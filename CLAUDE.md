@@ -144,6 +144,18 @@ so row 0 stays full-screen and row 18 maps to row 28 = fully hidden; also fixes 
 bleed-through where a "hidden" (row 18) overlay still showed under a dialogue box on SNES.
 The editor field cap (`eventOverlay{Show,MoveTo}.js`, `y max: 18`) is left as-is — after
 scaling it already spans full-screen…hidden on both targets.
+**Overlay left d-pad movement dead (engine, user-found in the sample game).** `UIIsClosed()`
+in `appData/src/snes/src/ui.c` gates `SceneHandleInput()` (game.c main loop); it treated
+`ui_overlay` as a sticky boolean. `EVENT_OVERLAY_SHOW` sets it and only `EVENT_OVERLAY_HIDE`
+clears it — `EVENT_OVERLAY_MOVE_TO` (slide the panel off-screen) does not. The stock sample's
+Logo intro does `OVERLAY_SHOW` → `OVERLAY_MOVE_TO` away and never `OVERLAY_HIDE`, so from that
+point on `UIIsClosed()` returned 0 and the player couldn't walk for the rest of the game
+(`script_ptr` was 0 the whole time — not a stuck script; `SceneHandleInput` simply never ran).
+Fixed to mirror GB (`win_pos_y == MENU_CLOSED_Y` counts as closed): an overlay whose current
+**and** target row are `>= UI_SCREEN_ROWS` (28, the NTSC visible height in tiles) no longer
+blocks input. Relies on the overlay-row scaling above so `OVERLAY_MOVE_TO(0,18)` lands exactly
+on row 28. Verified in an offscreen SnesJs run: player stuck at the spawn tile before, walks
+normally after (identical to a build that starts in that scene directly).
 **M9 editor asset feedback (done).** Two more editor spots were GB-hardcoded and are now
 target-aware via `getTarget(settings.target)`: the **Backgrounds page size warnings**
 (`src/components/assets/ImageViewer.js` → `src/lib/helpers/assetWarnings.js`) used a fixed

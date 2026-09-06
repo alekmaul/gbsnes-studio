@@ -711,8 +711,23 @@ void UIFlush(void)
     }
 }
 
+/* Visible screen height in tiles (224px NTSC). The BG3 overlay map is 32 rows;
+ * rows >= this are off the bottom of the screen. */
+#define UI_SCREEN_ROWS 28
+
 u8 UIIsClosed(void)
 {
-    if (ui_overlay) return 0;
-    return ui_state == 0;
+    if (ui_state != 0) return 0;
+    if (ui_overlay)
+    {
+        /* An overlay that has scrolled fully off the bottom of the screen no
+         * longer blocks the player - mirrors the GB engine, where a window
+         * parked at MENU_CLOSED_Y counts as closed. OVERLAY_MOVE_TO never
+         * clears ui_overlay (only OVERLAY_HIDE does), so the common
+         * "OVERLAY_SHOW then slide it away" reveal would otherwise kill d-pad
+         * movement for the rest of the game. */
+        if (ui_ov_row < UI_SCREEN_ROWS) return 0;
+        if (ui_ov_target < UI_SCREEN_ROWS) return 0;
+    }
+    return 1;
 }

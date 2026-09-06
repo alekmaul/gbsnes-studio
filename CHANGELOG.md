@@ -57,6 +57,10 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- SNES: after a scene used `Overlay: Show` and then slid the overlay away with
+  `Overlay: Move To` (without an explicit `Overlay: Hide` — as the sample game's intro does),
+  the player could no longer be moved with the d-pad for the rest of the game. An
+  off-screen overlay no longer blocks input.
 - `Overlay: Show` / `Overlay: Move To` on SNES stopped the overlay short of the bottom of
   the screen (it used the Game Boy's screen height), so "hide" left a strip covering the
   lower part of the screen. The overlay row is now scaled to the target's screen height.

@@ -93,7 +93,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Display Text with Avatar | ✅ | 16×16 portrait (OBJ palette 2), text indented. |
 | Display Choice, Display Menu | ✅ | Cursor + Up/Down + A/B; menu layout supports 1 or 2 columns. |
 | Text: Set Animation Speed | ✅ | Controls box slide-in / slide-out and typewriter speed. Timing is approximate, not pixel-for-pixel GB (values 1–2 = fastest, 3/4/5 progressively slower, 0 ≈ fastest rather than a true instant jump). |
-| Overlay Show, Overlay Move To, Overlay Hide | ✅ | Solid BG3 panel, row-targeted, animates independently of the dialogue box. |
+| Overlay Show, Overlay Move To, Overlay Hide | ✅ | Solid BG3 panel, row-targeted, animates independently of the dialogue box. The Y row is scaled from the GB screen (18 rows) to the SNES screen (28); an overlay parked off-screen stops blocking the d-pad even without an explicit Overlay Hide. |
 
 ## Screen & fades
 
