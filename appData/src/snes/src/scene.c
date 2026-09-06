@@ -317,35 +317,17 @@ static u8 npc_blocking(u16 skip, s16 dx, s16 dy)
 }
 
 // Can actor i start a one-tile step in unit direction (dx, dy)?
+// Mirrors the GB engine: the footprint is the actor's single tile, widened one
+// tile to the right for the 16px-wide sprite, so the check is the destination
+// tile (tx+dx, ty+dy) and the one to its right. The old version tested two
+// tiles ahead (a 2x2 footprint), which blocked the player a tile early - e.g.
+// it couldn't step onto a door trigger with a solid tile just past it.
 static u8 can_step(u16 i, s16 dx, s16 dy)
 {
-    s16 tx = SceneActorTileX(i);
-    s16 ty = SceneActorTileY(i);
-    // The 16px sprite spans two tiles across the leading edge; both must be free.
-    if (dx > 0)
-    {
-        if (col_solid(tx + 2, ty)) return 0;
-        if (col_solid(tx + 2, ty + 1)) return 0;
-        return 1;
-    }
-    if (dx < 0)
-    {
-        if (col_solid(tx - 1, ty)) return 0;
-        if (col_solid(tx - 1, ty + 1)) return 0;
-        return 1;
-    }
-    if (dy > 0)
-    {
-        if (col_solid(tx, ty + 2)) return 0;
-        if (col_solid(tx + 1, ty + 2)) return 0;
-        return 1;
-    }
-    if (dy < 0)
-    {
-        if (col_solid(tx, ty - 1)) return 0;
-        if (col_solid(tx + 1, ty - 1)) return 0;
-        return 1;
-    }
+    s16 tx = SceneActorTileX(i) + dx;
+    s16 ty = SceneActorTileY(i) + dy;
+    if (col_solid(tx, ty)) return 0;
+    if (col_solid(tx + 1, ty)) return 0;
     return 1;
 }
 

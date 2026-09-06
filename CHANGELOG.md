@@ -57,6 +57,9 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- SNES: the player was blocked one tile earlier than on Game Boy, so a tight gap (a house
+  doorway with a wall just past it) couldn't be walked through - the exit trigger behind it
+  never fired. Collision now matches Game Boy.
 - SNES: actor sprites drew one tile too low, so an actor placed "on" something (a rock on
   a staircase, a torch on a stand) rendered a row below it. Sprites now sit at the same
   spot as on Game Boy.

@@ -251,6 +251,14 @@ Tests: `test/helpers/assetWarnings.test.js`.
   drew the 16×16 OBJ at `actors[i].y - scroll_y - 8`, putting every sprite a full tile too
   low. GB positions it so the feet sit at the bottom of the actor's tile (`pos.y = tile*8+8`,
   GB OAM shows at `pos - {8,16}`); SNES now matches with `- 16` (emote bubble `- 24` → `- 32`).
+  **`can_step` blocked the player a tile early (user-found: "can't leave the shop").** It
+  tested a **2×2** tile footprint - `col_solid(tx+2, …)` / `(…, ty+2)` two tiles ahead of the
+  actor - so the player couldn't step onto a tile with a wall just past it (the sample's house
+  door has a solid tile one row below the exit trigger, so the trigger never fired). Now
+  matches GB exactly: footprint = the destination tile `(tx+dx, ty+dy)` and the one to its
+  right (the 16px-wide-sprite fudge). Verified in SnesJs: player walks through the door and
+  `SWITCH_SCENE` fires. Broad collision behaviour change but a strict GB match; all fixture
+  ROMs still build + boot.
   **Per-sprite OBJ palettes (done).** Each used sprite slot draws its own 16-colour OBJ
   palette. The SNES has 8 OBJ palettes (CGRAM 128..255); palettes 1 and 2 stay reserved for
   the emote bubbles / dialogue avatars, so `compileSnesData.js` assigns actor sprite slots
