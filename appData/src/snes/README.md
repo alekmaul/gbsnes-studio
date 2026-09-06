@@ -398,8 +398,9 @@ CGRAM contents genuinely different; emote/avatar palettes intact after the whole
 
 **Input-script / timer-script execution (M7-cont., done):** `SET_INPUT_SCRIPT`,
 `REMOVE_INPUT_SCRIPT`, `SET_TIMER_SCRIPT`, `TIMER_RESTART`, `TIMER_DISABLE` all run for real now
-(`scene.c`: `input_script_ptrs[8]` one slot per GB-layout button bit, persists across scenes like
-GB; `timer_script_duration/time` a single auto-repeating slot, disabled every scene load like GB).
+(`scene.c`: `input_script_ptrs[NUM_INPUT_SCRIPTS]` one slot per GB-layout button bit, persists
+across scenes like GB; `timer_script_duration/time` a single auto-repeating slot, disabled every
+scene load like GB).
 Both are only checked while no other script is running (`script_ptr == 0`), matching the GB
 engine. Found and fixed two real bugs along the way:
 - `Script_IfInput_b` (`IF_INPUT`) compared the compiler's GB-layout button mask directly against
@@ -415,6 +416,20 @@ engine. Found and fixed two real bugs along the way:
   frame and releases the script, clearing `await_input` immediately (unlike the GB engine, which
   gates on `last_fn` instead — this engine has no such per-opcode gate, so a stale non-zero mask
   would wrongly complete a later, unrelated blocking opcode without the clear).
+
+**X / Y / L / R (M12-cont., done):** the four input opcodes (`IF_INPUT`, `AWAIT_INPUT`,
+`SET_INPUT_SCRIPT`, `REMOVE_INPUT_SCRIPT`) carry a **2-byte** little-endian button mask on the
+SNES target instead of GB's 1 byte — the extra byte holds X / Y / L / R (`KEY_BITS` bits 8..11
+in `src/lib/compiler/helpers.js`; `targets/snes.js` `inputMaskBytes: 2`). This is the only place
+the SNES `script_cmds.c` arg lengths diverge from the GB table (`+1` for those four opcodes;
+`snesScriptCmds.test.js` allows exactly that). The GB engine, its byte-exact event tests and GB
+ROM output are untouched — GB still emits a 1-byte mask. Engine side: `SceneGbInputBits()` now
+returns `u16` and packs all 12 buttons, `input_script_ptrs[]` grew to `NUM_INPUT_SCRIPTS` (12),
+`await_input` is `u16`, and the four `Script_*Input*_b` handlers read
+`args[0] | (args[1] << 8)` (the jump/index args shift by one). The editor's `InputPicker` shows
+a third X/Y/L/R row for SNES projects. Verified in Mesen: a scene registering
+`SET_INPUT_SCRIPT("x")` / `SET_INPUT_SCRIPT("r")` had both sub-scripts fire on the real button
+presses (marker variables read back 42 / 43 from WRAM via a Lua `emu.setInput` driver).
 
 **816-tcc gotcha (M4c/M5):** a 3-or-more-term boolean chain (`a || b || c`, `a && b && c`) in a
 conditional links its branch targets wrong — the false path fell through into the block. All of

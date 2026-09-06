@@ -1016,6 +1016,40 @@ test("Should be able to remove input script", () => {
   expect(output).toEqual([cmd(REMOVE_INPUT_SCRIPT), inputDec(["b"])]);
 });
 
+// SNES target: the button mask is 2 little-endian bytes so X/Y/L/R (KEY_BITS
+// bits 8..11) fit. GB stays 1 byte (tests above), verified unchanged.
+test("Should emit a 2-byte input mask for the SNES target", () => {
+  const lo = m => m & 0xff;
+  const hi = m => (m >> 8) & 0xff;
+
+  const ifOut = [];
+  new ScriptBuilder(ifOut, {
+    target: "snes",
+    compileEvents: () => ifOut.push(99)
+  }).ifInput(["a", "r"], [], []);
+  const ifMask = inputDec(["a", "r"]);
+  expect(ifOut.slice(0, 3)).toEqual([cmd(IF_INPUT), lo(ifMask), hi(ifMask)]);
+  expect(hi(ifMask)).toBe(0x08); // "r" = 0x0800
+
+  const awaitOut = [];
+  new ScriptBuilder(awaitOut, { target: "snes" }).inputAwait(["x", "y"]);
+  const awaitMask = inputDec(["x", "y"]);
+  expect(awaitOut).toEqual([cmd(AWAIT_INPUT), lo(awaitMask), hi(awaitMask)]);
+  expect(awaitOut).toEqual([cmd(AWAIT_INPUT), 0x00, 0x03]);
+
+  const removeOut = [];
+  new ScriptBuilder(removeOut, { target: "snes" }).inputScriptRemove(["l"]);
+  expect(removeOut).toEqual([cmd(REMOVE_INPUT_SCRIPT), 0x00, 0x04]);
+
+  const setOut = [];
+  new ScriptBuilder(setOut, {
+    target: "snes",
+    compileEvents: (input, subScript) => subScript.push(99),
+    banked: { push: () => ({ bank: 99, offset: 200 }) }
+  }).inputScriptSet("y", []);
+  expect(setOut).toEqual([cmd(SET_INPUT_SCRIPT), 0x00, 0x02, 99, 0, 200]);
+});
+
 test("Should be able to add timer script", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {

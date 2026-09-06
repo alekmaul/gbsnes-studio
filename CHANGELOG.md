@@ -21,6 +21,11 @@ and are kept for chronology; everything in them ships in 1.0.0.
 The highlights of the final push (roadmap M8–M12):
 
 ### Added
+- **SNES scripts can read the X / Y / L / R buttons.** The input events (`If Button Pressed`,
+  `Await Input`, `Attach Script to Button`) offer all 12 SNES buttons for a SNES project — the
+  editor shows an extra X/Y/L/R row. On the SNES target the button mask these events compile to
+  is 2 bytes instead of 1; the Game Boy target is completely unchanged (still 8 buttons, 1 byte,
+  byte-identical ROM output). In the bundled web player X/Y/L/R map to the keys U / I / O / P.
 - **SNES music now plays a project's own songs.** Each `.mod` track is converted to Impulse
   Tracker `.it` at build time (new `src/lib/compiler/mod2it.js`) and built into the SNES
   soundbank by the new `src/lib/compiler/compileSnesMusic.js`. `Music: Play` picks the right
@@ -119,7 +124,6 @@ The SNES target is functional end to end (create → script → build → play),
 - **Music** conversion is lossy: Amiga (non-linear) pitch slides become linear slides and a few
   ProTracker effects have no `.it` equivalent, so an SNES build won't sound identical to the GB
   player. Only 4-channel `M.K.` `.mod` files convert (the same format the GB target requires).
-- **Input**: only the 8 Game Boy buttons. X / Y / L / R are not readable from scripts.
 - **Sprites**: sheets load per scene (player + 7). A single scene with 9+ distinct actor
   sheets overflows the extras to the player sprite; at most 6 sheets in one scene keep their
   own 16-colour palette (a 7th/8th reuses palette 0).

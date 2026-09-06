@@ -49,10 +49,23 @@ describe("SNES script_cmds[] opcode contract", () => {
     expect(gbTable.length).toBe(scriptCommands.length);
   });
 
-  test("arg lengths match the Game Boy engine table at every index", () => {
-    const gbLens = gbTable.map(r => r.argsLen);
+  // The four input opcodes carry a 2-byte button mask on SNES (X/Y/L/R live in
+  // the extra byte) vs 1 byte on the Game Boy, so their args_len is GB + 1.
+  // This is the *only* place the SNES opcode arg lengths diverge from GB -
+  // see targets/snes.js `inputMaskBytes` and script_cmds.c.
+  const INPUT_MASK_OPCODES = new Set([
+    "AWAIT_INPUT",
+    "IF_INPUT",
+    "SET_INPUT_SCRIPT",
+    "REMOVE_INPUT_SCRIPT"
+  ]);
+
+  test("arg lengths match the Game Boy engine table at every index (input opcodes +1)", () => {
+    const expected = gbTable.map((r, i) =>
+      INPUT_MASK_OPCODES.has(scriptCommands[i]) ? r.argsLen + 1 : r.argsLen
+    );
     const snesLens = snesTable.map(r => r.argsLen);
-    expect(snesLens).toEqual(gbLens);
+    expect(snesLens).toEqual(expected);
   });
 
   test("row comments match the scriptCommands.js order", () => {

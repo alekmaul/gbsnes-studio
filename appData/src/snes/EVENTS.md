@@ -24,7 +24,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Wait | ✅ | |
 | Stop Script | ✅ | |
 | Call Custom Event, Group, Comment | ✅ | Compiler-side — inlined before any target sees them. |
-| Attach Script to Button (`SET_INPUT_SCRIPT` / remove) | ⚠️ | Only the 8 Game Boy buttons (d-pad, A, B, Select, Start). X / Y / L / R are not readable — see *Input* below. |
+| Attach Script to Button (`SET_INPUT_SCRIPT` / remove) | ✅ | All 12 SNES buttons — d-pad, A, B, Select, Start, **and X / Y / L / R** (the input opcodes carry a 2-byte mask on SNES). |
 
 ## Variables & math
 
@@ -41,7 +41,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Event | SNES | Notes |
 | --- | --- | --- |
 | Set Timer Script, Restart Timer, Disable Timer | ✅ | |
-| If Button Pressed (`IF_INPUT`), Await Input (`AWAIT_INPUT`) | ⚠️ | Only d-pad + A / B / Select / Start. **X / Y / L / R are ignored** — the shared `KEY_BITS` mask is one byte, already full with the 8 GB buttons, and widening it touches the frozen GB reference engine + its byte-exact tests. Deferred pending a decision. |
+| If Button Pressed (`IF_INPUT`), Await Input (`AWAIT_INPUT`) | ✅ | All 12 SNES buttons, X / Y / L / R included. On the SNES target these opcodes (plus `SET_INPUT_SCRIPT` / `REMOVE_INPUT_SCRIPT`) carry a 2-byte button mask — X/Y/L/R are `KEY_BITS` bits 8..11 in `src/lib/compiler/helpers.js`. The Game Boy engine and its byte-exact tests are untouched (GB still emits a 1-byte mask). |
 
 ## Actors — position & movement
 
@@ -120,8 +120,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 
 ## Editor (not scripting — M9)
 
-The editor is data-driven and already renders SNES projects correctly; the only
-real remaining gap is the X/Y/L/R input options (deferred with the engine side).
+The editor is data-driven and already renders SNES projects correctly.
 
 | Area | SNES-aware? | Notes |
 | --- | --- | --- |
@@ -132,5 +131,5 @@ real remaining gap is the X/Y/L/R input options (deferred with the engine side).
 | Backgrounds page: size warnings | ✅ | "Too small / too large" now use the target's screen (256×224 on SNES) and scene-map size, not the fixed GB 160×144 / 256×256. |
 | Scene info bar: sprite budget | ✅ | GB shows a per-scene sprite-*frame* budget (`F: n/25`); SNES shows distinct actor sprite *sheets* (`S: n/8`, the real `SPRITE_SLOTS` limit — project-wide, enforced by a compiler warning). |
 | Sprite editor: dimensions, frame counts | ✅ | 16×16 frames, 1/3/6-frame types — the same shape the SNES engine uses. |
-| Input events: X / Y / L / R options | ❌ | Not offered (engine can't read them — see *Input* above). |
+| Input events: X / Y / L / R options | ✅ | `InputPicker` shows a third button row (X / Y / L / R) for SNES projects; the engine reads them (see *Timers & input* above). |
 | Palette editor | — | Intentionally not built: `snesgfx.js` extracts the palette from each PNG automatically, nothing to edit by hand. |

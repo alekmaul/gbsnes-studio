@@ -719,7 +719,7 @@ class ScriptBuilder {
   ifInput = (input, truePath = [], falsePath = []) => {
     const output = this.output;
     output.push(cmd(IF_INPUT));
-    output.push(inputDec(input));
+    this.inputMask(input);
     compileConditional(truePath, falsePath, {
       ...this.options,
       output
@@ -789,10 +789,26 @@ class ScriptBuilder {
 
   // Input
 
+  // Push the button mask carried by IF_INPUT / AWAIT_INPUT / SET_INPUT_SCRIPT /
+  // REMOVE_INPUT_SCRIPT. One byte on the Game Boy (8 buttons); two little-endian
+  // bytes on the SNES, whose extra X/Y/L/R bits live in KEY_BITS 8..11. The
+  // target descriptor's inputMaskBytes is the single source of truth.
+  inputMask = input => {
+    const output = this.output;
+    const { target } = this.options || {};
+    const mask = inputDec(input);
+    if (getTarget(target).inputMaskBytes === 2) {
+      output.push(mask & 0xff);
+      output.push((mask >> 8) & 0xff);
+    } else {
+      output.push(mask & 0xff);
+    }
+  };
+
   inputAwait = input => {
     const output = this.output;
     output.push(cmd(AWAIT_INPUT));
-    output.push(inputDec(input));
+    this.inputMask(input);
   };
 
   inputScriptSet = (input, script) => {
@@ -810,7 +826,7 @@ class ScriptBuilder {
     const bankPtr = banked.push(subScript);
 
     output.push(cmd(SET_INPUT_SCRIPT));
-    output.push(inputDec(input));
+    this.inputMask(input);
     output.push(bankPtr.bank);
     output.push(hi(bankPtr.offset));
     output.push(lo(bankPtr.offset));
@@ -819,7 +835,7 @@ class ScriptBuilder {
   inputScriptRemove = input => {
     const output = this.output;
     output.push(cmd(REMOVE_INPUT_SCRIPT));
-    output.push(inputDec(input));
+    this.inputMask(input);
   };
 
   // Camera

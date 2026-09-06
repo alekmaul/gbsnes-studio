@@ -34,6 +34,7 @@ describe("compile targets", () => {
     expect(gb.maxActors).toBe(9);
     expect(gb.maxTriggers).toBe(9);
     expect(gb.maxScriptSize).toBe(16384);
+    expect(gb.inputMaskBytes).toBe(1);
     expect(gb.romExt).toBe("gb");
     expect(gb.engineDir).toBe("gb");
     // editor asset guidance
@@ -66,6 +67,8 @@ describe("compile targets", () => {
     // M9 editor: SNES is limited by distinct sprite sheets, not a frame budget
     expect(snes.maxSpriteFrames).toBeNull();
     expect(snes.maxSpriteSheets).toBe(8);
+    // X/Y/L/R: the input opcodes carry a 2-byte button mask on SNES
+    expect(snes.inputMaskBytes).toBe(2);
     // every gb key exists on snes so nothing reads `undefined`
     Object.keys(gb).forEach(key => {
       expect(snes).toHaveProperty(key);

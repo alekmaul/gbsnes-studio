@@ -69,13 +69,14 @@ s16 SceneActorTileY(u8 i);
 
 /* M7-cont.: SET_INPUT_SCRIPT / SET_TIMER_SCRIPT execution. `joy`/`prev_joy`
  * are raw PVSnesLib pad bits; the compiler emits masks in the GB engine's
- * compact 8-bit layout (KEY_BITS in src/lib/compiler/helpers.js), so
- * SceneGbInputBits() re-packs the SNES bits into that layout wherever a
- * compiler-emitted mask needs comparing against - also used by IF_INPUT. */
-u8 SceneGbInputBits(u16 j);
+ * compact button layout (KEY_BITS in src/lib/compiler/helpers.js) - 8 bits on
+ * GB, plus X/Y/L/R in bits 8..11 on SNES - so SceneGbInputBits() re-packs the
+ * SNES bits into that layout wherever a compiler-emitted mask needs comparing
+ * against - also used by IF_INPUT / AWAIT_INPUT. */
+u16 SceneGbInputBits(u16 j);
 void SceneScheduledScriptsInit(void); /* boot-only: zero input_script_ptrs[] */
-void SceneSetInputScript(u8 mask, BANK_PTR target);
-void SceneRemoveInputScript(u8 mask);
+void SceneSetInputScript(u16 mask, BANK_PTR target);
+void SceneRemoveInputScript(u16 mask);
 void SceneSetTimerScript(u8 duration, BANK_PTR target);
 void SceneTimerRestart(void);
 void SceneTimerDisable(void);

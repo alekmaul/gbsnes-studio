@@ -25,7 +25,7 @@ extern u16 script_ptr_x, script_ptr_y;
 extern u8 script_action_complete;
 extern u8 script_continue;
 extern u8 script_actor;
-extern u8 await_input;
+extern u16 await_input;
 extern u8 wait_time;
 extern u8 shake_time;
 extern SCRIPT_CMD_FN last_fn;

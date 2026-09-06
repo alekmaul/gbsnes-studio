@@ -183,8 +183,24 @@ instead (`S: n/8`, `SPRITE_SLOTS`; per-scene count, the project-wide cap is enfo
 The rest of the "M9 gaps" in EVENTS.md turned out stale: GB Studio 1.2.2's editor already
 renders raw full-colour PNGs everywhere (no DMG filter — the 4-shade conversion is
 compiler-only) and the scene canvas is already sized from the background's tile dimensions.
-Only the X/Y/L/R input options remain unbuilt (deferred with the engine side).
 Tests: `test/helpers/assetWarnings.test.js`.
+
+**X / Y / L / R input (M12-cont., done — was the last deferred item).** The four input
+opcodes (`IF_INPUT` / `AWAIT_INPUT` / `SET_INPUT_SCRIPT` / `REMOVE_INPUT_SCRIPT`) now carry a
+**2-byte** little-endian button mask **on the SNES target only** — the extra byte holds
+X / Y / L / R (`KEY_BITS` bits 8..11 in `compiler/helpers.js`). New target field
+`inputMaskBytes` (gb 1 / snes 2, guarded by `targets.test.js`); `scriptBuilder.js`'s new
+`inputMask()` helper reads it and the 4 input methods call it instead of `output.push(inputDec(…))`.
+The **Game Boy engine, its byte-exact event tests and GB ROM output are byte-identical** — GB
+still emits 1 byte. SNES side: `script_cmds.c` bumps those 4 opcodes' `args_len` by 1 (the *only*
+place SNES arg lengths diverge from GB — `snesScriptCmds.test.js` now allows exactly that),
+`SceneGbInputBits()` returns `u16` and packs all 12 buttons, `input_script_ptrs[]` →
+`NUM_INPUT_SCRIPTS` (12), `await_input` → `u16`. Editor: `InputPicker.js` is now Redux-connected
+and shows a third X/Y/L/R button row when `settings.target === "snes"`. The web player already
+wired X/Y/L/R (fixed keys u/i/o/p) so no emulator-side change. Verified in Mesen (a scene with
+`SET_INPUT_SCRIPT("x")` / `("r")` — both sub-scripts fired on the real presses, marker vars read
+back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `targets.test.js`,
+`snesScriptCmds.test.js`.
 
 - **`src/lib/compiler/targets/{gb,snes}.js`** — one descriptor per target, the single source
   of truth for every hardware-shaped constant (bank size, `minDataBank`, screen tiles, entity
@@ -411,8 +427,9 @@ Tests: `test/helpers/assetWarnings.test.js`.
   `js/main.js`, `index.html`, `css/style.css` are this project's own, wiring the vendored core to
   a `fetch("rom/game.sfc")` auto-boot instead of upstream's file-picker UI, and to the project's
   own Settings > Controls mapping (same `customControls` JSON shape as the GB template — X/Y/L/R
-  aren't project-configurable since the engine doesn't read them yet, so they're fixed to
-  u/i/o/p). `buildProject.js`'s `buildProjectSnes` now accepts `buildType` and, for `"web"`,
+  aren't in that GB-era settings page so they're bound to fixed keys u/i/o/p, but the engine
+  *does* read them now, so scripts using X/Y/L/R work in the web player).
+  `buildProject.js`'s `buildProjectSnes` now accepts `buildType` and, for `"web"`,
   calls a `buildWebPlayer` helper shared with the GB path (extracted from what used to be
   GB-only inline code) that copies the emulator tree + built ROM into `build/web` and templates
   `index.html`'s placeholders — the "Play" button (`AppToolbar.js`, already target-agnostic) now
@@ -520,8 +537,8 @@ The port is **functional end to end**: create an SNES project in the app → scr
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
 controls + saved-game persistence). GB non-regression suite stays green. Milestones M0–M8 done;
 M9 done (the editor is data-driven — full-colour previews, target-aware scene geometry / asset
-warnings / sprite budget; only the X/Y/L/R input options are unbuilt, deferred with the engine
-side); M10 done; M11 code-side done. **M12 (playing the sample game for real, user-driven):**
+warnings / sprite budget; X/Y/L/R input now built too); M10 done; M11 code-side done.
+**M12 (playing the sample game for real, user-driven):**
 the stock 8-scene sample now plays start-to-finish on SNES — UI graphics from the project's
 own `assets/ui` PNGs, per-scene sprite sheets (16-sheet projects), N-frame `animated` sprites,
 GB-matching collision + sprite Y offset, off-screen overlay no longer freezing the player, and
@@ -529,15 +546,12 @@ all 8 sample backgrounds now SNES-sized (5 room scenes redrawn at 256×224, 3 sc
 recoloured off the DMG greens).
 
 Real remaining **code** gaps, most impactful first:
-1. **X / Y / L / R buttons** — deferred by user decision (needs the shared 1-byte `KEY_BITS`
-   mask widened to 2 bytes, which touches the frozen GB engine + its byte-exact event tests).
-   This is the one remaining M9 editor item too (the input-event option lists).
-2. **≤8 sprite sheets + ≤6 distinct OBJ palettes _per scene_** — sheets are loaded per-scene
+1. **≤8 sprite sheets + ≤6 distinct OBJ palettes _per scene_** — sheets are loaded per-scene
    now (not project-wide), so this only bites a single scene with 9+ distinct actor sheets;
    the extras fall back to slot 0 / palette 0 (emote+avatar hold 2 of the 8 OBJ palettes).
-3. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
+2. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
    but a mid-play emulator snapshot would need SnesJs machine-state serialization it doesn't have.
-4. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no
+3. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no
    per-project SFX assets, so there's nothing to convert; a richer set would just be more
    committed BRR samples.
 
@@ -550,7 +564,9 @@ player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, 
 **Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES. **In-app
 Play black screen** (old-Chromium CSS + window size). **All 8 sample backgrounds SNES-sized**
 (5 room scenes redrawn at 256×224 + scenes resized/collision re-strided; 3 scrolling scenes
-recoloured off the DMG greens, 1:1 LUT so collision is unchanged).
+recoloured off the DMG greens, 1:1 LUT so collision is unchanged). **X / Y / L / R input**
+(SNES-only 2-byte button mask on the 4 input opcodes; GB output byte-identical — see the M9
+section above).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 

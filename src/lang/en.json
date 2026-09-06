@@ -165,7 +165,7 @@
   "FIELD_TARGET_GB": "Game Boy",
   "FIELD_TARGET_SNES": "SNES (beta)",
   "FIELD_TARGET_HELP": "Changes which engine and build tools are used to build your game. The SNES target builds a real .sfc ROM and runs your scripts, dialogue, menus, actors, camera, music and cartridge saves. See appData/src/snes/EVENTS.md for the per-event support list.",
-  "FIELD_TARGET_SNES_WARNING": "SNES support is functional end to end but still young. Current limitations: the X / Y / L / R buttons can't be read from scripts (only the 8 Game Boy buttons); the built-in sound effects are two short samples (a beep and a noise burst) rather than a synthesiser; and a single scene using more than 8 different sprite sheets (or more than 6 with their own colours) falls the extras back to the player sprite. GB Color Options and Cartridge Type below don't apply to SNES and are hidden.",
+  "FIELD_TARGET_SNES_WARNING": "SNES support is functional end to end but still young. Current limitations: the built-in sound effects are two short samples (a beep and a noise burst) rather than a synthesiser; and a single scene using more than 8 different sprite sheets (or more than 6 with their own colours) falls the extras back to the player sprite. GB Color Options and Cartridge Type below don't apply to SNES and are hidden.",
   "FIELD_SNES_REGION": "Region",
   "FIELD_SNES_REGION_NTSC": "NTSC (60Hz)",
   "FIELD_SNES_REGION_PAL": "PAL (50Hz)",

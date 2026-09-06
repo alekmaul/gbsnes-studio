@@ -43,8 +43,11 @@ static u8 scene_col[SCENE_COL_BYTES];
 /* SET_INPUT_SCRIPT / SET_TIMER_SCRIPT (M7-cont.). Input scripts are global,
  * one slot per GB-layout button bit, and persist across scene loads (matches
  * the GB engine - only REMOVE_INPUT_SCRIPT clears one). The timer script is a
- * single auto-repeating slot, disabled on every scene load like GB. */
-static BANK_PTR input_script_ptrs[8];
+ * single auto-repeating slot, disabled on every scene load like GB.
+ * NUM_INPUT_SCRIPTS covers the 8 GB buttons plus the SNES X/Y/L/R (KEY_BITS
+ * bits 8..11 in src/lib/compiler/helpers.js). */
+#define NUM_INPUT_SCRIPTS 12
+static BANK_PTR input_script_ptrs[NUM_INPUT_SCRIPTS];
 static u8 timer_script_duration = 0;
 static u8 timer_script_time = 0;
 static BANK_PTR timer_script_ptr;
@@ -114,29 +117,34 @@ static void run_script(BANK_PTR ptr, u8 actor)
     ScriptStart(&local);
 }
 
-// Re-pack PVSnesLib's raw pad bits into the GB engine's compact byte layout
+// Re-pack PVSnesLib's raw pad bits into the GB engine's compact button layout
 // (right=0x01, left=0x02, up=0x04, down=0x08, a=0x10, b=0x20, select=0x40,
-// start=0x80 - see KEY_BITS in src/lib/compiler/helpers.js). IF_INPUT and the
-// input-script slots below are matched against masks the compiler emits in
-// that layout, not the raw SNES joypad bits.
-u8 SceneGbInputBits(u16 j)
+// start=0x80 - see KEY_BITS in src/lib/compiler/helpers.js). The SNES-only
+// X/Y/L/R sit in bits 8..11, so the result is 16-bit. IF_INPUT / AWAIT_INPUT
+// and the input-script slots below match masks the compiler emits in this
+// layout, not the raw SNES joypad bits.
+u16 SceneGbInputBits(u16 j)
 {
-    u8 b = 0;
-    if (j & KEY_RIGHT)  b |= 0x01;
-    if (j & KEY_LEFT)   b |= 0x02;
-    if (j & KEY_UP)     b |= 0x04;
-    if (j & KEY_DOWN)   b |= 0x08;
-    if (j & KEY_A)      b |= 0x10;
-    if (j & KEY_B)      b |= 0x20;
-    if (j & KEY_SELECT) b |= 0x40;
-    if (j & KEY_START)  b |= 0x80;
+    u16 b = 0;
+    if (j & KEY_RIGHT)  b |= 0x0001;
+    if (j & KEY_LEFT)   b |= 0x0002;
+    if (j & KEY_UP)     b |= 0x0004;
+    if (j & KEY_DOWN)   b |= 0x0008;
+    if (j & KEY_A)      b |= 0x0010;
+    if (j & KEY_B)      b |= 0x0020;
+    if (j & KEY_SELECT) b |= 0x0040;
+    if (j & KEY_START)  b |= 0x0080;
+    if (j & KEY_X)      b |= 0x0100;
+    if (j & KEY_Y)      b |= 0x0200;
+    if (j & KEY_L)      b |= 0x0400;
+    if (j & KEY_R)      b |= 0x0800;
     return b;
 }
 
 void SceneScheduledScriptsInit(void)
 {
     u8 i;
-    for (i = 0; i < 8; i++)
+    for (i = 0; i < NUM_INPUT_SCRIPTS; i++)
     {
         input_script_ptrs[i].ptr = 0;
     }
@@ -145,27 +153,27 @@ void SceneScheduledScriptsInit(void)
     timer_script_ptr.ptr = 0;
 }
 
-void SceneSetInputScript(u8 mask, BANK_PTR target)
+void SceneSetInputScript(u16 mask, BANK_PTR target)
 {
     // Only the lowest set bit is used, matching the GB engine's behaviour
     // when a caller passes a mask with several bits set.
     u8 index = 0;
-    while (index < 8)
+    while (index < NUM_INPUT_SCRIPTS)
     {
         if (mask & 1) break;
         index++;
         mask >>= 1;
     }
-    if (index < 8)
+    if (index < NUM_INPUT_SCRIPTS)
     {
         input_script_ptrs[index] = target;
     }
 }
 
-void SceneRemoveInputScript(u8 mask)
+void SceneRemoveInputScript(u16 mask)
 {
     u8 index;
-    for (index = 0; index < 8; index++)
+    for (index = 0; index < NUM_INPUT_SCRIPTS; index++)
     {
         if (mask & 1)
         {
@@ -632,9 +640,9 @@ void SceneHandleInput(void)
     // fires once per press rather than every frame the button stays held.
     if (joy != 0 && joy != prev_joy)
     {
-        u8 gbj = SceneGbInputBits(joy);
+        u16 gbj = SceneGbInputBits(joy);
         u8 i;
-        for (i = 0; i < 8; i++)
+        for (i = 0; i < NUM_INPUT_SCRIPTS; i++)
         {
             if ((gbj & (1 << i)) && input_script_ptrs[i].ptr)
             {

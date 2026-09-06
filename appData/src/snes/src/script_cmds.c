@@ -118,14 +118,17 @@ void Script_IfValueCompare_b(void)
     script_continue = 1;
 }
 
+// The compiler emits input masks in the GB engine's compact button layout. On
+// the SNES target it is 2 bytes (little-endian) instead of 1 - the extra byte
+// carries X / Y / L / R (KEY_BITS bits 8..11 in src/lib/compiler/helpers.js),
+// which is why these four opcodes' args_len is GB + 1 in the table below.
+// SceneGbInputBits() re-packs the raw PVSnesLib pad bits into the same layout.
 void Script_IfInput_b(void)
 {
-    // joy is raw PVSnesLib pad bits; the compiler emits masks in the GB
-    // engine's compact byte layout, so re-pack before comparing (see
-    // SceneGbInputBits in scene.c).
-    if ((SceneGbInputBits(joy) & script_cmd_args[0]) != 0)
+    u16 mask = script_cmd_args[0] | ((u16)script_cmd_args[1] << 8);
+    if ((SceneGbInputBits(joy) & mask) != 0)
     {
-        script_ptr = script_start_ptr + ARG16(1, 2);
+        script_ptr = script_start_ptr + ARG16(2, 3);
     }
     else
     {
@@ -134,22 +137,23 @@ void Script_IfInput_b(void)
     script_continue = 1;
 }
 
-// SET_INPUT_SCRIPT. args: mask (GB layout), bank (unused, always 0), event_ptrs
-// index hi/lo. Registers a background script that fires on the next press of
-// one of the masked buttons (SceneHandleInput / SceneSetInputScript).
+// SET_INPUT_SCRIPT. args: mask lo/hi (GB layout + X/Y/L/R), bank (unused, always
+// 0), event_ptrs index hi/lo. Registers a background script that fires on the
+// next press of one of the masked buttons (SceneHandleInput / SceneSetInputScript).
 void Script_SetInputScript_b(void)
 {
-    u8 mask = script_cmd_args[0];
-    u16 idx = ARG16(2, 3);
+    u16 mask = script_cmd_args[0] | ((u16)script_cmd_args[1] << 8);
+    u16 idx = ARG16(3, 4);
     SceneSetInputScript(mask, event_ptrs[idx]);
     ADVANCE();
     script_continue = 1;
 }
 
-// REMOVE_INPUT_SCRIPT. args: mask (GB layout).
+// REMOVE_INPUT_SCRIPT. args: mask lo/hi (GB layout + X/Y/L/R).
 void Script_RemoveInputScript_b(void)
 {
-    SceneRemoveInputScript(script_cmd_args[0]);
+    u16 mask = script_cmd_args[0] | ((u16)script_cmd_args[1] << 8);
+    SceneRemoveInputScript(mask);
     ADVANCE();
     script_continue = 1;
 }
@@ -184,7 +188,7 @@ void Script_Wait_b(void)
 
 void Script_AwaitInput_b(void)
 {
-    await_input = script_cmd_args[0];
+    await_input = script_cmd_args[0] | ((u16)script_cmd_args[1] << 8);
     ADVANCE();
     script_action_complete = 0;
 }
@@ -843,7 +847,7 @@ void Script_ActorInvoke_b(void)
     X(Script_HideOverlay_b, 0) /* 0x1A OVERLAY_HIDE */ \
     X(Script_Noop_b, 0) /* 0x1B OVERLAY_SET_POSITION */ \
     X(Script_OverlayMoveTo_b, 3) /* 0x1C OVERLAY_MOVE_TO */ \
-    X(Script_AwaitInput_b, 1) /* 0x1D AWAIT_INPUT */ \
+    X(Script_AwaitInput_b, 2) /* 0x1D AWAIT_INPUT */ \
     X(Script_MusicPlay_b, 2) /* 0x1E MUSIC_PLAY */ \
     X(Script_MusicStop_b, 0) /* 0x1F MUSIC_STOP */ \
     X(Script_ResetVariables_b, 0) /* 0x20 RESET_VARIABLES */ \
@@ -852,7 +856,7 @@ void Script_ActorInvoke_b(void)
     X(Script_DecFlag_b, 2) /* 0x23 DEC_VALUE */ \
     X(Script_SetFlagValue_b, 3) /* 0x24 SET_VALUE */ \
     X(Script_IfValue_b, 6) /* 0x25 IF_VALUE */ \
-    X(Script_IfInput_b, 3) /* 0x26 IF_INPUT */ \
+    X(Script_IfInput_b, 4) /* 0x26 IF_INPUT */ \
     X(Script_Choice_b, 5) /* 0x27 CHOICE */ \
     X(Script_ActorPush_b, 1) /* 0x28 ACTOR_PUSH */ \
     X(Script_IfActorPos_b, 4) /* 0x29 IF_ACTOR_AT_POSITION */ \
@@ -890,8 +894,8 @@ void Script_ActorInvoke_b(void)
     X(Script_StackPop_b, 0) /* 0x49 STACK_POP */ \
     X(Script_SceneResetStack_b, 0) /* 0x4A SCENE_STATE_RESET */ \
     X(Script_ScenePopAllState_b, 1) /* 0x4B SCENE_POP_ALL_STATE */ \
-    X(Script_SetInputScript_b, 4) /* 0x4C SET_INPUT_SCRIPT */ \
-    X(Script_RemoveInputScript_b, 1) /* 0x4D REMOVE_INPUT_SCRIPT */ \
+    X(Script_SetInputScript_b, 5) /* 0x4C SET_INPUT_SCRIPT */ \
+    X(Script_RemoveInputScript_b, 2) /* 0x4D REMOVE_INPUT_SCRIPT */ \
     X(Script_ActorSetFrame_b, 1) /* 0x4E ACTOR_SET_FRAME */ \
     X(Script_ActorSetFlip_b, 1) /* 0x4F ACTOR_SET_FLIP */ \
     X(Script_TextMulti_b, 1) /* 0x50 TEXT_MULTI */ \

@@ -59,7 +59,14 @@ const snesTarget = {
   maxSpriteSheets: 8,
 
   // A compiled script must fit one SUPERFREE section
-  maxScriptSize: 32768
+  maxScriptSize: 32768,
+
+  // The SNES pad adds X / Y / L / R, so the input opcodes carry a 2-byte mask
+  // (KEY_BITS bits 8..11 in compiler/helpers.js). scriptBuilder.js emits the
+  // extra byte for this target only; the SNES script_cmds table bumps the
+  // matching args_len (+1) for IF_INPUT / AWAIT_INPUT / SET_INPUT_SCRIPT /
+  // REMOVE_INPUT_SCRIPT — the one place its opcode arg lengths diverge from GB.
+  inputMaskBytes: 2
 };
 
 export default snesTarget;

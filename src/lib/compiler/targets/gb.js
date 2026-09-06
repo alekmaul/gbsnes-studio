@@ -55,7 +55,13 @@ const gbTarget = {
   maxSpriteSheets: null,
 
   // A single compiled script must fit one bank (compileEntityEvents.js)
-  maxScriptSize: 16384
+  maxScriptSize: 16384,
+
+  // Width of the button mask the input opcodes (IF_INPUT / AWAIT_INPUT /
+  // SET_INPUT_SCRIPT / REMOVE_INPUT_SCRIPT) carry. The Game Boy has 8 buttons —
+  // one byte, all bits used. scriptBuilder.js reads this to know how many bytes
+  // to emit for a mask; the GB engine's script_cmds table must stay in sync.
+  inputMaskBytes: 1
 };
 
 export default gbTarget;
