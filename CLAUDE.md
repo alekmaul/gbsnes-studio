@@ -398,6 +398,14 @@ Tests: `test/helpers/assetWarnings.test.js`.
   confirms `migrateProject` doesn't choke on it, and drives it into `compileSnesData` far enough
   to hit the expected "no scenes yet" error (proving the template's asset/settings shape is
   otherwise sound) rather than some earlier, unexpected failure.
+- **`appData/templates/sneshtml`** — a "Sample Project (SNES)" option, the SNES version of the
+  `gbhtml` sample game (8 scenes / 8 backgrounds / 16 sprite sheets: Outside, Cave, House,
+  Underground, Title Screen, Menu, …). A verbatim copy of `gbhtml` with `settings.target: "snes"`
+  + region/SRAM defaults; every event the sample uses is on the SNES support list and it
+  compiles + links to a bootable `.sfc` (the `snesTemplate.test.js` `sneshtml` describe covers
+  both the `compileSnesData` pass and a toolchain-gated end-to-end build). Visual caveats stand:
+  the art is GB-sized (160×144, 4-shade green) so scenes render smaller than the 256×224 SNES
+  screen and in green until the PNGs are redrawn/recoloured — but it plays.
 
 ### SNES port — state & what's left (as of 2026-09-06)
 

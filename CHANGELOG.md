@@ -25,7 +25,9 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   The web player has a **start/pause gate**, an **on-screen touch pad** (auto-shown on touch
   devices), a small toolbar (pause, reset, fullscreen), and **persists saved games** — the
   `Save Data` / `Load Data` events now survive a page reload (stored in the browser, per game).
-- New Project screen: a **"Blank Project (SNES)"** template, alongside the existing GB templates.
+- New Project screen: **"Blank Project (SNES)"** and **"Sample Project (SNES)"** templates. The
+  SNES sample is the classic 8-scene GB Studio sample game retargeted — it builds and plays as a
+  `.sfc`; the art is still Game Boy-sized and green until redrawn.
 - Engine: actor sprites with a **6-frame sheet now walk-cycle** (two poses per direction) while
   moving; a 6-frame sheet on a non-moving actor with "Animate Frames" ticked auto-cycles all 6
   frames (e.g. a torch). `Actor: Set Animation Speed` paces it.

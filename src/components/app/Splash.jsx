@@ -226,6 +226,9 @@ class Splash extends Component {
                   <option value="gbhtml">
                     {l10n("SPLASH_SAMPLE_PROJECT")}
                   </option>
+                  <option value="sneshtml">
+                    {l10n("SPLASH_SNES_SAMPLE_PROJECT")}
+                  </option>
                   <option value="blank">{l10n("SPLASH_BLANK_PROJECT")}</option>
                   <option value="snesblank">
                     {l10n("SPLASH_SNES_BLANK_PROJECT")}
