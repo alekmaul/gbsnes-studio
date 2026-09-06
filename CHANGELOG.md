@@ -57,6 +57,10 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- SNES: the dialogue box, menus and overlay now use the project's own
+  `assets/ui/ascii.png`, `frame.png` and `cursor.png` (the same files the Game Boy target
+  uses) instead of a built-in font. The box gets a real border and menus get a cursor;
+  text that previously rendered as garbled tiles is now legible.
 - SNES: after a scene used `Overlay: Show` and then slid the overlay away with
   `Overlay: Move To` (without an explicit `Overlay: Hide` — as the sample game's intro does),
   the player could no longer be moved with the d-pad for the rest of the game. An

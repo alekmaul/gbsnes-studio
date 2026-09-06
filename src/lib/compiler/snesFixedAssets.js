@@ -25,7 +25,6 @@
  * ACTOR_OBJ_PAL_POOL / sprite_pal_for_slot[]). A project with 7-8 distinct
  * sprite sheets reuses palette 0 for the overflow.
  */
-const fs = require("fs");
 const path = require("path");
 const getPixels = require("util").promisify(require("get-pixels"));
 
@@ -39,11 +38,28 @@ const TOOLS = path.join(
   "snes",
   "tools"
 );
-const FONT_PIC = path.join(TOOLS, "font8.pic");
 const EMOTES_PNG = path.join(TOOLS, "emotes.png");
 
-const FONT_COUNT = 96; // ASCII 0x20..0x7F
-const UI_FILL_TILE = FONT_COUNT;
+// The BG3 UI graphics come from a project's assets/ui/{ascii,frame,cursor}.png
+// (same files the Game Boy target uses). When no project dir is given - the
+// dummy-asset generator (gen-dummy-gfx.js) - fall back to the stock sample's.
+const DEFAULT_UI_DIR = path.join(
+  __dirname,
+  "..",
+  "..",
+  "..",
+  "appData",
+  "templates",
+  "gbhtml",
+  "assets",
+  "ui"
+);
+
+// ascii.png is a 16-wide glyph grid; GB Studio's font covers char 0x20..0xFF.
+const NUM_UI_GLYPHS = 224;
+const UI_FILL_TILE = NUM_UI_GLYPHS; // solid dark tile - the OVERLAY_SHOW panel
+const UI_FRAME_TILE0 = NUM_UI_GLYPHS + 1; // 9 nine-slice tiles: TL T TR L C R BL B BR
+const UI_CURSOR_TILE = NUM_UI_GLYPHS + 10; // menu ">" pointer
 const NUM_EMOTES = 8;
 const EMOTE_TILE0 = 32; // OBJ grid tile of emote 0
 const AVATAR_TILE0 = 64; // OBJ grid tile of avatar 0
@@ -124,26 +140,134 @@ const quadFromPixels = (pixels, ox, oy, colors, keyIndex) => {
   return tile4bpp(rows);
 };
 
-// PVSnesLib font8.pic: 96 glyphs, 4bpp 32B/char, glyph in plane 0 only.
-// Re-pack plane 0 as a 2bpp tile (16B/char). Tile 96 is a solid fill.
-const buildUiFont = () => {
-  const pic = fs.readFileSync(FONT_PIC);
+// 8 rows of 8 palette indices (0..3) -> 16 bytes of SNES 2bpp planar data
+// (BG3 in Mode 1 is 2bpp): bp0/bp1 interleaved, one byte pair per row.
+const tile2bpp = rows => {
   const out = [];
-  for (let c = 0; c < FONT_COUNT; c++) {
-    for (let row = 0; row < 8; row++) {
-      out.push(pic[c * 32 + row * 2], 0);
+  for (let y = 0; y < 8; y++) {
+    let lo = 0;
+    let hi = 0;
+    for (let x = 0; x < 8; x++) {
+      const v = rows[y][x] & 3;
+      lo |= (v & 1) << (7 - x);
+      hi |= ((v >> 1) & 1) << (7 - x);
     }
+    out.push(lo, hi);
   }
-  for (let row = 0; row < 8; row++) out.push(0x00, 0xff); // fill: colour 2
   return out;
 };
 
-const UI_PALETTE = [
-  [0, 0, 0],    // 0 transparent
-  [31, 31, 31], // 1 text
-  [3, 5, 12],   // 2 box fill
-  [20, 22, 28]  // 3 box edge
-];
+const lum = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
+
+// Build the BG3 UI tile blob + 4-colour palette from a project's
+// assets/ui/{ascii,frame,cursor}.png. Blob tile order:
+//   [0 .. NUM_UI_GLYPHS-1]  glyphs (char 0x20..0xFF)
+//   [UI_FILL_TILE]          solid darkest colour - the OVERLAY_SHOW panel
+//   [UI_FRAME_TILE0 .. +8]  nine-slice frame  TL T TR / L C R / BL B BR
+//   [UI_CURSOR_TILE]        the menu ">" pointer
+// Palette: index 0 is left unused (BG colour 0 is transparent); the image's
+// colours are mapped to 1..3 by luminance (lightest = box interior), a 4th
+// colour snaps to the nearest of those - the stock UI art is 2-4 GB shades.
+const buildUiGfx = async uiDir => {
+  const load = async name => {
+    const px = await getPixels(path.join(uiDir, name));
+    const [w, h] = px.shape;
+    return { px, w, h };
+  };
+  const ascii = await load("ascii.png");
+  const frame = await load("frame.png");
+  const cursor = await load("cursor.png");
+
+  // collect distinct colours across all three images
+  const seen = new Map();
+  const scan = ({ px, w, h }) => {
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const c = [px.get(x, y, 0), px.get(x, y, 1), px.get(x, y, 2)];
+        seen.set(c.join(","), c);
+      }
+    }
+  };
+  scan(ascii);
+  scan(frame);
+  scan(cursor);
+
+  // -> palette indices 1,2,3. BG3 colour 0 is transparent, so an opaque box
+  // gets at most 3 colours: keep the lightest (box interior) and the darkest
+  // (text/border), fill the middle slot, and snap any extra to the nearest.
+  const distinct = [...seen.values()].sort((a, b) => lum(b) - lum(a));
+  let palColours;
+  if (distinct.length <= 3) {
+    palColours = distinct.slice();
+  } else {
+    palColours = [distinct[0], distinct[1], distinct[distinct.length - 1]];
+  }
+  while (palColours.length < 3) palColours.push([0, 0, 0]);
+  const nearest = c => {
+    let best = 0;
+    let bd = Infinity;
+    palColours.forEach((p, i) => {
+      const d =
+        (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    });
+    return best + 1; // -> 1..3
+  };
+  const idxOf = c => nearest(c);
+
+  const quad = ({ px }, ox, oy) => {
+    const rows = [];
+    for (let y = 0; y < 8; y++) {
+      const row = [];
+      for (let x = 0; x < 8; x++) {
+        row.push(idxOf([px.get(ox + x, oy + y, 0), px.get(ox + x, oy + y, 1), px.get(ox + x, oy + y, 2)]));
+      }
+      rows.push(row);
+    }
+    return tile2bpp(rows);
+  };
+  const solid = i => tile2bpp(new Array(8).fill(new Array(8).fill(i)));
+
+  const out = [];
+  // glyphs - ascii.png is 16 tiles wide. Tile 0 (char 0x20, space) is forced
+  // fully transparent: it doubles as UI_BLANK, the tile every BG3 cell outside
+  // the dialogue box holds, so it must not paint over the scene. Spaces inside
+  // text are drawn as the box-fill tile instead (see UI_CHAR in ui.c).
+  const cols = ascii.w >> 3;
+  for (let t = 0; t < NUM_UI_GLYPHS; t++) {
+    const gx = (t % cols) * 8;
+    const gy = ((t / cols) | 0) * 8;
+    if (t === 0) {
+      out.push(...solid(0)); // space = transparent, doubles as UI_BLANK
+    } else if (gy + 8 <= ascii.h) {
+      out.push(...quad(ascii, gx, gy));
+    } else {
+      out.push(...solid(1));
+    }
+  }
+  out.push(...solid(3)); // UI_FILL_TILE - darkest, the overlay curtain
+  // frame nine-slice, row-major TL T TR / L C R / BL B BR
+  for (let fy = 0; fy < 3; fy++) {
+    for (let fx = 0; fx < 3; fx++) {
+      out.push(...quad(frame, fx * 8, fy * 8));
+    }
+  }
+  out.push(...quad(cursor, 0, 0));
+
+  // palette: [0]=unused, [1..3] by luminance (bytes = BGR555 lo/hi)
+  const words = [0].concat(
+    palColours.map(([r, g, b]) =>
+      (((b >> 3) & 31) << 10) | (((g >> 3) & 31) << 5) | ((r >> 3) & 31)
+    )
+  );
+  const palOut = [];
+  for (const w of words) palOut.push(w & 0xff, (w >> 8) & 0xff);
+
+  return { font: out, palette: palOut };
+};
 
 const SPR_PALETTE = [
   [0, 0, 0],
@@ -222,15 +346,19 @@ const buildSpriteSheet = async () => {
   return { sheet, emoteColors: colors };
 };
 
-const snesFixedAssets = async () => {
+const snesFixedAssets = async ({ uiAssetDir } = {}) => {
   const { sheet, emoteColors } = await buildSpriteSheet();
+  const ui = await buildUiGfx(uiAssetDir || DEFAULT_UI_DIR);
   return {
-    uiFont: buildUiFont(),
-    uiPaletteBytes: palBytes(UI_PALETTE).slice(0, 8),
+    uiFont: ui.font,
+    uiPaletteBytes: ui.palette,
     spriteTiles: sheet,
     spritePaletteBytes: palBytes(SPR_PALETTE),
     emotePaletteBytes: palBytes(emoteColors),
     UI_FILL_TILE,
+    NUM_UI_GLYPHS,
+    UI_FRAME_TILE0,
+    UI_CURSOR_TILE,
     NUM_EMOTES,
     EMOTE_TILE0,
     AVATAR_TILE0,

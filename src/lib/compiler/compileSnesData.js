@@ -24,15 +24,37 @@
  *
  * Not handled yet: SC_64x64 scenes wider than 32 tiles.
  */
+import fs from "fs-extra";
+import Path from "path";
 import snesgfx from "./snesgfx";
 import compileEntityEvents from "./compileEntityEvents";
 import { snesFixedAssets } from "./snesFixedAssets";
 import { dirDec, moveDec, animSpeedDec } from "./helpers";
 import { assetFilename } from "../helpers/gbstudio";
+import { projectTemplatesRoot } from "../../consts";
 import snesTarget from "./targets/snes";
 import migrateProject from "../project/migrateProject";
 
 const EVENT_END = "EVENT_END";
+
+// The BG3 UI graphics (ascii font, nine-slice frame, menu cursor) are project
+// assets, same as on Game Boy. Backfill any that are missing from the stock
+// sample so an older project still builds, and return the assets/ui dir.
+const UI_FILES = ["ascii.png", "frame.png", "cursor.png"];
+const ensureSnesUiAssets = async (projectRoot, warnings) => {
+  const uiDir = Path.join(projectRoot, "assets", "ui");
+  for (const name of UI_FILES) {
+    const dest = Path.join(uiDir, name);
+    if (!fs.existsSync(dest)) {
+      await fs.copy(
+        Path.join(projectTemplatesRoot, "gbhtml", "assets", "ui", name),
+        dest
+      );
+      warnings(`assets/ui/${name} was missing, copied the default in`);
+    }
+  }
+  return uiDir;
+};
 
 const clampByte = n => Math.max(0, Math.min(255, n | 0));
 
@@ -160,7 +182,11 @@ const compileSnesData = async (
     .slice(0, AVATAR_SLOTS)
     .map(id => ({ id }));
 
-  const fixed = await snesFixedAssets();
+  // BG3 UI graphics (font + nine-slice frame + menu cursor) come from the
+  // project's own assets/ui/*.png, same as the Game Boy target. Missing files
+  // are backfilled from the stock sample by ensureSnesUiAssets().
+  const uiAssetDir = await ensureSnesUiAssets(projectRoot, warnings);
+  const fixed = await snesFixedAssets({ uiAssetDir });
   // 256-tile OBJ sheet: actor pose-A/B direction regions (slot 0 seeded with
   // the placeholder player), plus the 8 emotes (M5c) and up to 8 dialogue
   // avatars (M5d). See snesFixedAssets.js for the full region map.
@@ -482,7 +508,10 @@ extern const unsigned char *const scenes[${scenes.length}];
 #define SPR_PAL_SIZE   ${sprPalBytes.length}
 #define UI_FONT_SIZE  ${fixed.uiFont.length}
 #define UI_PAL_SIZE   ${fixed.uiPaletteBytes.length}
+#define NUM_UI_GLYPHS ${fixed.NUM_UI_GLYPHS}
 #define UI_FILL_TILE  ${fixed.UI_FILL_TILE}
+#define UI_FRAME_TILE0 ${fixed.UI_FRAME_TILE0}
+#define UI_CURSOR_TILE ${fixed.UI_CURSOR_TILE}
 #define EMOTE_PAL_SIZE ${fixed.emotePaletteBytes.length}
 #define EMOTE_TILE0 ${fixed.EMOTE_TILE0}
 #define NUM_EMOTES ${fixed.NUM_EMOTES}

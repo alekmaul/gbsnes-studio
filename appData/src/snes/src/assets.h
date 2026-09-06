@@ -8,7 +8,7 @@ extern const unsigned char spr_tiles[8192];
 extern const unsigned char spr_pal[256];
 extern const unsigned char emote_pal[8];
 extern const unsigned char avatar_pal[12];
-extern const unsigned char ui_font[1552];
+extern const unsigned char ui_font[3760];
 extern const unsigned char ui_pal[8];
 extern const unsigned char sprite_slot_for_index[1];
 extern const unsigned char sprite_type_for_slot[8];
@@ -34,9 +34,12 @@ extern const unsigned char *const scenes[];
 #define SPRITE_SLOTS 8
 #define SPR_TILES_SIZE 8192
 #define SPR_PAL_SIZE   256
-#define UI_FONT_SIZE  1552
+#define UI_FONT_SIZE  3760
 #define UI_PAL_SIZE   8
-#define UI_FILL_TILE  96
+#define NUM_UI_GLYPHS 224
+#define UI_FILL_TILE  224
+#define UI_FRAME_TILE0 225
+#define UI_CURSOR_TILE 234
 #define EMOTE_PAL_SIZE 8
 #define EMOTE_TILE0 32
 #define NUM_EMOTES 8

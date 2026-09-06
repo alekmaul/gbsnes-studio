@@ -14,7 +14,8 @@ extern u16 prev_joy;
 extern u8 time;
 
 /* VRAM layout (words): BG1 map 0x0000-0x0FFF, BG3 map 0x1000-0x17FF,
- * BG1 tiles 0x2000, BG3 font 0x3000-0x32FF. */
+ * BG1 tiles 0x2000-0x2FFF (256 4bpp tiles), BG3 UI tiles 0x3000-0x375F
+ * (235 2bpp tiles: 224 glyphs + fill + 9-slice frame + cursor), OBJ 0x4000. */
 #define UI_MAP_VRAM  0x1000
 #define UI_FONT_VRAM 0x3000
 
@@ -23,7 +24,11 @@ extern u8 time;
  * Mode 1) is set - see setMode(BG_MODE1, BG3_MODE1_PRIORITY_HIGH) in game.c. */
 #define UI_PAL_BITS (0x1000 | 0x2000)
 #define UI_ENTRY(t) ((u16)(t) | UI_PAL_BITS)
-#define UI_CHAR(c)  UI_ENTRY((u8)((u8)(c) - 0x20))
+/* Glyph tile = char - 0x20; the space (tile 0) is transparent so it can double
+ * as UI_BLANK, so a space inside text draws the opaque box-fill tile instead. */
+#define UI_BOX_FILL (UI_FRAME_TILE0 + 4) /* nine-slice centre = box interior */
+#define UI_CHAR(c) \
+    UI_ENTRY((u8)(c) == 0x20 ? UI_BOX_FILL : (u8)((u8)(c) - 0x20))
 #define UI_BLANK    0x0000
 
 #define BOX_ROW0 20
@@ -105,6 +110,43 @@ static void ui_fill_box(u16 entry)
         for (c = 0; c < 32; c++)
         {
             ui_map[(BOX_ROW0 + r) * 32 + c] = entry;
+        }
+    }
+}
+
+/* Draw the assets/ui/frame.png nine-slice around the box rows: top/bottom
+ * edges, left/right edges, corners, centre fill. Text and the menu cursor are
+ * written over the centre afterwards. */
+static void ui_frame_box(void)
+{
+    u8 r, c;
+    for (r = 0; r < BOX_ROWS; r++)
+    {
+        u16 l, m, rt;
+        if (r == 0)
+        {
+            l = UI_FRAME_TILE0 + 0;
+            m = UI_FRAME_TILE0 + 1;
+            rt = UI_FRAME_TILE0 + 2;
+        }
+        else if (r == BOX_ROWS - 1)
+        {
+            l = UI_FRAME_TILE0 + 6;
+            m = UI_FRAME_TILE0 + 7;
+            rt = UI_FRAME_TILE0 + 8;
+        }
+        else
+        {
+            l = UI_FRAME_TILE0 + 3;
+            m = UI_FRAME_TILE0 + 4;
+            rt = UI_FRAME_TILE0 + 5;
+        }
+        for (c = 0; c < 32; c++)
+        {
+            u16 t = m;
+            if (c == 0) t = l;
+            else if (c == 31) t = rt;
+            ui_map[(BOX_ROW0 + r) * 32 + c] = UI_ENTRY(t);
         }
     }
 }
@@ -283,7 +325,7 @@ static void ui_begin_text(const unsigned char *str, u8 xoff)
     ui_tick = 0;
     ui_state = 1;
     ui_script_wait = 1;
-    ui_fill_box(UI_ENTRY(UI_FILL_TILE));
+    ui_frame_box();
     ui_dirty = 1;
     ui_slide_reset();
 }
@@ -372,9 +414,9 @@ static void ui_draw_cursor(void)
     for (i = 0; i < ui_menu_count; i++)
     {
         u8 row, col;
-        u16 e = UI_ENTRY(UI_FILL_TILE);
+        u16 e = UI_ENTRY(UI_BOX_FILL);
         ui_option_cell(i, &row, &col);
-        if (i == ui_menu_index) e = UI_CHAR('>');
+        if (i == ui_menu_index) e = UI_ENTRY(UI_CURSOR_TILE);
         ui_map[(TXT_ROW0 + row) * 32 + (TXT_COL0 + col * MENU_COL_W)] = e;
     }
 }
@@ -400,7 +442,7 @@ void UIShowMenu(u16 flag, const unsigned char *str, u8 cancel_cfg, u8 layout)
     ui_state = 4;
     ui_script_wait = 1;
 
-    ui_fill_box(UI_ENTRY(UI_FILL_TILE));
+    ui_frame_box();
     ui_draw_menu_options();
     ui_draw_cursor();
     ui_dirty = 1;
@@ -580,10 +622,11 @@ void UIUpdate(void)
         u8 b = time & 0x10;
         if (b != ui_blink)
         {
-            u16 e = UI_ENTRY(UI_FILL_TILE);
+            u16 e = UI_ENTRY(UI_BOX_FILL);
             ui_blink = b;
-            if (b) e = UI_CHAR('>');
-            ui_map[(BOX_ROW0 + BOX_ROWS - 1) * 32 + 30] = e;
+            if (b) e = UI_ENTRY(UI_CURSOR_TILE);
+            /* inside the frame, bottom-right corner of the text area */
+            ui_map[(BOX_ROW0 + BOX_ROWS - 2) * 32 + 29] = e;
             ui_dirty = 1;
         }
         if ((joy & KEY_A) && !(prev_joy & KEY_A))

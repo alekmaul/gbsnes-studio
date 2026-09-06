@@ -353,6 +353,9 @@ const repoSrc = path.resolve(__dirname, "..", "src");
   const sprSheet = fixed.spriteTiles;
   const emotePal = fixed.emotePaletteBytes;
   const UI_FILL_TILE = fixed.UI_FILL_TILE;
+  const NUM_UI_GLYPHS = fixed.NUM_UI_GLYPHS;
+  const UI_FRAME_TILE0 = fixed.UI_FRAME_TILE0;
+  const UI_CURSOR_TILE = fixed.UI_CURSOR_TILE;
 
   // spr_pal is the whole OBJ CGRAM image (8 palettes * 32 bytes). Palette 0 =
   // the placeholder colours; per-sprite palettes are filled in by the real
@@ -442,7 +445,10 @@ extern const unsigned char *const scenes[];
 #define SPR_PAL_SIZE   ${sprPal.length}
 #define UI_FONT_SIZE  ${uiFont.length}
 #define UI_PAL_SIZE   ${uiPal.length}
+#define NUM_UI_GLYPHS ${NUM_UI_GLYPHS}
 #define UI_FILL_TILE  ${UI_FILL_TILE}
+#define UI_FRAME_TILE0 ${UI_FRAME_TILE0}
+#define UI_CURSOR_TILE ${UI_CURSOR_TILE}
 #define EMOTE_PAL_SIZE ${emotePal.length}
 #define EMOTE_TILE0 ${fixed.EMOTE_TILE0}
 #define NUM_EMOTES ${fixed.NUM_EMOTES}

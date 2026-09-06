@@ -194,8 +194,23 @@ Tests: `test/helpers/assetWarnings.test.js`.
   (→ a plain 16-bit `string_ptrs[]` index; no banked pointer, D4). `buildProject.js`
   `buildProjectSnes` runs it and writes the two files into the ejected engine tree before
   `buildSnesRom`. Runs `migrateProject` (idempotent) so legacy `EVENT_MATH_*` etc. compile.
-  `src/lib/compiler/snesFixedAssets.js` provides the built-in font + fallback sprite + UI
-  palette shared with `gen-dummy-gfx.js`. Per-actor sprites: `imageToSpriteData` → up to 8
+  `src/lib/compiler/snesFixedAssets.js` provides the BG3 UI graphics + fallback sprite +
+  palette shared with `gen-dummy-gfx.js`. **The UI font/frame/cursor are project assets, not
+  built in** (user-found: the SNES box used a hardcoded `font8.pic` and a plain fill, no
+  border or `>` cursor). `snesFixedAssets({ uiAssetDir })` now converts
+  `assets/ui/{ascii,frame,cursor}.png` (the same files the GB target uses) to a BG3 2bpp tile
+  blob: 224 glyphs (char 0x20..0xFF) + a solid fill (the `OVERLAY_SHOW` curtain,
+  `UI_FILL_TILE`) + a 9-slice frame (`UI_FRAME_TILE0..+8`, drawn by `ui.c`'s new
+  `ui_frame_box()`) + the menu cursor (`UI_CURSOR_TILE`), sharing one 4-colour palette (CGRAM
+  16-19, mapped by luminance; BG3 index 0 stays transparent so an opaque box has ≤3 colours -
+  a 4th snaps to nearest). `compileSnesData.js` `ensureSnesUiAssets()` backfills the three PNGs
+  from `templates/gbhtml` if a project lacks them; `gen-dummy-gfx.js` uses that template dir.
+  **Tile 0 (the space glyph) is forced fully transparent** - it doubles as `UI_BLANK` (every
+  BG3 cell outside the box), and a non-transparent tile 0 showed through the transparent
+  background of 2-colour scenes like the Logo/Title (they map their bg to BG1 index 0);
+  `UI_CHAR(' ')` therefore draws the box-fill tile, not tile 0. VRAM: 235 2bpp tiles at
+  `0x3000-0x375F`, clear of BG1 (`0x2000-0x2FFF`) and OBJ (`0x4000`).
+  `test/data/compiler/snesFixedAssets.test.js` guards the blob shape. Per-actor sprites: `imageToSpriteData` → up to 8
   slots in one OBJ sheet (VRAM `0x4000`); actor blob byte 4 = slot, engine sets
   `frame_offset = slot*2`. Sub-scripts (`SET_INPUT_SCRIPT` / `SET_TIMER_SCRIPT`) use a `banked`
   shim → own `event_ptrs[]` slot; the engine now runs them for real too (M7-cont., see
