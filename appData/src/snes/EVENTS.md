@@ -61,7 +61,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | --- | --- | --- |
 | Show Actor, Hide Actor | ✅ | |
 | Show All Sprites, Hide All Sprites | ✅ | |
-| Actor animation (6-frame sheets) | ✅ | A 6-frame actor sheet walk-cycles (2 poses per direction) while moving. The editor's per-actor "Animate Frames" checkbox makes a non-moving 6-frame actor auto-cycle all 6 frames (e.g. a torch). 3-frame sheets are direction-only (no walk cycle); 1-frame sheets are static. |
+| Actor animation | ✅ | A 6-frame actor sheet walk-cycles (2 poses per direction) while moving. An "animated" sheet with 2/4/5/6 frames auto-cycles all of them (a duck, a torch) when "Animate Frames" is ticked. 3-frame sheets are direction-only (no cycle); 1-frame sheets are static. |
 | Actor Emote | ✅ | 16×16 bubble on OBJ palette 1. |
 | Per-actor sprite colours | ✅ | Each distinct sprite sheet gets its own 16-colour OBJ palette (extracted from the PNG). OBJ palettes 1 and 2 are reserved for emotes / avatars, so up to **6** distinct on-screen sprite sheets keep their own colours; a 7th/8th reuses the first sheet's palette. |
 | Set Collisions Enabled / Disabled | ✅ | |

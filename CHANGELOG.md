@@ -57,6 +57,11 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- SNES: actor sprites drew one tile too low, so an actor placed "on" something (a rock on
+  a staircase, a torch on a stand) rendered a row below it. Sprites now sit at the same
+  spot as on Game Boy.
+- SNES: "animated" sprite sheets with 2, 4 or 5 frames (e.g. a flapping duck, a flickering
+  torch) only showed their first frame. They now cycle through every frame.
 - SNES: the dialogue box, menus and overlay now use the project's own
   `assets/ui/ascii.png`, `frame.png` and `cursor.png` (the same files the Game Boy target
   uses) instead of a built-in font. The box gets a real border and menus get a cursor;

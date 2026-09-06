@@ -274,8 +274,10 @@ const imageToSpriteData = async (filename, options = {}) => {
     warnings.push(`Sprite ${filename} is ${imgW}x${imgH}, smaller than 16x16`);
   }
   const sheetFrames = Math.floor(imgW / FRAME_SIZE);
-  // frame count -> sprite_type (SPRITE_STATIC 0 / SPRITE_ACTOR 1 /
-  // SPRITE_ACTOR_ANIMATED 2); any count other than 3 or 6 reads frame 0 only.
+  // frame count -> sprite_type: 3 = SPRITE_ACTOR (directional), 6 =
+  // SPRITE_ACTOR_ANIMATED (walk cycle), any other 2..6 = SPRITE_STATIC that
+  // auto-cycles all its frames (GB Studio's "animated" type, e.g. a 2-frame
+  // duck, a 4-frame torch). 1 frame or >6 = frame 0 only.
   let frameCount = 1;
   let spriteType = 0;
   if (sheetFrames === 6) {
@@ -284,6 +286,9 @@ const imageToSpriteData = async (filename, options = {}) => {
   } else if (sheetFrames === 3) {
     frameCount = 3;
     spriteType = 1;
+  } else if (sheetFrames >= 2 && sheetFrames <= 6) {
+    frameCount = sheetFrames;
+    spriteType = 0;
   }
   const scanW = Math.min(FRAME_SIZE * frameCount, imgW);
 

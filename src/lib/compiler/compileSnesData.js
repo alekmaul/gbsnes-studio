@@ -226,22 +226,32 @@ const compileSnesData = async (
       for (let b = 0; b < 32; b++) sprSheet[dst[ti] * 32 + b] = tile[b];
     });
   };
-  // A 3-frame sheet's tiles: [down, up, side] (4 tiles each) -> the pose-A
-  // regions. A 6-frame sheet's tiles: [down-a, down-b, up-a, up-b, side-a,
-  // side-b] -> pose-A + pose-B regions. See snesFixedAssets.js for why these
-  // are separate 8-slot regions rather than a wider slot-0..7 range.
-  const placeDirectionFrames = (k, tiles) => {
-    if (tiles.length >= 24) {
-      // 6-frame SPRITE_ACTOR_ANIMATED
-      placeTiles(fixed.ACTOR_DOWN_B_SLOT0 + k, tiles.slice(4, 8));
-      placeTiles(fixed.ACTOR_UP_SLOT0 + k, tiles.slice(8, 12));
-      placeTiles(fixed.ACTOR_UP_B_SLOT0 + k, tiles.slice(12, 16));
-      placeTiles(fixed.ACTOR_SIDE_SLOT0 + k, tiles.slice(16, 20));
-      placeTiles(fixed.ACTOR_SIDE_B_SLOT0 + k, tiles.slice(20, 24));
-    } else if (tiles.length >= 12) {
-      // 3-frame SPRITE_ACTOR
+  // Frame 0 (4 tiles) always goes in slot k's pose-A region via placeTiles(k).
+  // The rest depend on the sprite type:
+  //   3-frame SPRITE_ACTOR         -> [down, up, side]: frame 1 = up, 2 = side
+  //   everything else (2-6 frames) -> frame f into the f-th of
+  //     [down-A, down-B, up-A, up-B, side-A, side-B] - the exact regions the
+  //     engine's SPRITE_ACTOR_ANIMATED walk cycle and its SPRITE_STATIC
+  //     auto-cycle both read by frame number.
+  // See snesFixedAssets.js for why these are separate 8-slot regions.
+  const ANIM_FRAME_SLOT0 = [
+    null,
+    fixed.ACTOR_DOWN_B_SLOT0,
+    fixed.ACTOR_UP_SLOT0,
+    fixed.ACTOR_UP_B_SLOT0,
+    fixed.ACTOR_SIDE_SLOT0,
+    fixed.ACTOR_SIDE_B_SLOT0
+  ];
+  const placeDirectionFrames = (k, tiles, spriteType) => {
+    const nFrames = Math.min(tiles.length >> 2, 6);
+    if (spriteType === 1) {
+      // 3-frame SPRITE_ACTOR: [down, up, side]
       placeTiles(fixed.ACTOR_UP_SLOT0 + k, tiles.slice(4, 8));
       placeTiles(fixed.ACTOR_SIDE_SLOT0 + k, tiles.slice(8, 12));
+      return;
+    }
+    for (let f = 1; f < nFrames; f++) {
+      placeTiles(ANIM_FRAME_SLOT0[f] + k, tiles.slice(f * 4, f * 4 + 4));
     }
   };
   const spriteTypeBySlot = {};
@@ -254,7 +264,7 @@ const compileSnesData = async (
     );
     conv.warnings.forEach(warnings);
     placeTiles(k, conv.tiles.slice(0, 4));
-    placeDirectionFrames(k, conv.tiles);
+    placeDirectionFrames(k, conv.tiles, conv.spriteType);
     spriteTypeBySlot[k] = conv.spriteType;
     spriteFramesBySlot[k] = conv.frameCount;
     writePal(objPalForSlot(k), conv.paletteBytes);

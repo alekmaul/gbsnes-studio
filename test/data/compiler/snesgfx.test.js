@@ -110,6 +110,22 @@ describe("snesgfx imageToSpriteData", () => {
     expect(s.tiles).toHaveLength(4);
     expect(s.warnings).toEqual([]);
   });
+
+  test("a 2- or 4-frame 'animated' sheet keeps every frame, SPRITE_STATIC", async () => {
+    const ui = Path.join(
+      __dirname, "..", "..", "..", "appData", "templates", "sneshtml",
+      "assets", "sprites"
+    );
+    const duck = await imageToSpriteData(Path.join(ui, "duck.png")); // 32x16
+    expect(duck.frameCount).toBe(2);
+    expect(duck.spriteType).toBe(0); // auto-cycle, not a walk / direction sheet
+    expect(duck.tiles).toHaveLength(8);
+
+    const fire = await imageToSpriteData(Path.join(ui, "fire.png")); // 64x16
+    expect(fire.frameCount).toBe(4);
+    expect(fire.spriteType).toBe(0);
+    expect(fire.tiles).toHaveLength(16);
+  });
 });
 
 describe("snesgfx imageToBGData - real GB Studio background", () => {

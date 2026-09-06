@@ -425,13 +425,21 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  */
 
 /* frames_len from the per-actor sprite_type + the sheet's frame count:
- * a 6-frame SPRITE_ACTOR_ANIMATED walks 2 poses per direction; a 6-frame sheet
- * on a non-moving actor (SPRITE_STATIC) is a manual/auto 6-frame cycle;
- * everything else is a single frame. */
+ * a 6-frame SPRITE_ACTOR_ANIMATED walks 2 poses per direction; a SPRITE_STATIC
+ * sheet with 2-6 frames auto-cycles all of them (GB Studio's "animated" type -
+ * a 2-frame duck, a 4-frame torch, ...); a 3-frame SPRITE_ACTOR and 1-frame
+ * sheet are a single frame. */
 static u8 frames_len_for(u8 sprite_type, u8 slot)
 {
     if (sprite_type == SPRITE_ACTOR_ANIMATED) return 2;
-    if (sprite_type == SPRITE_STATIC && sprite_frames_for_slot[slot] == 6) return 6;
+    if (sprite_type == SPRITE_STATIC)
+    {
+        /* n == 3 is a directional SPRITE_ACTOR sheet (its 3 frames are laid
+         * out down/up/side, not for a linear cycle) - leave it at frame 0. */
+        u8 n = sprite_frames_for_slot[slot];
+        if (n == 2) return 2;
+        if (n >= 4 && n <= 6) return n;
+    }
     return 1;
 }
 
@@ -944,7 +952,11 @@ static void SceneRenderActors(void)
             // oamSet(id, x, y, priority, hflip, vflip, gfxoffset, pal)
             // frame_offset is always slot*2 (SceneInit / PLAYER_SET_SPRITE), so
             // frame_offset>>1 is the sprite slot -> its per-sheet OBJ palette.
-            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 8, 2,
+            // -8 x / -16 y: a 16x16 sprite whose feet sit at the bottom of the
+            // actor's tile, matching the GB engine (actor pos = tile*8+8, GB
+            // OAM shows at pos - {8,16}); -8 y put every sprite a tile too low
+            // (an actor placed "on the stairs" rendered one row below them).
+            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 16, 2,
                    flip, 0, tile, sprite_pal_for_slot[actors[i].frame_offset >> 1]);
             oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         }
@@ -957,7 +969,7 @@ static void SceneRenderActors(void)
     if (emote_time != 0)
     {
         oamSet(EMOTE_OID, actors[emote_actor].x - scroll_x - 8,
-               actors[emote_actor].y - scroll_y - 24, 2, 0, 0,
+               actors[emote_actor].y - scroll_y - 32, 2, 0, 0,
                EMOTE_TILE0 + emote_id * 2, 1);
         oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
     }

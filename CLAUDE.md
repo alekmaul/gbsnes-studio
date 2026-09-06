@@ -238,6 +238,19 @@ Tests: `test/helpers/assetWarnings.test.js`.
   per direction, snapped to standing when idle; 3-/1-frame sheets provably unchanged
   (`frames_len` 1 → `SceneAnimateActors` skips; `SPRITE_ACTOR` render path byte-identical to
   phase 1).
+  **N-frame `animated` sheets (user-found: the sample's 2-frame duck / 4-frame torch didn't
+  animate).** `snesgfx.js` only recognised 3- and 6-frame sheets; 2/4/5-frame "animated"
+  sheets read frame 0 only. Now `imageToSpriteData` keeps every frame for 2-6, `spriteType`
+  `SPRITE_STATIC` (an auto-cycle, not a walk/direction sheet). `compileSnesData.js`
+  `placeDirectionFrames` puts frame f into the f-th of `[downA, downB, upA, upB, sideA, sideB]`
+  - the same regions the engine's `SPRITE_ACTOR_ANIMATED` and 6-frame-`SPRITE_STATIC` render
+  paths already read by frame number - so `scene.c` only needed `frames_len_for` widened to
+  `n ∈ {2,4,5,6}` (n==3 stays a directional `SPRITE_ACTOR`, frame 0). Verified in SnesJs: the
+  duck's OAM tile alternates `2k` ↔ `160+2k` (frame 0 ↔ 1). Test: `snesgfx.test.js`.
+  **Actor sprite Y offset (user-found: "the rock is not on the stair").** `SceneRenderActors`
+  drew the 16×16 OBJ at `actors[i].y - scroll_y - 8`, putting every sprite a full tile too
+  low. GB positions it so the feet sit at the bottom of the actor's tile (`pos.y = tile*8+8`,
+  GB OAM shows at `pos - {8,16}`); SNES now matches with `- 16` (emote bubble `- 24` → `- 32`).
   **Per-sprite OBJ palettes (done).** Each used sprite slot draws its own 16-colour OBJ
   palette. The SNES has 8 OBJ palettes (CGRAM 128..255); palettes 1 and 2 stay reserved for
   the emote bubbles / dialogue avatars, so `compileSnesData.js` assigns actor sprite slots
