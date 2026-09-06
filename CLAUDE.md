@@ -307,8 +307,11 @@ Tests: `test/helpers/assetWarnings.test.js`.
   `make` run (MSYS `make`/`sh` at `C:\svgexterne\...\ndsdev\msys\bin`, see Claude memory) against
   the *vendored* (not the external full) PVSnesLib copy, producing a ROM that boots in Mesen.
 - **Toolchain** vendored (subset) under `buildTools/<platform>-<arch>/pvsneslib/` — PVSnesLib
-  V4.7.0 `devkitsnes/{bin,tools,include,snes_rules}` + `pvsneslib/{include,lib}`. Only `win32-x64`
-  so far. Decisions log + roadmap live in Claude memory (`snes-port-effort`).
+  V4.7.0 `devkitsnes/{bin,tools,include,snes_rules}` + `pvsneslib/{include,lib}`, for
+  `win32-x64`, `linux-x64` and `darwin-x64` (native binaries per platform; the unix ones carry
+  a forced exec bit in the index since `core.fileMode` is `false` here). `smconv.spc` (the
+  platform-independent SPC700 driver blob) travels in every `tools/`. Only 64-bit hosts (no
+  `win32-ia32`). Decisions log + roadmap live in Claude memory (`snes-port-effort`).
 - **`appData/snes-js-emulator/`** — M10 (Play button / web export), the SNES counterpart of
   `appData/js-emulator` (GameBoy-Online, the GB target's bundled JS emulator). Vendors
   [angelo-wf/SnesJs](https://github.com/angelo-wf/SnesJs) (MIT, pure JS, LoROM-only — matches

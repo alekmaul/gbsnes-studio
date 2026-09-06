@@ -20,9 +20,10 @@ const path = require("path");
 const { execFileSync } = require("child_process");
 
 const RES = path.resolve(__dirname, "..", "res");
+const EXT = process.platform === "win32" ? ".exe" : "";
 const SNESBRR = path.resolve(
   __dirname,
-  "../../../../buildTools/win32-x64/pvsneslib/devkitsnes/tools/snesbrr.exe"
+  `../../../../buildTools/${process.platform}-${process.arch}/pvsneslib/devkitsnes/tools/snesbrr${EXT}`
 );
 
 // mono 16-bit PCM WAV. snesbrr ignores the sample rate (playback rate is set at
