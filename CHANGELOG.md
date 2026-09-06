@@ -5,10 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.2.0] - 2026-09-06
+## [1.0.0] - 2026-09-06
 
-SNES: project music + layered sound effects, per-sprite colours, in-app Play + touch controls + saved-game persistence, sprite animation, editor polish, and playing the 8-scene sample game start to finish — UI graphics from the project's PNGs, per-scene sprite sheets, N-frame animation, GB-matching collision (roadmap M8–M12). Full status:
+First tagged release of **GBSNES Studio** — a fork of GB Studio 1.2.2 that keeps the Game Boy
+(GBDK) target intact and adds a second **SNES / PVSnesLib** build target: create an SNES
+project → script it (dialogue, menus, actors, camera, SRAM save, music, sound effects) →
+Build ROM → Play (bundled JS emulator, with touch controls + saved-game persistence). The
+Game Boy non-regression suite stays green. The stock 8-scene sample game plays start to
+finish on SNES. Full roadmap & status:
 https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
+
+The `[0.x.0]` sections below were untagged development milestones during the fork's build-out
+and are kept for chronology; everything in them ships in 1.0.0.
+
+The highlights of the final push (roadmap M8–M12):
 
 ### Added
 - **SNES music now plays a project's own songs.** Each `.mod` track is converted to Impulse
@@ -120,7 +130,9 @@ The SNES target is functional end to end (create → script → build → play),
 
 Full per-event detail: `appData/src/snes/EVENTS.md`.
 
-## [1.1.0] - 2026-09-05
+## [0.2.0] - 2026-09-05
+
+*(untagged development milestone — ships in 1.0.0)*
 
 SNES engine opcode coverage + editor integration (roadmap M7-cont. + M9).
 
@@ -153,6 +165,9 @@ SNES engine opcode coverage + editor integration (roadmap M7-cont. + M9).
 - The camera's compiled movement range was always clamped to the Game Boy's screen size, even
   when building for SNES.
 
-## [1.0.0] - 2026-09-03
+## [0.1.0] - 2026-09-03
 
-Initial GB SNES Studio Public Release : https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4?via=auto_preview
+*(untagged development milestone — ships in 1.0.0)*
+
+First internal end-to-end SNES build (roadmap M0–M7). Full status:
+https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4?via=auto_preview
