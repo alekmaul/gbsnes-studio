@@ -1,0 +1,88 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+  workflow_dispatch:
+
+# Older toolchain (electron-forge 5 / Electron 4). Node 16 matches what the
+# project builds with locally; CI installs with --ignore-engines like the old
+# CircleCI config did.
+env:
+  NODE_VERSION: "16"
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+      - run: yarn install --ignore-engines --network-timeout 600000
+      - run: yarn test
+
+  build:
+    needs: test
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            make: make:win
+            artifact: windows-x64
+          - os: macos-13 # x64 runner — Electron 4 has no arm64 build
+            make: make:mac
+            artifact: macos-x64
+          - os: ubuntu-latest
+            make: make:linux
+            artifact: linux-x64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+
+      - name: Linux packaging deps
+        if: matrix.os == 'ubuntu-latest'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fakeroot rpm
+
+      - run: yarn install --ignore-engines --network-timeout 600000
+
+      - name: Package + make (${{ matrix.artifact }})
+        run: yarn ${{ matrix.make }}
+        env:
+          CI: "true" # forge.config.js skips osxSign when set
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gbsnes-studio-${{ matrix.artifact }}
+          path: out/make/**
+          if-no-files-found: error
+          retention-days: 14
+
+  # On a v* tag: collect the per-platform builds and attach them to the release.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: List assets
+        run: find dist -type f | sort
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: false

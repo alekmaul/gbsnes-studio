@@ -13,7 +13,7 @@ it does not edit GB behaviour in place.
 
 Branding: everything user-facing says **GBSNES Studio** — `productName`, `forge.config.js`
 names, the splash/About windows, and every "GB Studio" string in `src/lang/*.json` (all
-locales). The npm `name`, `executableName`, Squirrel/Store names and CircleCI artifact names
+locales). The npm `name`, `executableName`, Squirrel/Store names and CI artifact names
 are `gbsnes-studio` / `gbsnes_studio` / `gbsnesstudio`. Still `gbstudio`-flavoured (not renamed
 on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
 `src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
@@ -35,6 +35,14 @@ node src/lang/list_missing.js           # report missing translation keys
 
 There is no build step for `src/` in dev — `electron-compile` transpiles on the fly via
 `.compilerc` / `.babelrc`. Tests transpile through `babel-jest` with `.babelrc`.
+
+**CI** is GitHub Actions (`.github/workflows/build.yml`) — replaced the inherited-from-upstream
+CircleCI config (deleted; wrong branch names, Wine-based Windows builds). `test` runs
+`yarn test` on Node 16 (Ubuntu); `build` is a `{windows-latest, macos-13, ubuntu-latest}`
+matrix running `yarn make:{win,mac,linux}` natively per OS (each vendored PVSnesLib toolchain
+runs on its own platform). `forge.config.js` skips `osxSign` when `process.env.CI` is set (no
+Apple identity on CI). On a `v*` tag the `release` job attaches the per-platform builds to the
+GitHub Release (`softprops/action-gh-release`). Lint is not gated (large inherited eslint debt).
 
 ## Two processes, one repo
 

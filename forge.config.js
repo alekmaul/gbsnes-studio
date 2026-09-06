@@ -16,12 +16,17 @@ module.exports = {
     afterCopy: ["./after-copy"],
     asar: true,
     appBundleId: "dev.gbstudio.gbstudio",
-    osxSign: {
-      "hardened-runtime": true,
-      "gatekeeper-assess": false,
-      entitlements: "./entitlements.plist",
-      "entitlements-inherit": "./entitlements.plist"
-    },
+    // Code-sign the .app locally, but skip it on CI (no Apple identity there —
+    // electron-osx-sign would fail trying to auto-discover one). CI produces an
+    // unsigned build; the notarize hook already no-ops without APPLE_ID.
+    osxSign: process.env.CI
+      ? false
+      : {
+          "hardened-runtime": true,
+          "gatekeeper-assess": false,
+          entitlements: "./entitlements.plist",
+          "entitlements-inherit": "./entitlements.plist"
+        },
     ignore: [
       "/.vscode($|/)",
       "/coverage($|/)",
