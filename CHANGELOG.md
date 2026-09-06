@@ -57,6 +57,9 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- `Overlay: Show` / `Overlay: Move To` on SNES stopped the overlay short of the bottom of
+  the screen (it used the Game Boy's screen height), so "hide" left a strip covering the
+  lower part of the screen. The overlay row is now scaled to the target's screen height.
 - The in-app "Play" window for an SNES project showed only a black screen. The player's
   layout used CSS features the app's bundled browser doesn't support, which pushed the
   "Play" button out of the (Game Boy-sized) window — the game was waiting to be started

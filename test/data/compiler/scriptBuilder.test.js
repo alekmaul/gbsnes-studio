@@ -626,6 +626,29 @@ test("Should default to moving the overlay instantly offscreen", () => {
   expect(output).toEqual([cmd(OVERLAY_MOVE_TO), 0, 18, 0]);
 });
 
+test("Should scale overlay row to the target screen height on SNES", () => {
+  // The overlay spans row Y..screen bottom, so the authored GB row (18 rows)
+  // has to be scaled to the SNES screen (28 rows) or "hide" leaves a strip.
+  const move = [];
+  new ScriptBuilder(move, { target: "snes" }).overlayMoveTo(0, 18, 0);
+  expect(move).toEqual([cmd(OVERLAY_MOVE_TO), 0, 28, 0]);
+
+  const show = [];
+  new ScriptBuilder(show, { target: "snes" }).overlayShow("white", 0, 9);
+  expect(show).toEqual([cmd(OVERLAY_SHOW), 1, 0, 14]);
+
+  // full-screen (row 0) stays row 0
+  const full = [];
+  new ScriptBuilder(full, { target: "snes" }).overlayShow();
+  expect(full).toEqual([cmd(OVERLAY_SHOW), 1, 0, 0]);
+});
+
+test("Should leave overlay row untouched on the GB target", () => {
+  const output = [];
+  new ScriptBuilder(output, { target: "gb" }).overlayMoveTo(4, 9, 1);
+  expect(output).toEqual([cmd(OVERLAY_MOVE_TO), 4, 9, 1]);
+});
+
 test("Should be able to switch scene", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {

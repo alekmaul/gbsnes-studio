@@ -132,6 +132,18 @@ codebase has access to project/scene context at definition time** (fields are st
 `field.min`/`field.max` render straight into the number input) - real correctness now lives
 in the compiler-side clamp above, which already accounts for the actual scene size.
 A real `.gbsproj` (`test/projects/Test_Math`) now compiles to a bootable `.sfc` this way.
+**Overlay row scaling (same class of bug, found later by the user).** `Overlay: Show` /
+`Overlay: Move To` take a Y **tile row** (0 = full-screen overlay, 18 = just off the bottom
+of the GB screen = hidden); the SNES BG3 overlay fills from that row to the bottom of the
+screen, so an authored `18` on SNES stopped at row 18 and left a ~10-row strip covering the
+lower screen ("the BG3 window still uses GB coordinates (144) to disappear instead of SNES
+(224)"). Fixed in `scriptBuilder.js` `scaleOverlayRow(y)` — `round(y * getTarget(target).
+screenTileHeight / 18)`, applied by both `overlayShow` and `overlayMoveTo` (`target` undefined
+/ `"gb"` → ×18/18 → unchanged bytes, scoped test in `scriptBuilder.test.js`). Proportional
+so row 0 stays full-screen and row 18 maps to row 28 = fully hidden; also fixes a latent
+bleed-through where a "hidden" (row 18) overlay still showed under a dialogue box on SNES.
+The editor field cap (`eventOverlay{Show,MoveTo}.js`, `y max: 18`) is left as-is — after
+scaling it already spans full-screen…hidden on both targets.
 **M9 editor asset feedback (done).** Two more editor spots were GB-hardcoded and are now
 target-aware via `getTarget(settings.target)`: the **Backgrounds page size warnings**
 (`src/components/assets/ImageViewer.js` → `src/lib/helpers/assetWarnings.js`) used a fixed

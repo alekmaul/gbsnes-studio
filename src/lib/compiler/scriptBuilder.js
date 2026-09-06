@@ -551,12 +551,26 @@ class ScriptBuilder {
 
   // Overlays
 
+  // Overlay Y is authored as a Game Boy tile row (0 = full-screen overlay,
+  // 18 = just off the bottom of the GB screen = hidden). The overlay always
+  // spans from row Y to the bottom of the screen, so on a taller target the
+  // same authored row has to be scaled by the screen height or "hide" (18)
+  // stops short and leaves a strip visible. target undefined -> "gb", ratio
+  // 18/18 = 1, so GB output is byte-for-byte unchanged.
+  scaleOverlayRow = y => {
+    const { target } = this.options || {};
+    const gbRows = getTarget("gb").screenTileHeight;
+    const rows = getTarget(target).screenTileHeight;
+    if (rows === gbRows) return y;
+    return Math.round((y * rows) / gbRows);
+  };
+
   overlayShow = (color = "white", x = 0, y = 0) => {
     const output = this.output;
     output.push(cmd(OVERLAY_SHOW));
     output.push(color === "white" ? 1 : 0);
     output.push(x);
-    output.push(y);
+    output.push(this.scaleOverlayRow(y));
   };
 
   overlayHide = () => {
@@ -568,7 +582,7 @@ class ScriptBuilder {
     const output = this.output;
     output.push(cmd(OVERLAY_MOVE_TO));
     output.push(x);
-    output.push(y);
+    output.push(this.scaleOverlayRow(y));
     output.push(speed);
   };
 
