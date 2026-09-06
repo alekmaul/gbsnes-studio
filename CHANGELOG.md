@@ -37,8 +37,8 @@ The highlights of the final push (roadmap M8–M12):
   `Save Data` / `Load Data` events now survive a page reload (stored in the browser, per game).
 - New Project screen: **"Blank Project (SNES)"** and **"Sample Project (SNES)"** templates. The
   SNES sample is the classic 8-scene GB Studio sample game retargeted — it builds and plays as a
-  `.sfc`; most backgrounds are redrawn at the SNES resolution (a few of the larger scenes
-  still use the Game Boy art).
+  `.sfc`, with all backgrounds at the SNES resolution (the room scenes redrawn, the scrolling
+  scenes recoloured off the 4-shade Game Boy green).
 - Engine: actor sprites with a **6-frame sheet now walk-cycle** (two poses per direction) while
   moving; a 6-frame sheet on a non-moving actor with "Animate Frames" ticked auto-cycles all 6
   frames (e.g. a torch). `Actor: Set Animation Speed` paces it.
@@ -58,8 +58,10 @@ The highlights of the final push (roadmap M8–M12):
 - Engine: the SNES **dialogue box, menus and overlay now use the project's own
   `assets/ui/ascii.png` / `frame.png` / `cursor.png`** (the same files the Game Boy target
   uses) — a real bordered box, a menu cursor, the project's font.
-- The "Sample Project (SNES)" backgrounds are **redrawn at the SNES resolution** (256×224)
-  and their scenes resized to match, so the sample fills the screen instead of a corner.
+- The "Sample Project (SNES)" backgrounds all use the **SNES resolution**: the 5 room scenes
+  are redrawn at 256×224 and their scenes resized to match (so the sample fills the screen
+  instead of a corner), and the 3 scrolling scenes (Outside, Stars, Underground) are
+  recoloured off the 4-shade Game Boy green to a per-scene palette.
 - Editor: the **Backgrounds page size warnings** now match the selected target — an SNES
   project is checked against the 256×224 SNES screen, not the Game Boy's 160×144.
 - Editor: for SNES projects the scene info bar shows **distinct sprite sheets (`S: n/8`)**

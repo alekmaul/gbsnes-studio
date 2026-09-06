@@ -502,9 +502,12 @@ Tests: `test/helpers/assetWarnings.test.js`.
   Underground, Title Screen, Menu, …). A verbatim copy of `gbhtml` with `settings.target: "snes"`
   + region/SRAM defaults; every event the sample uses is on the SNES support list and it
   compiles + links to a bootable `.sfc` (the `snesTemplate.test.js` `sneshtml` describe covers
-  both the `compileSnesData` pass and a toolchain-gated end-to-end build). Visual caveats stand:
-  the art is GB-sized (160×144, 4-shade green) so scenes render smaller than the 256×224 SNES
-  screen and in green until the PNGs are redrawn/recoloured — but it plays.
+  both the `compileSnesData` pass and a toolchain-gated end-to-end build). All 8 backgrounds
+  are now SNES-sized: the 5 room scenes (cave/house/logo/menu/titlescreen) were hand-redrawn
+  160×144 → 256×224, and the 3 scrolling scenes (outside/stars/underground, already 256×256)
+  were recoloured off the 4 flat DMG greens to a per-scene palette (a straight 1:1 colour LUT,
+  so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
+  committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
 ### SNES port — state & what's left (as of 2026-09-06)
 
@@ -517,7 +520,8 @@ side); M10 done; M11 code-side done. **M12 (playing the sample game for real, us
 the stock 8-scene sample now plays start-to-finish on SNES — UI graphics from the project's
 own `assets/ui` PNGs, per-scene sprite sheets (16-sheet projects), N-frame `animated` sprites,
 GB-matching collision + sprite Y offset, off-screen overlay no longer freezing the player, and
-5 of the 8 sample backgrounds redrawn at 256×224.
+all 8 sample backgrounds now SNES-sized (5 room scenes redrawn at 256×224, 3 scrolling scenes
+recoloured off the DMG greens).
 
 Real remaining **code** gaps, most impactful first:
 1. **X / Y / L / R buttons** — deferred by user decision (needs the shared 1-byte `KEY_BITS`
@@ -539,8 +543,9 @@ shows the player sprite for the overflow). **N-frame `animated` sprites** (2/4/5
 and torches cycle). **`can_step` collision** now matches GB (was a 2×2 footprint blocking the
 player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, matching GB).
 **Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES. **In-app
-Play black screen** (old-Chromium CSS + window size). **5 sample backgrounds redrawn at
-256×224** + scenes resized/collision re-strided.
+Play black screen** (old-Chromium CSS + window size). **All 8 sample backgrounds SNES-sized**
+(5 room scenes redrawn at 256×224 + scenes resized/collision re-strided; 3 scrolling scenes
+recoloured off the DMG greens, 1:1 LUT so collision is unchanged).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
