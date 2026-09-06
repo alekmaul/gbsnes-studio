@@ -1,60 +1,43 @@
-# GB Studio
+# GBSNES Studio
 
+**GBSNES Studio** is a fork of **GB Studio 1.2.2** that adds a Super Nintendo
+(PVSnesLib) build target alongside the original Game Boy one — a free and easy to
+use retro adventure game creator for Game Boy and Super Nintendo, for Mac, Linux
+and Windows.
 
-[![CircleCI](https://circleci.com/gh/chrismaltby/gb-studio/tree/develop.svg?style=shield)](https://circleci.com/gh/chrismaltby/gb-studio/tree/develop)
-
-Copyright (c) 2020 Chris Maltby, released under the [MIT license](https://opensource.org/licenses/MIT).
-
-Twitter: [@maltby](https://www.twitter.com/maltby) 
-
-Reddit: [/r/gbstudio](https://www.reddit.com/r/gbstudio)  
-Discord: [Join Chat](https://discord.gg/bxerKnc)
-
-GB Studio is a free and easy to use retro adventure game creator for Game Boy available for Mac, Linux and Windows.
-For more information see the [GB Studio](https://www.gbstudio.dev) site
+Based on GB Studio, Copyright (c) 2020 Chris Maltby ([@maltby](https://www.twitter.com/maltby)),
+released under the [MIT license](https://opensource.org/licenses/MIT).
 
 ----
 
-## 🚨 🚨 🚨 Version 2 Beta Available 🚨 🚨 🚨
+![GBSNES Studio](gbstudio.gif)
 
-If you're looking for the GB Studio 2 Beta check out the branch [v2beta](https://github.com/chrismaltby/gb-studio/tree/v2beta) for the latest builds.
+GBSNES Studio consists of an [Electron](https://electronjs.org/) game-builder
+application and two C game engines:
 
-----
+- **Game Boy** — [GBDK](http://gbdk.sourceforge.net/), music by
+  [GBT Player](https://github.com/AntonioND/gbt-player)
+- **Super Nintendo** — [PVSnesLib](https://github.com/alekmaul/pvsneslib), music
+  and sound via snesmod
 
-![GB Studio](gbstudio.gif)
+The Game Boy path is unchanged from GB Studio 1.2.2 and stays the reference; the
+SNES target is added in parallel.
 
-GB Studio consists of an [Electron](https://electronjs.org/) game builder application and a C based game engine using [GBDK](http://gbdk.sourceforge.net/), music is provided by [GBT Player](https://github.com/AntonioND/gbt-player)
+## Running from source
 
-## Installation
-
-Download a release for your operating system from the [GB Studio Downloads](https://www.gbstudio.dev/download) page.
-
-Or to run from source, clone this repo then:
+You need [Git](https://git-scm.com/) and Node.js 16 on your `PATH`. Then:
 
 ```bash
 $ yarn
 $ npm start
 ```
 
+Package a distributable with `yarn make:win`, `yarn make:mac` or `yarn make:linux`.
+
 ## Documentation
 
-[GB Studio Documentation](https://www.gbstudio.dev/docs)
-
-## Development builds
-
-These builds reflects the latest changes from the `develop` branch and are updated automatically. It is recommended to make a backup of your project before using any of these versions.
-
-#### macOS
-
-[![MacOS](https://img.shields.io/static/v1.svg?label=&message=64%20bit&color=blue&logo=apple&style=for-the-badge&logoColor=white)](https://circleci.com/api/v1.1/project/github/chrismaltby/gb-studio/latest/artifacts/0/builds/gb-studio-develop-darwin_x86_64.zip?branch=develop&filter=successful)
-
-#### Linux
-
-[![DEB](https://img.shields.io/static/v1.svg?label=&message=deb&color=blue&logo=Ubuntu&style=for-the-badge&logoColor=white)](https://circleci.com/api/v1.1/project/github/chrismaltby/gb-studio/latest/artifacts/0/builds/gb-studio-develop-linux_x86_64.deb?branch=develop&filter=successful)
-[![RPM](https://img.shields.io/static/v1.svg?label=&message=RPM&color=blue&logo=linux&style=for-the-badge&logoColor=white)](https://circleci.com/api/v1.1/project/github/chrismaltby/gb-studio/latest/artifacts/0/builds/gb-studio-develop-linux_x86_64.rpm?branch=develop&filter=successful)
-
-#### Windows
-
-[![Windows_x86_64](https://img.shields.io/static/v1.svg?label=&message=64%20bit&color=blue&logo=windows&style=for-the-badge&logoColor=white)](https://circleci.com/api/v1.1/project/github/chrismaltby/gb-studio/latest/artifacts/0/builds/gb-studio-develop-windows_x86_64.zip?branch=develop&filter=successful)
-[![Windows_x86](https://img.shields.io/static/v1.svg?label=&message=32%20bit&color=blue&logo=windows&style=for-the-badge&logoColor=white)](https://circleci.com/api/v1.1/project/github/chrismaltby/gb-studio/latest/artifacts/0/builds/gb-studio-develop-windows_x86.zip?branch=develop&filter=successful)
-
+- `appData/src/snes/README.md` — the SNES engine (architecture, milestones)
+- `appData/src/snes/EVENTS.md` — per-event Game Boy vs SNES support
+- `appData/src/snes/PERF.md` — SNES performance profile
+- `CLAUDE.md` — repository guide (build pipeline, conventions)
+- `CHANGELOG.md` — release notes
