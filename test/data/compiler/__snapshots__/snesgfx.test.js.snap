@@ -1,0 +1,98 @@
+// Jest Snapshot v1, https://goo.gl/fbAQLP
+
+exports[`snesgfx imageToBGData - real GB Studio background byte output is stable: palette 1`] = `
+Array [
+  252,
+  107,
+  50,
+  63,
+  198,
+  41,
+  97,
+  16,
+  17,
+  59,
+  97,
+  16,
+  50,
+  63,
+  50,
+  67,
+  50,
+  67,
+  97,
+  16,
+  166,
+  41,
+  50,
+  63,
+  50,
+  63,
+  50,
+  63,
+]
+`;
+
+exports[`snesgfx imageToBGData - real GB Studio background byte output is stable: tile0 1`] = `
+Array [
+  94,
+  32,
+  214,
+  32,
+  249,
+  64,
+  175,
+  240,
+  189,
+  195,
+  230,
+  255,
+  251,
+  255,
+  14,
+  246,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  0,
+  8,
+  0,
+]
+`;
+
+exports[`snesgfx imageToBGData - real GB Studio background byte output is stable: tileCount 1`] = `46`;
+
+exports[`snesgfx imageToBGData - real GB Studio background byte output is stable: tilemap-row0 1`] = `
+Array [
+  0,
+  1,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+  2,
+  3,
+]
+`;

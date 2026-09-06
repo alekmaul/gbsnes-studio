@@ -1,0 +1,231 @@
+:root {
+  --bg: #12141a;
+  --shell: #1c1f27;
+  --edge: #2b2f3a;
+  --accent: #6b8cff;
+  --ink: #e7e9ee;
+  --ink-dim: #8b909c;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-touch-callout: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#snes_shell {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+}
+
+#screen {
+  position: relative;
+  width: min(100%, calc(90vh * 512 / 480));
+  aspect-ratio: 512 / 480;
+  background: #000;
+  border-radius: 10px;
+  overflow: hidden;
+  box-shadow: 0 0 0 1px var(--edge), 0 20px 50px -20px rgba(0, 0, 0, 0.7);
+}
+
+#output {
+  display: block;
+  width: 100%;
+  height: 100%;
+  image-rendering: pixelated;
+  background: #000;
+}
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 12, 16, 0.72);
+  backdrop-filter: blur(2px);
+  z-index: 2;
+}
+.overlay[hidden] { display: none; }
+
+.overlay_inner {
+  text-align: center;
+  padding: 20px;
+}
+
+#start_title {
+  font-size: clamp(1rem, 4vw, 1.6rem);
+  font-weight: 600;
+  margin-bottom: 16px;
+  word-break: break-word;
+}
+
+#start_button {
+  appearance: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 12px 30px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent);
+  cursor: pointer;
+}
+#start_button:active { transform: translateY(1px); }
+
+#start_hint {
+  margin-top: 14px;
+  font-size: 0.8rem;
+  color: var(--ink-dim);
+  min-height: 1em;
+}
+
+.overlay_msg {
+  font-size: 1.1rem;
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  color: var(--ink-dim);
+}
+
+#log {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  padding: 4px 8px;
+  font: 10px/1.4 ui-monospace, Menlo, Consolas, monospace;
+  color: var(--ink-dim);
+  background: linear-gradient(transparent, rgba(0, 0, 0, 0.55));
+  white-space: pre-wrap;
+  pointer-events: none;
+  z-index: 1;
+}
+
+#toolbar {
+  display: flex;
+  gap: 8px;
+}
+
+#toolbar button {
+  appearance: none;
+  width: 40px;
+  height: 34px;
+  border: 1px solid var(--edge);
+  border-radius: 8px;
+  background: var(--shell);
+  color: var(--ink);
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+#toolbar button:active { background: var(--edge); }
+#toolbar button[data-on="1"] { border-color: var(--accent); color: var(--accent); }
+
+/* ---- touch pad ---- */
+#pad {
+  position: fixed;
+  inset: auto 0 0 0;
+  height: 220px;
+  opacity: 0.9;
+  z-index: 3;
+  touch-action: none;
+}
+#pad[hidden] { display: none; }
+
+#pad_dpad {
+  position: absolute;
+  left: 18px;
+  bottom: 30px;
+  width: 168px;
+  height: 168px;
+}
+#pad_dpad::before {
+  content: "";
+  position: absolute;
+  left: 56px;
+  top: 56px;
+  width: 56px;
+  height: 56px;
+  background: #3a3f4c;
+  border-radius: 6px;
+}
+.dbtn {
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  background: #4a5060;
+  border-radius: 8px;
+}
+.dbtn[data-btn="up"] { left: 56px; top: 0; }
+.dbtn[data-btn="down"] { left: 56px; top: 112px; }
+.dbtn[data-btn="left"] { left: 0; top: 56px; }
+.dbtn[data-btn="right"] { left: 112px; top: 56px; }
+.dbtn.pressed { background: var(--accent); }
+
+#pad_face {
+  position: absolute;
+  right: 22px;
+  bottom: 46px;
+  width: 150px;
+  height: 130px;
+}
+.fbtn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  color: #1a1c22;
+}
+.fbtn.round {
+  position: absolute;
+  width: 62px;
+  height: 62px;
+  border-radius: 999px;
+  font-size: 22px;
+  background: radial-gradient(ellipse at center, #b7c4ff 0%, #8ea3f5 100%);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+.fbtn.round[data-btn="a"] { right: 0; top: 22px; }
+.fbtn.round[data-btn="b"] { right: 70px; top: 58px; }
+
+#pad_center {
+  position: absolute;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 14px;
+}
+.fbtn.capsule {
+  width: 74px;
+  height: 30px;
+  border-radius: 999px;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #cfd3dd;
+  background: #3a3f4c;
+}
+.fbtn.pressed { filter: brightness(1.5); }
+
+@media (max-width: 520px) {
+  #snes_shell { padding: 0; gap: 6px; justify-content: flex-start; }
+  #screen { border-radius: 0; width: 100%; margin-top: env(safe-area-inset-top, 0); }
+  #toolbar { padding: 4px 0; }
+}

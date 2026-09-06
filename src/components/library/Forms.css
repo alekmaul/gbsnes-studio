@@ -1,0 +1,369 @@
+input,
+select,
+textarea {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica,
+    Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+}
+
+.Textarea {
+  background: var(--input-bg-color);
+  border-radius: 4px;
+  border: 1px solid var(--input-border-color);
+  color: var(--input-text-color);
+  padding: 5px;
+  box-sizing: border-box;
+  width: 100%;
+  font-family: monospace;
+}
+
+.Textarea--Large {
+  padding: 20px;
+  font-size: 22px;
+  margin-bottom: 20px;
+}
+
+.Textarea--Borderless {
+  padding: 0px;
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.Textarea--FixedSize {
+  resize: none;
+}
+
+.FormField {
+  box-sizing: border-box;
+  display: inline-block;
+  padding: 10px;
+  padding-bottom: 0;
+  width: 100%;
+}
+
+.FormField--HalfWidth {
+  width: 50%;
+}
+
+.FormField--ThirdWidth {
+  width: 33%;
+}
+
+.FormField--QuarterWidth {
+  width: 25%;
+}
+
+.FormField--ToggleableClosed label {
+  float: left;
+  text-decoration: underline;
+}
+
+.FormField--ToggleableClosed label:hover {
+  padding: 5px;
+  margin: -5px -5px;
+  border-radius: 2px;
+  background: rgba(80, 80, 80, 0.1);
+}
+
+.FormField label {
+  display: block;
+  text-align: left;
+  box-sizing: border-box;
+  font-size: 12px;
+}
+
+.FormField label > input,
+.FormField label > select,
+.FormField label > textarea,
+.FormField label > div {
+  margin-top: 5px;
+}
+
+.FormField label > div label > div {
+  margin-top: 0px;
+}
+
+.FormField label ~ * {
+  margin-top: 5px;
+}
+
+.FormField input {
+  margin-right: 5px;
+  border-radius: 4px;
+  background-color: var(--input-bg-color);
+  border: 1px solid var(--input-border-color);
+  color: var(--input-text-color);
+  padding: 5px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+}
+
+.FormField input[type="checkbox"] {
+  width: 1px;
+  position: absolute;
+  opacity: 0;
+}
+
+.FormField .FormCheckbox {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  background: var(--input-bg-color);
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+  vertical-align: middle;
+  border-radius: 4px;
+  border: 1px solid var(--input-border-color);
+  margin-top: 0;
+}
+
+.FormField input[type="checkbox"]:checked + .FormCheckbox {
+  background: var(--highlight-color);
+  border-color: transparent;
+}
+
+.FormField input[type="checkbox"]:checked + .FormCheckbox:after {
+  content: "";
+  mask: url('data:image/svg+xml; utf8, <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="#808080"><path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z"/></svg>')
+    no-repeat 50% 50%;
+  -webkit-mask: url('data:image/svg+xml; utf8, <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="#808080"><path d="M20.285 2l-11.285 11.567-5.286-5.011-3.714 3.716 9 8.728 15-15.285z"/></svg>')
+    no-repeat 50% 50%;
+  background: #fff;
+  display: block;
+  width: 10px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.FormField input[type="checkbox"]:focus + .FormCheckbox {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0px 2px var(--highlight-color);
+}
+
+.FormField textarea {
+  margin-right: 5px;
+  border-radius: 4px;
+  background-color: var(--input-bg-color);
+  border: 1px solid var(--input-border-color);
+  color: var(--input-text-color);
+  padding: 5px;
+  box-sizing: border-box;
+  width: 100%;
+  height: auto;
+  resize: none;
+  line-height: 16px;
+}
+
+.FormField select {
+  border-radius: 4px;
+  border: 0px;
+  padding: 5px;
+  box-sizing: border-box;
+  width: 100%;
+  height: 30px;
+  border: 1px solid var(--input-border-color);
+  background-color: var(--input-bg-color);
+  color: var(--input-text-color);
+}
+
+.FormField:last-child {
+  padding-bottom: 10px;
+}
+
+.SelectRenamable {
+  display: flex;
+}
+
+.SelectRenamable .ReactSelectContainer {
+  width: 100%;
+}
+
+.SelectRenamable input {
+  padding-left: 8px;
+}
+
+.SelectRenamable__EditBtn {
+  display: flex;
+  text-decoration: underline;
+  justify-content: center;
+  align-items: center;
+  padding: 0 5px;
+  margin-right: -5px;
+  margin-left: 5px;
+  border-radius: 2px;
+}
+
+.SelectRenamable__EditBtn:hover {
+  background: rgba(80, 80, 80, 0.1);
+}
+
+.SelectRenamable__SaveBtn,
+.SelectRenamable__SaveBtn:hover {
+  background: var(--highlight-color);
+  border-radius: 2px;
+  color: #fff;
+  text-decoration: none;
+  padding: 0 10px;
+}
+
+.Platform__win32 .FormField input,
+.Platform__win32 .FormField textarea,
+.Platform__win32 .FormField select {
+  border-radius: 2px;
+}
+
+.FormField input:focus,
+.FormField textarea:focus,
+.FormField select:focus {
+  outline: none;
+  border-color: transparent;
+  box-shadow: 0 0 0px 2px var(--highlight-color);
+}
+
+.FormField .GBScriptEditor {
+  margin: -10px;
+  width: auto;
+}
+
+.FormField .ace_editor {
+}
+
+.FormField .ReactSelectContainer input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+.FormField .ReactSelect__control {
+  height: 30px;
+  min-height: 30px;
+  border: 1px solid var(--input-border-color);
+  background-color: var(--input-bg-color);
+}
+
+.ReactSelect__control:hover {
+  border: 1px solid var(--input-border-color) !important;
+}
+
+.FormField .ReactSelect__single-value {
+  color: var(--input-text-color);
+  font-size: 11px;
+}
+
+.FormField .ReactSelect__input {
+  color: var(--input-text-color);
+  font-size: 11px;
+}
+
+.FormField .ReactSelect__control--is-focused {
+  border: 1px solid transparent !important;
+  box-shadow: 0 0 0px 2px var(--highlight-color);
+}
+
+.FormField .ReactSelect__menu {
+  color: var(--main-text-color);
+  background-color: var(--menu-bg-color);
+  z-index: 100;
+  box-shadow: 0 0 0 1px rgba(120, 120, 120, 0.3),
+    0 4px 11px hsla(0, 0%, 0%, 0.1);
+}
+
+.FormField .ReactSelect__option {
+  font-size: 11px;
+  padding: 6px 10px;
+}
+
+.FormField .ReactSelect__option:active {
+  background-color: var(--menu-bg-color);
+}
+
+.FormField .ReactSelect__option .Button--Small {
+  height: 20px;
+  min-width: 24px;
+  width: 24px;
+  padding: 2px 0px;
+  margin-left: -4px;
+  margin-right: -4px;
+  margin-top: -2px;
+  margin-bottom: -2px;
+}
+
+.FormField .ReactSelect__option .Button--Small svg {
+  height: 10px;
+}
+
+.FormField .ReactSelect__group {
+  padding-bottom: 0px;
+  padding-left: 0px;
+  border-top: 1px solid var(--menu-hover-color);
+  padding-top: 8px;
+  margin-top: 8px;
+  /* border-bottom: 1px solid var(--input-border-color); */
+}
+
+.FormField .ReactSelect__group-heading {
+  margin-top: -14px;
+  float: left;
+  background: var(--menu-bg-color);
+  margin-left: 5px;
+  padding-left: 5px;
+}
+
+.FormField .ReactSelect__value-container {
+  padding-left: 3px;
+}
+
+.FormField .ReactSelect__option--is-focused {
+  color: var(--main-text-color);
+  background-color: var(--menu-hover-color) !important;
+}
+
+.FormField .ReactSelect__option--is-selected {
+  color: var(--highlight-color);
+  background-color: inherit;
+}
+
+.FormField .ReactSelect__indicator-separator {
+  background: var(--menu-hover-color);
+}
+
+.FormField .ReactSelectContainer .Thumbnail {
+  width: 24px;
+  height: 24px;
+  background-size: contain;
+  background-repeat: no-repeat;
+  background-position: right center;
+  transform: scale(1);
+  transition: transform 0.1s ease-in-out;
+  transform-origin: 100% 50%;
+  position: relative;
+  margin: -4px;
+}
+
+.FormField .ReactSelectContainer .Thumbnail:hover {
+  transform: scale(3);
+  z-index: 1000;
+}
+
+.FormField .ReactSelectContainer .ReactSelect__option:first-child .Thumbnail {
+  transform-origin: 100% 0%;
+}
+
+.FormField .ReactSelectContainer .ReactSelect__option:last-child .Thumbnail {
+  transform-origin: 100% 100%;
+}
+
+.FormField .ReactSelectContainer .ReactSelect__indicator .Button {
+  min-width: 24px;
+  width: 24px;
+  padding: 2px 0px;
+  margin-left: -4px;
+  margin-right: -4px;
+}
+
+.FormField .ReactSelectContainer .ReactSelect__indicator .Button svg {
+  height: 10px;
+}

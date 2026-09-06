@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="stylesheet" href="css/style.css" />
+    <title>___PROJECT_NAME___</title>
+    <meta name="author" content="___AUTHOR___" />
+    ___PROJECT_HEAD___
+  </head>
+  <body>
+    <div id="snes_shell">
+      <div id="screen">
+        <canvas id="output" width="512" height="480">No Canvas Support</canvas>
+
+        <div id="start_overlay" class="overlay">
+          <div class="overlay_inner">
+            <div id="start_title">___PROJECT_NAME___</div>
+            <button id="start_button" type="button">&#9654;&nbsp;Play</button>
+            <div id="start_hint"></div>
+          </div>
+        </div>
+
+        <div id="pause_overlay" class="overlay" hidden>
+          <div class="overlay_inner"><div class="overlay_msg">Paused</div></div>
+        </div>
+
+        <pre id="log"></pre>
+      </div>
+
+      <div id="toolbar">
+        <button id="btn_pause" type="button" title="Pause / resume">&#10073;&#10073;</button>
+        <button id="btn_reset" type="button" title="Reset">&#8635;</button>
+        <button id="btn_pad" type="button" title="Show / hide touch controls">&#9711;</button>
+        <button id="btn_full" type="button" title="Fullscreen">&#9974;</button>
+      </div>
+
+      <div id="pad" hidden>
+        <div id="pad_dpad">
+          <div class="dbtn" data-btn="up"></div>
+          <div class="dbtn" data-btn="down"></div>
+          <div class="dbtn" data-btn="left"></div>
+          <div class="dbtn" data-btn="right"></div>
+        </div>
+        <div id="pad_face">
+          <div class="fbtn round" data-btn="b">B</div>
+          <div class="fbtn round" data-btn="a">A</div>
+        </div>
+        <div id="pad_center">
+          <div class="fbtn capsule" data-btn="select">Select</div>
+          <div class="fbtn capsule" data-btn="start">Start</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const customControls = ___CUSTOM_CONTROLS___
+    </script>
+    <script src="snes/cart.js"></script>
+    <script src="snes/dsp.js"></script>
+    <script src="snes/spc.js"></script>
+    <script src="snes/apu.js"></script>
+    <script src="snes/pipu.js"></script>
+    <script src="snes/cpu.js"></script>
+    <script src="snes/snes.js"></script>
+    <script src="js/audio.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>

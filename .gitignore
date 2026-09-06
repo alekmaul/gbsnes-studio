@@ -1,0 +1,26 @@
+/node_modules
+out
+.eslintcache
+*.gbsproj.bak
+.claude/settings.local.json
+src/data/src/gb/build
+src/data/src/gb/include/banks.h
+src/data/src/gb/src/data
+src/data/output
+coverage
+.cache
+.parcelCache
+.vscode
+/dist
+.DS_Store
+test/projects/*/build
+
+# SNES engine (appData/src/snes) standalone build artifacts
+appData/src/snes/hdr.asm
+appData/src/snes/*.sfc
+appData/src/snes/*.sym
+appData/src/snes/*.symfull
+appData/src/snes/*.log
+appData/src/snes/linkfile
+appData/src/snes/build
+appData/src/snes/src/data

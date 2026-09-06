@@ -1,0 +1,6 @@
+-std=c99
+-ffreestanding
+-D__816__
+-I../../../../buildTools/win32-x64/pvsneslib/pvsneslib/include
+-I../../../../buildTools/win32-x64/pvsneslib/devkitsnes/include
+-I.

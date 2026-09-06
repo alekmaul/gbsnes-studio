@@ -1,0 +1,33 @@
+{
+  "extends": ["eslint-config-airbnb", "react-app", "prettier"],
+  "parser": "babel-eslint",
+  "plugins": ["babel"],
+  "parserOptions": {
+    "ecmaVersion": 2018
+  },
+  "rules": {
+    "import/extensions": 0,
+    "import/no-extraneous-dependencies": 0,
+    "import/no-unresolved": [2, { "ignore": ["electron"] }],
+    "linebreak-style": 0,
+    "react/prefer-stateless-function": 0,
+    "react/jsx-filename-extension": 0,
+    "react/jsx-wrap-multilines": 0,
+    "prefer-destructuring": 0,
+    "no-underscore-dangle": 0,
+    "no-bitwise": 0,
+    "no-plusplus": 0,
+    "react/jsx-one-expression-per-line": 0,
+    "jsx-a11y/no-autofocus": 0,
+    "jsx-a11y/no-static-element-interactions": 0,
+    "jsx-a11y/click-events-have-key-events": 0,
+    "jsx-a11y/mouse-events-have-key-events": 0,
+    "jsx-a11y/no-noninteractive-element-interactions": 0,
+    "no-await-in-loop": 0
+  },
+  "env": {
+    "browser": true,
+    "node": true,
+    "es6": true
+  }
+}

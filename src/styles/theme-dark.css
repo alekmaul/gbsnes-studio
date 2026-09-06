@@ -1,0 +1,165 @@
+:root {
+  --highlight-color: #c92c61;
+
+  --toolbar-top-color: #3e4142;
+  --toolbar-bottom-color: #282a2a;
+  --toolbar-background-color: #292e2f;
+  --toolbar-border-color: #000000;
+  --toolbar-inactive-color: #3e4142;
+  --toolbar-inactive-border-color: #000000;
+  --toolbar-text-color: #b7babb;
+
+  --toolbar-button-top-color: #6a6d6e;
+  --toolbar-button-bottom-color: #616364;
+  --toolbar-button-active-top-color: #838587;
+  --toolbar-button-active-bottom-color: #7a7c7e;
+  --toolbar-button-border-color: transparent;
+  --toolbar-button-border-top-color: #9f9e9e;
+  --toolbar-button-shadow-color: transparent;
+  --toolbar-button-text-color: #fbfeff;
+  --toolbar-button-nested-color: #444444;
+
+  --button-top-color: #6a6d6e;
+  --button-bottom-color: #616364;
+  --button-border-color: transparent;
+  --button-border-top-color: #9f9e9e;
+  --button-text-color: #fbfeff;
+  --button-light-icon-color: #999999;
+
+  --menu-bg-color: #000000;
+  --menu-hover-color: #282a2a;
+
+  --input-bg-color: #000000;
+  --input-border-color: #111111;
+  --input-text-color: #b7babb;
+  --input-active-color: #383d3e;
+  --input-button-hover-color: #151515;
+
+  --main-text-color: #b7babb;
+  --main-bg-color: #1d2021;
+  --nav-bg-color: purple;
+  --sidebar-bg-color: #292e2f;
+  --sidebar-border-color: #2e3f44;
+  --sidebar-edge-color: #000000;
+
+  --script-command-text-color: #ffffff;
+  --script-command-bg-color: #0a0e0e;
+  --script-editor-bg-color: #1f2323;
+  --script-review-text-color: #ffffff;
+
+  --sidebar-hover-color: #282a2b;
+  --sidebar-selected-color: #383d3e;
+
+  --conditional-level1: #01579b;
+  --conditional-level2: #bf360c;
+  --conditional-level3: #1b5e20;
+  --conditional-level4: #311b92;
+
+  --script-command-bg-color-alt: #101515;
+  --conditional-level1-alt: #0277bd;
+  --conditional-level2-alt: #d84315;
+  --conditional-level3-alt: #2e7d32;
+  --conditional-level4-alt: #4527a0;
+
+  --comment-event-color: #8bc34a;
+  --comment-event-color-alt: #7cb342;
+}
+
+.App .GBScriptEditor .ace_gutter {
+  background: #292e2f;
+  color: #8f908a;
+}
+.App .GBScriptEditor .ace_print-margin {
+  width: 1px;
+  background: #555651;
+}
+.App .GBScriptEditor .ace_editor {
+  background-color: #1f2323;
+  color: #f8f8f2;
+}
+.App .GBScriptEditor .ace_cursor {
+  color: #f8f8f0;
+}
+.App .GBScriptEditor .ace_marker-layer .ace_selection {
+  background: #49483e;
+}
+.App .GBScriptEditor.ace_multiselect .ace_selection.ace_start {
+  box-shadow: 0 0 3px 0px #272822;
+}
+.App .GBScriptEditor .ace_marker-layer .ace_step {
+  background: rgb(102, 82, 0);
+}
+.App .GBScriptEditor .ace_marker-layer .ace_bracket {
+  margin: -1px 0 0 -1px;
+  border: 1px solid #49483e;
+}
+.App .GBScriptEditor .ace_marker-layer .ace_active-line {
+  background: #202020 !important;
+}
+.App .GBScriptEditor .ace_gutter-active-line {
+  background-color: #272727;
+}
+.App .GBScriptEditor .ace_marker-layer .ace_selected-word {
+  border: 1px solid #49483e;
+}
+.App .GBScriptEditor .ace_invisible {
+  color: #52524d;
+}
+.App .GBScriptEditor .ace_entity.ace_name.ace_tag,
+.App .GBScriptEditor .ace_keyword,
+.App .GBScriptEditor .ace_meta.ace_tag,
+.App .GBScriptEditor .ace_storage {
+  color: #f92672;
+}
+.App .GBScriptEditor .ace_punctuation,
+.App .GBScriptEditor .ace_punctuation.ace_tag {
+  color: #fff;
+}
+.App .GBScriptEditor .ace_constant.ace_character,
+.App .GBScriptEditor .ace_constant.ace_language,
+.App .GBScriptEditor .ace_constant.ace_numeric,
+.App .GBScriptEditor .ace_constant.ace_other {
+  color: #ae81ff;
+}
+.App .GBScriptEditor .ace_invalid {
+  color: #f8f8f0;
+  background-color: #f92672;
+}
+.App .GBScriptEditor .ace_invalid.ace_deprecated {
+  color: #f8f8f0;
+  background-color: #ae81ff;
+}
+.App .GBScriptEditor .ace_support.ace_constant,
+.App .GBScriptEditor .ace_support.ace_function {
+  color: #66d9ef;
+}
+.App .GBScriptEditor .ace_fold {
+  background-color: #a6e22e;
+  border-color: #f8f8f2;
+}
+.App .GBScriptEditor .ace_storage.ace_type,
+.App .GBScriptEditor .ace_support.ace_class,
+.App .GBScriptEditor .ace_support.ace_type {
+  font-style: italic;
+  color: #66d9ef;
+}
+.App .GBScriptEditor .ace_entity.ace_name.ace_function,
+.App .GBScriptEditor .ace_entity.ace_other,
+.App .GBScriptEditor .ace_entity.ace_other.ace_attribute-name,
+.App .GBScriptEditor .ace_variable {
+  color: #a6e22e;
+}
+.App .GBScriptEditor .ace_variable.ace_parameter {
+  font-style: italic;
+  color: #fd971f;
+}
+.App .GBScriptEditor .ace_string {
+  color: #e6db74;
+}
+.App .GBScriptEditor .ace_comment {
+  color: #75715e;
+}
+.App .GBScriptEditor .ace_indent-guide {
+  background: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAACCAYAAACZgbYnAAAAEklEQVQImWPQ0FD0ZXBzd/wPAAjVAoxeSgNeAAAAAElFTkSuQmCC)
+    right repeat-y;
+}
