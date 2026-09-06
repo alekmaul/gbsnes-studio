@@ -502,7 +502,11 @@ menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emul
 controls + saved-game persistence). GB non-regression suite stays green. Milestones M0–M8 done;
 M9 done (the editor is data-driven — full-colour previews, target-aware scene geometry / asset
 warnings / sprite budget; only the X/Y/L/R input options are unbuilt, deferred with the engine
-side); M10 done; M11 code-side done.
+side); M10 done; M11 code-side done. **M12 (playing the sample game for real, user-driven):**
+the stock 8-scene sample now plays start-to-finish on SNES — UI graphics from the project's
+own `assets/ui` PNGs, per-scene sprite sheets (16-sheet projects), N-frame `animated` sprites,
+GB-matching collision + sprite Y offset, off-screen overlay no longer freezing the player, and
+5 of the 8 sample backgrounds redrawn at 256×224.
 
 Real remaining **code** gaps, most impactful first:
 1. **X / Y / L / R buttons** — deferred by user decision (needs the shared 1-byte `KEY_BITS`
@@ -517,12 +521,17 @@ Real remaining **code** gaps, most impactful first:
    per-project SFX assets, so there's nothing to convert; a richer set would just be more
    committed BRR samples.
 
-Done since: **Sound effects layered over music** — `SOUND_*` events play BRR samples through
-snesmod's dedicated sound region, mixing over the music instead of interrupting it.
-**M9 editor asset feedback** — target-aware Backgrounds-page size warnings + Scene info-bar
-sprite budget (`S: n/8` on SNES). **M10 web-player polish** — start gate, touch pad, cartridge
-SRAM persistence. **Per-sprite OBJ palettes**. **Project music (M8 phase 2)** — `mod2it.js` +
-`compileSnesMusic.js` turn the project's own `.mod` songs into the soundbank.
+Done since (M12, playing the sample end to end): **UI graphics from the project's `assets/ui`
+PNGs** (font + 9-slice frame + menu cursor, was a hardcoded font + plain fill). **Per-scene
+sprite sheets** (`buildSceneSprites` + `src/assets_spr.asm`; a 16-sheet project no longer
+shows the player sprite for the overflow). **N-frame `animated` sprites** (2/4/5-frame ducks
+and torches cycle). **`can_step` collision** now matches GB (was a 2×2 footprint blocking the
+player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, matching GB).
+**Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES. **In-app
+Play black screen** (old-Chromium CSS + window size). **5 sample backgrounds redrawn at
+256×224** + scenes resized/collision re-strided.
+Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
+web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
 Not code: a tagged release (trivial), a full demo game (art/music/level design), and the
 roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are data-driven; it

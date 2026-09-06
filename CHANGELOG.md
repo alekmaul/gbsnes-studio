@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-09-06
 
-SNES: project music + layered sound effects, per-sprite colours, in-app Play + touch controls + saved-game persistence, sprite animation, editor polish, stabilisation (roadmap M8 + M9 + M10 + M11). Full status:
+SNES: project music + layered sound effects, per-sprite colours, in-app Play + touch controls + saved-game persistence, sprite animation, editor polish, and playing the 8-scene sample game start to finish — UI graphics from the project's PNGs, per-scene sprite sheets, N-frame animation, GB-matching collision (roadmap M8–M12). Full status:
 https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
 
 ### Added
@@ -27,7 +27,8 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   `Save Data` / `Load Data` events now survive a page reload (stored in the browser, per game).
 - New Project screen: **"Blank Project (SNES)"** and **"Sample Project (SNES)"** templates. The
   SNES sample is the classic 8-scene GB Studio sample game retargeted — it builds and plays as a
-  `.sfc`; the art is still Game Boy-sized and green until redrawn.
+  `.sfc`; most backgrounds are redrawn at the SNES resolution (a few of the larger scenes
+  still use the Game Boy art).
 - Engine: actor sprites with a **6-frame sheet now walk-cycle** (two poses per direction) while
   moving; a 6-frame sheet on a non-moving actor with "Animate Frames" ticked auto-cycles all 6
   frames (e.g. a torch). `Actor: Set Animation Speed` paces it.
@@ -37,8 +38,18 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   palettes); a 7th/8th reuses the first sheet's palette.
 - Engine: `Text: Set Animation Speed`, `Player: Set Sprite Sheet`, and the internal opcode
   behind multi-page `Text` boxes now work (previously silently did nothing). Setting the
-  player's sprite only works if that sheet is already used elsewhere in the project.
+  player's sprite only works if that sheet is already loaded in the current scene.
 - Engine: unused actor OAM slots are hidden once at scene load instead of every frame.
+- Engine: **sprite sheets load per scene** — the player plus up to 7 of a scene's own actor
+  sheets — so a project's total sprite-sheet count is no longer capped at 8. (A single scene
+  with 9+ distinct actor sheets still overflows the extras.)
+- Engine: **"animated" sprite sheets** with 2, 4 or 5 frames (not just 3 or 6) now cycle
+  through every frame — a 2-frame duck, a 4-frame torch.
+- Engine: the SNES **dialogue box, menus and overlay now use the project's own
+  `assets/ui/ascii.png` / `frame.png` / `cursor.png`** (the same files the Game Boy target
+  uses) — a real bordered box, a menu cursor, the project's font.
+- The "Sample Project (SNES)" backgrounds are **redrawn at the SNES resolution** (256×224)
+  and their scenes resized to match, so the sample fills the screen instead of a corner.
 - Editor: the **Backgrounds page size warnings** now match the selected target — an SNES
   project is checked against the 256×224 SNES screen, not the Game Boy's 160×144.
 - Editor: for SNES projects the scene info bar shows **distinct sprite sheets (`S: n/8`)**
@@ -52,9 +63,9 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
 - **Rebranded to "GBSNES Studio"** — the app title, About box, splash window, menus, dialogs
   (all languages), packaged app name, executable and installer filenames.
 - The Settings → Platform "SNES" help/warning text now reflects reality (music, actors,
-  animation, saves all work; the real caveats are X/Y/L/R input, SFX interrupting music, and
-  the 6-sprite-palette ceiling). The dropdown label is "SNES (beta)" rather than
-  "SNES (experimental)".
+  animation, saves all work; the real caveats are X/Y/L/R input, the two built-in sound
+  effects, and the per-scene sprite-sheet limit). The dropdown label is "SNES (beta)" rather
+  than "SNES (experimental)".
 
 ### Fixed
 - SNES: a project with more than 8 sprite sheets showed the player sprite for every actor
@@ -97,9 +108,10 @@ The SNES target is functional end to end (create → script → build → play),
   ProTracker effects have no `.it` equivalent, so an SNES build won't sound identical to the GB
   player. Only 4-channel `M.K.` `.mod` files convert (the same format the GB target requires).
 - **Input**: only the 8 Game Boy buttons. X / Y / L / R are not readable from scripts.
-- **Sprites**: at most 6 distinct sprite sheets on screen keep their own palette; a 7th/8th
-  reuses the first sheet's colours.
-- `Player: Set Sprite Sheet` only works for a sheet already used elsewhere in the project.
+- **Sprites**: sheets load per scene (player + 7). A single scene with 9+ distinct actor
+  sheets overflows the extras to the player sprite; at most 6 sheets in one scene keep their
+  own 16-colour palette (a 7th/8th reuses palette 0).
+- `Player: Set Sprite Sheet` only works for a sheet already loaded in the current scene.
 - **Sound effects** are two built-in samples (beep + noise); `Tone` frequency and `Stop Tone`
   are ignored (the sample is a one-shot).
 - **Performance**: a scene with more than ~5–6 simultaneously moving actors may drop frames
