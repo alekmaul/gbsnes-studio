@@ -183,7 +183,7 @@ endif
 #---------------------------------------------------------------------------------
 %.asm: %.ps
 	@echo Assembling ... $(notdir $<)
-	$(OPT) -i $< -o $@
+	$(OPT) -q -i $< -o $@
 ifeq ($(DEBUG),1)
 	cp $*.asm $*.opt.02.dbg
 endif
