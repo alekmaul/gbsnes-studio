@@ -6,8 +6,8 @@ Second build target for GB Studio: **PVSnesLib / SNES**, parallel to `appData/sr
 Status: **M7 (data compiler + input/timer-script execution, ACTOR_PUSH, scene-state stack,
 SHOW/HIDE_SPRITES, SRAM save game, directional + walk-cycle actor sprites, per-sprite OBJ
 palettes) + M5b-e (menus, emotes,
-avatars, overlay, slide/2-col/move-to) + M8 (music/sound engine plumbing + project `.mod`
-music via a JS `.mod`->`.it` converter feeding snesmod's `smconv`) + M9 (editor Settings page: Platform/Region/SRAM-size toggles,
+avatars, overlay, slide/2-col/move-to) + M8 (project `.mod` music via a JS `.mod`->`.it`
+converter feeding snesmod's `smconv`; BRR sound effects layered over the music) + M9 (editor Settings page: Platform/Region/SRAM-size toggles,
 target-aware camera viewport helper and compiler clamp) + M10 (Play button / web export via a
 vendored JS SNES emulator) + M11 in progress (SNES New Project template; ejected build verified
 to compile standalone with plain `make`; opcode audit + 4 Noop gaps closed; per-event support
@@ -186,6 +186,7 @@ scene-start script) moved them again - a test-scenario quirk, not an engine bug.
 
 **M8 phase 1 (music/sound engine plumbing, done):** `MUSIC_PLAY`/`MUSIC_STOP`/`SOUND_START_TONE`/`SOUND_STOP_TONE`/
 `SOUND_PLAY_BEEP`/`SOUND_PLAY_CRASH` all call into `music.c`'s `spc*` wrappers
+(see "Sound effects layered over music" below for the current SFX path)
 (PVSnesLib's snesmod driver - `pvsneslib/include/snes/sound.h`). Good news from
 investigating: the SPC700 driver ships prebuilt inside `libc.obj`, already unconditionally
 linked by `buildSnesRom.js` for every build - **nothing extra to vendor**, and
@@ -203,21 +204,32 @@ reference to SOUNDBANK__" error. The `.incbin "res/soundbank.bnk"` inside the `.
 `music.c`'s `#include "res/soundbank.h"` are both resolved relative to the *build tool's working
 directory* (the project root), not the including file's own location, so only the `.asm` needed
 to move.
-`game.c`: `MusicInit()` (`spcBoot()` + `MUSIC_SET_BANKS()`) runs once at boot; `spcProcess()` runs
-every frame in the main loop (required - it streams soundbank data to the APU).
-`SOUND_START_TONE`'s period/frequency argument is ignored (snesmod has no "hold an
-arbitrary raw frequency" primitive) - it and `SOUND_PLAY_BEEP`/`SOUND_PLAY_CRASH` all trigger a
-one-shot `spcEffect()` from the test soundbank's 5 loaded instruments instead; `SOUND_STOP_TONE`
-is a no-op. Playing a sound effect currently reloads the effects session, which **stops any
-playing music** - GB Studio's real semantics (SFX layered over music) need a more careful
-multi-session driver setup, deferred.
+`game.c`: `MusicInit()` (`spcBoot()` + `MUSIC_SET_BANKS()` + `spcAllocateSoundRegion()`) runs
+once at boot; `spcProcess()` runs every frame in the main loop (required - it streams soundbank
+data to the APU).
+
+**Sound effects layered over music (done).** `SOUND_PLAY_BEEP` / `SOUND_START_TONE` /
+`SOUND_PLAY_CRASH` play a short BRR sample through snesmod's **dedicated BRR sound region**
+(`spcAllocateSoundRegion` at boot -> `spcSetSoundEntry` + `spcPlaySound` per event), which mixes
+on top of the module instead of interrupting it - no more `spcStop`/session reload. The samples
+are two tiny generated waveforms baked into ROM: `res/sfx_beep.brr` (a square-wave blip, used
+for beep + tone) and `res/sfx_crash.brr` (a noise burst). `appData/src/snes/tools/gen-sfx.js`
+synthesises the `.wav`s and encodes them with the vendored `snesbrr`; the `.brr` + `res/sfx.h`
+(byte lengths) + `src/res/sfx.asm` (`.incbin`, under `src/` so plain `make` finds it) are
+committed so an eject build needs no extra tool. `SOUND_PLAY_BEEP`'s GB pitch (0-7) maps onto
+the BRR pitch range 1-6 (`hz ~ pitch*2000`); `SOUND_START_TONE`'s exact period and
+`SOUND_STOP_TONE` are still ignored (one-shot sample, no arbitrary-frequency primitive).
+GB Studio 1.2.2 has no per-project sound-effect assets, so these two are engine built-ins;
+`res/effectssfx.it` stays soundbank module 0 (for smconv / bank-layout stability) but is no
+longer loaded at runtime.
+**Verified in Mesen** (`emu.getState()` DSP voice envelopes): with music on voice 2 (env ~2016),
+a burst of 10 alternating beep/crash effects fired on voice 7 (env ~1920) **while voice 2 stayed
+at 2016** - the music never dropped out. Before this change a `SOUND_*` collapsed every music
+voice to 0.
 **Verified in Mesen** via `emu.getState()`'s SPC700/DSP registers (flat string keys like
 `"spc.dsp.outSamples0"`, NOT nested tables - a real gotcha, see below) rather than by ear:
-`spc.pc` advances (driver alive), and `spc.dsp.outSamples0/1` + `spc.dsp.voices[1].envVolume`
-go from silent (0) to strongly nonzero (up to ~22800) and back down repeating over 5 seconds
-after `MUSIC_PLAY` fires at boot - exactly the on/off amplitude pattern of real music, not
-constant tone or noise. `MUSIC_STOP`/`SOUND_*` share the same simple call shape (not
-independently exercised in Mesen this pass).
+`spc.pc` advances (driver alive), and `spc.dsp.voices[*].envVolume` go from silent (0) to
+strongly nonzero and back down as the module plays.
 **M8 phase 2 (project music, done):** `src/lib/compiler/compileSnesMusic.js`, run from
 `buildProjectSnes` after `compileSnesData`, turns the project's own `.mod` songs into the
 soundbank the engine plays. The phase-1 blocker (this repo's music pipeline is ProTracker
@@ -362,9 +374,9 @@ implements has a real SNES handler (checked against the GB reference: the "camer
 linear" item once listed here didn't correspond to anything real - GB's own camera has no
 easing/curve concept either, just the same bit-masked linear speed steps this engine already
 ports). Remaining known gaps are visual/asset-pipeline or documented restrictions, not opcode
-coverage: `PLAYER_SET_SPRITE` only working for already-loaded sheets (above), SFX playback
-cutting the music (snesmod one-session limit), and only 6 distinct actor OBJ palettes (see
-below).
+coverage: `PLAYER_SET_SPRITE` only working for already-loaded sheets (above), the two built-in
+BRR sound effects (no per-project SFX assets - GB Studio 1.2.2 has none), and only 6 distinct
+actor OBJ palettes (see below).
 
 **Per-sprite OBJ palettes (done):** each used sprite slot draws its own 16-colour OBJ palette.
 The SNES has 8 OBJ palettes (CGRAM 128..255, 16 colours each); palettes 1 and 2 stay reserved

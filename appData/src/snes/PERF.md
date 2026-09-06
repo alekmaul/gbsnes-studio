@@ -54,11 +54,12 @@ full after walk-cycle frames were added — more OBJ tiles would need the 2nd pa
 
 ## ARAM (SPC700, 64 KB)
 
-Managed by snesmod: one "session" (a music module + its effect instruments) resident at a time,
-~58 KB combined cap (PVSnesLib's own figure). Each song is streamed from ROM on `MUSIC_PLAY`,
-so what has to fit ARAM is one song's samples + the 5 effect instruments, not the whole
-soundbank — `smconv` reports per-module ARAM use at build time. The soundbank as a whole sits
-in ROM (banks 5+, ~2 banks for one converted `.mod` alongside the effects module).
+Managed by snesmod: one music module resident at a time, ~58 KB cap (PVSnesLib's own figure).
+Each song is streamed from ROM on `MUSIC_PLAY`, so what has to fit ARAM is one song's samples,
+not the whole soundbank — `smconv` reports per-module ARAM use at build time. The soundbank as a
+whole sits in ROM (banks 5+, ~2 banks for one converted `.mod`). The built-in BRR sound effects
+reserve a fixed **2 KB** region (`spcAllocateSoundRegion(8)` in `music.c`) for the effect
+stream, carved out at boot and independent of the music module — a small, constant cost.
 
 ## CPU — the frame budget
 

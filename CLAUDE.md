@@ -235,9 +235,17 @@ Tests: `test/helpers/assetWarnings.test.js`.
   slide-in/out (`bgSetScroll` on BG3), 2-column `MENU` layout, `OVERLAY_MOVE_TO` (animates the
   covered row, blocks the script until it arrives)). M6 — `SceneInit` uploads the BG
   tiles/map/palette/size per scene from `assets.c` `bg_*_ptrs[]`; `gen-dummy-gfx.js` feeds a
-  real background through `snesgfx.js`. `src/music.c` (M8 phase 1) — `MUSIC_PLAY`/`MUSIC_STOP`/
-  `SOUND_*` wired to PVSnesLib's snesmod driver (`spcBoot`/`spcLoad`/`spcPlay`/`spcEffect`, already
-  linked in via `libc.obj` — nothing to vendor).
+  real background through `snesgfx.js`. `src/music.c` (M8) — `MUSIC_PLAY`/`MUSIC_STOP`/`SOUND_*`
+  wired to PVSnesLib's snesmod driver (all `spc*` in `libc.obj` — nothing to vendor).
+  **Sound effects layered over music (done).** `SOUND_PLAY_BEEP`/`_START_TONE`/`_PLAY_CRASH` play
+  a short BRR sample through snesmod's dedicated BRR sound region — `spcAllocateSoundRegion(8)`
+  (2 KB) in `MusicInit`, then `spcSetSoundEntry` + `spcPlaySound` per event — which mixes on top
+  of the module instead of the old `spcStop`/session reload. Samples: `res/sfx_beep.brr` (square
+  blip, beep+tone) + `res/sfx_crash.brr` (noise), two tiny generated waveforms
+  (`appData/src/snes/tools/gen-sfx.js` synthesises `.wav`s and encodes with vendored `snesbrr`);
+  `.brr` + `res/sfx.h` (byte lengths) + `src/res/sfx.asm` (`.incbin`, under `src/` for `make`)
+  all committed. GB pitch 0-7 → BRR pitch 1-6; `SOUND_STOP_TONE` still a no-op (one-shot sample).
+  Verified in Mesen: music voice held env ~2016 through a 10-effect burst on a separate voice.
   **M8 phase 2 (project music, done)** — `src/lib/compiler/mod2it.js` converts a 4-channel
   `M.K.` ProTracker `.mod` to the minimal Impulse Tracker `.it` snesmod's `smconv` accepts
   (one pass-through instrument per sample, 8-bit signed, IT packed patterns; Amiga slides →
@@ -401,19 +409,19 @@ Real remaining **code** gaps, most impactful first:
 1. **X / Y / L / R buttons** — deferred by user decision (needs the shared 1-byte `KEY_BITS`
    mask widened to 2 bytes, which touches the frozen GB engine + its byte-exact event tests).
    This is the one remaining M9 editor item too (the input-event option lists).
-2. **Sound effects layered over music** — playing a `SOUND_*` effect currently reloads the
-   effects session and stops the music (snesmod one-session limitation; needs a more careful
-   multi-session driver setup).
-3. **Only 6 distinct actor OBJ palettes** — a project with 7-8 different sprite sheets on
+2. **Only 6 distinct actor OBJ palettes** — a project with 7-8 different sprite sheets on
    screen shares palette 0 for the overflow (emote/avatar hold 2 of the 8 OBJ palettes).
-4. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
+3. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
    but a mid-play emulator snapshot would need SnesJs machine-state serialization it doesn't have.
+4. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no
+   per-project SFX assets, so there's nothing to convert; a richer set would just be more
+   committed BRR samples.
 
-Done since: **M9 editor asset feedback** — target-aware Backgrounds-page size warnings + Scene
-info-bar sprite budget (`S: n/8` on SNES); the rest of the "M9 gaps" were stale (editor already
-renders full colour + correct geometry). **M10 web-player polish** — start gate, on-screen touch
-pad, toolbar, cartridge SRAM persistence to localStorage. **Per-sprite OBJ palettes** — each
-sprite slot draws its own 16-colour OBJ palette. **Project music (M8 phase 2)** — `mod2it.js` +
+Done since: **Sound effects layered over music** — `SOUND_*` events play BRR samples through
+snesmod's dedicated sound region, mixing over the music instead of interrupting it.
+**M9 editor asset feedback** — target-aware Backgrounds-page size warnings + Scene info-bar
+sprite budget (`S: n/8` on SNES). **M10 web-player polish** — start gate, touch pad, cartridge
+SRAM persistence. **Per-sprite OBJ palettes**. **Project music (M8 phase 2)** — `mod2it.js` +
 `compileSnesMusic.js` turn the project's own `.mod` songs into the soundbank.
 
 Not code: a tagged release (trivial), a full demo game (art/music/level design), and the

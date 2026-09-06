@@ -123,6 +123,54 @@ maybe("compileSnesMusic (smconv) + buildProject", () => {
     180000
   );
 
+  test(
+    "SOUND_PLAY_EFFECT alongside music -> BRR sfx assets + bootable ROM",
+    async () => {
+      const dir = Path.join(PROJECTS, "Test_SoundEffects");
+      const gbs = fs.readdirSync(dir).find(x => x.endsWith(".gbsproj"));
+      const p = JSON.parse(fs.readFileSync(Path.join(dir, gbs), "utf8"));
+      p.name = "SNESSFXTEST";
+      p.settings = { ...p.settings, target: "snes" };
+      p.scenes[0].script = [
+        {
+          command: "EVENT_MUSIC_PLAY",
+          args: { musicId: p.music[0].id, loop: true }
+        },
+        { command: "EVENT_SOUND_PLAY_EFFECT", args: { type: "beep", pitch: 4, duration: 0.1 } },
+        { command: "EVENT_SOUND_PLAY_EFFECT", args: { type: "crash", duration: 0.1 } },
+        { command: "EVENT_END" }
+      ];
+      const outputRoot = await fs.mkdtemp(
+        Path.join(os.tmpdir(), "gbs-snes-sfx-")
+      );
+      try {
+        await buildProject(p, {
+          projectRoot: dir,
+          outputRoot,
+          progress: () => {},
+          warnings: () => {}
+        });
+        const rom = await fs.readFile(
+          Path.join(outputRoot, "build", "rom", "game.sfc")
+        );
+        expect(rom.length).toBe(8 * 0x8000);
+        // the built-in BRR sound effects were ejected + compiled
+        expect(fs.existsSync(Path.join(outputRoot, "res", "sfx_beep.brr"))).toBe(true);
+        expect(fs.existsSync(Path.join(outputRoot, "res", "sfx_crash.brr"))).toBe(true);
+        expect(fs.existsSync(Path.join(outputRoot, "src", "res", "sfx.asm"))).toBe(true);
+        const sfxH = await fs.readFile(
+          Path.join(outputRoot, "res", "sfx.h"),
+          "utf8"
+        );
+        expect(sfxH).toMatch(/#define SFX_BEEP_LEN\s+\d+/);
+        expect(sfxH).toMatch(/#define SFX_CRASH_LEN\s+\d+/);
+      } finally {
+        await fs.remove(outputRoot);
+      }
+    },
+    180000
+  );
+
   test("no project music is a no-op (keeps the committed soundbank)", async () => {
     const outputRoot = await fs.mkdtemp(
       Path.join(os.tmpdir(), "gbs-snes-nomusic-")

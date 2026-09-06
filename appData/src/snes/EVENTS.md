@@ -107,7 +107,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | --- | --- | --- |
 | Music: Play | ✅ | The project's own `.mod` songs are converted to `.it` (`mod2it.js`) and built into the soundbank by `compileSnesMusic.js` at build time. Lossy vs the GB player: Amiga pitch slides become IT linear slides and a few ProTracker effects are dropped (see `appData/src/snes/README.md` M8 phase 2). |
 | Music: Stop | ✅ | |
-| Sound: Play Effect (beep / tone / crash) | ⚠️ | Triggers one of the 5 bundled demo effects. The pitch / frequency argument is ignored (snesmod has no raw-frequency primitive). **Playing an effect currently stops any playing music** — layering SFX over music needs a more careful driver setup, deferred. |
+| Sound: Play Effect (beep / tone / crash) | ⚠️ | Plays a short built-in BRR sample **layered over the music** (via snesmod's dedicated sound region). "Beep" and "Tone" use a generated square-wave blip; "Crash" a noise burst. The beep's pitch maps onto the SNES 1–6 range; "Tone"'s exact frequency and "Stop Tone" are ignored (the sample is a one-shot). No per-project sound-effect assets (GB Studio 1.2.2 has none). |
 
 ## Save data
 

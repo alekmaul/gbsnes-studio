@@ -323,7 +323,7 @@ void Script_ScenePopAllState_b(void)
     }
 }
 
-/* -------- M8 phase 1: music, sound (see music.c/.h) -------- */
+/* -------- M8: music, sound (see music.c/.h) -------- */
 
 // MUSIC_PLAY. args: musicIndex, loop (0/1 - not wired yet, see music.c).
 void Script_MusicPlay_b(void)
@@ -342,12 +342,12 @@ void Script_MusicStop_b(void)
 }
 
 // SOUND_START_TONE. args: hi(period), lo(period) - a GB tone period, not a
-// frequency. Phase 1 approximation: triggers a one-shot effect and ignores
-// the period (snesmod has no simple "hold an arbitrary raw frequency"
-// primitive); SOUND_STOP_TONE is a no-op.
+// frequency. snesmod's BRR path has no "hold an arbitrary raw frequency"
+// primitive, so play the beep sample at a mid pitch; SOUND_STOP_TONE is a
+// no-op (the sample is a short one-shot). Layers over the music.
 void Script_SoundStartTone_b(void)
 {
-    SoundPlayEffect(1, 4);
+    SoundPlayEffect(SFX_BEEP, 3);
     ADVANCE();
     script_continue = 1;
 }
@@ -358,16 +358,13 @@ void Script_SoundStopTone_b(void)
     script_continue = 1;
 }
 
-// SOUND_PLAY_BEEP. args: pitch (0-7, GB pitch table index) -> spcEffect
-// playback-rate step (1/2/4/8 = 4/8/16/32kHz).
+// SOUND_PLAY_BEEP. args: pitch (0-7, GB pitch table index). Map onto the BRR
+// pitch range 1..6 (playback rate ~ pitch * 2000 Hz).
 void Script_SoundPlayBeep_b(void)
 {
-    u8 pitch = script_cmd_args[0];
-    u16 rate = 1;
-    if (pitch >= 2) rate = 2;
-    if (pitch >= 4) rate = 4;
-    if (pitch >= 6) rate = 8;
-    SoundPlayEffect(0, rate);
+    u8 gb_pitch = script_cmd_args[0];
+    if (gb_pitch > 7) gb_pitch = 7;
+    SoundPlayEffect(SFX_BEEP, 1 + ((gb_pitch * 5) / 7));
     ADVANCE();
     script_continue = 1;
 }
@@ -375,7 +372,7 @@ void Script_SoundPlayBeep_b(void)
 // SOUND_PLAY_CRASH. No args.
 void Script_SoundPlayCrash_b(void)
 {
-    SoundPlayEffect(4, 4);
+    SoundPlayEffect(SFX_CRASH, 3);
     ADVANCE();
     script_continue = 1;
 }

@@ -2,11 +2,10 @@
 #define MUSIC_H
 
 /*
- * M8 phase 1: MUSIC_PLAY / MUSIC_STOP / SOUND_* wired to PVSnesLib's snesmod
- * driver (spcBoot/spcLoad/spcPlay/spcEffect, appData/src/snes/res/soundbank.*).
- * See appData/src/snes/README.md's M8 section for what's real vs. approximated
- * here - this is a proof-of-concept soundbank (one music track + 5 effect
- * instruments, from a PVSnesLib example), not yet driven by project assets.
+ * M8: MUSIC_PLAY / MUSIC_STOP play the project's `.mod` songs (converted to the
+ * snesmod soundbank by src/lib/compiler/compileSnesMusic.js); the SOUND_*
+ * events play short built-in BRR effects that layer over the music. See
+ * appData/src/snes/README.md's M8 section and music.c.
  */
 #include "gbs_types.h"
 
@@ -14,7 +13,12 @@ void MusicInit(void); /* boots the SPC700 driver - call once from main() */
 void MusicPlay(u8 track);
 void MusicStop(void);
 
-/* pitch: 1/2/4/8 = spcEffect's 4/8/16/32 kHz playback rate steps */
-void SoundPlayEffect(u8 sfxIndex, u16 pitch);
+/* which built-in effect SoundPlayEffect plays */
+#define SFX_BEEP 0
+#define SFX_CRASH 1
+
+/* pitch: snesmod BRR pitch 1..6 (playback rate ~ pitch * 2000 Hz).
+ * Plays on top of any running music. */
+void SoundPlayEffect(u8 kind, u8 pitch);
 
 #endif

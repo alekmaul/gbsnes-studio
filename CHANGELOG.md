@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [1.2.0] - 2026-09-06
 
-SNES: project music, per-sprite colours, in-app Play + touch controls + saved-game persistence, sprite animation, editor polish, stabilisation (roadmap M8 phase 2 + M9 + M10 + M11). Full status:
+SNES: project music + layered sound effects, per-sprite colours, in-app Play + touch controls + saved-game persistence, sprite animation, editor polish, stabilisation (roadmap M8 + M9 + M10 + M11). Full status:
 https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
 
 ### Added
@@ -16,6 +16,10 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   soundbank by the new `src/lib/compiler/compileSnesMusic.js`. `Music: Play` picks the right
   track. Conversion is slightly lossy (Amiga pitch slides → linear slides; a few ProTracker
   effects dropped). A project with no music keeps the previous bundled demo track.
+- **SNES sound effects now play over the music** instead of stopping it. `Sound: Play Effect`
+  (beep / tone / crash) plays a short BRR sample through the SPC700's dedicated sound region;
+  the beep's pitch maps onto the SNES range. Two built-in samples (a square-wave blip and a
+  noise burst) — GB Studio 1.2.2 has no per-project sound-effect assets.
 - The **"Play" toolbar button now works for SNES projects**: it builds the ROM and runs it in a
   bundled in-app JS emulator (not cycle-accurate — a quick preview, not a reference emulator).
   The web player has a **start/pause gate**, an **on-screen touch pad** (auto-shown on touch
@@ -66,8 +70,8 @@ The SNES target is functional end to end (create → script → build → play),
 - **Sprites**: at most 6 distinct sprite sheets on screen keep their own palette; a 7th/8th
   reuses the first sheet's colours.
 - `Player: Set Sprite Sheet` only works for a sheet already used elsewhere in the project.
-- **Sound effects** trigger bundled demo sounds; pitch/frequency arguments are ignored, and
-  playing an effect stops the music.
+- **Sound effects** are two built-in samples (beep + noise); `Tone` frequency and `Stop Tone`
+  are ignored (the sample is a one-shot).
 - **Performance**: a scene with more than ~5–6 simultaneously moving actors may drop frames
   (degrades gracefully). See `appData/src/snes/PERF.md`.
 - The **web player** persists saved games (SRAM) but has no full save-state (mid-play snapshot).
