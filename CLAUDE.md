@@ -303,7 +303,10 @@ Tests: `test/helpers/assetWarnings.test.js`.
   (no `make`/shell): generates `hdr.asm` from `devkitsnes/include/hdr.asm.in`, runs
   `816-tcc → 816-opt → wla-65816` per `.c` and `wla-65816` per `.asm`, builds `linkfile`
   (+ `pvsneslib/lib/LoROM_FastROM/*.obj`), `wlalink` → `build/rom/game.sfc`. LoROM + FastROM,
-  SRAM 8 KB, auto header (no JS header patching).
+  SRAM 8 KB, auto header (no JS header patching). Runs `816-opt` with `-q` (mirrors the
+  `snes_rules` edit) and its `filterLog` also strips ANSI colour codes and drops the pure
+  banner noise (`816opt: (x) version …`, the wla/wlalink box rule lines) so "Build & Run" /
+  "Export ROM" output stays legible — `spawnTool` skips any line `filterLog` empties.
 - **`appData/src/snes/`** — the engine tree. Ported so far: `src/game.c` (M3 — Mode 1 BG,
   OAM player, d-pad, camera scroll; M5 — camera pan/lock/shake), `src/script_runner.c` +
   `src/script_cmds.c` (M4 — the bytecode VM), `src/scene.c` (M4b — scenes from `assets.c`

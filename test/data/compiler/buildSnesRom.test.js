@@ -1,7 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import Path from "path";
-import buildSnesRom from "../../../src/lib/compiler/buildSnesRom";
+import buildSnesRom, { filterLog } from "../../../src/lib/compiler/buildSnesRom";
 import { engineRoot, buildToolsRoot } from "../../../src/consts";
 
 const vendored = Path.join(
@@ -14,6 +14,27 @@ const hasToolchain = fs.existsSync(vendored);
 // Integration test: drives the real PVSnesLib toolchain, so it only runs on a
 // platform that has the vendored toolchain checked in.
 const maybe = hasToolchain ? describe : describe.skip;
+
+describe("filterLog", () => {
+  const ESC = String.fromCharCode(27);
+
+  test("swallows the 816-opt version banner (printed on every file even with -q)", () => {
+    expect(
+      filterLog(`${ESC}[97m816opt${ESC}[0m: (2.0.0) version 20260818\r`)
+    ).toBe("");
+  });
+
+  test("swallows the wla/wlalink box banner lines", () => {
+    expect(filterLog("-----------------------------------")).toBe("");
+    expect(filterLog("WLA-65816 Macro Assembler v9.11")).toBe("");
+  });
+
+  test("keeps real diagnostics, stripped of ANSI codes and leading path", () => {
+    expect(filterLog("C:/tmp/build/src/game.c:42: warning: real thing")).toBe(
+      "game.c:42: warning: real thing"
+    );
+  });
+});
 
 maybe("buildSnesRom", () => {
   let buildRoot;

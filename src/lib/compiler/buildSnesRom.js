@@ -26,7 +26,20 @@ import copy from "../helpers/fsCopy";
 
 const HDR_TEMPLATE_REL = Path.join("devkitsnes", "include", "hdr.asm.in");
 
-const filterLog = str => str.replace(/.*[/\\]/g, "").trim();
+// Tidy a tool's console line: drop ANSI colour codes, shorten leading paths,
+// and swallow the pure version/banner noise (816-opt prints its version on
+// every file even with -q; wla/wlalink print a box banner). Returns "" for a
+// line that should not reach the build log.
+// eslint-disable-next-line no-control-regex
+const ANSI_RE = /\u001b\[[0-9;]*m/g;
+const NOISE_RE = /^816opt: \([\d.]+\) version|^-{5,}$|Macro Assembler.*v\d/i;
+const filterLog = str => {
+  const s = str
+    .replace(ANSI_RE, "")
+    .replace(/.*[/\\]/g, "")
+    .trim();
+  return NOISE_RE.test(s) ? "" : s;
+};
 
 // ROM size byte ($08 = 2 Mbit / 8 LoROM banks) and the power-of-2 bank count,
 // mirroring GB Studio's cart sizing in buildProject.js.
@@ -151,7 +164,8 @@ const spawnTool = (label, cmd, args, cwd, { progress, warnings }) =>
         .toString()
         .split("\n")
         .forEach(line => {
-          if (line.trim()) progress(filterLog(line));
+          const clean = filterLog(line);
+          if (clean) progress(clean);
         });
     });
     child.stderr.on("data", data => {
@@ -160,7 +174,8 @@ const spawnTool = (label, cmd, args, cwd, { progress, warnings }) =>
         .toString()
         .split("\n")
         .forEach(line => {
-          if (line.trim()) warnings(filterLog(line));
+          const clean = filterLog(line);
+          if (clean) warnings(clean);
         });
     });
     child.on("error", err =>
@@ -260,7 +275,7 @@ const buildSnesRom = async ({
     await spawnTool(
       "Optimising",
       tool("816-opt"),
-      ["-i", `${base}.ps`, "-o", `${base}.asm`],
+      ["-q", "-i", `${base}.ps`, "-o", `${base}.asm`],
       buildRoot,
       { progress, warnings }
     );
@@ -333,4 +348,4 @@ const buildSnesRom = async ({
 };
 
 export default buildSnesRom;
-export { resolvePvsHome };
+export { resolvePvsHome, filterLog };
