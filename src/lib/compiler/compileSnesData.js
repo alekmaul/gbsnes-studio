@@ -81,6 +81,15 @@ const cArray = (name, bytes, type = "unsigned char") => {
   return `const ${type} ${name}[${bytes.length}] = {\n${lines.join(",\n")}\n};\n`;
 };
 
+// bytes -> wla-65816 `.db` lines
+const cDb = bytes => {
+  const lines = [];
+  for (let i = 0; i < bytes.length; i += 24) {
+    lines.push(`.db ${bytes.slice(i, i + 24).map(b => b & 0xff).join(",")}`);
+  }
+  return lines.join("\n");
+};
+
 const compileSnesData = async (
   rawProjectData,
   { projectRoot = "/tmp", warnings = () => {} } = {}
@@ -124,81 +133,96 @@ const compileSnesData = async (
   }
 
   // ---- actor sprites (M7) --------------------------------------------
-  // One shared OBJ sheet, up to SPRITE_SLOTS 16x16 sprites (first frame only).
-  // slot k -> OBJ grid tiles 2k, 2k+1, 2k+16, 2k+17 (16-wide grid, 2 rows).
+  // One OBJ sheet **per scene** (uploaded by SceneInit), up to SPRITE_SLOTS
+  // 16x16 sprites. slot k -> OBJ grid tiles 2k, 2k+1, 2k+16, 2k+17. The player
+  // sheet is always slot 0; a scene's own actor sheets take 1..7. A scene that
+  // needs more than 8 distinct sheets falls the extras back to slot 0.
   const SPRITE_SLOTS = 8;
   const spriteSheets = projectData.spriteSheets || [];
   const spriteById = id => spriteSheets.find(s => s.id === id);
-  const usedSpriteIds = [];
-  const addSprite = id => {
-    if (id && spriteById(id) && usedSpriteIds.indexOf(id) === -1) {
-      usedSpriteIds.push(id);
-    }
-  };
-  addSprite(settings.playerSpriteSheetId);
-  scenes.forEach(sc =>
-    (sc.actors || []).forEach(a => addSprite(a.spriteSheetId))
-  );
-  if (usedSpriteIds.length > SPRITE_SLOTS) {
-    warnings(
-      `Scene uses ${usedSpriteIds.length} sprite sheets; only the first ` +
-        `${SPRITE_SLOTS} are loaded, the rest fall back to slot 0.`
+  const isSprite = id => id && !!spriteById(id);
+
+  // sceneSpriteIds[i][k] = the sprite sheet id loaded into scene i's slot k
+  const sceneSpriteIds = scenes.map((sc, i) => {
+    const ids = [];
+    const add = id => {
+      if (isSprite(id) && ids.indexOf(id) === -1 && ids.length < SPRITE_SLOTS) {
+        ids.push(id);
+      }
+    };
+    add(settings.playerSpriteSheetId);
+    (sc.actors || []).forEach(a => add(a.spriteSheetId));
+    const distinct = new Set(
+      [settings.playerSpriteSheetId]
+        .concat((sc.actors || []).map(a => a.spriteSheetId))
+        .filter(isSprite)
     );
-  }
-  const spriteSlotById = {};
-  usedSpriteIds.slice(0, SPRITE_SLOTS).forEach((id, k) => {
-    spriteSlotById[id] = k;
+    if (distinct.size > SPRITE_SLOTS) {
+      warnings(
+        `Scene '${sc.name || i}' uses ${distinct.size} sprite sheets; only ` +
+          `${SPRITE_SLOTS} fit - the rest fall back to slot 0 (the player).`
+      );
+    }
+    return ids;
   });
-  const slotForActor = id =>
-    spriteSlotById[id] !== undefined ? spriteSlotById[id] : 0;
+  const slotForActor = (sceneIndex, id) => {
+    const k = sceneSpriteIds[sceneIndex].indexOf(id);
+    return k >= 0 ? k : 0;
+  };
 
   // ---- dialogue avatars (M5d): TEXT events with an avatarId ------------
+  // Also per-scene: a scene's blob carries only the avatars its own scripts
+  // use, at AVATAR region slots 0..k. scriptBuilder's getSpriteIndex resolves
+  // avatarId -> that index, so compile() is passed the scene's own avatar list.
   const AVATAR_SLOTS = 8;
-  const usedAvatarIds = [];
-  const scanAvatars = evs => {
-    (evs || []).forEach(ev => {
-      if (ev.args && ev.args.avatarId && usedAvatarIds.indexOf(ev.args.avatarId) === -1) {
-        usedAvatarIds.push(ev.args.avatarId);
-      }
-      if (ev.children) {
-        Object.keys(ev.children).forEach(k => scanAvatars(ev.children[k]));
-      }
-    });
-  };
-  scenes.forEach(sc => {
-    scanAvatars(sc.script);
+  const sceneAvatarIds = scenes.map(sc => {
+    const ids = [];
+    const scan = evs => {
+      (evs || []).forEach(ev => {
+        if (ev.args && ev.args.avatarId && isSprite(ev.args.avatarId) &&
+            ids.indexOf(ev.args.avatarId) === -1 && ids.length < AVATAR_SLOTS) {
+          ids.push(ev.args.avatarId);
+        }
+        if (ev.children) {
+          Object.keys(ev.children).forEach(k => scan(ev.children[k]));
+        }
+      });
+    };
+    scan(sc.script);
     (sc.actors || []).forEach(a => {
-      scanAvatars(a.script);
-      scanAvatars(a.startScript);
+      scan(a.script);
+      scan(a.startScript);
     });
-    (sc.triggers || []).forEach(t => scanAvatars(t.script));
+    (sc.triggers || []).forEach(t => scan(t.script));
+    return ids;
   });
-  if (usedAvatarIds.length > AVATAR_SLOTS) {
-    warnings(`Project uses ${usedAvatarIds.length} avatars; only ${AVATAR_SLOTS} load.`);
-  }
-  // scriptBuilder's getSpriteIndex resolves avatarId against this list by
-  // position, so keep it stable and pass the same array to every compile().
-  const avatars = usedAvatarIds
-    .slice(0, AVATAR_SLOTS)
-    .map(id => ({ id }));
+  const sceneAvatars = sceneAvatarIds.map(ids => ids.map(id => ({ id })));
+  const maxAvatars = Math.max(0, ...sceneAvatarIds.map(a => a.length));
 
   // BG3 UI graphics (font + nine-slice frame + menu cursor) come from the
   // project's own assets/ui/*.png, same as the Game Boy target. Missing files
   // are backfilled from the stock sample by ensureSnesUiAssets().
   const uiAssetDir = await ensureSnesUiAssets(projectRoot, warnings);
   const fixed = await snesFixedAssets({ uiAssetDir });
-  // 256-tile OBJ sheet: actor pose-A/B direction regions (slot 0 seeded with
-  // the placeholder player), plus the 8 emotes (M5c) and up to 8 dialogue
-  // avatars (M5d). See snesFixedAssets.js for the full region map.
-  const sprSheet = fixed.spriteTiles.slice();
 
-  // Per-sprite OBJ palettes. The SNES has 8 OBJ palettes (16 colours each,
-  // CGRAM 128..255). Palettes 1 and 2 are reserved for the emote bubbles and
-  // dialogue-avatar portraits, so an actor sprite slot draws its palette from
-  // this pool; a project with more than 6 distinct sprite sheets reuses
-  // palette 0 for the overflow. `spr_pal` is emitted as the whole OBJ CGRAM
-  // image (8 * 32 bytes); the engine uploads it wholesale with oamInitGfxSet,
-  // then its own dmaCopyCGram calls overwrite palettes 1/2 with emote/avatar.
+  // Convert every sprite sheet that's referenced anywhere, once.
+  const spriteConv = {};
+  const allSpriteIds = new Set(
+    [].concat(...sceneSpriteIds, ...sceneAvatarIds)
+  );
+  for (const id of allSpriteIds) {
+    // eslint-disable-next-line no-await-in-loop
+    const conv = await snesgfx.imageToSpriteData(
+      assetFilename(projectRoot, "sprites", spriteById(id))
+    );
+    conv.warnings.forEach(warnings);
+    spriteConv[id] = conv;
+  }
+
+  // SNES has 8 OBJ palettes (16 colours each, CGRAM 128..255). Palettes 1 and 2
+  // are reserved for the emote bubbles and dialogue-avatar portraits, so an
+  // actor sprite slot draws its palette from this pool; a scene with more than
+  // 6 distinct sprite sheets reuses palette 0 for the overflow.
   const OBJ_PAL_SIZE = 32;
   const NUM_OBJ_PALS = 8;
   const ACTOR_OBJ_PAL_POOL = [0, 3, 4, 5, 6, 7];
@@ -209,31 +233,14 @@ const compileSnesData = async (
     while (out.length < OBJ_PAL_SIZE) out.push(0);
     return out;
   };
-  const sprPalBytes = new Array(NUM_OBJ_PALS * OBJ_PAL_SIZE).fill(0);
-  const writePal = (objPal, bytes) => {
-    const base = objPal * OBJ_PAL_SIZE;
-    padPal(bytes).forEach((b, i) => {
-      sprPalBytes[base + i] = b;
-    });
-  };
-  // seed palette 0 with the built-in placeholder colours (slot 0 with no real
-  // sprite sheet, e.g. a project that never sets a player sprite)
-  writePal(0, fixed.spritePaletteBytes);
-  let avatarPalBytes = fixed.spritePaletteBytes;
-  const placeTiles = (slot, tiles) => {
-    const dst = [2 * slot, 2 * slot + 1, 16 + 2 * slot, 17 + 2 * slot];
-    tiles.forEach((tile, ti) => {
-      for (let b = 0; b < 32; b++) sprSheet[dst[ti] * 32 + b] = tile[b];
-    });
-  };
-  // Frame 0 (4 tiles) always goes in slot k's pose-A region via placeTiles(k).
-  // The rest depend on the sprite type:
+
+  // Frame 0 (4 tiles) always goes in slot k's pose-A region. The rest depend on
+  // the sprite type:
   //   3-frame SPRITE_ACTOR         -> [down, up, side]: frame 1 = up, 2 = side
   //   everything else (2-6 frames) -> frame f into the f-th of
   //     [down-A, down-B, up-A, up-B, side-A, side-B] - the exact regions the
   //     engine's SPRITE_ACTOR_ANIMATED walk cycle and its SPRITE_STATIC
   //     auto-cycle both read by frame number.
-  // See snesFixedAssets.js for why these are separate 8-slot regions.
   const ANIM_FRAME_SLOT0 = [
     null,
     fixed.ACTOR_DOWN_B_SLOT0,
@@ -242,76 +249,92 @@ const compileSnesData = async (
     fixed.ACTOR_SIDE_SLOT0,
     fixed.ACTOR_SIDE_B_SLOT0
   ];
-  const placeDirectionFrames = (k, tiles, spriteType) => {
-    const nFrames = Math.min(tiles.length >> 2, 6);
-    if (spriteType === 1) {
-      // 3-frame SPRITE_ACTOR: [down, up, side]
-      placeTiles(fixed.ACTOR_UP_SLOT0 + k, tiles.slice(4, 8));
-      placeTiles(fixed.ACTOR_SIDE_SLOT0 + k, tiles.slice(8, 12));
-      return;
-    }
-    for (let f = 1; f < nFrames; f++) {
-      placeTiles(ANIM_FRAME_SLOT0[f] + k, tiles.slice(f * 4, f * 4 + 4));
-    }
-  };
-  const spriteTypeBySlot = {};
-  const spriteFramesBySlot = {};
-  for (let k = 0; k < usedSpriteIds.length && k < SPRITE_SLOTS; k++) {
-    const sheet = spriteById(usedSpriteIds[k]);
-    // eslint-disable-next-line no-await-in-loop
-    const conv = await snesgfx.imageToSpriteData(
-      assetFilename(projectRoot, "sprites", sheet)
-    );
-    conv.warnings.forEach(warnings);
-    placeTiles(k, conv.tiles.slice(0, 4));
-    placeDirectionFrames(k, conv.tiles, conv.spriteType);
-    spriteTypeBySlot[k] = conv.spriteType;
-    spriteFramesBySlot[k] = conv.frameCount;
-    writePal(objPalForSlot(k), conv.paletteBytes);
-  }
-  for (let k = 0; k < avatars.length; k++) {
-    const sheet = spriteById(avatars[k].id);
-    if (sheet) {
-      // eslint-disable-next-line no-await-in-loop
-      const conv = await snesgfx.imageToSpriteData(
-        assetFilename(projectRoot, "sprites", sheet)
-      );
-      conv.warnings.forEach(warnings);
-      placeTiles(fixed.AVATAR_SLOT0 + k, conv.tiles.slice(0, 4));
-      if (k === 0) avatarPalBytes = conv.paletteBytes; // OBJ palette 2 = avatar 0
-    }
-  }
-  const playerSpriteSlot = spriteSlotById[settings.playerSpriteSheetId] || 0;
-  // Match GB's spriteTypeDec: a sheet on a static-movement actor is never a
-  // walk-cycle - it's a manual/auto frame cycle, so SPRITE_STATIC regardless
-  // of frame count (frames_len is then derived from the sheet's frame count in
-  // the engine's SceneInit, via sprite_frames_for_slot[]).
-  const spriteTypeForActor = (id, movementType) =>
-    moveDec(movementType) === 1 ? 0 : spriteTypeBySlot[slotForActor(id)] || 0;
-  // the player is always MOVE_PLAYER_INPUT (never static), so its type is
-  // purely frame-count based
-  const playerSpriteType = spriteTypeBySlot[playerSpriteSlot] || 0;
 
-  // PLAYER_SET_SPRITE: the compiler encodes the target as an index into the
-  // project's full spriteSheets[] (scriptBuilder.js's getSpriteIndex, same
-  // array passed as `sprites` to compileEntityEvents below) - but at runtime
-  // only the <=SPRITE_SLOTS sheets actually used by an actor/the player are
-  // physically in VRAM (no runtime tile streaming here, unlike GB). So this
-  // table maps every project sprite index to its pre-loaded OBJ slot, or 0xFF
-  // if that sheet was never loaded - Script_PlayerSetSprite_b (SNES engine)
-  // no-ops on 0xFF rather than switching to a sheet that isn't in VRAM.
-  const spriteSlotForIndex = spriteSheets.map(s => {
-    const slot = spriteSlotById[s.id];
-    return slot !== undefined ? slot : 0xff;
-  });
-  const spriteTypeForSlot = [];
-  const spriteFramesForSlot = [];
-  const spritePalForSlot = [];
-  for (let k = 0; k < SPRITE_SLOTS; k++) {
-    spriteTypeForSlot.push(spriteTypeBySlot[k] || 0);
-    spriteFramesForSlot.push(spriteFramesBySlot[k] || 1);
-    spritePalForSlot.push(objPalForSlot(k));
-  }
+  // Build one scene's OBJ sheet (8 KB) + palette image (256 B) + per-slot
+  // type/frames/palette arrays, starting from the fixed emote/placeholder sheet.
+  const buildSceneSprites = sceneIndex => {
+    const sheet = fixed.spriteTiles.slice(); // emotes (32-63) + placeholder (0)
+    const palBytes = new Array(NUM_OBJ_PALS * OBJ_PAL_SIZE).fill(0);
+    const writePal = (objPal, bytes) => {
+      const base = objPal * OBJ_PAL_SIZE;
+      padPal(bytes).forEach((b, i) => {
+        palBytes[base + i] = b;
+      });
+    };
+    const placeTiles = (slot, tiles) => {
+      const dst = [2 * slot, 2 * slot + 1, 16 + 2 * slot, 17 + 2 * slot];
+      tiles.forEach((tile, ti) => {
+        for (let b = 0; b < 32; b++) sheet[dst[ti] * 32 + b] = tile[b];
+      });
+    };
+    const placeFrames = (k, tiles, spriteType) => {
+      const nFrames = Math.min(tiles.length >> 2, 6);
+      if (spriteType === 1) {
+        placeTiles(fixed.ACTOR_UP_SLOT0 + k, tiles.slice(4, 8));
+        placeTiles(fixed.ACTOR_SIDE_SLOT0 + k, tiles.slice(8, 12));
+        return;
+      }
+      for (let f = 1; f < nFrames; f++) {
+        placeTiles(ANIM_FRAME_SLOT0[f] + k, tiles.slice(f * 4, f * 4 + 4));
+      }
+    };
+
+    writePal(0, fixed.spritePaletteBytes); // placeholder (empty slot 0)
+    writePal(1, fixed.emotePaletteBytes); // OBJ palette 1 = emotes
+    writePal(2, fixed.spritePaletteBytes); // OBJ palette 2 = avatar 0 (below)
+
+    const types = new Array(SPRITE_SLOTS).fill(0);
+    const frames = new Array(SPRITE_SLOTS).fill(1);
+    const pals = [];
+    for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
+
+    sceneSpriteIds[sceneIndex].forEach((id, k) => {
+      const conv = spriteConv[id];
+      placeTiles(k, conv.tiles.slice(0, 4));
+      placeFrames(k, conv.tiles, conv.spriteType);
+      types[k] = conv.spriteType;
+      frames[k] = conv.frameCount;
+      writePal(objPalForSlot(k), conv.paletteBytes);
+    });
+    sceneAvatarIds[sceneIndex].forEach((id, k) => {
+      const conv = spriteConv[id];
+      placeTiles(fixed.AVATAR_SLOT0 + k, conv.tiles.slice(0, 4));
+      if (k === 0) writePal(2, conv.paletteBytes);
+    });
+
+    return { sheet, palBytes, types, frames, pals };
+  };
+
+  const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
+
+  // player is always slot 0; its sheet is the same in every scene, so its type
+  // is scene-independent (the frame count still comes from the loaded blob).
+  const playerSpriteSlot = 0;
+  const playerConv = isSprite(settings.playerSpriteSheetId)
+    ? spriteConv[settings.playerSpriteSheetId]
+    : null;
+  const playerSpriteType = playerConv ? playerConv.spriteType : 0;
+
+  // Match GB's spriteTypeDec: a sheet on a static-movement actor is never a
+  // walk-cycle - it's a manual/auto frame cycle, so SPRITE_STATIC regardless of
+  // frame count (frames_len is derived from the sheet's frame count, engine-side).
+  const spriteTypeForActor = (sceneIndex, id, movementType) => {
+    if (moveDec(movementType) === 1) return 0;
+    const conv = spriteConv[id];
+    return conv ? conv.spriteType : 0;
+  };
+
+  // PLAYER_SET_SPRITE: scriptBuilder encodes the target as an index into the
+  // project's full spriteSheets[]. At runtime only the sheets loaded in the
+  // *current scene* are in VRAM, so this is per-scene: project sprite index ->
+  // the scene's OBJ slot, or 0xFF if that sheet isn't loaded there (the engine
+  // no-ops on 0xFF).
+  const sceneSlotForIndex = scenes.map((_, sceneIndex) =>
+    spriteSheets.map(s => {
+      const k = sceneSpriteIds[sceneIndex].indexOf(s.id);
+      return k >= 0 ? k : 0xff;
+    })
+  );
 
   // ---- scripts + scene blobs ------------------------------------------
   // Raw (unresolved) bytecode per event_ptrs[] slot; placeholders are resolved
@@ -335,7 +358,7 @@ const compileSnesData = async (
       sceneIndex,
       scenes,
       sprites: projectData.spriteSheets || [],
-      avatars,
+      avatars: sceneAvatars[sceneIndex] || [],
       backgrounds,
       music: projectData.music || [],
       strings,
@@ -394,13 +417,17 @@ const compileSnesData = async (
         clampByte(actor.y),
         dirDec(actor.direction),
         moveDec(actor.movementType),
-        slotForActor(actor.spriteSheetId),
+        slotForActor(sceneIndex, actor.spriteSheetId),
         actorScriptIdx[i],
-        spriteTypeForActor(actor.spriteSheetId, actor.movementType),
+        spriteTypeForActor(sceneIndex, actor.spriteSheetId, actor.movementType),
         animSpeedDec(actor.animSpeed),
         actor.animate ? 1 : 0
       );
     });
+
+    // per-scene OBJ-slot tables, read by SceneInit straight after w/h
+    const spr = sceneSprites[sceneIndex];
+    const sprSlotBytes = [].concat(spr.types, spr.frames, spr.pals);
 
     const triggerEntries = [];
     (scene.triggers || []).forEach((trigger, i) => {
@@ -421,6 +448,7 @@ const compileSnesData = async (
       sceneScriptIdx,
       w,
       h,
+      sprSlotBytes, // [24] sprite_type[8], sprite_frames[8], sprite_pal[8]
       actorEntries,
       triggerEntries,
       collisions
@@ -475,10 +503,34 @@ const compileSnesData = async (
   const nBg = bgTables.length;
   const nStr = Math.max(1, strings.length);
   const emittedStrings = strings.length ? strings : [""];
-  const nSpriteSheets = Math.max(1, spriteSlotForIndex.length);
-  const emittedSpriteSlotForIndex = spriteSlotForIndex.length
-    ? spriteSlotForIndex
-    : [0xff];
+  const nSpriteSheets = Math.max(1, spriteSheets.length);
+
+  // De-dupe identical per-scene OBJ sheets / palettes / slot maps (e.g. a Logo
+  // and a Title scene with no actors produce the same bytes). scene_spr_*
+  // pointer tables then reference the shared arrays.
+  const interned = () => {
+    const seen = new Map();
+    const arrays = [];
+    const intern = item => {
+      const key = item.join(",");
+      if (!seen.has(key)) {
+        seen.set(key, arrays.length);
+        arrays.push(item);
+      }
+      return seen.get(key);
+    };
+    return { intern, arrays };
+  };
+  const sprTiles = interned();
+  const sprPals = interned();
+  const sprSlots = interned();
+  const sceneSprTileIdx = sceneSprites.map(spr => sprTiles.intern(spr.sheet));
+  const sceneSprPalIdx = sceneSprites.map(spr => sprPals.intern(spr.palBytes));
+  const sceneSprSlotIdx = sceneSlotForIndex.map(m =>
+    sprSlots.intern(m.length ? m : [0xff])
+  );
+  const SPR_TILES_SIZE = sceneSprites[0].sheet.length;
+  const SPR_PAL_SIZE = sceneSprites[0].palBytes.length;
 
   const h = `#ifndef ASSETS_H
 #define ASSETS_H
@@ -486,16 +538,18 @@ const compileSnesData = async (
 /* Generated by src/lib/compiler/compileSnesData.js. Do not edit. */
 #include "gbs_types.h"
 
-extern const unsigned char spr_tiles[${sprSheet.length}];
-extern const unsigned char spr_pal[${sprPalBytes.length}];
-extern const unsigned char emote_pal[${fixed.emotePaletteBytes.length}];
-extern const unsigned char avatar_pal[${avatarPalBytes.length}];
+/* one OBJ tile sheet + 8-palette CGRAM image + PLAYER_SET_SPRITE slot map per
+ * scene (deduped); SceneInit uploads scene_index's and fills the mutable
+ * sprite_*_for_slot[] from the scene blob's [24] slot table. The 8 KB tile
+ * blobs live in assets_spr.asm (one superfree section each). */
+${sprTiles.arrays
+  .map((_, i) => `extern const unsigned char scene_spr_${i}[${SPR_TILES_SIZE}];`)
+  .join("\n")}
+extern const unsigned char *const scene_spr_ptrs[${scenes.length}];
+extern const unsigned char *const scene_spr_pal_ptrs[${scenes.length}];
+extern const unsigned char *const scene_sprite_slot_ptrs[${scenes.length}];
 extern const unsigned char ui_font[${fixed.uiFont.length}];
 extern const unsigned char ui_pal[${fixed.uiPaletteBytes.length}];
-extern const unsigned char sprite_slot_for_index[${nSpriteSheets}];
-extern const unsigned char sprite_type_for_slot[${SPRITE_SLOTS}];
-extern const unsigned char sprite_frames_for_slot[${SPRITE_SLOTS}];
-extern const unsigned char sprite_pal_for_slot[${SPRITE_SLOTS}];
 
 extern const unsigned char *const bg_tiles_ptrs[${nBg}];
 extern const unsigned char *const bg_maps_ptrs[${nBg}];
@@ -514,20 +568,18 @@ extern const unsigned char *const scenes[${scenes.length}];
 #define NUM_BGS ${nBg}
 #define NUM_SPRITE_SHEETS ${nSpriteSheets}
 #define SPRITE_SLOTS ${SPRITE_SLOTS}
-#define SPR_TILES_SIZE ${sprSheet.length}
-#define SPR_PAL_SIZE   ${sprPalBytes.length}
+#define SPR_TILES_SIZE ${SPR_TILES_SIZE}
+#define SPR_PAL_SIZE   ${SPR_PAL_SIZE}
 #define UI_FONT_SIZE  ${fixed.uiFont.length}
 #define UI_PAL_SIZE   ${fixed.uiPaletteBytes.length}
 #define NUM_UI_GLYPHS ${fixed.NUM_UI_GLYPHS}
 #define UI_FILL_TILE  ${fixed.UI_FILL_TILE}
 #define UI_FRAME_TILE0 ${fixed.UI_FRAME_TILE0}
 #define UI_CURSOR_TILE ${fixed.UI_CURSOR_TILE}
-#define EMOTE_PAL_SIZE ${fixed.emotePaletteBytes.length}
 #define EMOTE_TILE0 ${fixed.EMOTE_TILE0}
 #define NUM_EMOTES ${fixed.NUM_EMOTES}
-#define AVATAR_PAL_SIZE ${avatarPalBytes.length}
 #define AVATAR_TILE0 ${fixed.AVATAR_TILE0}
-#define NUM_AVATARS ${avatars.length}
+#define NUM_AVATARS ${maxAvatars}
 #define ACTOR_UP_TILE0 ${fixed.ACTOR_UP_TILE0}
 #define ACTOR_SIDE_TILE0 ${fixed.ACTOR_SIDE_TILE0}
 #define ACTOR_DOWN_B_TILE0 ${fixed.ACTOR_DOWN_B_TILE0}
@@ -568,19 +620,40 @@ extern const unsigned char *const scenes[${scenes.length}];
     .map((s, i) => cArray(`string_${i}`, strBytes(s)))
     .join("\n");
 
+  // The 8 KB OBJ tile blobs go in a hand-rolled .asm, one `superfree` section
+  // each - wla then spreads them across banks (a single .rodata section from
+  // 816-tcc is atomic and can't exceed a 32 KB bank).
+  const assetsSpr = `;* Generated by src/lib/compiler/compileSnesData.js. Do not edit.
+.include "hdr.asm"
+
+${sprTiles.arrays
+  .map(
+    (a, i) =>
+      `.section "scene_spr_${i}" superfree\nscene_spr_${i}:\n${cDb(a)}\n.ends`
+  )
+  .join("\n\n")}
+`;
+
+  const sprArrays = [
+    ...sprPals.arrays.map((a, i) => cArray(`scene_spr_pal_${i}`, a)),
+    ...sprSlots.arrays.map((a, i) => cArray(`scene_spr_slot_${i}`, a))
+  ].join("\n");
+
   const c = `/* Generated by src/lib/compiler/compileSnesData.js. Do not edit. */
 #include "assets.h"
 
-${cArray("spr_tiles", sprSheet)}
-${cArray("spr_pal", sprPalBytes)}
-${cArray("emote_pal", fixed.emotePaletteBytes)}
-${cArray("avatar_pal", avatarPalBytes)}
+${sprArrays}
+const unsigned char *const scene_spr_ptrs[${scenes.length}] = {
+${sceneSprTileIdx.map(i => `    scene_spr_${i}`).join(",\n")}
+};
+const unsigned char *const scene_spr_pal_ptrs[${scenes.length}] = {
+${sceneSprPalIdx.map(i => `    scene_spr_pal_${i}`).join(",\n")}
+};
+const unsigned char *const scene_sprite_slot_ptrs[${scenes.length}] = {
+${sceneSprSlotIdx.map(i => `    scene_spr_slot_${i}`).join(",\n")}
+};
 ${cArray("ui_font", fixed.uiFont)}
 ${cArray("ui_pal", fixed.uiPaletteBytes)}
-${cArray("sprite_slot_for_index", emittedSpriteSlotForIndex)}
-${cArray("sprite_type_for_slot", spriteTypeForSlot)}
-${cArray("sprite_frames_for_slot", spriteFramesForSlot)}
-${cArray("sprite_pal_for_slot", spritePalForSlot)}
 ${bgArrays}
 const unsigned char *const bg_tiles_ptrs[${nBg}] = { ${bgTables
     .map(b => `${b.name}_tiles`)
@@ -622,6 +695,7 @@ ${sceneBlobs.map((_, i) => `    scene_${i}`).join(",\n")}
   return {
     assetsH: h,
     assetsC: c,
+    assetsSpr,
     stats: {
       scenes: scenes.length,
       backgrounds: nBg,

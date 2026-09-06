@@ -55,6 +55,16 @@ static BANK_PTR timer_script_ptr;
  * SceneInit (SHOW_SPRITES right before DISPLAY_ON). */
 static u8 sprites_hidden = 0;
 
+/* Per-scene OBJ slot tables, filled by SceneInit from the scene blob's [24]
+ * sprite table (was compile-time-const, project-wide - now every scene loads
+ * its own <=8 sheets). sprite_slot_for_index points at the current scene's
+ * project-index -> slot map (PLAYER_SET_SPRITE). Mutable: the toolchain does
+ * not pre-zero .bss, so SceneInit always writes all 8. */
+u8 sprite_type_for_slot[SPRITE_SLOTS];
+u8 sprite_frames_for_slot[SPRITE_SLOTS];
+u8 sprite_pal_for_slot[SPRITE_SLOTS];
+const unsigned char *sprite_slot_for_index = 0;
+
 /* SCENE_PUSH_STATE / SCENE_POP_STATE / SCENE_STATE_RESET / SCENE_POP_ALL_STATE.
  * A small stack of (scene, player tile pos, player facing) snapshots, e.g. for
  * a pause-menu scene that later returns exactly where the player left off.
@@ -442,6 +452,17 @@ void SceneInit(void)
     scene_height = s[5] ? s[5] : SCENE_TILE_H;
     p = s + 6;
 
+    /* [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
+     * sprite_pal[8] - see compileSnesData.js. */
+    for (i = 0; i < SPRITE_SLOTS; i++)
+    {
+        sprite_type_for_slot[i] = p[i];
+        sprite_frames_for_slot[i] = p[SPRITE_SLOTS + i];
+        sprite_pal_for_slot[i] = p[2 * SPRITE_SLOTS + i];
+    }
+    sprite_slot_for_index = scene_sprite_slot_ptrs[scene_index];
+    p += 3 * SPRITE_SLOTS;
+
     /* pick the tilemap size from the BG dimensions (one 2-term test per if) */
     if (bg_map_w[bg_index] > 32) sc_size = SC_64x64;
     if (bg_map_h[bg_index] > 32) sc_size = SC_64x64;
@@ -455,6 +476,10 @@ void SceneInit(void)
     dmaCopyCGram((u8 *)bg_pals_ptrs[bg_index], 0, bg_pals_len[bg_index]);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
+    /* this scene's OBJ tile sheet (8 KB) + 8-palette CGRAM image (bakes in the
+     * emote / avatar palettes at OBJ pal 1 / 2). */
+    dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], 0x4000, SPR_TILES_SIZE);
+    dmaCopyCGram((u8 *)scene_spr_pal_ptrs[scene_index], 128, SPR_PAL_SIZE);
     bgSetMapPtr(0, 0x0000, sc_size);
     bgSetGfxPtr(0, 0x2000);
 

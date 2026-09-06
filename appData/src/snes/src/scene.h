@@ -14,6 +14,15 @@
  * (the dummy sprite has no facing frames yet - only left/right flip is applied).
  */
 #include "gbs_types.h"
+#include "assets.h" /* SPRITE_SLOTS */
+
+/* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [24]
+ * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
+ * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */
+extern u8 sprite_type_for_slot[SPRITE_SLOTS];
+extern u8 sprite_frames_for_slot[SPRITE_SLOTS];
+extern u8 sprite_pal_for_slot[SPRITE_SLOTS];
+extern const unsigned char *sprite_slot_for_index;
 
 /* Dummy scenes reuse the M3 64x64 map. The real limit comes from the target
  * descriptor + collision bitmap size. */

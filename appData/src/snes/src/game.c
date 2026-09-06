@@ -176,14 +176,13 @@ int main(void)
     oamClear(0, 128);
     // OBJ tiles at VRAM 0x4000 (0x0000-0x0FFF is BG1 map, 0x2000 BG1 tiles,
     // 0x3000 BG3 font). Up to 8 actor sprites, slot k at grid tiles 2k..2k+17.
-    /* spr_pal is the whole OBJ CGRAM image (8 palettes * 32 B); oamInitGfxSet
-     * uploads it from OBJ palette 0. Per-sprite palettes live in 0 and 3..7
-     * (sprite_pal_for_slot[]); the two dmaCopyCGram calls below then claim
-     * palettes 1 and 2 for the emotes and dialogue avatars. */
-    oamInitGfxSet((u8 *)spr_tiles, SPR_TILES_SIZE, (u8 *)spr_pal, SPR_PAL_SIZE, 0,
+    /* The OBJ tile sheet + its 8-palette CGRAM image (which now bakes in the
+     * emote and dialogue-avatar palettes at OBJ pal 1 / 2) are per-scene:
+     * SceneInit uploads scene_index's. This boot call just sets the OBJ VRAM
+     * base / sprite size and seeds the start scene's data. */
+    oamInitGfxSet((u8 *)scene_spr_ptrs[START_SCENE], SPR_TILES_SIZE,
+                  (u8 *)scene_spr_pal_ptrs[START_SCENE], SPR_PAL_SIZE, 0,
                   0x4000, OBJ_SIZE8_L16);
-    dmaCopyCGram((u8 *)emote_pal, 128 + 1 * 16, EMOTE_PAL_SIZE);
-    dmaCopyCGram((u8 *)avatar_pal, 128 + 2 * 16, AVATAR_PAL_SIZE);
     UIInit();
     bgSetGfxPtr(0, 0x2000);
     bgSetMapPtr(0, 0x0000, SC_32x32);

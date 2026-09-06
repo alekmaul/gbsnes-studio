@@ -57,6 +57,10 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- SNES: a project with more than 8 sprite sheets showed the player sprite for every actor
+  past the 8th (a shop keeper, a torch flame, an NPC). Sprite sheets are now loaded per
+  scene, so each scene gets its own 8 slots — the sample game's shops and cave render
+  correctly.
 - SNES: the player was blocked one tile earlier than on Game Boy, so a tight gap (a house
   doorway with a wall just past it) couldn't be walked through - the exit trigger behind it
   never fired. Collision now matches Game Boy.

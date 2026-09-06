@@ -85,11 +85,14 @@ describe("compileSnesData - Test_Math fixture", () => {
     ]);
   });
 
-  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h]", () => {
+  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h] + [24] sprite table", () => {
     const blob = out.stats.sceneBlobs[0];
     expect(blob.slice(0, 6)).toEqual([0, 1, 0, 0, 20, 18]);
-    // one 6-byte actor entry: x, y, dir(down=1), move(static=1), spriteIdx, scriptIdx
-    expect(blob.slice(6, 12)).toEqual([9, 7, 1, 1, 0, 1]);
+    // [6..29] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
+    expect(blob.slice(22, 30)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]); // pal numbers
+    // first actor entry (9 bytes) starts right after the 24-byte table
+    // x, y, dir(down=1), move(static=1), spriteSlot, scriptIdx, ...
+    expect(blob.slice(30, 36)).toEqual([9, 7, 1, 1, 0, 1]);
   });
 
   test("the actor's first TEXT resolves to a string index", () => {
@@ -263,17 +266,15 @@ describe("compileSnesData - per-sprite OBJ palettes", () => {
       warnings: () => {}
     });
     // slot 0 (player) -> OBJ pal 0, slot 1 (npc) -> pal 3 (pool skips 1/2 =
-    // emote/avatar). Remaining slots reuse 0.
-    expect(out.assetsC).toMatch(
-      /sprite_pal_for_slot\[8\] = \{\s*0, 3, 4, 5, 6, 7, 0, 0\s*\}/
-    );
+    // emote/avatar). The per-scene blob's pal table (bytes 22..29) carries it.
+    expect(out.stats.sceneBlobs[0].slice(22, 30)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]);
     expect(out.assetsH).toMatch(/#define PLAYER_SPRITE_PAL 0/);
-    // spr_pal is now the whole OBJ CGRAM image: 8 palettes * 32 bytes
+    // the per-scene OBJ CGRAM image: 8 palettes * 32 bytes
     expect(out.assetsH).toMatch(/#define SPR_PAL_SIZE\s+256/);
-    expect(out.assetsH).toMatch(/spr_pal\[256\]/);
+    expect(out.assetsC).toMatch(/scene_spr_pal_0\[256\]/);
     // pal 0 (bytes 0..31) and pal 3 (bytes 96..127) hold different colours
     const m = out.assetsC.match(
-      /const unsigned char spr_pal\[256\] = \{([\s\S]*?)\}/
+      /const unsigned char scene_spr_pal_0\[256\] = \{([\s\S]*?)\}/
     );
     const bytes = m[1].split(",").map(x => parseInt(x.trim(), 10));
     const pal0 = bytes.slice(0, 32).join(",");
@@ -309,9 +310,88 @@ describe("compileSnesData - per-sprite OBJ palettes", () => {
       projectRoot: PROJECT_ROOT,
       warnings: () => {}
     });
-    expect(out.assetsC).toMatch(
-      /sprite_pal_for_slot\[8\] = \{\s*0, 3, 4, 5, 6, 7, 0, 0\s*\}/
-    );
+    // 6 actor sheets + player = 7 in one scene: slot 6 (7th) reuses pal 0
+    expect(out.stats.sceneBlobs[0].slice(22, 30)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]);
+  });
+});
+
+describe("compileSnesData - per-scene sprite sheets", () => {
+  const PROJECT_ROOT = Path.join(
+    __dirname, "..", "..", "projects", "Test_ActorInvoke"
+  );
+  const sheet = (id, file) => ({ id, filename: file, numFrames: 1 });
+
+  test("each scene loads its own <=8 sheets; the same actor sheet gets a per-scene slot", async () => {
+    // 12 distinct sheets across 2 scenes - would overflow one project-wide 8-slot
+    // sheet, but each scene only uses a handful.
+    const project = {
+      settings: { target: "snes", startSceneId: "a", startX: 1, startY: 1, playerSpriteSheetId: "player" },
+      backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+      spriteSheets: [
+        sheet("player", "actor.png"),
+        ...Array.from({ length: 11 }, (_, i) =>
+          sheet(`s${i}`, i % 2 ? "signpost.png" : "static.png")
+        )
+      ],
+      variables: [],
+      scenes: [
+        {
+          id: "a", name: "A", backgroundId: "bg", width: 20, height: 18, triggers: [],
+          actors: [
+            { id: "a0", x: 2, y: 2, spriteSheetId: "s0", movementType: "static", script: [] },
+            { id: "a1", x: 3, y: 2, spriteSheetId: "s1", movementType: "static", script: [] }
+          ]
+        },
+        {
+          id: "b", name: "B", backgroundId: "bg", width: 20, height: 18, triggers: [],
+          actors: [
+            // s1 again (different scene -> different slot) + a fresh sheet
+            { id: "b0", x: 2, y: 2, spriteSheetId: "s1", movementType: "static", script: [] },
+            { id: "b1", x: 3, y: 2, spriteSheetId: "s9", movementType: "static", script: [] }
+          ]
+        }
+      ]
+    };
+    const out = await compileSnesData(project, { projectRoot: PROJECT_ROOT, warnings: () => {} });
+
+    // one deduped tile blob + pointer table entry per scene, no project-wide spr_tiles
+    expect(out.assetsC).not.toMatch(/\bspr_tiles\b/);
+    expect(out.assetsSpr).toMatch(/\.section "scene_spr_0" superfree/);
+    expect(out.assetsC).toMatch(/scene_spr_ptrs\[2\]/);
+
+    // scene A: player=slot 0, s0=1, s1=2 -> actor entries reference 1 and 2
+    const a = out.stats.sceneBlobs[0];
+    const actorsA = a.slice(6 + 24);
+    expect(actorsA[4]).toBe(1); // a0 -> s0 -> slot 1
+    expect(actorsA[9 + 4]).toBe(2); // a1 -> s1 -> slot 2
+    // scene B: player=0, s1=1 (NOT 2 - it's B's first actor sheet), s9=2
+    const b = out.stats.sceneBlobs[1];
+    const actorsB = b.slice(6 + 24);
+    expect(actorsB[4]).toBe(1); // b0 -> s1 -> slot 1 in scene B
+    expect(actorsB[9 + 4]).toBe(2); // b1 -> s9 -> slot 2
+  });
+
+  test("a scene with >8 distinct sheets warns and overflows to slot 0", async () => {
+    const warns = [];
+    const project = {
+      settings: { target: "snes", startSceneId: "s", startX: 1, startY: 1, playerSpriteSheetId: "player" },
+      backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+      spriteSheets: [
+        sheet("player", "actor.png"),
+        ...Array.from({ length: 9 }, (_, i) => sheet(`s${i}`, "static.png"))
+      ],
+      variables: [],
+      scenes: [
+        {
+          id: "s", name: "Crowded", backgroundId: "bg", width: 20, height: 18, triggers: [],
+          actors: Array.from({ length: 9 }, (_, i) => ({
+            id: `a${i}`, x: i + 2, y: 5, spriteSheetId: `s${i}`, movementType: "static", script: []
+          }))
+        }
+      ]
+    };
+    await compileSnesData(project, { projectRoot: PROJECT_ROOT, warnings: m => warns.push(m) });
+    expect(warns.join("\n")).toMatch(/Crowded.*sprite sheets/);
   });
 });
 

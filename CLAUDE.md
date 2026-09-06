@@ -210,9 +210,25 @@ Tests: `test/helpers/assetWarnings.test.js`.
   background of 2-colour scenes like the Logo/Title (they map their bg to BG1 index 0);
   `UI_CHAR(' ')` therefore draws the box-fill tile, not tile 0. VRAM: 235 2bpp tiles at
   `0x3000-0x375F`, clear of BG1 (`0x2000-0x2FFF`) and OBJ (`0x4000`).
-  `test/data/compiler/snesFixedAssets.test.js` guards the blob shape. Per-actor sprites: `imageToSpriteData` → up to 8
-  slots in one OBJ sheet (VRAM `0x4000`); actor blob byte 4 = slot, engine sets
-  `frame_offset = slot*2`. Sub-scripts (`SET_INPUT_SCRIPT` / `SET_TIMER_SCRIPT`) use a `banked`
+  `test/data/compiler/snesFixedAssets.test.js` guards the blob shape.
+  **Per-scene OBJ sheets (user-found: a 16-sheet project showed the player sprite for
+  everything past the 8th).** The OBJ sheet used to be **one project-wide** 8 KB blob loaded
+  at boot - 8 slots for the whole game. Now `compileSnesData.js` builds one 8 KB sheet **per
+  scene** (`buildSceneSprites`): player always slot 0, that scene's own actor sheets 1..7,
+  plus the fixed emotes (region 32-63) and only that scene's dialogue avatars (64-95). Deduped
+  by content (a Logo + Title with no actors share one). Emitted as `src/assets_spr.asm` (one
+  `superfree` section per blob - a single 816-tcc `.rodata` section is atomic and can't cross
+  a 32 KB bank; `buildProject.js` writes the third file). The 8-palette CGRAM image is
+  per-scene too and now bakes in the emote / avatar palettes at OBJ pal 1 / 2 (game.c's two
+  `dmaCopyCGram` calls are gone). The scene blob gained a `[24]` table after `w,h`:
+  `sprite_type[8]`, `sprite_frames[8]`, `sprite_pal[8]`; `SceneInit` DMAs `scene_spr_ptrs
+  [scene_index]` / `scene_spr_pal_ptrs[scene_index]` and fills the now-**mutable** globals
+  `sprite_{type,frames,pal}_for_slot[8]` + `sprite_slot_for_index` (= `scene_sprite_slot_ptrs
+  [scene_index]`, for `PLAYER_SET_SPRITE`) from it. Per-scene ≤8 sheets covers the stock
+  sample (Outside's 6, Cave's 4, …); a scene needing >8 still warns and overflows to slot 0.
+  Verified in SnesJs: Cave's fire/sage/savepoint and House's seller/radio render their real
+  sprites; dialogue + avatar + emote intact. Actor blob byte 4 = the **per-scene** slot;
+  engine sets `frame_offset = slot*2`. Sub-scripts (`SET_INPUT_SCRIPT` / `SET_TIMER_SCRIPT`) use a `banked`
   shim → own `event_ptrs[]` slot; the engine now runs them for real too (M7-cont., see
   `appData/src/snes/README.md`), including a fix for `IF_INPUT`/`AWAIT_INPUT` comparing against
   raw PVSnesLib pad bits instead of the compiler's GB-layout button mask. **Actor sprite frames
@@ -492,8 +508,9 @@ Real remaining **code** gaps, most impactful first:
 1. **X / Y / L / R buttons** — deferred by user decision (needs the shared 1-byte `KEY_BITS`
    mask widened to 2 bytes, which touches the frozen GB engine + its byte-exact event tests).
    This is the one remaining M9 editor item too (the input-event option lists).
-2. **Only 6 distinct actor OBJ palettes** — a project with 7-8 different sprite sheets on
-   screen shares palette 0 for the overflow (emote/avatar hold 2 of the 8 OBJ palettes).
+2. **≤8 sprite sheets + ≤6 distinct OBJ palettes _per scene_** — sheets are loaded per-scene
+   now (not project-wide), so this only bites a single scene with 9+ distinct actor sheets;
+   the extras fall back to slot 0 / palette 0 (emote+avatar hold 2 of the 8 OBJ palettes).
 3. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
    but a mid-play emulator snapshot would need SnesJs machine-state serialization it doesn't have.
 4. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no

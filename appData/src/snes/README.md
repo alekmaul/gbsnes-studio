@@ -88,8 +88,11 @@ the odd frame — an `816-tcc` codegen ceiling, degrades gracefully).
     (idempotent) first.
   - 32x32-tile backgrounds are the max and fit `SC_32x32` exactly - `SC_64x64` isn't needed.
   - **Per-actor sprites** - `snesgfx.imageToSpriteData` converts a sprite sheet's frame(s) into
-    OBJ tiles; up to 8 slots in one shared OBJ sheet at VRAM `0x4000`. Actor blob byte 4 = slot;
-    `SceneInit` sets `actors[i].frame_offset = slot * 2` (OBJ grid TL tile for the "down"/only
+    OBJ tiles. The OBJ sheet at VRAM `0x4000` is **per scene** (`SceneInit` DMAs
+    `scene_spr_ptrs[scene_index]` + its 8-palette CGRAM image): player = slot 0, that scene's
+    actor sheets = 1..7. The scene blob's `[24]` table (`sprite_type[8] / _frames[8] / _pal[8]`,
+    right after `w,h`) fills the mutable `sprite_*_for_slot[]`. Actor blob byte 4 = the per-scene
+    slot; `SceneInit` sets `actors[i].frame_offset = slot * 2` (OBJ grid TL tile for the "down"/only
     frame); a 3-frame sheet's up/side frames additionally land in two dedicated regions (see
     "Directional actor sprites" below) and `SceneRenderActors` picks the right one at render
     time from the actor's current facing. Player uses `PLAYER_SPRITE_SLOT`. One 16-colour OBJ
