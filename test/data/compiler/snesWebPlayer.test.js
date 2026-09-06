@@ -25,6 +25,18 @@ describe("SNES web-player template", () => {
     expect(main).toMatch(/localStorage/);
     expect(main).toMatch(/snes\.cart\.sram/);
     expect(main).toMatch(/setPointerCapture/); // touch pad multi-touch
+    expect(main).toMatch(/function layoutScreen/); // JS sizing, not CSS aspect-ratio
+  });
+
+  test("css avoids features the in-app Chromium lacks (aspect-ratio, inset, flex gap)", () => {
+    const css = fs.readFileSync(
+      Path.join(snesEmulatorRoot, "css", "style.css"),
+      "utf8"
+    );
+    expect(css).not.toMatch(/aspect-ratio\s*:/);
+    expect(css).not.toMatch(/\binset\s*:/);
+    // no `gap:` on the flex rows (margins are used instead)
+    expect(css).not.toMatch(/^\s*gap\s*:/m);
   });
 });
 

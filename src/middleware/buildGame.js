@@ -91,7 +91,8 @@ export default store => next => async action => {
         });
         ipcRenderer.send(
           "open-play",
-          `file://${outputRoot}/build/web/index.html`
+          `file://${outputRoot}/build/web/index.html`,
+          target
         );
       }
 

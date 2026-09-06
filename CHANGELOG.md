@@ -57,6 +57,11 @@ https://claude.ai/code/artifact/5d2ffc31-f2da-4f0d-b7d9-bb8f927573a4
   "SNES (experimental)".
 
 ### Fixed
+- The in-app "Play" window for an SNES project showed only a black screen. The player's
+  layout used CSS features the app's bundled browser doesn't support, which pushed the
+  "Play" button out of the (Game Boy-sized) window — the game was waiting to be started
+  with no visible way to do it. The window is now sized for the SNES screen and the layout
+  no longer depends on those features. (Exported web players were unaffected.)
 - A user's "Eject Build" output for an SNES project could fail to compile with plain `make`
   (no app/Node involved) — the bundled proof-of-concept music data lived in a folder plain
   `make` never scans for source files, even though it linked fine through the app's own build.

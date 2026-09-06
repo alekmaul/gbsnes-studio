@@ -23,20 +23,27 @@ html, body {
   -webkit-user-select: none;
 }
 
+/* NB: this player also runs inside the app's bundled Chromium, which is old
+   enough to lack CSS `aspect-ratio`, `inset`, `gap` on flex, `clamp()` etc. -
+   so those are avoided here (explicit offsets / margins, JS sizing). */
 #snes_shell {
   height: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
   padding: 12px;
 }
 
+/* Size is set explicitly by layoutScreen() in main.js (keeps a 512:480 box
+   fitting the window) - CSS `aspect-ratio` isn't supported by the Chromium
+   the in-app player runs on, so we can't rely on it. These are just the
+   pre-layout fallback dimensions. */
 #screen {
   position: relative;
-  width: min(100%, calc(90vh * 512 / 480));
-  aspect-ratio: 512 / 480;
+  width: 512px;
+  height: 480px;
+  max-width: 100%;
   background: #000;
   border-radius: 10px;
   overflow: hidden;
@@ -53,11 +60,15 @@ html, body {
 
 .overlay {
   position: absolute;
-  inset: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
   display: flex;
   align-items: center;
   justify-content: center;
   background: rgba(10, 12, 16, 0.72);
+  -webkit-backdrop-filter: blur(2px);
   backdrop-filter: blur(2px);
   z-index: 2;
 }
@@ -69,13 +80,14 @@ html, body {
 }
 
 #start_title {
-  font-size: clamp(1rem, 4vw, 1.6rem);
+  font-size: 1.4rem;
   font-weight: 600;
   margin-bottom: 16px;
   word-break: break-word;
 }
 
 #start_button {
+  -webkit-appearance: none;
   appearance: none;
   border: 0;
   border-radius: 999px;
@@ -119,13 +131,15 @@ html, body {
 
 #toolbar {
   display: flex;
-  gap: 8px;
+  margin-top: 10px;
 }
 
 #toolbar button {
+  -webkit-appearance: none;
   appearance: none;
   width: 40px;
   height: 34px;
+  margin: 0 4px;
   border: 1px solid var(--edge);
   border-radius: 8px;
   background: var(--shell);
@@ -140,7 +154,9 @@ html, body {
 /* ---- touch pad ---- */
 #pad {
   position: fixed;
-  inset: auto 0 0 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
   height: 220px;
   opacity: 0.9;
   z-index: 3;
@@ -210,11 +226,11 @@ html, body {
   bottom: 26px;
   transform: translateX(-50%);
   display: flex;
-  gap: 14px;
 }
 .fbtn.capsule {
   width: 74px;
   height: 30px;
+  margin: 0 7px;
   border-radius: 999px;
   font-size: 10px;
   text-transform: uppercase;
@@ -225,7 +241,7 @@ html, body {
 .fbtn.pressed { filter: brightness(1.5); }
 
 @media (max-width: 520px) {
-  #snes_shell { padding: 0; gap: 6px; justify-content: flex-start; }
-  #screen { border-radius: 0; width: 100%; margin-top: env(safe-area-inset-top, 0); }
-  #toolbar { padding: 4px 0; }
+  #snes_shell { padding: 0; justify-content: flex-start; }
+  #screen { border-radius: 0; margin-top: env(safe-area-inset-top, 0); }
+  #toolbar { margin-top: 6px; padding: 4px 0; }
 }

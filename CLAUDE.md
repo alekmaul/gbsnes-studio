@@ -345,6 +345,18 @@ Tests: `test/helpers/assetWarnings.test.js`.
   past the poll, reload → bytes restored; canvas 93% non-black after clicking Play).
   `test/data/compiler/snesWebPlayer.test.js` covers the template shape + the `buildType: "web"`
   export (toolchain-gated).
+  **In-app play window / old-Chromium CSS (fixed).** The same shell runs in two very different
+  browsers: a modern one (web export) and the app's own bundled Chromium (Electron 4 →
+  Chromium 69, `src/index.js` `createPlay`). The first cut used `aspect-ratio`, `inset:` and
+  flex `gap` — none of which Chromium 69 supports — so in-app the shell overflowed and the
+  start-overlay's **Play button landed below the small (494×471, GB-sized) play window**: the
+  game just showed the black boot frame with no visible way to start it (reported as "the
+  emulator always gives a black screen; the ROM is fine in Mesen"). Fixes: `css/style.css`
+  avoids all three (explicit `top/right/bottom/left`, `margin` instead of `gap`, no
+  `aspect-ratio`); `js/main.js` `layoutScreen()` sizes `#screen` to the largest 512:480 box
+  that fits the window (JS, re-run on `resize`); and `createPlay` opens a 560×600 window when
+  `buildGame.js` passes `target: "snes"` on the `open-play` IPC (GB path unchanged). The
+  Jest test now asserts the CSS stays free of those features and that `layoutScreen` exists.
 - **Opcode audit (M11)** — the SNES README's "no opcode left as a meaningless Noop" claim was
   stale: re-checking `script_cmds.c` row-by-row against `scriptCommands.js` found 4 opcodes with
   a real GB implementation still `Script_Noop_b`: `PLAYER_SET_SPRITE`, `TEXT_SET_ANIM_SPEED`,

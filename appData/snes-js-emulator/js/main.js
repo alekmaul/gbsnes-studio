@@ -68,6 +68,37 @@ canvas.height = 480;
 const ctx = canvas.getContext("2d");
 const imgData = ctx.getImageData(0, 0, 512, 480);
 
+// Keep the screen a 512:480 box that fits the window. Done in JS because the
+// Chromium the in-app play window runs on has no CSS `aspect-ratio`; without
+// this the shell overflows and the start overlay (with the Play button) ends
+// up scrolled out of a small window - the game then looks stuck on a black
+// frame because there's no visible way to start it.
+const screenEl = document.getElementById("screen");
+const shellEl = document.getElementById("snes_shell");
+const toolbarEl = document.getElementById("toolbar");
+
+function layoutScreen() {
+  const cs = window.getComputedStyle(shellEl);
+  const padX = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  const padY = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+  let toolbarH = 0;
+  if (toolbarEl) {
+    const ts = window.getComputedStyle(toolbarEl);
+    toolbarH =
+      toolbarEl.offsetHeight +
+      (parseFloat(ts.marginTop) || 0) +
+      (parseFloat(ts.marginBottom) || 0);
+  }
+  const availW = Math.max(1, shellEl.clientWidth - padX);
+  const availH = Math.max(1, window.innerHeight - padY - toolbarH - 2);
+  const scale = Math.min(availW / 512, availH / 480);
+  screenEl.style.width = Math.max(1, Math.floor(512 * scale)) + "px";
+  screenEl.style.height = Math.max(1, Math.floor(480 * scale)) + "px";
+}
+
+window.addEventListener("resize", layoutScreen);
+layoutScreen();
+
 const snes = new Snes(); // eslint-disable-line no-undef
 const audioHandler = new AudioHandler(); // eslint-disable-line no-undef
 
