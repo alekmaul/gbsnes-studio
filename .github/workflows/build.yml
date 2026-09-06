@@ -12,6 +12,12 @@ on:
 # CircleCI config did.
 env:
   NODE_VERSION: "16"
+  # Belt-and-suspenders for the CLI --ignore-engines below: this is inherited by
+  # the nested `yarn install` electron-packager runs while pruning the packaged
+  # app, which otherwise chokes on modern transitive deps that require Node >=18
+  # (e.g. node-releases, via a fresh browserslist resolve). We build on 16 on
+  # purpose. A repo-root .yarnrc sets the same thing for local dev.
+  YARN_IGNORE_ENGINES: "true"
 
 jobs:
   test:

@@ -43,6 +43,11 @@ matrix running `yarn make:{win,mac,linux}` natively per OS (each vendored PVSnes
 runs on its own platform). `forge.config.js` skips `osxSign` when `process.env.CI` is set (no
 Apple identity on CI). On a `v*` tag the `release` job attaches the per-platform builds to the
 GitHub Release (`softprops/action-gh-release`). Lint is not gated (large inherited eslint debt).
+Node-16 pin: the 2021 `yarn.lock` is never regenerated, so a clean CI resolve pulls a few
+modern transitive deps that declare `engines.node >=18` (e.g. `node-releases` via browserslist).
+`--ignore-engines` is on the CLI install, plus `YARN_IGNORE_ENGINES=true` in the workflow `env`
+(inherited by the nested `yarn install` electron-packager runs while pruning the packaged app —
+that one never saw the CLI flag) and a repo-root `.yarnrc` (`ignore-engines true`) for local dev.
 
 ## Two processes, one repo
 
