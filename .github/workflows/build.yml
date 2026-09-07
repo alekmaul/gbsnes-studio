@@ -19,6 +19,13 @@ env:
   # purpose. A repo-root .yarnrc sets the same thing for local dev.
   YARN_IGNORE_ENGINES: "true"
 
+# The three desktop builds run strictly one after another - Windows, then macOS,
+# then Linux - via the `needs` chain below. macOS is billed at 10x the minute
+# rate on this private repo and can sit "waiting for a runner" when the account
+# is over its limit, so `build-macos` is `continue-on-error` and `build-linux`
+# runs with `if: always()`: a stuck or failed macOS build delays Linux by no
+# more than GitHub's queue give-up, and never fails the run or the release.
+# `release` gates on Windows + Linux only; the macOS .zip is attached if present.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -31,74 +38,43 @@ jobs:
       - run: yarn install --ignore-engines --network-timeout 600000
       - run: yarn test
 
-  # Linux, then Windows - one at a time (max-parallel: 1), in that order.
-  # These two gate the release.
-  build:
+  build-windows:
     needs: test
-    strategy:
-      fail-fast: false
-      max-parallel: 1
-      matrix:
-        include:
-          - os: ubuntu-latest
-            make: make:linux
-            artifact: linux-x64
-          - os: windows-latest
-            make: make:win
-            artifact: windows-x64
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: yarn
-
-      - name: Linux packaging deps
-        if: matrix.os == 'ubuntu-latest'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fakeroot rpm
-
       - run: yarn install --ignore-engines --network-timeout 600000
-
-      - name: Package + make (${{ matrix.artifact }})
-        run: yarn ${{ matrix.make }}
+      - name: Package + make (windows-x64)
+        run: yarn make:win
         env:
           CI: "true" # forge.config.js skips osxSign when set
-
       - uses: actions/upload-artifact@v4
         with:
-          name: gbsnes-studio-${{ matrix.artifact }}
+          name: gbsnes-studio-windows-x64
           path: out/make/**
           if-no-files-found: error
           retention-days: 14
 
-  # macOS runs last and on its own. This repo is private, where GitHub bills
-  # macOS runners at 10x the minute rate; if the account is over its limit the
-  # job just sits "waiting for a runner". Keeping it out of the `build` matrix -
-  # and only a soft dependency of `release` (continue-on-error + the release's
-  # `always()` gate) - means a stuck or failed macOS build never blocks the
-  # Windows + Linux release. The macOS .zip is attached when the job does run.
   build-macos:
-    needs: build
+    needs: build-windows
     runs-on: macos-13 # x64 runner — Electron 4 has no arm64 build
     continue-on-error: true
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: yarn
-
       - run: yarn install --ignore-engines --network-timeout 600000
-
       - name: Package + make (macos-x64)
         run: yarn make:mac
         env:
-          CI: "true" # forge.config.js skips osxSign when set
-
+          CI: "true"
       - uses: actions/upload-artifact@v4
         with:
           name: gbsnes-studio-macos-x64
@@ -106,17 +82,46 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
+  build-linux:
+    # Chained after macOS (build-macos already waits for Windows), but listed
+    # both so the `if` can read Windows's result.
+    needs: [build-windows, build-macos]
+    # Runs once macOS reaches a terminal state (success, failure, or cancelled),
+    # as long as Windows actually succeeded - macOS is not allowed to block it.
+    if: ${{ always() && needs.build-windows.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+      - name: Linux packaging deps
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends fakeroot rpm
+      - run: yarn install --ignore-engines --network-timeout 600000
+      - name: Package + make (linux-x64)
+        run: yarn make:linux
+        env:
+          CI: "true"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gbsnes-studio-linux-x64
+          path: out/make/**
+          if-no-files-found: error
+          retention-days: 14
+
   # On a v* tag: collect whatever per-platform builds are available and attach
-  # them to the release. Runs as soon as Windows + Linux succeed; macOS is
-  # optional (see build-macos) - `always()` lets this run even when that job
-  # failed, was cancelled, or never got a runner, and download-artifact +
+  # them to the release. Fires as soon as Windows + Linux succeed; macOS is
+  # optional - `always()` lets this run even when that job failed, was
+  # cancelled, or never got a runner, and download-artifact +
   # fail_on_unmatched_files: false tolerate the missing macOS asset.
   release:
-    needs: [build, build-macos]
+    needs: [build-windows, build-macos, build-linux]
     if: >-
       ${{ always()
       && startsWith(github.ref, 'refs/tags/v')
-      && needs.build.result == 'success' }}
+      && needs.build-windows.result == 'success'
+      && needs.build-linux.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write
