@@ -20,12 +20,12 @@ env:
   YARN_IGNORE_ENGINES: "true"
 
 # The three desktop builds run strictly one after another - Windows, then macOS,
-# then Linux - via the `needs` chain below. macOS is billed at 10x the minute
-# rate on this private repo and can sit "waiting for a runner" when the account
-# is over its limit, so `build-macos` is `continue-on-error` and `build-linux`
-# runs with `if: always()`: a stuck or failed macOS build delays Linux by no
-# more than GitHub's queue give-up, and never fails the run or the release.
-# `release` gates on Windows + Linux only; the macOS .zip is attached if present.
+# then Linux - via the `needs` chain below. `build-macos` is still kept
+# `continue-on-error` and `build-linux` runs with `if: always()`, so a macOS
+# runner hiccup (the retired `macos-13` label used to hang here forever) delays
+# Linux by no more than GitHub's queue give-up and never fails the run or the
+# release. `release` gates on Windows + Linux only; the macOS .zip is attached
+# if present. The repo is public, so macOS runner minutes are free.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -61,7 +61,12 @@ jobs:
 
   build-macos:
     needs: build-windows
-    runs-on: macos-13 # x64 runner — Electron 4 has no arm64 build
+    # macos-15 is an arm64 runner (macos-13, the last Intel image, was retired
+    # by GitHub in 2025). That's fine: `yarn make:mac` runs electron-packager
+    # with --arch=x64 --platform=darwin, which just downloads the x64 Electron
+    # binary and repackages the (pure-JS) app around it - no native addon in the
+    # bundle needs host-arch compilation.
+    runs-on: macos-15
     continue-on-error: true
     timeout-minutes: 120
     steps:

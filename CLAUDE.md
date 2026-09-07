@@ -40,12 +40,14 @@ There is no build step for `src/` in dev — `electron-compile` transpiles on th
 CircleCI config (deleted; wrong branch names, Wine-based Windows builds). `test` runs
 `yarn test` on Node 16 (Ubuntu). The three desktop builds are separate jobs chained strictly
 **Windows → macOS → Linux** (`needs`), each `yarn make:{win,mac,linux}` on its own OS (each
-vendored PVSnesLib toolchain runs natively). `forge.config.js` skips `osxSign` when
-`process.env.CI` is set (no Apple identity on CI). **macOS can't block the release**: this repo
-is private, where GitHub bills macOS runners at 10× and a job can sit "waiting for a runner"
-when the account is over its limit — `build-macos` is `continue-on-error` + `timeout-minutes:
-120`, and `build-linux` runs `if: always() && needs.build-windows.result == 'success'` (so a
-stuck/failed macOS delays Linux by at most GitHub's queue give-up, never fails the run).
+vendored PVSnesLib toolchain runs natively). macOS uses `macos-15` (arm64 — GitHub retired the
+last Intel image `macos-13` in 2025); `yarn make:mac` still cross-packages x64 via
+electron-packager `--arch=x64` (downloads x64 Electron, repackages the pure-JS app — no native
+addon needs host-arch compilation). `forge.config.js` skips `osxSign` when `process.env.CI` is
+set (no Apple identity on CI). **macOS can't block the release**: `build-macos` is
+`continue-on-error` + `timeout-minutes: 120`, and `build-linux` runs `if: always() &&
+needs.build-windows.result == 'success'` (so a macOS runner hiccup delays Linux by at most
+GitHub's queue give-up, never fails the run). The repo is public → macOS runner minutes free.
 `release` (`needs: [build-windows, build-macos, build-linux]`, `if: always() && …windows &&
 linux succeeded`) fires on Windows + Linux alone and attaches the macOS `.zip` only if that job
 produced one. On a `v*` tag `release` attaches the artifacts to the GitHub Release
