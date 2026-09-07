@@ -169,6 +169,16 @@ Fixed to mirror GB (`win_pos_y == MENU_CLOSED_Y` counts as closed): an overlay w
 blocks input. Relies on the overlay-row scaling above so `OVERLAY_MOVE_TO(0,18)` lands exactly
 on row 28. Verified in an offscreen SnesJs run: player stuck at the spawn tile before, walks
 normally after (identical to a build that starts in that scene directly).
+**Stray dark line at the screen bottom (same parked-overlay scenario, user-found).**
+`ui_overlay_fill_from(row)` filled BG3 rows `row..31` with the fill tile. Rows 28-31 are past
+the 224-line NTSC screen, but the SNES's +1-scanline quirk (and Mesen's capture) still shows a
+sliver of row 28, so an overlay parked off the bottom (`OVERLAY_MOVE_TO` past row 28 — again
+the Logo-intro case) painted a 1px full-width dark band along the bottom edge for the rest of
+the game, its colour tracking the scene fade. Fixed: a parked position (`row >= UI_SCREEN_ROWS`)
+now fills *nothing* — the overlay is hidden, rows 28-31 stay blank. A genuine on-screen curtain
+still fills all the way down. Verified in Mesen: the stray line at screen y=230 is gone, a
+full-screen stray-row scan is clean while walking all four directions, dialogue/menu box
+unaffected.
 **M9 editor asset feedback (done).** Two more editor spots were GB-hardcoded and are now
 target-aware via `getTarget(settings.target)`: the **Backgrounds page size warnings**
 (`src/components/assets/ImageViewer.js` → `src/lib/helpers/assetWarnings.js`) used a fixed
@@ -561,7 +571,8 @@ sprite sheets** (`buildSceneSprites` + `src/assets_spr.asm`; a 16-sheet project 
 shows the player sprite for the overflow). **N-frame `animated` sprites** (2/4/5-frame ducks
 and torches cycle). **`can_step` collision** now matches GB (was a 2×2 footprint blocking the
 player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, matching GB).
-**Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES. **In-app
+**Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES + **no
+stray dark line at the screen bottom** from the parked overlay's fill tiles. **In-app
 Play black screen** (old-Chromium CSS + window size). **All 8 sample backgrounds SNES-sized**
 (5 room scenes redrawn at 256×224 + scenes resized/collision re-strided; 3 scrolling scenes
 recoloured off the DMG greens, 1:1 LUT so collision is unchanged). **X / Y / L / R input**

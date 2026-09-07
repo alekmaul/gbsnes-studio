@@ -31,6 +31,13 @@ extern u8 time;
     UI_ENTRY((u8)(c) == 0x20 ? UI_BOX_FILL : (u8)((u8)(c) - 0x20))
 #define UI_BLANK    0x0000
 
+/* Visible screen height in tiles (224px NTSC = 28 rows). BG3's tilemap is 32
+ * rows; rows >= this are past the bottom of the screen. The overlay fill must
+ * never touch them: a real display (and Mesen's capture) still shows a sliver
+ * of row 28 in the overscan area, so a "parked" overlay left with fill tiles
+ * down there paints a stray dark line along the bottom edge. */
+#define UI_SCREEN_ROWS 28
+
 #define BOX_ROW0 20
 #define BOX_ROWS 8
 #define TXT_COL0 2
@@ -505,10 +512,16 @@ static void ui_render_avatar(void)
 static void ui_overlay_fill_from(u8 row)
 {
     u16 r, c;
+    /* An overlay parked at/below the screen bottom (OVERLAY_MOVE_TO off the
+     * bottom edge) is fully hidden - fill nothing. Leaving fill tiles in the
+     * off-screen rows painted a stray dark line along the bottom edge, because
+     * a sliver of row 28 still shows in the overscan area. A genuine curtain
+     * (row on-screen) still fills all the way down. */
+    u8 hidden = row >= UI_SCREEN_ROWS;
     for (r = 0; r < 32; r++)
     {
         u16 e = UI_BLANK;
-        if (r >= row) e = UI_ENTRY(UI_FILL_TILE);
+        if (!hidden && r >= row) e = UI_ENTRY(UI_FILL_TILE);
         for (c = 0; c < 32; c++)
         {
             ui_map[r * 32 + c] = e;
@@ -753,10 +766,6 @@ void UIFlush(void)
                     BOX_ROWS * 32 * 2);
     }
 }
-
-/* Visible screen height in tiles (224px NTSC). The BG3 overlay map is 32 rows;
- * rows >= this are off the bottom of the screen. */
-#define UI_SCREEN_ROWS 28
 
 u8 UIIsClosed(void)
 {
