@@ -62,18 +62,23 @@ jobs:
   build-macos:
     needs: build-windows
     # macos-15 is an arm64 runner (macos-13, the last Intel image, was retired
-    # by GitHub in 2025). That's fine: `yarn make:mac` runs electron-packager
-    # with --arch=x64 --platform=darwin, which just downloads the x64 Electron
-    # binary and repackages the (pure-JS) app around it - no native addon in the
-    # bundle needs host-arch compilation.
+    # by GitHub in 2025). Electron 4 has no darwin-arm64 build, and
+    # electron-prebuilt-compile's postinstall downloads Electron for the host
+    # arch - so we install an x64 Node (Rosetta 2 is on the arm64 runners) and
+    # force npm's target arch to x64. Every Electron download tool then fetches
+    # darwin-x64, and electron-packager --arch=x64 packages an Intel app.
     runs-on: macos-15
     continue-on-error: true
     timeout-minutes: 120
+    env:
+      npm_config_arch: x64
+      npm_config_target_arch: x64
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          architecture: x64
           cache: yarn
       - run: yarn install --ignore-engines --network-timeout 600000
       - name: Package + make (macos-x64)
