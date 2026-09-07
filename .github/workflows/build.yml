@@ -31,21 +31,21 @@ jobs:
       - run: yarn install --ignore-engines --network-timeout 600000
       - run: yarn test
 
+  # Linux, then Windows - one at a time (max-parallel: 1), in that order.
+  # These two gate the release.
   build:
     needs: test
     strategy:
       fail-fast: false
+      max-parallel: 1
       matrix:
         include:
-          - os: windows-latest
-            make: make:win
-            artifact: windows-x64
-          - os: macos-13 # x64 runner — Electron 4 has no arm64 build
-            make: make:mac
-            artifact: macos-x64
           - os: ubuntu-latest
             make: make:linux
             artifact: linux-x64
+          - os: windows-latest
+            make: make:win
+            artifact: windows-x64
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -73,10 +73,50 @@ jobs:
           if-no-files-found: error
           retention-days: 14
 
-  # On a v* tag: collect the per-platform builds and attach them to the release.
-  release:
-    if: startsWith(github.ref, 'refs/tags/v')
+  # macOS runs last and on its own. This repo is private, where GitHub bills
+  # macOS runners at 10x the minute rate; if the account is over its limit the
+  # job just sits "waiting for a runner". Keeping it out of the `build` matrix -
+  # and only a soft dependency of `release` (continue-on-error + the release's
+  # `always()` gate) - means a stuck or failed macOS build never blocks the
+  # Windows + Linux release. The macOS .zip is attached when the job does run.
+  build-macos:
     needs: build
+    runs-on: macos-13 # x64 runner — Electron 4 has no arm64 build
+    continue-on-error: true
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: yarn
+
+      - run: yarn install --ignore-engines --network-timeout 600000
+
+      - name: Package + make (macos-x64)
+        run: yarn make:mac
+        env:
+          CI: "true" # forge.config.js skips osxSign when set
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gbsnes-studio-macos-x64
+          path: out/make/**
+          if-no-files-found: error
+          retention-days: 14
+
+  # On a v* tag: collect whatever per-platform builds are available and attach
+  # them to the release. Runs as soon as Windows + Linux succeed; macOS is
+  # optional (see build-macos) - `always()` lets this run even when that job
+  # failed, was cancelled, or never got a runner, and download-artifact +
+  # fail_on_unmatched_files: false tolerate the missing macOS asset.
+  release:
+    needs: [build, build-macos]
+    if: >-
+      ${{ always()
+      && startsWith(github.ref, 'refs/tags/v')
+      && needs.build.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: write

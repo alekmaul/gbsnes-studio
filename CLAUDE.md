@@ -38,11 +38,18 @@ There is no build step for `src/` in dev — `electron-compile` transpiles on th
 
 **CI** is GitHub Actions (`.github/workflows/build.yml`) — replaced the inherited-from-upstream
 CircleCI config (deleted; wrong branch names, Wine-based Windows builds). `test` runs
-`yarn test` on Node 16 (Ubuntu); `build` is a `{windows-latest, macos-13, ubuntu-latest}`
-matrix running `yarn make:{win,mac,linux}` natively per OS (each vendored PVSnesLib toolchain
-runs on its own platform). `forge.config.js` skips `osxSign` when `process.env.CI` is set (no
-Apple identity on CI). On a `v*` tag the `release` job attaches the per-platform builds to the
-GitHub Release (`softprops/action-gh-release`). Lint is not gated (large inherited eslint debt).
+`yarn test` on Node 16 (Ubuntu). The three desktop builds run **one at a time**: `build` is a
+`max-parallel: 1` matrix of `{ubuntu-latest → make:linux, windows-latest → make:win}` (Linux
+then Windows), then `build-macos` (`macos-13`, x64) runs after it. Each vendored PVSnesLib
+toolchain runs on its own platform; `forge.config.js` skips `osxSign` when `process.env.CI` is
+set (no Apple identity on CI). **macOS is decoupled from the release**: this repo is private, so
+GitHub bills macOS runners at 10× and a job can sit "waiting for a runner" if the account is
+over its limit — `build-macos` is `continue-on-error` + `timeout-minutes`, out of the `build`
+matrix, and `release` (`needs: [build, build-macos]`, `if: always() && …needs.build.result ==
+'success'`) fires on Windows + Linux alone, attaching the macOS `.zip` only if that job produced
+one. On a `v*` tag `release` attaches the artifacts to the GitHub Release
+(`softprops/action-gh-release`, `fail_on_unmatched_files: false`). Lint is not gated (large
+inherited eslint debt).
 Node-16 pin: the 2021 `yarn.lock` is never regenerated, so a clean CI resolve pulls a few
 modern transitive deps that declare `engines.node >=18` (e.g. `node-releases` via browserslist).
 `--ignore-engines` is on the CLI install, plus `YARN_IGNORE_ENGINES=true` in the workflow `env`
