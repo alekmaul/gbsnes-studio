@@ -269,14 +269,17 @@ describe("compileSnesData - per-sprite OBJ palettes", () => {
     // emote/avatar). The per-scene blob's pal table (bytes 22..29) carries it.
     expect(out.stats.sceneBlobs[0].slice(22, 30)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]);
     expect(out.assetsH).toMatch(/#define PLAYER_SPRITE_PAL 0/);
-    // the per-scene OBJ CGRAM image: 8 palettes * 32 bytes
+    // the per-scene OBJ CGRAM image: 8 palettes * 32 bytes, in its own .as file
     expect(out.assetsH).toMatch(/#define SPR_PAL_SIZE\s+256/);
-    expect(out.assetsC).toMatch(/scene_spr_pal_0\[256\]/);
+    const palAs = out.assetsData["scene_spr_pal_0_data.as"];
+    expect(palAs).toMatch(/\.section "rodata_scene_spr_pal_0" superfree/);
+    expect(palAs).toMatch(/\nscene_spr_pal_0:/);
     // pal 0 (bytes 0..31) and pal 3 (bytes 96..127) hold different colours
-    const m = out.assetsC.match(
-      /const unsigned char scene_spr_pal_0\[256\] = \{([\s\S]*?)\}/
-    );
-    const bytes = m[1].split(",").map(x => parseInt(x.trim(), 10));
+    const bytes = palAs
+      .split(/\r?\n/)
+      .filter(l => l.startsWith(".db "))
+      .flatMap(l => l.slice(4).split(",").map(x => parseInt(x.trim(), 10)));
+    expect(bytes.length).toBe(256);
     const pal0 = bytes.slice(0, 32).join(",");
     const pal3 = bytes.slice(96, 128).join(",");
     expect(pal0).not.toBe(pal3);
@@ -356,7 +359,12 @@ describe("compileSnesData - per-scene sprite sheets", () => {
 
     // one deduped tile blob + pointer table entry per scene, no project-wide spr_tiles
     expect(out.assetsC).not.toMatch(/\bspr_tiles\b/);
-    expect(out.assetsSpr).toMatch(/\.section "scene_spr_0" superfree/);
+    expect(out.assetsData["scene_spr_0_data.as"]).toMatch(
+      /\.section "rodata_scene_spr_0" superfree[\s\S]*\nscene_spr_0:/
+    );
+    expect(out.assetsData["data.asm"]).toMatch(
+      /\.include "src\/data\/scene_spr_0_data\.as"/
+    );
     expect(out.assetsC).toMatch(/scene_spr_ptrs\[2\]/);
 
     // scene A: player=slot 0, s0=1, s1=2 -> actor entries reference 1 and 2

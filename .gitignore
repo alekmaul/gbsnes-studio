@@ -23,4 +23,8 @@ appData/src/snes/*.symfull
 appData/src/snes/*.log
 appData/src/snes/linkfile
 appData/src/snes/build
-appData/src/snes/src/data
+# src/data/ holds committed dummy graphic assets (*.as + data.asm, like
+# assets.c) - only ignore what a standalone `make` drops next to them
+appData/src/snes/src/data/*.obj
+appData/src/snes/src/data/*.ps
+appData/src/snes/src/data/*.dbg

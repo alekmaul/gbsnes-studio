@@ -247,13 +247,24 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   inverts `imageToBGData` and `snesgfx.test.js` asserts a lossless round-trip.
   `targets/snes.js` `maxTilesetTiles` is the real 256-tile VRAM budget.
 - **`src/lib/compiler/compileSnesData.js`** — the SNES data compiler (M7 phase 1). A
-  denormalized project → `appData/src/snes/src/assets.{c,h}` in the engine's format: scene
-  blobs, `event_ptrs[]` (script bytecode via the shared `compileEntityEvents` / `scriptBuilder`
-  — opcode numbers identical to GB), `string_ptrs[]`, `bg_*_ptrs[]` (via `snesgfx.js`), and
-  `START_*` defines. The only placeholders resolved here are the `__REPLACE:STRING_*` triples
-  (→ a plain 16-bit `string_ptrs[]` index; no banked pointer, D4). `buildProject.js`
-  `buildProjectSnes` runs it and writes the two files into the ejected engine tree before
-  `buildSnesRom`. Runs `migrateProject` (idempotent) so legacy `EVENT_MATH_*` etc. compile.
+  denormalized project → `appData/src/snes/src/assets.{c,h}` + `src/data/*` in the engine's
+  format: scene blobs, `event_ptrs[]` (script bytecode via the shared `compileEntityEvents` /
+  `scriptBuilder` — opcode numbers identical to GB), `string_ptrs[]`, `bg_*_ptrs[]` (via
+  `snesgfx.js`), and `START_*` defines. The only placeholders resolved here are the
+  `__REPLACE:STRING_*` triples (→ a plain 16-bit `string_ptrs[]` index; no banked pointer, D4).
+  **Graphic assets are 65816 source, not C.** `assets.c` (one atomic 816-tcc `.rodata` section,
+  capped at a 32 KB LoROM bank) holds only the pointer tables + `bg_*_len[]` + scene blobs +
+  script bytecode + strings; every background, the UI font, each per-scene OBJ tile sheet and
+  each OBJ palette is emitted as its own `src/data/<name>_data.as` — one `.section
+  "rodata_<name>" superfree` with `<name>_tiles` / `_pal` / `_map` labels (`.db`, 32 B/line;
+  no map for the font). `src/data/data.asm` (`.include "hdr.asm"` + one `.include
+  "src/data/<name>_data.as"` per file) is the file the build actually assembles — `.as` files
+  are pulled in, never compiled directly (neither `buildSnesRom.js` nor `snes_rules` scans
+  `*.as`). wlalink then spreads the sections across banks, so total graphic data can exceed
+  32 KB. The C engine references the asm labels via the `extern` arrays in `assets.h`
+  (816-tcc emits a plain `bg0_tiles` symbol reference — the label must match exactly, no dot).
+  `buildProject.js` `buildProjectSnes` runs the compiler, removes any stale `assets_spr.asm`,
+  and writes `assets.{c,h}` + `src/data/*` into the ejected engine tree before `buildSnesRom`. Runs `migrateProject` (idempotent) so legacy `EVENT_MATH_*` etc. compile.
   `src/lib/compiler/snesFixedAssets.js` provides the BG3 UI graphics + fallback sprite +
   palette shared with `gen-dummy-gfx.js`. **The UI font/frame/cursor are project assets, not
   built in** (user-found: the SNES box used a hardcoded `font8.pic` and a plain fill, no
@@ -276,9 +287,10 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   at boot - 8 slots for the whole game. Now `compileSnesData.js` builds one 8 KB sheet **per
   scene** (`buildSceneSprites`): player always slot 0, that scene's own actor sheets 1..7,
   plus the fixed emotes (region 32-63) and only that scene's dialogue avatars (64-95). Deduped
-  by content (a Logo + Title with no actors share one). Emitted as `src/assets_spr.asm` (one
-  `superfree` section per blob - a single 816-tcc `.rodata` section is atomic and can't cross
-  a 32 KB bank; `buildProject.js` writes the third file). The 8-palette CGRAM image is
+  by content (a Logo + Title with no actors share one). Emitted as `src/data/scene_spr_*_data.as`
+  (one `superfree` section per blob, `.include`d from `src/data/data.asm` — see the
+  `compileSnesData.js` bullet; this is the general "graphic assets are 65816 source" scheme, not
+  sprite-specific). The 8-palette CGRAM image is
   per-scene too and now bakes in the emote / avatar palettes at OBJ pal 1 / 2 (game.c's two
   `dmaCopyCGram` calls are gone). The scene blob gained a `[24]` table after `w,h`:
   `sprite_type[8]`, `sprite_frames[8]`, `sprite_pal[8]`; `SceneInit` DMAs `scene_spr_ptrs
@@ -410,7 +422,7 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   (player + variables only). Found a real bug via testing: checking the exists flag for
   truthiness instead of exact equality (`== 1`) misreported "save exists" on a fresh cartridge,
   since Mesen (realistically) fills a freshly-created `.srm` with random garbage, not zeros.
-  `src/assets.{c,h}` is committed dummy data (`tools/gen-dummy-gfx.js`), replaced in M6.
+  `src/assets.{c,h}` + `src/data/*` are committed dummy data (`tools/gen-dummy-gfx.js`), replaced per build.
   `src/gbs_types.h` mirrors GB `GameTypes.h` (`BANK_PTR` is a plain far pointer, D4).
   `test/data/compiler/snesScriptCmds.test.js` enforces that `script_cmds.c`'s opcode/args_len
   table matches `scriptCommands.js` **and** the GB `ScriptRunner.c` table.
@@ -445,6 +457,12 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   location, so nothing else needed to move). Verified with a real `PVSNESLIB_HOME`-pointed
   `make` run (MSYS `make`/`sh` at `C:\svgexterne\...\ndsdev\msys\bin`, see Claude memory) against
   the *vendored* (not the external full) PVSnesLib copy, producing a ROM that boots in Mesen.
+  The graphic-asset split (`src/data/data.asm` + `src/data/*_data.as`) was checked the same way:
+  `data.asm` sits at `src/data/` (matches `snes_rules`' `$(SRC)/*/*.asm`), its `.include` paths
+  are root-relative (`src/data/bg0_data.as`), and the `.as` files are never scanned as sources -
+  a full `make` of an ejected 8-background sneshtml links and boots. `appData/src/snes/src/data/`
+  holds the committed dummy `.as`/`data.asm` (like `assets.c`); `.gitignore` only excludes the
+  `.obj`/`.ps`/`.dbg` a standalone `make` drops there.
 - **Toolchain** vendored (subset) under `buildTools/<platform>-<arch>/pvsneslib/` — PVSnesLib
   V4.7.0 `devkitsnes/{bin,tools,include,snes_rules}` + `pvsneslib/{include,lib}`, for
   `win32-x64`, `linux-x64` and `darwin-x64` (native binaries per platform; the unix ones carry
@@ -588,7 +606,7 @@ Real remaining **code** gaps, most impactful first:
 
 Done since (M12, playing the sample end to end): **UI graphics from the project's `assets/ui`
 PNGs** (font + 9-slice frame + menu cursor, was a hardcoded font + plain fill). **Per-scene
-sprite sheets** (`buildSceneSprites` + `src/assets_spr.asm`; a 16-sheet project no longer
+sprite sheets** (`buildSceneSprites`; a 16-sheet project no longer
 shows the player sprite for the overflow). **N-frame `animated` sprites** (2/4/5-frame ducks
 and torches cycle). **`can_step` collision** now matches GB (was a 2×2 footprint blocking the
 player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, matching GB).

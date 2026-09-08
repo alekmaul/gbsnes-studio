@@ -74,10 +74,16 @@ const buildProjectSnes = async (
   const snesData = await compileSnesData(data, { projectRoot, warnings });
   await fs.writeFile(`${outputRoot}/src/assets.h`, snesData.assetsH);
   await fs.writeFile(`${outputRoot}/src/assets.c`, snesData.assetsC);
-  // Big per-scene OBJ tile blobs go in their own .asm (one superfree section
-  // each) so wla can spread them across banks - a single .rodata section can't
-  // exceed a 32 KB bank.
-  await fs.writeFile(`${outputRoot}/src/assets_spr.asm`, snesData.assetsSpr);
+  // Graphic assets go in src/data/: one `<name>_data.as` (superfree section)
+  // per background / font / OBJ sheet / OBJ palette, plus data.asm that
+  // `.include`s them - so wla spreads them across banks instead of one atomic
+  // 32 KB-capped `.rodata` section. Drop any stale assets_spr.asm shipped in
+  // the engine tree (its blobs live in src/data/ now).
+  await fs.remove(`${outputRoot}/src/assets_spr.asm`);
+  await fs.ensureDir(`${outputRoot}/src/data`);
+  for (const [name, content] of Object.entries(snesData.assetsData)) {
+    await fs.writeFile(`${outputRoot}/src/data/${name}`, content);
+  }
   await compileSnesMusic({
     music: data.music || [],
     projectRoot,
