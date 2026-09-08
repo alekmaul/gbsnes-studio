@@ -38,12 +38,30 @@ extern u8 time;
  * down there paints a stray dark line along the bottom edge. */
 #define UI_SCREEN_ROWS 28
 
-#define BOX_ROW0 20
-#define BOX_ROWS 8
+#define BOX_ROW0 20        /* top of the max-size box */
+#define BOX_ROWS 8         /* max box height; the always-cleared + flushed region */
+#define BOX_ROWS_MIN 4     /* 2 frame borders + >=2 content rows */
 #define TXT_COL0 2
-#define TXT_ROW0 21
-#define TXT_ROWS 6
 #define TXT_COLS 28
+
+/* The box is anchored to its bottom edge (row BOX_ROW0 + BOX_ROWS) and grows
+ * upward from there to fit its content (ui_set_box), so a 2-option menu or a
+ * 1-line line of text isn't drawn as a near-empty 8-row slab. box_row0 /
+ * box_rows are the *current* box; the region BOX_ROW0..+BOX_ROWS above it is
+ * kept blank and is what UIFlush's partial DMA and the close path cover. */
+static u8 box_row0 = BOX_ROW0;
+static u8 box_rows = BOX_ROWS;
+#define TXT_ROW0 (box_row0 + 1)
+#define TXT_ROWS (box_rows - 2)
+
+static void ui_set_box(u8 content_rows)
+{
+    u8 rows = content_rows + 2;
+    if (rows < BOX_ROWS_MIN) rows = BOX_ROWS_MIN;
+    if (rows > BOX_ROWS) rows = BOX_ROWS;
+    box_rows = rows;
+    box_row0 = (u8)(BOX_ROW0 + BOX_ROWS - rows);
+}
 
 /* M5e: box slides up from below the screen over a few frames. BG3 has nothing
  * else fixed to the screen (the avatar is OAM and is held back until the
@@ -109,34 +127,51 @@ static u8 ui_ov_wait;    /* OVERLAY_MOVE_TO blocks the script until it arrives *
 
 /*--------------------------------------------------------------------------- */
 
+/* Fill the current box's rows with `entry`; blank the rows above it (up to the
+ * BOX_ROW0..+BOX_ROWS max region UIFlush covers) so a shrunk box leaves nothing
+ * behind. */
 static void ui_fill_box(u16 entry)
 {
     u8 r, c;
     for (r = 0; r < BOX_ROWS; r++)
     {
+        u8 mr = (u8)(BOX_ROW0 + r);
+        u16 e = UI_BLANK;
+        if (mr >= box_row0) e = entry;
         for (c = 0; c < 32; c++)
         {
-            ui_map[(BOX_ROW0 + r) * 32 + c] = entry;
+            ui_map[mr * 32 + c] = e;
         }
     }
 }
 
-/* Draw the assets/ui/frame.png nine-slice around the box rows: top/bottom
- * edges, left/right edges, corners, centre fill. Text and the menu cursor are
- * written over the centre afterwards. */
+/* Draw the assets/ui/frame.png nine-slice around the current box rows: top/
+ * bottom edges, left/right edges, corners, centre fill; blank the rows above.
+ * Text and the menu cursor are written over the centre afterwards. */
 static void ui_frame_box(void)
 {
     u8 r, c;
     for (r = 0; r < BOX_ROWS; r++)
     {
+        u8 mr = (u8)(BOX_ROW0 + r);
+        u8 br;
         u16 l, m, rt;
-        if (r == 0)
+        if (mr < box_row0)
+        {
+            for (c = 0; c < 32; c++)
+            {
+                ui_map[mr * 32 + c] = UI_BLANK;
+            }
+            continue;
+        }
+        br = (u8)(mr - box_row0);
+        if (br == 0)
         {
             l = UI_FRAME_TILE0 + 0;
             m = UI_FRAME_TILE0 + 1;
             rt = UI_FRAME_TILE0 + 2;
         }
-        else if (r == BOX_ROWS - 1)
+        else if (br == (u8)(box_rows - 1))
         {
             l = UI_FRAME_TILE0 + 6;
             m = UI_FRAME_TILE0 + 7;
@@ -153,7 +188,7 @@ static void ui_frame_box(void)
             u16 t = m;
             if (c == 0) t = l;
             else if (c == 31) t = rt;
-            ui_map[(BOX_ROW0 + r) * 32 + c] = UI_ENTRY(t);
+            ui_map[mr * 32 + c] = UI_ENTRY(t);
         }
     }
 }
@@ -182,6 +217,8 @@ void UIInit(void)
     ui_ov_speed = 0;
     ui_ov_tick = 0;
     ui_ov_wait = 0;
+    box_row0 = BOX_ROW0;
+    box_rows = BOX_ROWS;
 
     /* force-blanks internally; main() calls setScreenOn() afterwards */
     bgInitTileSetData(2, (u8 *)ui_font, UI_FONT_SIZE, UI_FONT_VRAM);
@@ -323,9 +360,17 @@ static void ui_slide_reset(void)
 
 static void ui_begin_text(const unsigned char *str, u8 xoff)
 {
+    u8 lines = 1, i;
     ui_xoff = xoff;
     ui_subst(str);
     ui_wrap(TXT_COLS - 1 - xoff);
+    /* size the box to the wrapped line count (>= 2 rows for an avatar portrait) */
+    for (i = 0; i < ui_len; i++)
+    {
+        if (ui_text[i] == '\n') lines++;
+    }
+    if (xoff && lines < 2) lines = 2;
+    ui_set_box(lines);
     ui_pos = 0;
     ui_col = 0;
     ui_row = 0;
@@ -439,9 +484,20 @@ void UIShowMenu(u16 flag, const unsigned char *str, u8 cancel_cfg, u8 layout)
     }
     ui_menu_cols = 1;
     if (layout == 1) ui_menu_cols = 2;
-    if (ui_menu_count > (u8)(TXT_ROWS * ui_menu_cols))
+    /* clamp to what the biggest box holds, then shrink the box to the rows the
+     * options actually use (1 col: one row each; 2 cols: <= MENU_ROWS_PER_COL). */
+    if (ui_menu_count > (u8)((BOX_ROWS - 2) * ui_menu_cols))
     {
-        ui_menu_count = (u8)(TXT_ROWS * ui_menu_cols);
+        ui_menu_count = (u8)((BOX_ROWS - 2) * ui_menu_cols);
+    }
+    {
+        u8 mrows = ui_menu_count;
+        if (ui_menu_cols == 2)
+        {
+            mrows = (u8)((ui_menu_count + 1) >> 1);
+            if (mrows > MENU_ROWS_PER_COL) mrows = MENU_ROWS_PER_COL;
+        }
+        ui_set_box(mrows);
     }
     ui_menu_flag = flag;
     ui_menu_index = 0;
@@ -639,7 +695,7 @@ void UIUpdate(void)
             ui_blink = b;
             if (b) e = UI_ENTRY(UI_CURSOR_TILE);
             /* inside the frame, bottom-right corner of the text area */
-            ui_map[(BOX_ROW0 + BOX_ROWS - 2) * 32 + 29] = e;
+            ui_map[((u8)(box_row0 + box_rows - 2)) * 32 + 29] = e;
             ui_dirty = 1;
         }
         if ((joy & KEY_A) && !(prev_joy & KEY_A))
