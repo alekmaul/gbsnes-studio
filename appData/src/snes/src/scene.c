@@ -17,6 +17,9 @@
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
 u8 scene_loaded = 0;
+/* Set by SceneInit, consumed by main() one frame later: hold the screen
+ * force-blanked until the scene's opening script has run and reached VRAM. */
+u8 scene_unblank_pending = 0;
 u8 scene_num_actors = 0;
 u8 scene_num_triggers = 0;
 u8 scene_width = SCENE_TILE_W;
@@ -569,9 +572,13 @@ void SceneInit(void)
     timer_script_duration = 0; /* disable any timer script from the last scene */
     sprites_hidden = 0; /* GB: SHOW_SPRITES right before DISPLAY_ON on every scene load */
 
-    /* Un-blank to the fade's current level: 15 on a normal load, 0 (still
-     * black) when a SWITCH_SCENE fade-in is pending - FadeIn() then ramps it. */
-    setBrightness(FadeLevel());
+    /* Leave the screen force-blanked (setScreenOff above). main() un-blanks it
+     * one frame later, right after the next UIFlush - by then the scene's
+     * opening script (OVERLAY_SHOW, palette tweaks, ...) has run and its BG3
+     * curtain has reached VRAM, so the bare background never flashes for a
+     * frame before the curtain is up. A pending SWITCH_SCENE fade-in still
+     * ramps from black via FadeUpdate, unchanged. */
+    scene_unblank_pending = 1;
 
     run_script(event_ptrs[scene_script_idx], 0);
 }

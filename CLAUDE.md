@@ -189,6 +189,17 @@ now fills *nothing* — the overlay is hidden, rows 28-31 stay blank. A genuine 
 still fills all the way down. Verified in Mesen: the stray line at screen y=230 is gone, a
 full-screen stray-row scan is clean while walking all four directions, dialogue/menu box
 unaffected.
+**Scene flashed visible for a frame before its opening curtain (user-found, Logo intro).**
+`SceneInit` did `setBrightness(FadeLevel())` (un-blank) *before* `run_script()` set the scene
+script going — so the bare BG1 (the "YOUR LOGO" art) rendered at full brightness for the frame
+between `SceneInit` and the next `UIFlush` that pushed the init script's `OVERLAY_SHOW` curtain
+to VRAM. Fixed by leaving the screen force-blanked in `SceneInit` (it already `setScreenOff`s
+for the VRAM DMAs) and setting `scene_unblank_pending`; `game.c`'s main loop clears it and calls
+`setBrightness(FadeLevel())` on the *next* frame, right after that `UIFlush`. Costs one extra
+force-blanked frame on a no-fade scene load (imperceptible); a `SWITCH_SCENE` fade-in is
+unchanged (it ramps from black via `FadeUpdate` regardless). Verified in Mesen frame-by-frame:
+old build showed the full logo at ~f20 then the curtain; new build is clean black → curtain →
+`OVERLAY_MOVE_TO` wipe → logo.
 **M9 editor asset feedback (done).** Two more editor spots were GB-hardcoded and are now
 target-aware via `getTarget(settings.target)`: the **Backgrounds page size warnings**
 (`src/components/assets/ImageViewer.js` → `src/lib/helpers/assetWarnings.js`) used a fixed
@@ -582,7 +593,9 @@ shows the player sprite for the overflow). **N-frame `animated` sprites** (2/4/5
 and torches cycle). **`can_step` collision** now matches GB (was a 2×2 footprint blocking the
 player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, matching GB).
 **Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES + **no
-stray dark line at the screen bottom** from the parked overlay's fill tiles. **In-app
+stray dark line at the screen bottom** from the parked overlay's fill tiles + **no bare-scene
+flash before the opening curtain** (screen held force-blanked one extra frame at scene load).
+**In-app
 Play black screen** (old-Chromium CSS + window size). **All 8 sample backgrounds SNES-sized**
 (5 room scenes redrawn at 256×224 + scenes resized/collision re-strided; 3 scrolling scenes
 recoloured off the DMG greens, 1:1 LUT so collision is unchanged). **X / Y / L / R input**

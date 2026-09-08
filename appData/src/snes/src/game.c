@@ -209,6 +209,15 @@ int main(void)
         WaitForVBlank();
         UIFlush();
 
+        /* SceneInit leaves the screen force-blanked; un-blank it here, the
+         * frame after, so the opening script's UI (curtain, palette) has been
+         * flushed to VRAM by the UIFlush above before anything shows. */
+        if (scene_unblank_pending)
+        {
+            scene_unblank_pending = 0;
+            setBrightness(FadeLevel());
+        }
+
         joy = padsCurrent(0);
 
         if (!scene_loaded || scene_index != scene_next_index)
