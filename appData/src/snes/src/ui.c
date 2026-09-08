@@ -39,20 +39,30 @@ extern u8 time;
 #define UI_SCREEN_ROWS 28
 
 #define BOX_ROW0 20        /* top of the max-size box */
-#define BOX_ROWS 8         /* max box height; the always-cleared + flushed region */
+#define BOX_ROWS 8         /* max box height */
 #define BOX_ROWS_MIN 4     /* 2 frame borders + >=2 content rows */
+#define BOX_MAP_ROWS 32    /* ui_map / BG3 tilemap height */
 #define TXT_COL0 2
 #define TXT_COLS 28
 
-/* The box is anchored to its bottom edge (row BOX_ROW0 + BOX_ROWS) and grows
- * upward from there to fit its content (ui_set_box), so a 2-option menu or a
- * 1-line line of text isn't drawn as a near-empty 8-row slab. box_row0 /
- * box_rows are the *current* box; the region BOX_ROW0..+BOX_ROWS above it is
- * kept blank and is what UIFlush's partial DMA and the close path cover. */
+/* The box is anchored to its bottom edge (row BOX_ROW0 + BOX_ROWS = the screen
+ * bottom) and grows upward from there to fit its content (ui_set_box), so a
+ * 2-option menu or a 1-line line of text isn't a near-empty 8-row slab. */
 static u8 box_row0 = BOX_ROW0;
 static u8 box_rows = BOX_ROWS;
 #define TXT_ROW0 (box_row0 + 1)
 #define TXT_ROWS (box_rows - 2)
+
+/* M5e slide: the box rises from the bottom edge over a few frames. BG3 is only
+ * 256px tall with just 4 rows of off-screen margin below the box, not enough to
+ * hide a taller box by scrolling (scrolling further wraps the map and the box
+ * reappears at the *top* of the screen - the bug this replaced). So instead the
+ * box is *redrawn* each frame shifted down by ui_slide_off rows (box_rows =
+ * fully below the screen, 0 = in place); BG3 vscroll stays 0. Rows below the
+ * box within the map are clipped, rows above it are blanked. An OVERLAY_SHOW
+ * shares BG3 and is unaffected (it doesn't slide). */
+#define SLIDE_ROWS_PER_TICK 2
+static u8 ui_slide_off = 0;
 
 static void ui_set_box(u8 content_rows)
 {
@@ -61,15 +71,8 @@ static void ui_set_box(u8 content_rows)
     if (rows > BOX_ROWS) rows = BOX_ROWS;
     box_rows = rows;
     box_row0 = (u8)(BOX_ROW0 + BOX_ROWS - rows);
+    ui_slide_off = rows; /* start fully hidden below the screen */
 }
-
-/* M5e: box slides up from below the screen over a few frames. BG3 has nothing
- * else fixed to the screen (the avatar is OAM and is held back until the
- * slide finishes), so scrolling the whole layer is safe for the dialogue box.
- * NOTE: an active OVERLAY_SHOW shares BG3 too, so it rides along with the
- * slide if one happens to be up at the same time - a known M5e limitation. */
-#define SLIDE_HIDDEN (-64)
-#define SLIDE_STEP 16
 
 /* TEXT_SET_ANIM_SPEED (0x44): 1-2 fastest (every frame), 3/4/5 progressively
  * slower (every 2nd/4th/8th frame) - the same ordinal scale and frame-skip
@@ -100,7 +103,6 @@ static u8 ui_tick;
 static u8 ui_state; /* 0 closed, 1 typing, 2 shown, 3 closing, 4 menu */
 static u8 ui_dirty;
 static u8 ui_blink;
-static s16 ui_scroll_y; /* M5e: box slide offset, SLIDE_HIDDEN..0 */
 
 /* menu / choice (M5b, M5e columns) */
 static u16 ui_menu_flag;
@@ -127,44 +129,44 @@ static u8 ui_ov_wait;    /* OVERLAY_MOVE_TO blocks the script until it arrives *
 
 /*--------------------------------------------------------------------------- */
 
-/* Fill the current box's rows with `entry`; blank the rows above it (up to the
- * BOX_ROW0..+BOX_ROWS max region UIFlush covers) so a shrunk box leaves nothing
- * behind. */
+/* Blank the whole BOX_ROW0..BOX_MAP_ROWS region (what UIFlush's partial DMA and
+ * the close path cover - the box can be drawn anywhere in it while sliding). */
 static void ui_fill_box(u16 entry)
 {
     u8 r, c;
-    for (r = 0; r < BOX_ROWS; r++)
+    for (r = BOX_ROW0; r < BOX_MAP_ROWS; r++)
     {
-        u8 mr = (u8)(BOX_ROW0 + r);
-        u16 e = UI_BLANK;
-        if (mr >= box_row0) e = entry;
         for (c = 0; c < 32; c++)
         {
-            ui_map[mr * 32 + c] = e;
+            ui_map[r * 32 + c] = entry;
         }
     }
 }
 
-/* Draw the assets/ui/frame.png nine-slice around the current box rows: top/
- * bottom edges, left/right edges, corners, centre fill; blank the rows above.
- * Text and the menu cursor are written over the centre afterwards. */
+/* Draw the assets/ui/frame.png nine-slice around the box, shifted down by
+ * ui_slide_off rows (the M5e slide); rows above and below it in the
+ * BOX_ROW0..BOX_MAP_ROWS region are blanked. Text and the menu cursor are
+ * written over the centre once the slide finishes. */
 static void ui_frame_box(void)
 {
     u8 r, c;
-    for (r = 0; r < BOX_ROWS; r++)
+    u8 top = (u8)(box_row0 + ui_slide_off);
+    for (r = BOX_ROW0; r < BOX_MAP_ROWS; r++)
     {
-        u8 mr = (u8)(BOX_ROW0 + r);
         u8 br;
         u16 l, m, rt;
-        if (mr < box_row0)
+        u8 outside = 0;
+        if (r < top) outside = 1;
+        else if ((u8)(r - top) >= box_rows) outside = 1;
+        if (outside)
         {
             for (c = 0; c < 32; c++)
             {
-                ui_map[mr * 32 + c] = UI_BLANK;
+                ui_map[r * 32 + c] = UI_BLANK;
             }
             continue;
         }
-        br = (u8)(mr - box_row0);
+        br = (u8)(r - top);
         if (br == 0)
         {
             l = UI_FRAME_TILE0 + 0;
@@ -188,7 +190,7 @@ static void ui_frame_box(void)
             u16 t = m;
             if (c == 0) t = l;
             else if (c == 31) t = rt;
-            ui_map[mr * 32 + c] = UI_ENTRY(t);
+            ui_map[r * 32 + c] = UI_ENTRY(t);
         }
     }
 }
@@ -205,7 +207,7 @@ void UIInit(void)
      * `.data`-style initialized globals are safe to assume a value for. */
     ui_state = 0;
     ui_dirty = 1;
-    ui_scroll_y = 0;
+    ui_slide_off = 0;
     ui_menu_cols = 1;
     ui_avatar_active = 0;
     ui_xoff = 0;
@@ -352,12 +354,6 @@ void UITextMulti(u8 mode)
     }
 }
 
-static void ui_slide_reset(void)
-{
-    ui_scroll_y = SLIDE_HIDDEN;
-    bgSetScroll(2, 0, (u16)ui_scroll_y);
-}
-
 static void ui_begin_text(const unsigned char *str, u8 xoff)
 {
     u8 lines = 1, i;
@@ -377,9 +373,8 @@ static void ui_begin_text(const unsigned char *str, u8 xoff)
     ui_tick = 0;
     ui_state = 1;
     ui_script_wait = 1;
-    ui_frame_box();
+    ui_frame_box(); /* ui_set_box left ui_slide_off = box_rows: starts hidden */
     ui_dirty = 1;
-    ui_slide_reset();
 }
 
 void UIShowText(const unsigned char *str)
@@ -505,11 +500,11 @@ void UIShowMenu(u16 flag, const unsigned char *str, u8 cancel_cfg, u8 layout)
     ui_state = 4;
     ui_script_wait = 1;
 
+    /* Just the frame for now (ui_set_box left ui_slide_off = box_rows: hidden);
+     * the options + cursor are drawn once the slide-in finishes, at their final
+     * rows - drawing them now would only get wiped as the frame rises over them. */
     ui_frame_box();
-    ui_draw_menu_options();
-    ui_draw_cursor();
     ui_dirty = 1;
-    ui_slide_reset();
 }
 
 static void ui_reveal_char(void)
@@ -546,7 +541,7 @@ static void ui_render_avatar(void)
     u8 show = 0;
     if (ui_avatar_active)
     {
-        if (ui_scroll_y == 0)
+        if (ui_slide_off == 0)
         {
             if (ui_state == 1 || ui_state == 2) show = 1;
         }
@@ -660,15 +655,23 @@ void UIUpdate(void)
     }
 
     /* M5e: slide the box up into place before typing/menu input starts. */
-    if (ui_scroll_y != 0)
+    if (ui_slide_off != 0)
     {
         if (ui_state == 1 || ui_state == 4)
         {
             if (ui_speed_tick(ui_slide_in_speed))
             {
-                ui_scroll_y += SLIDE_STEP;
-                if (ui_scroll_y > 0) ui_scroll_y = 0;
-                bgSetScroll(2, 0, (u16)ui_scroll_y);
+                if (ui_slide_off > SLIDE_ROWS_PER_TICK)
+                    ui_slide_off -= SLIDE_ROWS_PER_TICK;
+                else
+                    ui_slide_off = 0;
+                ui_frame_box();
+                if (ui_slide_off == 0 && ui_state == 4)
+                {
+                    ui_draw_menu_options();
+                    ui_draw_cursor();
+                }
+                ui_dirty = 1;
             }
             return;
         }
@@ -764,29 +767,32 @@ void UIUpdate(void)
     }
 
     /* ui_state == 3: closing - slide back down first, then blank + release. */
-    if (ui_scroll_y > SLIDE_HIDDEN)
+    if (ui_slide_off < box_rows)
     {
         if (ui_speed_tick(ui_slide_out_speed))
         {
-            ui_scroll_y -= SLIDE_STEP;
-            if (ui_scroll_y < SLIDE_HIDDEN) ui_scroll_y = SLIDE_HIDDEN;
-            bgSetScroll(2, 0, (u16)ui_scroll_y);
+            ui_slide_off = (u8)(ui_slide_off + SLIDE_ROWS_PER_TICK);
+            if (ui_slide_off > box_rows) ui_slide_off = box_rows;
+            ui_frame_box();
+            ui_dirty = 1;
         }
         return;
     }
     /* Restore what was under the box: overlay fill row-by-row if one is up
-     * (its covered region may not be the whole box), else blank. */
+     * (its covered region may not be the whole box), else blank - across the
+     * whole BOX_ROW0..BOX_MAP_ROWS region the sliding box could have touched. */
     if (ui_overlay)
     {
         u8 r;
-        for (r = 0; r < BOX_ROWS; r++)
+        u8 ov_hidden = (ui_ov_row >= UI_SCREEN_ROWS);
+        for (r = BOX_ROW0; r < BOX_MAP_ROWS; r++)
         {
             u16 e = UI_BLANK;
             u8 c;
-            if ((u8)(BOX_ROW0 + r) >= ui_ov_row) e = UI_ENTRY(UI_FILL_TILE);
+            if (!ov_hidden && r >= ui_ov_row) e = UI_ENTRY(UI_FILL_TILE);
             for (c = 0; c < 32; c++)
             {
-                ui_map[(BOX_ROW0 + r) * 32 + c] = e;
+                ui_map[r * 32 + c] = e;
             }
         }
     }
@@ -796,7 +802,6 @@ void UIUpdate(void)
     }
     ui_dirty = 1;
     ui_state = 0;
-    bgSetScroll(2, 0, 0);
     if (ui_script_wait)
     {
         ui_script_wait = 0;
@@ -818,8 +823,10 @@ void UIFlush(void)
     }
     else
     {
+        /* BOX_ROW0..BOX_MAP_ROWS: the box can be drawn anywhere in there while
+         * sliding, not just the BOX_ROWS visible rows. */
         dmaCopyVram((u8 *)&ui_map[BOX_ROW0 * 32], UI_MAP_VRAM + BOX_ROW0 * 32,
-                    BOX_ROWS * 32 * 2);
+                    (BOX_MAP_ROWS - BOX_ROW0) * 32 * 2);
     }
 }
 

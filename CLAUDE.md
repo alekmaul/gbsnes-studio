@@ -383,16 +383,22 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   (`SceneStartEmote`, OBJ palette 1, images from `tools/emotes.png`); M5d — word-wrap,
   `TEXT_WITH_AVATAR` (OBJ palette 2, portrait per project via the sprite pipeline),
   `OVERLAY_SHOW`/`HIDE` (BG3 panel, row-targeted, independent of the dialogue box); M5e — box
-  slide-in/out (`bgSetScroll` on BG3), 2-column `MENU` layout, `OVERLAY_MOVE_TO` (animates the
-  covered row, blocks the script until it arrives)). **The dialogue/menu box is content-sized**
-  (user-found: a 2-option menu drew as a near-empty 8-row slab). `ui_set_box(content_rows)`
-  anchors the box to its bottom edge (row `BOX_ROW0 + BOX_ROWS`, the screen bottom) and grows it
-  upward to `content_rows + 2` (borders), clamped `[BOX_ROWS_MIN 4, BOX_ROWS 8]`; `box_row0` /
-  `box_rows` are dynamic, `TXT_ROW0` / `TXT_ROWS` became `(box_row0 + 1)` / `(box_rows - 2)`
-  macros. `ui_begin_text` sizes to the wrapped-line count, `UIShowMenu` to the option rows
-  (1-col: one per option; 2-col: ≤ `MENU_ROWS_PER_COL`). `ui_frame_box` / `ui_fill_box` blank
-  the rows above the shrunk box so the fixed `BOX_ROW0..+BOX_ROWS` region UIFlush's partial DMA
-  and the close path cover stays consistent. M6 — `SceneInit` uploads the BG
+  2-column `MENU` layout, `OVERLAY_MOVE_TO` (animates the covered row, blocks the script until
+  it arrives)). **The dialogue/menu box is content-sized** (user-found: a 2-option menu drew as
+  a near-empty 8-row slab). `ui_set_box(content_rows)` anchors the box to its bottom edge (row
+  `BOX_ROW0 + BOX_ROWS`, the screen bottom) and grows it upward to `content_rows + 2` (borders),
+  clamped `[BOX_ROWS_MIN 4, BOX_ROWS 8]`; `box_row0` / `box_rows` are dynamic, `TXT_ROW0` /
+  `TXT_ROWS` became `(box_row0 + 1)` / `(box_rows - 2)` macros. `ui_begin_text` sizes to the
+  wrapped-line count, `UIShowMenu` to the option rows (1-col: one per option; 2-col: ≤
+  `MENU_ROWS_PER_COL`). **The slide is a redraw, not a BG3 scroll** (user-found: the box flashed
+  at the *top* of the screen while sliding). BG3 is 256px with only 4 rows of off-screen margin
+  below the box - not enough to hide a taller box by scrolling, and scrolling further wraps the
+  32-row map so the box reappears up top. So `ui_frame_box` now draws the frame shifted down by
+  `ui_slide_off` rows (`box_rows` = fully below the screen → `0` = in place), redrawn each slide
+  tick; BG3 vscroll stays 0. Rows below the box are clipped, rows above blanked. The partial
+  UIFlush DMA / close-path clear cover the full `BOX_ROW0..BOX_MAP_ROWS(32)` the sliding box can
+  touch. Menu options + cursor are drawn only once the slide finishes (drawing them earlier just
+  gets wiped as the frame rises over them). M6 — `SceneInit` uploads the BG
   tiles/map/palette/size per scene from `assets.c` `bg_*_ptrs[]`; `gen-dummy-gfx.js` feeds a
   real background through `snesgfx.js`. `src/music.c` (M8) — `MUSIC_PLAY`/`MUSIC_STOP`/`SOUND_*`
   wired to PVSnesLib's snesmod driver (all `spc*` in `libc.obj` — nothing to vendor).
