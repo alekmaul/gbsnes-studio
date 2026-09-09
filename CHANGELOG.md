@@ -18,6 +18,11 @@ downloadable binaries.
   editor shows an extra X/Y/L/R row. On the SNES target the button mask these events compile to
   is 2 bytes instead of 1; the Game Boy target is completely unchanged (still 8 buttons, 1 byte,
   byte-identical ROM output). In the bundled web player X/Y/L/R map to the keys U / I / O / P.
+- **Settings → Controls now shows the SNES pad for a SNES project** — an X / Y / L / R
+  key-binding column and a SNES-shaped pad diagram (L/R shoulders, X/Y/A/B diamond) instead of
+  the Game Boy one. The bundled web player also gained a full default keyboard for SNES
+  projects that never customised their controls (previously only X/Y/L/R responded), and the
+  on-screen touch pad grew the L/R and X/Y buttons.
 
 ### Changed
 - **The SNES dialogue / menu box is now sized to its contents** and anchored to the bottom of

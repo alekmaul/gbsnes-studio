@@ -233,6 +233,19 @@ wired X/Y/L/R (fixed keys u/i/o/p) so no emulator-side change. Verified in Mesen
 back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `targets.test.js`,
 `snesScriptCmds.test.js`.
 
+**Settings > Controls, SNES pad (M9-cont., user-found: "in SNES mode I don't see the X/Y/L/R
+controls and the pad is the Game Boy one").** `CustomControlsPicker.js` is target-aware: a
+SNES project gets a fourth column of key-binding rows for **X / Y / L / R** and the preview
+widget is a new `SNESControlsPreview` (L/R shoulders + X/Y/A/B diamond + Select/Start) instead
+of `GBControlsPreview`. New settings keys `customControlsX/Y/L/R` (defaults `i`/`u`/`o`/`p`,
+shown as placeholders); `keyMap`/`defaultValues` carry them for every target but only SNES
+renders the column. `buildProject.js`'s web-player `customControls` blob now includes
+`x`/`y`/`l`/`r`, and the SNES `main.js` gained a `DEFAULT_KEYS` fallback covering all 12
+buttons (an un-customised SNES project used to have no keyboard bindings at all bar the fixed
+X/Y/L/R). Touch pad (`index.html` + `css/style.css`) grew the L/R shoulders and X/Y face
+buttons. GB target unchanged (`GBControlsPreview`, 8 buttons). No new tests (no component
+tests exist); `snesWebPlayer.test.js` still green.
+
 - **`src/lib/compiler/targets/{gb,snes}.js`** — one descriptor per target, the single source
   of truth for every hardware-shaped constant (bank size, `minDataBank`, screen tiles, entity
   limits, …). `bankedData.js` and `consts.js` now read the Game Boy numbers from `targets/gb`;
@@ -499,9 +512,13 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   this project's own D3 LoROM+FastROM decision) for the actual 65816/PPU/SPC700 emulation core;
   `js/main.js`, `index.html`, `css/style.css` are this project's own, wiring the vendored core to
   a `fetch("rom/game.sfc")` auto-boot instead of upstream's file-picker UI, and to the project's
-  own Settings > Controls mapping (same `customControls` JSON shape as the GB template — X/Y/L/R
-  aren't in that GB-era settings page so they're bound to fixed keys u/i/o/p, but the engine
-  *does* read them now, so scripts using X/Y/L/R work in the web player).
+  own Settings > Controls mapping. The `customControls` JSON `buildProject.js` templates in now
+  carries `x`/`y`/`l`/`r` too (the Settings page grew an X/Y/L/R column + a SNES pad preview for
+  SNES projects — see `CustomControlsPicker.js`), and `main.js` has a `DEFAULT_KEYS` fallback for
+  every button a project leaves unset (the GB fallback keys for the 8 shared buttons, plus
+  `i`/`u`/`o`/`p` for X/Y/L/R — matching the Settings-page placeholders) — before, an
+  un-customised SNES project had *no* keyboard bindings at all except the then-fixed X/Y/L/R.
+  The on-screen touch pad gained the L/R shoulders and the X/Y face buttons.
   `buildProject.js`'s `buildProjectSnes` now accepts `buildType` and, for `"web"`,
   calls a `buildWebPlayer` helper shared with the GB path (extracted from what used to be
   GB-only inline code) that copies the emulator tree + built ROM into `build/web` and templates
@@ -610,7 +627,8 @@ The port is **functional end to end**: create an SNES project in the app → scr
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
 controls + saved-game persistence). GB non-regression suite stays green. Milestones M0–M8 done;
 M9 done (the editor is data-driven — full-colour previews, target-aware scene geometry / asset
-warnings / sprite budget; X/Y/L/R input now built too); M10 done; M11 code-side done.
+warnings / sprite budget; X/Y/L/R input events built; Settings > Controls has the X/Y/L/R
+bindings + a SNES pad preview); M10 done; M11 code-side done.
 **M12 (playing the sample game for real, user-driven):**
 the stock 8-scene sample now plays start-to-finish on SNES — UI graphics from the project's
 own `assets/ui` PNGs, per-scene sprite sheets (16-sheet projects), N-frame `animated` sprites,
@@ -621,7 +639,9 @@ recoloured off the DMG greens).
 a GitHub Release on a `v*` tag (was CircleCI cruft); graphic assets emitted as multi-bank
 65816 source so a large project isn't capped at one 32 KB `.rodata` section; and a run of
 playthrough-found engine fixes — the content-sized dialogue box, no box-flashes-at-top slide,
-no camera-scroll shear, talk/push from all four sides, no bare-scene flash before the curtain.
+no camera-scroll shear, talk/push from all four sides, no bare-scene flash before the curtain;
+Settings > Controls gained the X/Y/L/R key bindings + a SNES-shaped pad preview (+ a
+`DEFAULT_KEYS` fallback so an un-customised SNES web build has a working keyboard).
 `package.json` is **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release
 (CI couldn't build macOS then) — cut `v1.1.0` at HEAD to publish binaries.
 

@@ -476,6 +476,14 @@ presses (marker variables read back 42 / 43 from WRAM via a Lua `emu.setInput` d
   and cuts a GitHub Release on a `v*` tag. macOS is a soft dependency (paid runner class /
   arm64-only since GitHub retired the Intel image) so it can't block the Windows + Linux
   release.
+- **Settings > Controls, SNES pad** (user-found: "in SNES mode I don't see the X/Y/L/R
+  controls and the pad is the Game Boy one"). `CustomControlsPicker.js` is target-aware: a
+  SNES project gets an X / Y / L / R key-binding column and a `SNESControlsPreview` diagram
+  (L/R shoulders, X/Y/A/B diamond) in place of `GBControlsPreview`. New settings keys
+  `customControlsX/Y/L/R`; `buildProject.js` templates them into the web player's
+  `customControls`, and `main.js` gained a `DEFAULT_KEYS` fallback for all 12 buttons (an
+  un-customised SNES web build had no keyboard bindings before, only the fixed X/Y/L/R). The
+  touch pad grew the L/R + X/Y buttons. GB target untouched.
 
 **816-tcc gotcha (M4c/M5):** a 3-or-more-term boolean chain (`a || b || c`, `a && b && c`) in a
 conditional links its branch targets wrong — the false path fell through into the block. All of

@@ -10,6 +10,11 @@
   grid-row-gap: 0px;
 }
 
+/* SNES adds an X / Y / L / R column before the (span-2) preview. */
+.CustomControlsPicker__Columns--snes {
+  grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+}
+
 .CustomControlsPicker__Column {
   min-width: 120px;
 }

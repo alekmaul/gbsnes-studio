@@ -39,28 +39,36 @@ const BUTTON = {
 };
 
 // customControls is templated in by buildProject.js from the project's own
-// Settings > Controls page - same shape as the GB template. X/Y/L/R have no
-// project setting (the SNES engine doesn't read them yet), so they're fixed.
-const FIXED_KEYS = { y: ["u"], x: ["i"], l: ["o"], r: ["p"] };
+// Settings > Controls page - the 8 Game Boy buttons plus SNES X / Y / L / R.
+// Anything the project left unset falls back to DEFAULT_KEYS (the same scheme
+// the Settings page shows as its placeholder), so a fresh project still has a
+// working keyboard.
+const DEFAULT_KEYS = {
+  up: ["arrowup", "w"],
+  down: ["arrowdown", "s"],
+  left: ["arrowleft", "a"],
+  right: ["arrowright", "d"],
+  a: ["alt", "z", "j"],
+  b: ["control", "k", "x"],
+  start: ["enter"],
+  select: ["shift"],
+  x: ["i"],
+  y: ["u"],
+  l: ["o"],
+  r: ["p"]
+};
 
 const keyToButton = {};
 function bindKeys(name, keys) {
-  (keys || []).forEach(key => {
+  const list = keys && keys.length ? keys : DEFAULT_KEYS[name];
+  (list || []).forEach(key => {
     keyToButton[String(key).toLowerCase()] = BUTTON[name];
   });
 }
-bindKeys("up", customControls.up);
-bindKeys("down", customControls.down);
-bindKeys("left", customControls.left);
-bindKeys("right", customControls.right);
-bindKeys("a", customControls.a);
-bindKeys("b", customControls.b);
-bindKeys("start", customControls.start);
-bindKeys("select", customControls.select);
-bindKeys("y", FIXED_KEYS.y);
-bindKeys("x", FIXED_KEYS.x);
-bindKeys("l", FIXED_KEYS.l);
-bindKeys("r", FIXED_KEYS.r);
+const ALL_BUTTONS = [
+  "up", "down", "left", "right", "a", "b", "start", "select", "x", "y", "l", "r"
+];
+ALL_BUTTONS.forEach(name => bindKeys(name, customControls[name]));
 
 const canvas = document.getElementById("output");
 canvas.width = 512;

@@ -44,7 +44,12 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
     a: data.settings.customControlsA,
     b: data.settings.customControlsB,
     start: data.settings.customControlsStart,
-    select: data.settings.customControlsSelect
+    select: data.settings.customControlsSelect,
+    // SNES-only; the GB web player ignores these keys.
+    x: data.settings.customControlsX,
+    y: data.settings.customControlsY,
+    l: data.settings.customControlsL,
+    r: data.settings.customControlsR
   });
   const html = (await fs.readFile(`${outputRoot}/build/web/index.html`, "utf8"))
     .replace(/___PROJECT_NAME___/g, projectName)

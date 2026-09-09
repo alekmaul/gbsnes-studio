@@ -5,6 +5,7 @@ import { connect } from "react-redux";
 import l10n from "../../lib/helpers/l10n";
 import * as actions from "../../actions";
 import GBControlsPreview from "../library/GBControlsPreview";
+import SNESControlsPreview from "../library/SNESControlsPreview";
 import { FormField } from "../library/Forms";
 import Button from "../library/Button";
 
@@ -40,6 +41,14 @@ const buttons = [
   }
 ];
 
+// Shown only for a SNES project, as an extra column.
+const snesButtons = [
+  { key: "x", label: "X" },
+  { key: "y", label: "Y" },
+  { key: "l", label: "L" },
+  { key: "r", label: "R" }
+];
+
 const keyMap = {
   up: "customControlsUp",
   down: "customControlsDown",
@@ -48,7 +57,11 @@ const keyMap = {
   a: "customControlsA",
   b: "customControlsB",
   start: "customControlsStart",
-  select: "customControlsSelect"
+  select: "customControlsSelect",
+  x: "customControlsX",
+  y: "customControlsY",
+  l: "customControlsL",
+  r: "customControlsR"
 };
 
 const defaultValues = {
@@ -59,7 +72,13 @@ const defaultValues = {
   customControlsA: ["Alt", "z", "j"],
   customControlsB: ["Control", "k", "x"],
   customControlsStart: ["Enter"],
-  customControlsSelect: ["Shift"]
+  customControlsSelect: ["Shift"],
+  // SNES-only (X / Y / L / R) - the same keys the bundled web player falls back
+  // to. Ignored by the Game Boy target.
+  customControlsX: ["i"],
+  customControlsY: ["u"],
+  customControlsL: ["o"],
+  customControlsR: ["p"]
 };
 
 class CustomControlsPicker extends Component {
@@ -146,64 +165,69 @@ class CustomControlsPicker extends Component {
     );
   };
 
-  render() {
+  renderField = item => {
     const { settings } = this.props;
     const { input } = this.state;
     return (
+      <FormField key={item.key}>
+        <label htmlFor="buttonUps">
+          {item.label}
+          <input
+            id="buttonUp"
+            value={(
+              settings[keyMap[item.key]] ||
+              defaultValues[keyMap[item.key]] ||
+              []
+            ).join(", ")}
+            onChange={this.noop}
+            placeholder=""
+            className={cx("CustomControlsPicker__Input", {
+              "CustomControlsPicker__Input--Focus": item.key === input
+            })}
+            onFocus={this.onFocus(item.key)}
+          />
+        </label>
+      </FormField>
+    );
+  };
+
+  render() {
+    const { settings } = this.props;
+    const { input } = this.state;
+    const isSnes = settings.target === "snes";
+    return (
       <div className="CustomControlsPicker">
-        <div className="CustomControlsPicker__Columns">
+        <div
+          className={cx("CustomControlsPicker__Columns", {
+            "CustomControlsPicker__Columns--snes": isSnes
+          })}
+        >
           <div className="CustomControlsPicker__Column">
-            {directions.map(direction => (
-              <FormField key={direction.key}>
-                <label htmlFor="directionUps">
-                  {direction.label}
-                  <input
-                    id="directionUp"
-                    value={(
-                      settings[keyMap[direction.key]] ||
-                      defaultValues[keyMap[direction.key]] ||
-                      []
-                    ).join(", ")}
-                    onChange={this.noop}
-                    placeholder=""
-                    className={cx("CustomControlsPicker__Input", {
-                      "CustomControlsPicker__Input--Focus":
-                        direction.key === input
-                    })}
-                    onFocus={this.onFocus(direction.key)}
-                  />
-                </label>
-              </FormField>
-            ))}
+            {directions.map(this.renderField)}
           </div>
           <div className="CustomControlsPicker__Column">
-            {buttons.map(button => (
-              <FormField key={button.key}>
-                <label htmlFor="buttonUps">
-                  {button.label}
-                  <input
-                    id="buttonUp"
-                    value={(
-                      settings[keyMap[button.key]] ||
-                      defaultValues[keyMap[button.key]] ||
-                      []
-                    ).join(", ")}
-                    onChange={this.noop}
-                    placeholder=""
-                    className={cx("CustomControlsPicker__Input", {
-                      "CustomControlsPicker__Input--Focus": button.key === input
-                    })}
-                    onFocus={this.onFocus(button.key)}
-                  />
-                </label>
-              </FormField>
-            ))}
+            {buttons.map(this.renderField)}
           </div>
+          {isSnes && (
+            <div className="CustomControlsPicker__Column">
+              {snesButtons.map(this.renderField)}
+            </div>
+          )}
           <div
             className="CustomControlsPicker__Column"
             style={{ marginTop: 30 }}
           >
-            <GBControlsPreview selected={input} onSelect={this.onSelectInput} />
+            {isSnes ? (
+              <SNESControlsPreview
+                selected={input}
+                onSelect={this.onSelectInput}
+              />
+            ) : (
+              <GBControlsPreview
+                selected={input}
+                onSelect={this.onSelectInput}
+              />
+            )}
           </div>
         </div>
         <input
@@ -233,7 +257,12 @@ CustomControlsPicker.propTypes = {
     customControlsA: CustomControlPropType,
     customControlsB: CustomControlPropType,
     customControlsStart: CustomControlPropType,
-    customControlsSelect: CustomControlPropType
+    customControlsSelect: CustomControlPropType,
+    customControlsX: CustomControlPropType,
+    customControlsY: CustomControlPropType,
+    customControlsL: CustomControlPropType,
+    customControlsR: CustomControlPropType,
+    target: PropTypes.string
   }).isRequired,
   editProjectSettings: PropTypes.func.isRequired
 };
