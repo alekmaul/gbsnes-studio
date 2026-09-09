@@ -587,27 +587,34 @@ void SceneInit(void)
 
 static void SceneTryInteract(void)
 {
+    /* The tile the player is facing. SceneActorTileX/Y is the *top-left* of the
+     * 16x16 (2x2 tile) sprite, so when facing right or down the tile "in front"
+     * is two tiles from the origin, not one - otherwise `ntx`/`nty` point at
+     * the player's own far edge and talk / push only work from the left / top
+     * (user-found). Mirrors GB's `DIV_8(pos) + dir` with the wider sprite. */
     s16 ntx = SceneActorTileX(0) + actors[0].dir_x;
     s16 nty = SceneActorTileY(0) + actors[0].dir_y;
     u8 i;
 
+    if (actors[0].dir_x > 0) ntx++;
+    if (actors[0].dir_y > 0) nty++;
+
     for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
+        s16 ax, ay;
         if (!actors[i].enabled)
         {
             continue;
         }
+        ax = SceneActorTileX(i);
+        ay = SceneActorTileY(i);
+        if (in_box(ntx, nty, ax, ay, 2, 2))
         {
-            s16 ax = SceneActorTileX(i);
-            s16 ay = SceneActorTileY(i);
-            if (in_box(ntx, nty, ax, ay, 2, 2))
-            {
-                // Face the player and stop
-                actor_face(i, -actors[0].dir_x, -actors[0].dir_y);
-                actors[i].moving = 0;
-                run_script(actors[i].events_ptr, i);
-                return;
-            }
+            // Face the player and stop
+            actor_face(i, -actors[0].dir_x, -actors[0].dir_y);
+            actors[i].moving = 0;
+            run_script(actors[i].events_ptr, i);
+            return;
         }
     }
 

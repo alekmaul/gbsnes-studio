@@ -347,6 +347,16 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   right (the 16px-wide-sprite fudge). Verified in SnesJs: player walks through the door and
   `SWITCH_SCENE` fires. Broad collision behaviour change but a strict GB match; all fixture
   ROMs still build + boot.
+  **Talk / push only worked from the left and top (user-found: "on the right of a character,
+  hit A, nothing happens", "same for the rock").** `SceneTryInteract` computed the facing tile
+  as `SceneActorTileX/Y(0) + dir` - but `SceneActorTileX/Y` is the *top-left* of the player's
+  16×16 (2×2 tile) sprite, so facing **right or down** it pointed at the player's own far edge,
+  a tile short of the target. `in_box(ntx,nty,ax,ay,2,2)` (the target's own 2×2 footprint) then
+  missed. Fixed by adding 1 to `ntx`/`nty` when `dir_x`/`dir_y` is positive (the sprite is two
+  tiles wide/tall), mirroring GB's `DIV_8(pos)+dir` with the wider sprite. Verified in Mesen:
+  a scene with one NPC, player pressing A from each of the four sides - all four now run the
+  actor's script (talk box appears); before, right/below worked and left/above didn't. The
+  trigger-A-press check in the same function picks up the same corrected `ntx/nty`.
   **Per-sprite OBJ palettes (done).** Each used sprite slot draws its own 16-colour OBJ
   palette. The SNES has 8 OBJ palettes (CGRAM 128..255); palettes 1 and 2 stay reserved for
   the emote bubbles / dialogue avatars, so `compileSnesData.js` assigns actor sprite slots
