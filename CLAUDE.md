@@ -632,7 +632,15 @@ Play black screen** (old-Chromium CSS + window size). **All 8 sample backgrounds
 (5 room scenes redrawn at 256×224 + scenes resized/collision re-strided; 3 scrolling scenes
 recoloured off the DMG greens, 1:1 LUT so collision is unchanged). **X / Y / L / R input**
 (SNES-only 2-byte button mask on the 4 input opcodes; GB output byte-identical — see the M9
-section above).
+section above). **Camera scroll no longer shears the screen while walking** (user-found:
+horizontal glitch lines near the bottom, moving frame-to-frame). `CameraUpdate()` wrote
+`bgSetScroll(0, …)` at the *end* of the main loop — mid-render, so every camera step during
+movement tore the lower scanlines at whatever line the beam had reached. Now `CameraUpdate`
+only computes `scroll_x/y`; `game.c`'s loop writes the BG1 scroll registers at the *top*, in
+vblank, right after `WaitForVBlank()` (one frame of latency; also puts BG1 and the OAM sprite
+positions, which `SceneRenderActors` reads from the same `scroll_x/y`, back in lockstep).
+Verified in Mesen: `$210D/$210E` writes while walking were 584/872 mid-render (clustered ~y170
+and ~y210) before, 0/864 after.
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 

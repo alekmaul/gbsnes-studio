@@ -36,8 +36,8 @@ u8 script_variables[NUM_VARIABLES + 1];
 u16 joy;
 u16 prev_joy;
 u8 time;
-s16 scroll_x;
-s16 scroll_y;
+s16 scroll_x = 0;
+s16 scroll_y = 0;
 
 // --- camera (camera.h) ---
 u8 camera_settings = CAMERA_LOCK_FLAG;
@@ -80,6 +80,8 @@ void CameraInit(void)
     camera_y = clamp16(actors[0].y - SCREEN_H_HALF, 0, cam_max_y());
     camera_dest_x = camera_x;
     camera_dest_y = camera_y;
+    scroll_x = camera_x;
+    scroll_y = camera_y;
 }
 
 void CameraMoveTo(s16 px, s16 py, u8 settings)
@@ -153,7 +155,9 @@ void CameraUpdate(void)
     }
     scroll_x = sx;
     scroll_y = sy;
-    bgSetScroll(0, (u16)sx, (u16)sy);
+    /* The BG1 scroll registers are written at the top of the main loop, during
+     * vblank - writing them here (mid-frame, after all the script/actor work)
+     * shears the lower part of the screen while the camera is moving. */
 }
 
 int main(void)
@@ -207,6 +211,11 @@ int main(void)
     while (1)
     {
         WaitForVBlank();
+        /* Apply the camera scroll computed last frame - in vblank, before the
+         * PPU starts drawing - so it never shears the screen mid-render while
+         * the camera is moving. Also keeps BG1 and the OAM sprite positions
+         * (SceneRenderActors also reads scroll_x/y) in lockstep. */
+        bgSetScroll(0, (u16)scroll_x, (u16)scroll_y);
         UIFlush();
 
         /* SceneInit leaves the screen force-blanked; un-blank it here, the
