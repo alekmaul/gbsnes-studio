@@ -9,10 +9,14 @@ palettes) + M5b-e (menus, emotes,
 avatars, overlay, slide/2-col/move-to) + M8 (project `.mod` music via a JS `.mod`->`.it`
 converter feeding snesmod's `smconv`; BRR sound effects layered over the music) + M9 (editor Settings page: Platform/Region/SRAM-size toggles,
 target-aware camera viewport helper and compiler clamp) + M10 (Play button / web export via a
-vendored JS SNES emulator) + M11 in progress (SNES New Project template; ejected build verified
+vendored JS SNES emulator) + M11 (SNES New Project + Sample templates; ejected build verified
 to compile standalone with plain `make`; opcode audit + 4 Noop gaps closed; per-event support
-matrix `EVENTS.md`; performance profile `PERF.md`). Real `.gbsproj` → SNES ROM via the app's own
-Build page, no env var needed.**
+matrix `EVENTS.md`; performance profile `PERF.md`) + M12 (the stock 8-scene sample plays start
+to finish - UI from project `assets/ui`, per-scene sprite sheets, N-frame animation, GB-matching
+collision / sprite offset, SNES-sized backgrounds) + M13 (release-prep polish: CI for all three
+desktop platforms, multi-bank 65816 asset data, and a run of playthrough-found engine fixes -
+see the M13 list further down). Real `.gbsproj` → SNES ROM via the app's own Build page, no env
+var needed. `package.json` is 1.1.0.**
 
 **Per-event support (GB vs SNES): [`EVENTS.md`](EVENTS.md)** — every scripting event, whether it
 works fully / with a caveat / is inert on the SNES target, plus the editor-side (M9) gaps.
@@ -430,6 +434,48 @@ returns `u16` and packs all 12 buttons, `input_script_ptrs[]` grew to `NUM_INPUT
 a third X/Y/L/R row for SNES projects. Verified in Mesen: a scene registering
 `SET_INPUT_SCRIPT("x")` / `SET_INPUT_SCRIPT("r")` had both sub-scripts fire on the real button
 presses (marker variables read back 42 / 43 from WRAM via a Lua `emu.setInput` driver).
+
+**M13 (release-prep polish, user-driven, all done):**
+- **Camera-scroll shear.** `CameraUpdate()` wrote `bgSetScroll(0, …)` at the tail of the main
+  loop — mid-render — so every camera step while walking tore the lower scanlines at the beam
+  position (jumping frame-to-frame with the per-frame workload). Now `CameraUpdate` only
+  computes `scroll_x/y`; `game.c` writes BG1 scroll at the loop top, in vblank. Also puts BG1
+  and the OAM sprite positions (`SceneRenderActors` reads the same `scroll_x/y`) in lockstep
+  instead of a frame apart. Mesen: `$210D/$210E` writes while walking 584/872 mid-render →
+  0/864.
+- **Dialogue / menu box sizing + slide.** The box was a fixed 8-row slab regardless of content.
+  `ui_set_box(content_rows)` now anchors it to the screen bottom and grows it upward
+  (`content_rows + 2`, clamped `[4, 8]`); `TXT_ROW0`/`TXT_ROWS` became `box_row0+1` /
+  `box_rows-2`. And the slide-in/out is a **redraw** (`ui_frame_box` at a `ui_slide_off` row
+  offset) not a BG3 scroll — BG3 is a 256px/32-row layer with only 4 rows of margin below the
+  box, so scrolling a taller box far enough to hide it wrapped it back to the *top* of the
+  screen. `UIFlush`'s partial DMA and the close-path clear now cover `BOX_ROW0..BOX_MAP_ROWS`.
+- **Talk / push from all four sides.** `SceneTryInteract` took the facing tile as
+  `SceneActorTileX/Y(0) + dir`, but that's the sprite's top-left — facing right/down it pointed
+  at the player's own far edge, a tile short. Fixed by adding 1 to `ntx`/`nty` when the facing
+  component is positive (2-tile-wide sprite). Mesen: A-press from each of the 4 sides now runs
+  the actor script; before, only right/below did.
+- **Bare-scene flash before the opening curtain.** `SceneInit` un-blanked (`setBrightness`)
+  before `run_script` started the scene script, so BG1 rendered at full brightness for the
+  frame before the init script's `OVERLAY_SHOW` reached VRAM. Now `SceneInit` stays
+  force-blanked and `game.c` un-blanks the next frame (after that `UIFlush`), gated on
+  `scene_unblank_pending`.
+- **Stray dark line at the screen bottom.** `ui_overlay_fill_from(row)` filled BG3 rows
+  `row..31`; rows 28-31 are past the 224-line screen but the +1-scanline quirk shows a sliver
+  of row 28, so an overlay parked off the bottom (`OVERLAY_MOVE_TO` past row 28) painted a 1px
+  band. A parked position (`row >= UI_SCREEN_ROWS`) now fills nothing.
+- **Graphic assets → multi-bank 65816 source.** `compileSnesData.js` used to put every
+  background / OBJ sheet / font array in `assets.c`, which 816-tcc compiles to *one atomic
+  `.rodata` section* that can't cross a 32 KB LoROM bank — so a project's total graphic data
+  was capped there. Now each asset is its own `src/data/<name>_data.as` (a `superfree` section
+  with `<name>_tiles`/`_pal`/`_map` labels), `.include`d from `src/data/data.asm`; wlalink
+  spreads them across banks. `assets.c` keeps only the pointer tables + scene blobs + script
+  bytecode + strings. The `.as` files are never scanned as sources (only `data.asm` is), so it
+  works on both `buildSnesRom.js` and standalone `make`.
+- **CI** (`.github/workflows/build.yml`) builds Windows → macOS → Linux (three chained jobs)
+  and cuts a GitHub Release on a `v*` tag. macOS is a soft dependency (paid runner class /
+  arm64-only since GitHub retired the Intel image) so it can't block the Windows + Linux
+  release.
 
 **816-tcc gotcha (M4c/M5):** a 3-or-more-term boolean chain (`a || b || c`, `a && b && c`) in a
 conditional links its branch targets wrong — the false path fell through into the block. All of

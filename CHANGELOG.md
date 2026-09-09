@@ -5,6 +5,54 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-09-09
+
+Playing the retargeted sample game end to end turned up a run of SNES engine and build-system
+issues; this release clears them. The `1.0.0` tag was cut before CI could build all three
+platforms, so nothing was actually published under it — `1.1.0` is the first release with
+downloadable binaries.
+
+### Added
+- **SNES scripts can read the X / Y / L / R buttons.** The input events (`If Button Pressed`,
+  `Await Input`, `Attach Script to Button`) offer all 12 SNES buttons for a SNES project — the
+  editor shows an extra X/Y/L/R row. On the SNES target the button mask these events compile to
+  is 2 bytes instead of 1; the Game Boy target is completely unchanged (still 8 buttons, 1 byte,
+  byte-identical ROM output). In the bundled web player X/Y/L/R map to the keys U / I / O / P.
+
+### Changed
+- **The SNES dialogue / menu box is now sized to its contents** and anchored to the bottom of
+  the screen. A two-option menu or a two-line line of text used to draw as a fixed eight-row
+  slab with a large empty area below it.
+- **SNES builds: graphic assets are emitted as multi-bank 65816 source** (`src/data/*.as` +
+  `src/data/data.asm`) instead of one big C array file. A single C data file compiles to one
+  atomic section that can't cross a 32 KB ROM bank, which capped a project's total
+  background / sprite / font data; the new layout lets the linker spread it across banks, so a
+  large project builds. No change to how you author assets.
+- CI now builds Windows, macOS and Linux as three separate jobs in sequence, and the macOS
+  build (a paid runner class on private repos, an Apple-Silicon runner since GitHub retired
+  the Intel one) can no longer block the Windows + Linux release.
+- "Build & Run" / "Export ROM" no longer print the assembler's per-file optimisation chatter.
+
+### Fixed
+- SNES: **the screen sheared (horizontal glitch lines near the bottom) while the camera was
+  moving.** The camera scroll registers were written mid-frame; they're now written during the
+  vertical blank.
+- SNES: **when the dialogue box opened or closed it briefly flashed at the top of the screen.**
+  The box now slides by redrawing rather than by scrolling BG3 (which, being a 256-pixel layer,
+  wrapped a taller box back around to the top).
+- SNES: **you couldn't talk to a character (or push the rock) from its right or from above** —
+  only from the left or below. The "tile in front of the player" was computed a tile short when
+  the player faced right or down (the sprite is two tiles wide).
+- SNES: the scene's background **flashed at full brightness for one frame** before its opening
+  `Overlay: Show` curtain appeared (the sample's "YOUR LOGO" intro).
+- SNES: a "hidden" overlay (`Overlay: Move To` off the bottom of the screen) left a **1-pixel
+  dark line along the bottom edge** for the rest of the game.
+- The "Sample Project (SNES)"'s three large scrolling backgrounds (Outside, Stars, Underground)
+  are recoloured off the flat 4-shade Game Boy green — all eight sample backgrounds now use a
+  SNES palette.
+- CI: the packaged-app build failed on a fresh dependency resolve (a transitive package now
+  requires Node ≥ 18; the project builds on Node 16 on purpose).
+
 ## [1.0.0] - 2026-09-06
 
 First tagged release of **GBSNES Studio** — a fork of GB Studio 1.2.2 that keeps the Game Boy
@@ -21,11 +69,6 @@ and are kept for chronology; everything in them ships in 1.0.0.
 The highlights of the final push (roadmap M8–M12):
 
 ### Added
-- **SNES scripts can read the X / Y / L / R buttons.** The input events (`If Button Pressed`,
-  `Await Input`, `Attach Script to Button`) offer all 12 SNES buttons for a SNES project — the
-  editor shows an extra X/Y/L/R row. On the SNES target the button mask these events compile to
-  is 2 bytes instead of 1; the Game Boy target is completely unchanged (still 8 buttons, 1 byte,
-  byte-identical ROM output). In the bundled web player X/Y/L/R map to the keys U / I / O / P.
 - **SNES music now plays a project's own songs.** Each `.mod` track is converted to Impulse
   Tracker `.it` at build time (new `src/lib/compiler/mod2it.js`) and built into the SNES
   soundbank by the new `src/lib/compiler/compileSnesMusic.js`. `Music: Play` picks the right

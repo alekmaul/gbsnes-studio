@@ -604,7 +604,7 @@ back 42 / 43 from WRAM). Tests: `scriptBuilder.test.js` (SNES 2-byte mask), `tar
   so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
   committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
-### SNES port — state & what's left (as of 2026-09-06)
+### SNES port — state & what's left (as of 2026-09-09, `package.json` 1.1.0)
 
 The port is **functional end to end**: create an SNES project in the app → script it (dialogue,
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
@@ -617,6 +617,13 @@ own `assets/ui` PNGs, per-scene sprite sheets (16-sheet projects), N-frame `anim
 GB-matching collision + sprite Y offset, off-screen overlay no longer freezing the player, and
 all 8 sample backgrounds now SNES-sized (5 room scenes redrawn at 256×224, 3 scrolling scenes
 recoloured off the DMG greens).
+**M13 (release-prep polish, still user-driven):** CI that builds Windows/macOS/Linux and cuts
+a GitHub Release on a `v*` tag (was CircleCI cruft); graphic assets emitted as multi-bank
+65816 source so a large project isn't capped at one 32 KB `.rodata` section; and a run of
+playthrough-found engine fixes — the content-sized dialogue box, no box-flashes-at-top slide,
+no camera-scroll shear, talk/push from all four sides, no bare-scene flash before the curtain.
+`package.json` is **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release
+(CI couldn't build macOS then) — cut `v1.1.0` at HEAD to publish binaries.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets + ≤6 distinct OBJ palettes _per scene_** — sheets are loaded per-scene
@@ -651,12 +658,18 @@ vblank, right after `WaitForVBlank()` (one frame of latency; also puts BG1 and t
 positions, which `SceneRenderActors` reads from the same `scroll_x/y`, back in lockstep).
 Verified in Mesen: `$210D/$210E` writes while walking were 584/872 mid-render (clustered ~y170
 and ~y210) before, 0/864 after.
+**Talk / push from all four sides** (`SceneTryInteract` computed the facing tile a tile short
+when facing right/down — the player sprite is 2 tiles wide). **Content-sized dialogue/menu box**
++ **redraw-based slide** (was a fixed 8-row slab; the scroll-based slide wrapped a tall box to
+the top of the screen). **Graphic assets → `src/data/*.as` + `data.asm`** (multi-bank; a
+single C `.rodata` section can't cross a 32 KB bank).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
-Not code: a tagged release (trivial), a full demo game (art/music/level design), and the
-roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are data-driven; it
-would reduce to a compile-time warning if a background exceeds 15 colours per palette region).
+Not code: **cut the `v1.1.0` tag** (CHANGELOG + `package.json` are ready; the release job
+fires on the tag), a full demo game (art/music/level design), and the roadmap's "GB→SNES asset
+conversion assistant" (dubious value now — assets are data-driven; it would reduce to a
+compile-time warning if a background exceeds 15 colours per palette region).
 
 ## The engine (`appData/src/gb/`)
 
