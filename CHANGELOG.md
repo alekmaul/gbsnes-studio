@@ -37,6 +37,12 @@ downloadable binaries.
   build (a paid runner class on private repos, an Apple-Silicon runner since GitHub retired
   the Intel one) can no longer block the Windows + Linux release.
 - "Build & Run" / "Export ROM" no longer print the assembler's per-file optimisation chatter.
+- **New GBSNES Studio branding artwork.** The application icon (a Game Boy / SNES hybrid
+  handheld), the `.gbsproj` project-file icon (a "GBSNES Studio Project" cartridge) and the
+  macOS `.dmg` installer background were all redrawn; the Windows `.ico` and macOS `.icns`
+  were regenerated from the new 1024×1024 sources.
+- The "Sample Project (SNES)" now greets you with "Welcome to GBSNESStudio!" (the Game Boy
+  sample is unchanged).
 
 ### Fixed
 - SNES: **the screen sheared (horizontal glitch lines near the bottom) while the camera was

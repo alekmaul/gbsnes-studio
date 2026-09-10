@@ -18,6 +18,12 @@ are `gbsnes-studio` / `gbsnes_studio` / `gbsnesstudio`. Still `gbstudio`-flavour
 on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
 `src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
 upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio`.
+Icons/artwork under `src/assets/app/` are GBSNES-branded: `icon/app_icon.{png,ico,icns}` (a
+GB/SNES hybrid handheld), `icon/gbsproj.{png,ico,icns}` (a "GBSNES Studio Project" cartridge,
+the `.gbsproj` file-type icon) and `dmg/background.{png,tiff}` (the macOS installer window).
+The `.ico`/`.icns` are regenerated from the 1024×1024 `.png` with Pillow (`Image.save(…,
+format="ICO"|"ICNS")`) — no ImageMagick on this box; Python 3 + Pillow is at `C:\python3`.
+`forge.config.js` `icon: "…/app_icon"` lets electron-forge pick `.icns`/`.ico`/`.png` per OS.
 
 ## Commands
 
@@ -641,9 +647,11 @@ a GitHub Release on a `v*` tag (was CircleCI cruft); graphic assets emitted as m
 playthrough-found engine fixes — the content-sized dialogue box, no box-flashes-at-top slide,
 no camera-scroll shear, talk/push from all four sides, no bare-scene flash before the curtain;
 Settings > Controls gained the X/Y/L/R key bindings + a SNES-shaped pad preview (+ a
-`DEFAULT_KEYS` fallback so an un-customised SNES web build has a working keyboard).
-`package.json` is **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release
-(CI couldn't build macOS then) — cut `v1.1.0` at HEAD to publish binaries.
+`DEFAULT_KEYS` fallback so an un-customised SNES web build has a working keyboard); and the
+app icon, `.gbsproj` file icon and `.dmg` installer background were redrawn GBSNES-branded
+(`.ico`/`.icns` regenerated). `package.json` is **1.1.0**; the `v1.0.0` tag predates all of
+M13 and never shipped a release (CI couldn't build macOS then) — cut `v1.1.0` at HEAD to
+publish binaries.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets + ≤6 distinct OBJ palettes _per scene_** — sheets are loaded per-scene
