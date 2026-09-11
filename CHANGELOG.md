@@ -18,6 +18,13 @@ Changes since the `v1.1.0` tag was cut.
 - The "Download" buttons in the update-available / project-from-a-newer-version dialogs now
   point at this fork's own GitHub releases instead of the original GB Studio's download page.
 
+### Changed
+- SNES: **performance** — a scene with several simultaneously-moving actors could spike CPU
+  cost on the frame their movement AI happened to coincide (a per-mover collision scan running
+  once per actor on that one frame). Actor AI now updates half the actors per tick instead of
+  all of them at once (matching how the Game Boy engine already does it), spreading that cost
+  out instead of concentrating it. No gameplay/collision behaviour change.
+
 ## [1.1.0] - 2026-09-09
 
 Playing the retargeted sample game end to end turned up a run of SNES engine and build-system

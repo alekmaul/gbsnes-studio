@@ -681,6 +681,23 @@ by target, `undefined` target still falls back to gb).
   `emu.setInput`. One cheap safe fix applied (`SceneRenderActors` only walks used OAM slots);
   hand-asm optimisation of the render/actor hot path is deliberately deferred (high risk,
   low confidence) - see PERF.md's "future work".
+  **Movement/collision hot-path cleanup (2026-09-11, still plain C).** The ~10% moving-actor
+  slowdown traced to `npc_blocking()` (`scene.c`) - an O(actor count) scan every stepping actor
+  runs - being called by potentially *every* actor on the same frame, since `SceneUpdateAi()`
+  gated all of them on one shared 64-frame tick: an O(N²) spike concentrated on exactly the
+  frames that could drop. Fixed three ways, all mechanical: `actor_try_move()` computes the
+  destination tile once and passes it to both `npc_blocking()`/`can_step()` instead of each
+  re-deriving it via `SceneActorTileX/Y()` (816-tcc does no CSE, so that was 2 redundant real
+  function calls per move attempt); `npc_blocking()`'s inner scan inlines
+  `SceneActorTileX/Y(j)` instead of calling them; and `SceneUpdateAi()` now stripes actors by
+  index parity across the 64-frame ticks (odd on `time==0/128`, even on `64/192`) instead of
+  touching all of them every tick - **porting the GB engine's own already-shipped design**
+  (`Scene_b.c` already does exactly this striping; the SNES port had just never replicated it,
+  so it touched every actor twice as often as GB with no spread). No collision behaviour change
+  (identical `tx`/`ty` math, just not recomputed). Verified: the fixture build suite still
+  compiles/links, and a Mesen run of the retargeted sample (spawned directly in Outside)
+  confirmed normal 4-direction player movement/collision and that the scene's `randomWalk`
+  actor still moves over time. Not yet re-profiled with fps numbers - see PERF.md.
 - **`appData/templates/snesblank`** (M11) — a "Blank Project (SNES)" option in the New Project
   screen (`Splash.jsx`), alongside the existing `blank`/`gbhtml` (both GB) templates. Reuses the
   `blank` template's assets as-is (a PNG background/sprite sheet's pixels are target-agnostic;
@@ -751,6 +768,12 @@ Real remaining **code** gaps, most impactful first:
 3. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no
    per-project SFX assets, so there's nothing to convert; a richer set would just be more
    committed BRR samples.
+4. **CPU ceiling on many simultaneously-moving actors** (`816-tcc` codegen, see `PERF.md`) —
+   the worst-case O(N²) spike (every mover's `npc_blocking()` scan landing on the same frame)
+   is fixed (2026-09-11: destination-tile reuse + inlined tile lookups + GB-matching odd/even
+   AI striping - see the "Perf profile" bullet above), but the underlying "`816-tcc` emits slow
+   code" ceiling is unchanged and hand-asm optimisation of the render/actor hot path is still
+   deliberately deferred. Not yet re-profiled with fps numbers.
 
 Done since (M12, playing the sample end to end): **UI graphics from the project's `assets/ui`
 PNGs** (font + 9-slice frame + menu cursor, was a hardcoded font + plain fill). **Per-scene

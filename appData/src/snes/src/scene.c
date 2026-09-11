@@ -312,13 +312,19 @@ static u8 col_solid(s16 tx, s16 ty)
     return (scene_col[idx >> 3] >> (idx & 7)) & 1;
 }
 
-// The 16px sprite of actor i occupies tiles [tx, tx+1] x [ty, ty+1]. Return the
-// index of another actor blocking a one-tile step in (dx, dy), or 0xFF.
-// (dx/dy are int, not s8 - 816-tcc mangles small-type params in 3-arg calls.)
-static u8 npc_blocking(u16 skip, s16 dx, s16 dy)
+// The 16px sprite of actor `skip` occupies tiles [tx, tx+1] x [ty, ty+1] at
+// its destination tile (tx, ty). Return the index of another actor blocking
+// that step, or 0xFF.
+// PERF.md: (tx, ty) used to be `SceneActorTileX/Y(skip) + dx/dy`, computed
+// fresh here *and* again in can_step() right after - two extra function
+// calls per move attempt on a compiler with no CSE. The caller (actor_try_move)
+// now computes it once and passes it to both. Below, SceneActorTileX/Y(j) is
+// inlined for the same reason: this loop runs for every other actor on every
+// move attempt (up to O(N) calls per mover, O(N^2) on a frame where several
+// actors' AI ticks land together - see SceneUpdateAi's per-actor time offset),
+// and 816-tcc never inlines a real function call itself.
+static u8 npc_blocking(u16 skip, s16 tx, s16 ty)
 {
-    s16 tx = SceneActorTileX(skip) + dx;
-    s16 ty = SceneActorTileY(skip) + dy;
     u8 j;
     for (j = 0; j <= scene_num_actors && j < MAX_ACTORS; j++)
     {
@@ -326,8 +332,8 @@ static u8 npc_blocking(u16 skip, s16 dx, s16 dy)
         if (j == skip) continue;
         if (!actors[j].enabled) continue;
         if (!actors[j].collisions_enabled) continue;
-        jx = SceneActorTileX(j);
-        jy = SceneActorTileY(j);
+        jx = (actors[j].x - 8) >> 3;
+        jy = (actors[j].y - 8) >> 3;
         if (tx > jx + 1) continue;
         if (tx + 1 < jx) continue;
         if (ty > jy + 1) continue;
@@ -337,16 +343,15 @@ static u8 npc_blocking(u16 skip, s16 dx, s16 dy)
     return 0xFF;
 }
 
-// Can actor i start a one-tile step in unit direction (dx, dy)?
-// Mirrors the GB engine: the footprint is the actor's single tile, widened one
-// tile to the right for the 16px-wide sprite, so the check is the destination
-// tile (tx+dx, ty+dy) and the one to its right. The old version tested two
-// tiles ahead (a 2x2 footprint), which blocked the player a tile early - e.g.
-// it couldn't step onto a door trigger with a solid tile just past it.
-static u8 can_step(u16 i, s16 dx, s16 dy)
+// Can an actor step onto destination tile (tx, ty)? Mirrors the GB engine:
+// the footprint is the actor's single tile, widened one tile to the right for
+// the 16px-wide sprite, so the check is the destination tile and the one to
+// its right. The old version tested two tiles ahead (a 2x2 footprint), which
+// blocked the player a tile early - e.g. it couldn't step onto a door trigger
+// with a solid tile just past it.
+// (tx, ty) is the caller's already-computed destination tile - see npc_blocking.
+static u8 can_step(s16 tx, s16 ty)
 {
-    s16 tx = SceneActorTileX(i) + dx;
-    s16 ty = SceneActorTileY(i) + dy;
     if (col_solid(tx, ty)) return 0;
     if (col_solid(tx + 1, ty)) return 0;
     return 1;
@@ -385,12 +390,17 @@ static void actor_try_move(u16 i, s16 dx, s16 dy)
 
     if (actors[i].collisions_enabled)
     {
-        if (npc_blocking(i, dx, dy) != 0xFF)
+        // Destination tile, computed once and shared by npc_blocking/can_step
+        // below instead of each re-deriving it via SceneActorTileX/Y(i) - see
+        // the comment on npc_blocking.
+        s16 tx = SceneActorTileX(i) + dx;
+        s16 ty = SceneActorTileY(i) + dy;
+        if (npc_blocking(i, tx, ty) != 0xFF)
         {
             actors[i].moving = 0;
             return;
         }
-        if (!can_step(i, dx, dy))
+        if (!can_step(tx, ty))
         {
             actors[i].moving = 0;
             return;
@@ -725,18 +735,29 @@ static void SceneCheckTriggers(void)
 }
 
 // Random-walk / random-face NPC AI, on frames 0/64/128/192 like the GB engine.
+// PERF.md: touching every actor on the same AI-tick frame means every one
+// that decides to walk also runs npc_blocking()'s O(actor count) scan that
+// same frame - up to N calls each O(N), concentrated exactly where a frame
+// could be dropped. The GB engine (Scene_b.c) never does this either: it
+// only considers *half* the actors per tick - odd indices on frames 0/128,
+// even on 64/192 - so each actor's own decision cadence is every 128 frames,
+// not 64, but no two actors' decisions ever pile up on the same frame. Ported
+// that striping here (the SNES port previously touched every actor every 64
+// frames, twice as often as GB and with no such spread).
 static void SceneUpdateAi(void)
 {
-    u8 i;
+    u8 i, first;
     s8 dirs[4][2] = {{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
 
     if ((time & 0x3F) != 0)
     {
         return;
     }
+    first = (u8)(time == 0 || time == 128);
     for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
         if (script_ptr) return;
+        if ((i & 1) != first) continue;
         if (!actors[i].enabled) continue;
         if (actors[i].moving) continue;
         {

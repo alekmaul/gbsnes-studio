@@ -7,6 +7,9 @@ normal pipeline. Method notes at the bottom.
 time per frame**: a typical scene holds a locked 60 fps, but a scene with more than ~5–6
 *simultaneously moving* actors starts dropping the odd frame (graceful — ~54 fps, not 30). That
 ceiling is a property of the `816-tcc` toolchain (a small non-optimising C compiler), not a bug.
+2026-09-11: found and fixed a real O(N²) spike in the movement/collision path (an actor-count
+scan that could run once per actor on the very frame several actors' AI ticks coincided) - see
+"Done" below. The underlying `816-tcc`-is-slow ceiling itself is unchanged.
 
 ---
 
@@ -91,15 +94,42 @@ it tips over one frame.
   once) instead of iterating all 9 unconditionally. Helps every scene with fewer than 9 actors
   (i.e. all realistic ones); free; verified no regression (Mesen OAM dump — right sprites shown,
   unused slots parked at `y=240`).
+- **Movement/collision hot-path cleanup (still plain C, no asm).** The ~10 % slowdown above traced
+  to `npc_blocking()` - an O(actor count) scan run by *every* actor that attempts a step - being
+  called by potentially every actor on the *same* frame: `SceneUpdateAi()` gated all actors on one
+  shared `(time & 0x3F) == 0` tick, so an AI-tick frame could trigger up to N calls to
+  `npc_blocking()`, each itself O(N) - an O(N²) spike concentrated on exactly the frames that could
+  drop. Three fixes, all mechanical/low-risk:
+  1. `actor_try_move()` now computes the destination tile (`tx, ty`) **once** and passes it to both
+     `npc_blocking()` and `can_step()`, instead of each independently re-deriving it via
+     `SceneActorTileX/Y()` - two redundant function calls per move attempt removed (816-tcc does no
+     CSE, so every one of those was a real call with software-stack overhead).
+  2. `npc_blocking()`'s inner scan inlines `SceneActorTileX/Y(j)` (`(actors[j].x - 8) >> 3` etc.)
+     instead of calling them - up to `2*(N-1)` call eliminations per invocation.
+  3. `SceneUpdateAi()` now stripes actors by index parity across the 64-frame ticks (odd indices on
+     `time == 0/128`, even on `64/192`) instead of touching every actor on every tick - **porting
+     the GB engine's own already-shipped design** (`Scene_b.c` does exactly this striping; the SNES
+     port had never replicated it, so it was touching every actor twice as often as GB *and* with
+     no spread). Each actor's own AI decision cadence is now every 128 frames, matching GB exactly,
+     and no two actors' `npc_blocking()` scans ever land on the same frame.
+
+  No behaviour change to collision itself (same `tx`/`ty` arithmetic, just not recomputed) and no
+  new opcodes/fields. Verified: `buildSnesRom.js`/`compileSnesData.js` fixture suite still compiles
+  and links; a Mesen run of the retargeted sample (spawned directly in Outside) confirmed the
+  player still walks and collides normally in all four directions and the scene's one `randomWalk`
+  actor still moves over time (its position changed between two WRAM snapshots ~400 frames apart).
 
 ### Not done — future work
 
 - Hand-optimising the render / actor-update hot path (or the parts of it that `816-opt` leaves
   fat) in 65816 asm. High effort, real regression risk across every scene feature, and low
   confidence it's worth it — deliberately deferred rather than rushed.
+- Re-measuring the exact fps ratio after the movement/collision cleanup above (same Mesen Lua
+  method as the table above) — expected to help most on a frame where several actors' AI ticks
+  used to coincide, but not re-profiled with numbers yet.
 - **Practical guidance until then:** on the SNES target, a scene with more than ~5–6
-  simultaneously *moving* actors may drop frames. Static NPCs, dialogue, camera work, music and
-  large backgrounds are all fine.
+  simultaneously *moving* actors may still drop the odd frame. Static NPCs, dialogue, camera work,
+  music and large backgrounds are all fine.
 
 ---
 
