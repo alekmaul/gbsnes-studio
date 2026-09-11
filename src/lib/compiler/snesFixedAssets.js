@@ -371,7 +371,17 @@ const snesFixedAssets = async ({ uiAssetDir } = {}) => {
     uiPaletteBytes: ui.palette,
     spriteTiles: sheet,
     spritePaletteBytes: palBytes(SPR_PALETTE),
-    emotePaletteBytes: palBytes(emoteColors),
+    // palBytes() takes already-5-bit (0..31) components, matching
+    // SPR_PALETTE's hand-authored values above - but emoteColors comes
+    // straight from emotes.png's raw 8-bit pixels (get-pixels), so it needs
+    // the same >>3 scale-down snesgfx.js's rgbToBGR555 does. Without it,
+    // palBytes was masking the LOW 5 bits of an 8-bit value instead of the
+    // TOP 5 bits - a completely different number for almost any colour
+    // (e.g. (224,248,208) -> (0,192,128) instead of ~(224,248,208)).
+    // User-found: the emote bubbles rendered in visibly wrong colours.
+    emotePaletteBytes: palBytes(
+      emoteColors.map(([r, g, b]) => [r >> 3, g >> 3, b >> 3])
+    ),
     UI_FILL_TILE,
     NUM_UI_GLYPHS,
     UI_FRAME_TILE0,

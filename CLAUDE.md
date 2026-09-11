@@ -343,6 +343,17 @@ by target, `undefined` target still falls back to gb).
   `test/data/compiler/snesFixedAssets.test.js` guards the blob shape + this regression (a
   synthetic fixture built with `pngjs`, a transitive dep of `get-pixels` - same
   not-in-`package.json`-but-relied-on pattern this module already uses for `get-pixels` itself).
+  **Emote bubbles rendered in the wrong colours (user-found: "la palette des emotes n'est pas de
+  la bonne couleur").** `snesFixedAssets.js`'s local `palBytes()` helper takes already-5-bit
+  (0..31) components - written for the hand-authored `SPR_PALETTE` literals, which are genuinely
+  5-bit - but `emoteColors` (scanned straight from `emotes.png`'s raw 8-bit pixels via
+  `get-pixels`) was passed in unconverted. `(x & 31)` on an 8-bit value takes its *low* 5 bits,
+  not a scaled-down top-5-bits like `snesgfx.js`'s `rgbToBGR555` (`(x >> 3) & 0x1f`) - a
+  completely different number for almost any colour (e.g. `(224,248,208)` decoded back to
+  `(0,192,128)` instead of ~`(224,248,208)`). Fixed by scaling `emoteColors` down (`>> 3`) right
+  before the `palBytes()` call; `SPR_PALETTE`'s own (already-correct) path is untouched. Test:
+  `snesFixedAssets.test.js` decodes the real `emotes.png`'s palette and checks its actual
+  colours survive - fails against the pre-fix code with exactly the garbled values above.
   **Per-scene OBJ sheets (user-found: a 16-sheet project showed the player sprite for
   everything past the 8th).** The OBJ sheet used to be **one project-wide** 8 KB blob loaded
   at boot - 8 slots for the whole game. Now `compileSnesData.js` builds one 8 KB sheet **per

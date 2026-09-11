@@ -113,3 +113,28 @@ describe("snesFixedAssets - BG3 UI graphics", () => {
     }
   });
 });
+
+describe("snesFixedAssets - emote bubble palette", () => {
+  // Regression: palBytes() takes already-5-bit (0..31) components (matching
+  // the hand-authored SPR_PALETTE literals it was designed for), but
+  // emoteColors comes straight from emotes.png's raw 8-bit pixels - passing
+  // those in unconverted masked the LOW 5 bits of an 8-bit value instead of
+  // scaling it down (the top 5 bits), turning almost every colour into a
+  // different one (e.g. (224,248,208) -> (0,192,128)). User-found: the emote
+  // bubbles rendered in visibly wrong colours.
+  test("emotes.png's real colours survive 8-bit -> BGR555, not a low-bits slice", async () => {
+    const a = await snesFixedAssets();
+    const words = [];
+    for (let i = 0; i < a.emotePaletteBytes.length; i += 2) {
+      words.push(a.emotePaletteBytes[i] | (a.emotePaletteBytes[i + 1] << 8));
+    }
+    const rgb = words.map(wordToRgb8);
+    // index 0 is the transparent marker colour, forced to black regardless
+    expect(rgb[0]).toEqual([0, 0, 0]);
+    // the emote art's own real colours (5-bit rounded) must appear somewhere
+    // in the palette - a scale bug would produce none of these
+    expect(rgb).toContainEqual([8, 24, 32]);
+    expect(rgb).toContainEqual([224, 248, 208]);
+    expect(rgb).toContainEqual([136, 192, 112]);
+  });
+});
