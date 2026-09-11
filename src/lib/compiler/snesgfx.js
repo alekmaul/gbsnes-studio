@@ -303,11 +303,21 @@ const imageToSpriteData = async (filename, options = {}) => {
       const g = pixels.get(x, y, 1);
       const b = pixels.get(x, y, 2);
       const key = (r << 16) | (g << 8) | b;
-      if (!seen.has(key) && colors.length < maxColors) {
+      if (!seen.has(key)) {
         seen.add(key);
         colors.push([r, g, b]);
       }
     }
+  }
+  if (colors.length > maxColors) {
+    warnings.push(
+      `Sprite ${filename} has ${colors.length} colours, over the ${maxColors}-colour ` +
+        `limit for a sprite sheet - extra colours are snapped to the nearest kept colour. ` +
+        `Re-export as an indexed PNG with <= ${maxColors} colours.`
+    );
+    // keep first-seen order (colour 0 / top-left stays transparent), same
+    // truncation imageToBGData uses for backgrounds
+    colors.length = maxColors;
   }
   const idx = (r, g, b) => {
     for (let i = 0; i < colors.length; i++) {

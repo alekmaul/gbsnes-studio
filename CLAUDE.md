@@ -265,6 +265,14 @@ tests exist); `snesWebPlayer.test.js` still green.
   a sprite sheet's first 16×16 frame → 4 OBJ tiles. Pure helpers unit-tested; `decodeBGData()`
   inverts `imageToBGData` and `snesgfx.test.js` asserts a lossless round-trip.
   `targets/snes.js` `maxTilesetTiles` is the real 256-tile VRAM budget.
+  **`imageToSpriteData` now warns on a >16-colour sprite sheet, matching `imageToBGData`**
+  (asked by the user while discussing the `snesFixedAssets.js` palette bug above: "why
+  transform sprite/background palettes at all?"). Backgrounds already warned and pointed at
+  the fix ("re-export as an indexed PNG with ≤16 colours"); sprites silently snapped overflow
+  colours to the nearest kept one with no diagnostic. Both now collect every distinct colour
+  first (previously sprites stopped collecting at 16, hiding the true count), then truncate to
+  `maxColors` (first-seen order) and warn if truncated. Tests: `snesgfx.test.js` (two new
+  cases, synthetic 20-colour fixtures via `pngjs`).
 - **`src/lib/compiler/compileSnesData.js`** — the SNES data compiler (M7 phase 1). A
   denormalized project → `appData/src/snes/src/assets.{c,h}` + `src/data/*` in the engine's
   format: scene blobs, `event_ptrs[]` (script bytecode via the shared `compileEntityEvents` /

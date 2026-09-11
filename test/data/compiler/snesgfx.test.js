@@ -1,5 +1,8 @@
 import Path from "path";
+import os from "os";
+import fs from "fs-extra";
 import getPixelsCb from "get-pixels";
+import { PNG } from "pngjs";
 import { promisify } from "util";
 import {
   rgbToBGR555,
@@ -22,6 +25,25 @@ const getPixels = promisify(getPixelsCb);
 
 const bg = name =>
   Path.join(__dirname, "_files", "assets", "backgrounds", name);
+
+// Writes a WxH PNG whose first `numColours` pixels (row-major) are distinct
+// greys, and pads the rest with the last of those - so the image has exactly
+// `numColours` distinct colours, however big it is. Used to test the
+// over-the-colour-limit path without committing a real fixture PNG.
+const writeManyColoursPng = (file, width, height, numColours) => {
+  const png = new PNG({ width, height });
+  const total = width * height;
+  for (let i = 0; i < total; i++) {
+    const c = Math.min(i, numColours - 1);
+    const v = c * 10; // 0,10,20,... - stays under 256 for the sizes used below
+    const idx = i << 2;
+    png.data[idx] = v;
+    png.data[idx + 1] = v;
+    png.data[idx + 2] = v;
+    png.data[idx + 3] = 255;
+  }
+  fs.writeFileSync(file, PNG.sync.write(png));
+};
 
 describe("snesgfx colour", () => {
   test("rgbToBGR555 packs 0bbbbbbgggggrrrrr", () => {
@@ -126,6 +148,19 @@ describe("snesgfx imageToSpriteData", () => {
     expect(fire.spriteType).toBe(0);
     expect(fire.tiles).toHaveLength(16);
   });
+
+  test("more than 16 colours warns and snaps the overflow to the nearest kept one", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-snesgfx-sprite-"));
+    try {
+      const file = Path.join(dir, "toomany.png");
+      writeManyColoursPng(file, 16, 16, 20); // 20 distinct colours, 16x16 = 1 frame
+      const s = await imageToSpriteData(file);
+      expect(s.colorCount).toBe(16);
+      expect(s.warnings.join(" ")).toMatch(/20 colours, over the 16-colour/);
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
 });
 
 describe("snesgfx imageToBGData - real GB Studio background", () => {
@@ -154,6 +189,19 @@ describe("snesgfx imageToBGData - real GB Studio background", () => {
   test("maxTiles budget produces a warning", async () => {
     const tight = await imageToBGData(bg("mabe_house.png"), { maxTiles: 10 });
     expect(tight.warnings.join(" ")).toMatch(/tile VRAM budget/);
+  });
+
+  test("more than 16 colours warns and snaps the overflow to the nearest kept one", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-snesgfx-bg-"));
+    try {
+      const file = Path.join(dir, "toomany.png");
+      writeManyColoursPng(file, 8, 8, 20); // 20 distinct colours, one tile
+      const tooMany = await imageToBGData(file);
+      expect(tooMany.colorCount).toBe(16);
+      expect(tooMany.warnings.join(" ")).toMatch(/20 colours, over the 16-colour/);
+    } finally {
+      fs.removeSync(dir);
+    }
   });
 
   test("every tilemap entry points at a real tile", () => {
