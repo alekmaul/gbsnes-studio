@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+Changes since the `v1.1.0` tag was cut.
+
+### Fixed
+- SNES: **the dialogue text box's editor stayed wrapped at the Game Boy's 18-characters-per-line
+  width** even on a SNES project, needlessly breaking text into more/shorter lines than the
+  wider SNES screen can actually show. The editor now wraps at the SNES box's real width
+  (27 characters, or 23 with an avatar portrait) for a SNES project; Game Boy projects are
+  unchanged.
+- The "Download" buttons in the update-available / project-from-a-newer-version dialogs now
+  point at this fork's own GitHub releases instead of the original GB Studio's download page.
+
 ## [1.1.0] - 2026-09-09
 
 Playing the retargeted sample game end to end turned up a run of SNES engine and build-system

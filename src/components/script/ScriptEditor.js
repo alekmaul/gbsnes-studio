@@ -145,14 +145,17 @@ class ActionMini extends Component {
   };
 
   onEdit = (newValue, postUpdate) => {
-    const { onEdit, action, id } = this.props;
+    const { onEdit, action, id, target } = this.props;
     if (postUpdate) {
       return onEdit(
         id,
-        postUpdate({
-          ...action.args,
-          ...newValue
-        })
+        postUpdate(
+          {
+            ...action.args,
+            ...newValue
+          },
+          target
+        )
       );
     }
     onEdit(id, newValue);
@@ -197,6 +200,7 @@ class ActionMini extends Component {
       entityId,
       type,
       action,
+      target,
       connectDragSource,
       connectDragPreview,
       connectDropTarget,
@@ -389,6 +393,7 @@ class ActionMini extends Component {
                         type={type}
                         path={`${id}_true_${childAction.id}`}
                         action={childAction}
+                        target={target}
                         moveActions={moveActions}
                         onAdd={onAdd}
                         onRemove={onRemove}
@@ -497,6 +502,7 @@ ActionMini.propTypes = {
   id: PropTypes.string.isRequired,
   type: PropTypes.string.isRequired,
   action: EventShape.isRequired,
+  target: PropTypes.string,
   isDragging: PropTypes.bool.isRequired,
   isOverCurrent: PropTypes.bool.isRequired,
   onAdd: PropTypes.func.isRequired,
@@ -511,6 +517,10 @@ ActionMini.propTypes = {
   connectDragSource: PropTypes.func.isRequired,
   connectDragPreview: PropTypes.func.isRequired,
   connectDropTarget: PropTypes.func.isRequired
+};
+
+ActionMini.defaultProps = {
+  target: undefined
 };
 
 const ActionMiniDnD = DropTarget(
@@ -739,7 +749,7 @@ class ScriptEditor extends Component {
   };
 
   render() {
-    const { type, title, value, entityId, renderHeader } = this.props;
+    const { type, title, value, entityId, renderHeader, target } = this.props;
     const { clipboardEvent } = this.state;
 
     const buttons = (
@@ -787,6 +797,7 @@ class ScriptEditor extends Component {
               entityId={entityId}
               type={type}
               action={action}
+              target={target}
               moveActions={this.moveActions}
               onAdd={this.onAdd}
               onRemove={this.onRemove}
@@ -820,12 +831,14 @@ ScriptEditor.propTypes = {
   selectCustomEvent: PropTypes.func.isRequired,
   entityId: PropTypes.string.isRequired,
   scope: PropTypes.string.isRequired,
-  renderHeader: PropTypes.func
+  renderHeader: PropTypes.func,
+  target: PropTypes.string
 };
 
 ScriptEditor.defaultProps = Object.create(
   {
-    title: ""
+    title: "",
+    target: undefined
   },
   {
     value: {
@@ -849,6 +862,7 @@ function mapStateToProps(state, props) {
     musicIds: result.music,
     spriteSheetIds: result.spriteSheets,
     value: props.value && props.value.length > 0 ? props.value : undefined,
+    target: result.settings.target,
     scope
   };
 }

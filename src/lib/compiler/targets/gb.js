@@ -61,7 +61,13 @@ const gbTarget = {
   // SET_INPUT_SCRIPT / REMOVE_INPUT_SCRIPT) carry. The Game Boy has 8 buttons —
   // one byte, all bits used. scriptBuilder.js reads this to know how many bytes
   // to emit for a mask; the GB engine's script_cmds table must stay in sync.
-  inputMaskBytes: 1
+  inputMaskBytes: 1,
+
+  // Dialogue box text wrap width, in characters (eventTextDialogue.js's editor
+  // pre-wrap, mirroring the GB engine's own box column count). The historical
+  // literals from before this was target-aware - unchanged.
+  maxTextLineChars: 18,
+  maxTextLineCharsWithAvatar: 16
 };
 
 export default gbTarget;

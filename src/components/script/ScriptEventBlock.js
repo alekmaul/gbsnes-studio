@@ -59,7 +59,7 @@ class TextArea extends Component {
 
 class ScriptEventInput extends Component {
   onChange = e => {
-    const { onChange, field, value, index, args } = this.props;
+    const { onChange, field, value, index, args, target } = this.props;
     const { type, updateFn } = field;
     let newValue = e.currentTarget ? castEventValue(e) : e;
     if (type === "direction" && newValue === value) {
@@ -70,7 +70,7 @@ class ScriptEventInput extends Component {
       newValue = newValue.value;
     }
     if (updateFn) {
-      newValue = updateFn(newValue, field, args);
+      newValue = updateFn(newValue, field, args, target);
     }
     onChange(newValue, index);
   };
@@ -262,6 +262,7 @@ ScriptEventInput.propTypes = {
     PropTypes.arrayOf(PropTypes.string),
     PropTypes.arrayOf(PropTypes.bool)
   ]),
+  target: PropTypes.string,
   onChange: PropTypes.func.isRequired
 };
 
@@ -270,7 +271,8 @@ ScriptEventInput.defaultProps = {
   index: undefined,
   value: "",
   args: {},
-  type: ""
+  type: "",
+  target: undefined
 };
 
 class ScriptEventField extends Component {
@@ -332,7 +334,7 @@ class ScriptEventField extends Component {
   };
 
   render() {
-    const { eventId, field, value, args, entityId } = this.props;
+    const { eventId, field, value, args, entityId, target } = this.props;
 
     let label = field.label;
     if (label && label.replace) {
@@ -365,6 +367,7 @@ class ScriptEventField extends Component {
               index={valueIndex}
               value={value[valueIndex]}
               args={args}
+              target={target}
               onChange={this.onChange}
             />
             <div className="ScriptEventBlock__BtnRow">
@@ -394,6 +397,7 @@ class ScriptEventField extends Component {
         field={field}
         value={value}
         args={args}
+        target={target}
         onChange={this.onChange}
       />
     );
@@ -436,12 +440,14 @@ ScriptEventField.propTypes = {
     PropTypes.arrayOf(PropTypes.string),
     PropTypes.arrayOf(PropTypes.bool)
   ]),
+  target: PropTypes.string,
   onChange: PropTypes.func.isRequired
 };
 
 ScriptEventField.defaultProps = {
   value: "",
-  args: {}
+  args: {},
+  target: undefined
 };
 
 class ScriptEventBlock extends Component {
@@ -489,7 +495,7 @@ class ScriptEventBlock extends Component {
   }
 
   renderFields = fields => {
-    const { id, value, renderEvents, onChange, entityId } = this.props;
+    const { id, value, renderEvents, onChange, entityId, target } = this.props;
     return fields.map((field, index) => {
       if (field.hide) {
         return null;
@@ -529,6 +535,7 @@ class ScriptEventBlock extends Component {
           field={field}
           value={fieldValue}
           args={value}
+          target={target}
           onChange={onChange}
         />
       );
@@ -550,18 +557,22 @@ ScriptEventBlock.propTypes = {
   }),
   onChange: PropTypes.func.isRequired,
   renderEvents: PropTypes.func.isRequired,
-  customEvents: PropTypes.objectOf(CustomEventShape)
+  customEvents: PropTypes.objectOf(CustomEventShape),
+  target: PropTypes.string
 };
 
 ScriptEventBlock.defaultProps = {
   value: {},
-  customEvents: []
+  customEvents: [],
+  target: undefined
 };
 
 function mapStateToProps(state) {
   const customEvents = state.entities.present.entities.customEvents || {};
+  const { settings } = state.entities.present.result;
   return {
-    customEvents
+    customEvents,
+    target: settings.target
   };
 }
 

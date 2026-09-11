@@ -66,7 +66,19 @@ const snesTarget = {
   // extra byte for this target only; the SNES script_cmds table bumps the
   // matching args_len (+1) for IF_INPUT / AWAIT_INPUT / SET_INPUT_SCRIPT /
   // REMOVE_INPUT_SCRIPT — the one place its opcode arg lengths diverge from GB.
-  inputMaskBytes: 2
+  inputMaskBytes: 2,
+
+  // Dialogue box text wrap width, in characters (eventTextDialogue.js's editor
+  // pre-wrap). Mirrors appData/src/snes/src/ui.c's own runtime word-wrap
+  // exactly: TXT_COLS (28) - 1, minus the avatar portrait's xoff (4 tiles) when
+  // one is shown (user-found: the text box stayed capped at the GB's 18/16
+  // chars even on a SNES project, wasting most of the wider 32-tile screen and
+  // needlessly growing the box). The engine wraps correctly either way (its
+  // own ui_wrap() re-derives line breaks at runtime) - this only affects how
+  // much text the editor's own preview fits per line and how tall an authored
+  // box ends up.
+  maxTextLineChars: 27,
+  maxTextLineCharsWithAvatar: 23
 };
 
 export default snesTarget;

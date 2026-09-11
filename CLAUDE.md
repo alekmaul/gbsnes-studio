@@ -252,6 +252,26 @@ X/Y/L/R). Touch pad (`index.html` + `css/style.css`) grew the L/R shoulders and 
 buttons. GB target unchanged (`GBControlsPreview`, 8 buttons). No new tests (no component
 tests exist); `snesWebPlayer.test.js` still green.
 
+**Dialogue text box editor stuck at the GB's char-per-line width on SNES (user-found: "la zone
+de texte est resté sur la limite de la GB").** `eventTextDialogue.js`'s `text`/`avatarId` fields
+pre-wrap authored dialogue in the editor (`updateFn`/`postUpdate`, via `trimlines()`) so what you
+type roughly matches the in-game box - hardcoded to the GB's own box width (18 chars/line, 16
+with an avatar portrait) regardless of target. The SNES box is 256px/32 tiles wide (vs the GB's
+160px/20) and its engine (`ui.c`'s real runtime `ui_wrap()`) already wraps correctly against its
+own real width (`TXT_COLS` 28, minus 4 tiles of `xoff` when an avatar is shown) - but `ui_wrap()`
+only ever *adds* line breaks at overflow, never removes ones the editor already baked in, so the
+editor's GB-width pre-wrap directly forced a SNES box into unnecessarily many, needlessly short
+lines. New target fields `maxTextLineChars`/`maxTextLineCharsWithAvatar` (gb 18/16 - unchanged
+literals; snes 27/23, derived straight from `ui.c`'s `TXT_COLS - 1 [- xoff]`), guarded by
+`targets.test.js`. Static `fields` arrays have no project context at definition time (see the
+`eventCameraMoveTo.js` note above) - but `updateFn`/`postUpdate` are plain functions invoked
+fresh on every edit, so `settings.target` is threaded into them as a new call argument instead,
+via a normal prop chain: `ScriptEditor.js` and `ScriptEventBlock.js` each read `target` from
+their own `mapStateToProps` (both already Redux-connected) and pass it down through
+`ActionMini`/`ScriptEventField`/`ScriptEventInput` to the `updateFn(string, field, args, target)`
+/ `postUpdate(args, target)` call sites. Tests: `eventTextDialogue.test.js` (wrap width differs
+by target, `undefined` target still falls back to gb).
+
 - **`src/lib/compiler/targets/{gb,snes}.js`** — one descriptor per target, the single source
   of truth for every hardware-shaped constant (bank size, `minDataBank`, screen tiles, entity
   limits, …). `bankedData.js` and `consts.js` now read the Game Boy numbers from `targets/gb`;

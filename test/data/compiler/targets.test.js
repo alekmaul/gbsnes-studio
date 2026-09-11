@@ -42,6 +42,9 @@ describe("compile targets", () => {
     expect(gb.maxBackgroundHeight).toBe(256);
     expect(gb.maxSpriteFrames).toBe(25);
     expect(gb.maxSpriteSheets).toBeNull();
+    // dialogue box editor pre-wrap width (eventTextDialogue.js), historical literals
+    expect(gb.maxTextLineChars).toBe(18);
+    expect(gb.maxTextLineCharsWithAvatar).toBe(16);
   });
 
   test("bankedData and consts still expose the same Game Boy values", () => {
@@ -69,6 +72,10 @@ describe("compile targets", () => {
     expect(snes.maxSpriteSheets).toBe(8);
     // X/Y/L/R: the input opcodes carry a 2-byte button mask on SNES
     expect(snes.inputMaskBytes).toBe(2);
+    // dialogue box editor pre-wrap width: matches appData/src/snes/src/ui.c's
+    // own TXT_COLS(28)-1, minus the avatar portrait's 4-tile xoff when shown
+    expect(snes.maxTextLineChars).toBe(27);
+    expect(snes.maxTextLineCharsWithAvatar).toBe(23);
     // every gb key exists on snes so nothing reads `undefined`
     Object.keys(gb).forEach(key => {
       expect(snes).toHaveProperty(key);
