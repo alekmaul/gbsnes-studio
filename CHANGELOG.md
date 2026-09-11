@@ -43,6 +43,8 @@ downloadable binaries.
   were regenerated from the new 1024×1024 sources.
 - The "Sample Project (SNES)" now greets you with "Welcome to GBSNESStudio!" (the Game Boy
   sample is unchanged).
+- The vendored SNES toolchain is trimmed to the handful of tools actually used to build a ROM
+  (smaller download / repo) — no change in behaviour.
 
 ### Fixed
 - SNES: **the screen sheared (horizontal glitch lines near the bottom) while the camera was
@@ -63,6 +65,17 @@ downloadable binaries.
   SNES palette.
 - CI: the packaged-app build failed on a fresh dependency resolve (a transitive package now
   requires Node ≥ 18; the project builds on Node 16 on purpose).
+- SNES: **a project's dialogue font could render in the wrong colour** if `assets/ui/frame.png`
+  or `cursor.png` had so much as one stray anti-aliased pixel — a single off-palette pixel could
+  bump the font's real ink colour out of the tiny 3-colour UI palette entirely.
+- SNES: **a sprite sheet's colours could silently overwrite another sprite's** when a scene used
+  more than 6 distinct actor sheets (the SNES has only 6 spare OBJ colour palettes) — the extra
+  sheet's colours used to clobber the shared palette outright, so the player could end up
+  rendered in another actor's colours. The two sprites now share the palette properly instead.
+- Both this and a plain single-sprite colour overflow now warn during the build and name the
+  offending sheet, instead of silently degrading (sprites already got this for backgrounds).
+- The "Sample Project (SNES)"'s scenes no longer overlap each other in the World editor — 5 of
+  them grew to the SNES screen size without their World-map position being adjusted to match.
 
 ## [1.0.0] - 2026-09-06
 

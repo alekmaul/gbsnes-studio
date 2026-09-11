@@ -708,9 +708,15 @@ no camera-scroll shear, talk/push from all four sides, no bare-scene flash befor
 Settings > Controls gained the X/Y/L/R key bindings + a SNES-shaped pad preview (+ a
 `DEFAULT_KEYS` fallback so an un-customised SNES web build has a working keyboard); and the
 app icon, `.gbsproj` file icon and `.dmg` installer background were redrawn GBSNES-branded
-(`.ico`/`.icns` regenerated). `package.json` is **1.1.0**; the `v1.0.0` tag predates all of
-M13 and never shipped a release (CI couldn't build macOS then) — cut `v1.1.0` at HEAD to
-publish binaries.
+(`.ico`/`.icns` regenerated); a stray anti-aliased pixel could evict the dialogue font's real
+ink colour from its 3-colour BG3 palette; a scene with 7+ distinct sprite sheets had the 7th's
+colours clobber the palette it shared with another sprite instead of merging into it (could
+make the player render in another actor's colours); a sprite sheet over the 16-colour budget
+now warns like backgrounds already did; the vendored PVSnesLib toolchain is trimmed to the
+handful of tools actually used to build a ROM (~18 MB off across the 3 platform copies); and
+the Sample Project's own scenes no longer overlap each other in the World editor. `package.json`
+is **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release (CI couldn't
+build macOS then) — cut `v1.1.0` at HEAD to publish binaries.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
