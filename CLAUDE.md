@@ -300,7 +300,21 @@ tests exist); `snesWebPlayer.test.js` still green.
   background of 2-colour scenes like the Logo/Title (they map their bg to BG1 index 0);
   `UI_CHAR(' ')` therefore draws the box-fill tile, not tile 0. VRAM: 235 2bpp tiles at
   `0x3000-0x375F`, clear of BG1 (`0x2000-0x2FFF`) and OBJ (`0x4000`).
-  `test/data/compiler/snesFixedAssets.test.js` guards the blob shape.
+  **A stray anti-aliased pixel could evict the font's real ink colour from the palette**
+  (user-found: "ascii.png's palette in-game doesn't match `assets/ui`"). The 3-colour BG3
+  palette is shared across `ascii.png` + `frame.png` + `cursor.png`; the old code picked the
+  middle slot by pure luminance rank ("2nd-lightest colour"), so a single soft edge pixel on
+  the tiny `frame.png`/`cursor.png` (24×24 / 8×8 - one anti-aliased pixel from a resize/resave
+  is enough) could rank ahead of the font's actual, heavily-used ink colour and win the slot;
+  every "ink" pixel then snapped to that near-invisible stray colour instead. Fixed by picking
+  the middle slot by **pixel count** among the non-extreme colours (lightest/darkest are still
+  kept as anchors regardless of count - they're the box interior / outline, which can
+  legitimately be rare on a small `frame.png`/`cursor.png`), not by luminance adjacency.
+  Verified: rebuilding the stock sample's palette now keeps `(212,168,56)` (2960 px, the real
+  gold ink) instead of `(188,168,172)` (an 18-px artefact split across `frame.png`/`cursor.png`).
+  `test/data/compiler/snesFixedAssets.test.js` guards the blob shape + this regression (a
+  synthetic fixture built with `pngjs`, a transitive dep of `get-pixels` - same
+  not-in-`package.json`-but-relied-on pattern this module already uses for `get-pixels` itself).
   **Per-scene OBJ sheets (user-found: a 16-sheet project showed the player sprite for
   everything past the 8th).** The OBJ sheet used to be **one project-wide** 8 KB blob loaded
   at boot - 8 slots for the whole game. Now `compileSnesData.js` builds one 8 KB sheet **per

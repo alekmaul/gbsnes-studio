@@ -178,13 +178,19 @@ const buildUiGfx = async uiDir => {
   const frame = await load("frame.png");
   const cursor = await load("cursor.png");
 
-  // collect distinct colours across all three images
+  // collect distinct colours across all three images, with pixel counts -
+  // the count is what tells a real content colour apart from a stray
+  // anti-aliased / resave-artefact pixel (frame.png and cursor.png are tiny,
+  // 24x24 / 8x8, so a single soft edge pixel is enough to add a 4th colour).
   const seen = new Map();
   const scan = ({ px, w, h }) => {
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const c = [px.get(x, y, 0), px.get(x, y, 1), px.get(x, y, 2)];
-        seen.set(c.join(","), c);
+        const k = c.join(",");
+        const entry = seen.get(k);
+        if (entry) entry.count += 1;
+        else seen.set(k, { c, count: 1 });
       }
     }
   };
@@ -193,14 +199,25 @@ const buildUiGfx = async uiDir => {
   scan(cursor);
 
   // -> palette indices 1,2,3. BG3 colour 0 is transparent, so an opaque box
-  // gets at most 3 colours: keep the lightest (box interior) and the darkest
-  // (text/border), fill the middle slot, and snap any extra to the nearest.
-  const distinct = [...seen.values()].sort((a, b) => lum(b) - lum(a));
+  // gets at most 3 colours: the lightest (box interior) and the darkest
+  // (text/border) are kept as anchors regardless of how few pixels use them
+  // (a cursor or frame corner can be almost entirely one of those two);
+  // everything in between competes for the single middle slot by pixel
+  // count, not by luminance rank, so a rare stray colour can never win it
+  // away from the font's actual ink colour just by sitting next in the
+  // brightness order. Any further extra colours snap to the nearest of the
+  // three at render time (below).
+  const byLum = [...seen.values()].sort((a, b) => lum(b.c) - lum(a.c));
   let palColours;
-  if (distinct.length <= 3) {
-    palColours = distinct.slice();
+  if (byLum.length <= 3) {
+    palColours = byLum.map(e => e.c);
   } else {
-    palColours = [distinct[0], distinct[1], distinct[distinct.length - 1]];
+    const lightest = byLum[0];
+    const darkest = byLum[byLum.length - 1];
+    const middle = byLum
+      .slice(1, -1)
+      .reduce((best, e) => (e.count > best.count ? e : best));
+    palColours = [lightest.c, middle.c, darkest.c];
   }
   while (palColours.length < 3) palColours.push([0, 0, 0]);
   const nearest = c => {

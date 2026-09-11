@@ -1,4 +1,7 @@
 import Path from "path";
+import os from "os";
+import fs from "fs-extra";
+import { PNG } from "pngjs";
 import { snesFixedAssets } from "../../../src/lib/compiler/snesFixedAssets";
 
 const UI_DIR = Path.join(
@@ -12,6 +15,24 @@ const UI_DIR = Path.join(
   "assets",
   "ui"
 );
+
+// Writes a flat RGB pixel grid (row-major [[r,g,b], ...]) to a PNG file, for
+// building tiny synthetic ui/{ascii,frame,cursor}.png fixtures.
+const writePng = (file, width, height, pixels) => {
+  const png = new PNG({ width, height });
+  pixels.forEach(([r, g, b], i) => {
+    const idx = i << 2;
+    png.data[idx] = r;
+    png.data[idx + 1] = g;
+    png.data[idx + 2] = b;
+    png.data[idx + 3] = 255;
+  });
+  fs.writeFileSync(file, PNG.sync.write(png));
+};
+
+// Decodes a BG3 15-bit BGR555 palette word back to 8-bit r,g,b (5-bit
+// components << 3, same rounding compileSnesData's callers rely on).
+const wordToRgb8 = w => [(w & 31) << 3, ((w >> 5) & 31) << 3, ((w >> 10) & 31) << 3];
 
 describe("snesFixedAssets - BG3 UI graphics", () => {
   test("builds the font + frame + cursor blob from the sample's ui PNGs", async () => {
@@ -45,5 +66,50 @@ describe("snesFixedAssets - BG3 UI graphics", () => {
     const a = await snesFixedAssets();
     expect(a.uiFont.length).toBe(235 * 16);
     expect(a.NUM_UI_GLYPHS).toBe(224);
+  });
+
+  // Regression: a single anti-aliased/resave-artefact pixel on frame.png or
+  // cursor.png (both tiny) used to be able to bump a real, heavily-used
+  // colour (the font's own ink colour) out of the 3-colour palette, because
+  // the old code picked the palette's middle slot by luminance rank alone -
+  // "2nd-lightest colour", not "2nd most common colour". User-found: ascii.png
+  // rendered in-game with the wrong ink colour even though the PNG itself
+  // only had its own 3 clean colours.
+  test("a rare stray colour on frame/cursor can't displace the font's real ink colour", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-ui-stray-"));
+    try {
+      const LIGHT = [216, 228, 216]; // box interior - lightest
+      const GOLD = [212, 168, 56]; // real, heavily-used ink colour
+      const DARK = [28, 28, 60]; // outline - darkest
+      const STRAY = [188, 168, 172]; // rare anti-aliasing artefact
+
+      // 4x4: 8 light, 4 gold, 4 dark
+      writePng(Path.join(dir, "ascii.png"), 4, 4, [
+        LIGHT, LIGHT, GOLD, GOLD,
+        GOLD, GOLD, DARK, DARK,
+        LIGHT, LIGHT, LIGHT, LIGHT,
+        DARK, DARK, LIGHT, LIGHT
+      ]);
+      // 2x2: 3 light + 1 stray pixel (the artefact)
+      writePng(Path.join(dir, "frame.png"), 2, 2, [LIGHT, LIGHT, LIGHT, STRAY]);
+      // 2x2: all dark
+      writePng(Path.join(dir, "cursor.png"), 2, 2, [DARK, DARK, DARK, DARK]);
+
+      const a = await snesFixedAssets({ uiAssetDir: dir });
+      const words = [];
+      for (let i = 0; i < a.uiPaletteBytes.length; i += 2) {
+        words.push(a.uiPaletteBytes[i] | (a.uiPaletteBytes[i + 1] << 8));
+      }
+      const rgb = words.map(wordToRgb8);
+
+      // index 0 unused, 1 = lightest, 3 = darkest regardless of count
+      expect(rgb[1]).toEqual([216, 224, 216]); // LIGHT, 5-bit rounded
+      expect(rgb[3]).toEqual([24, 24, 56]); // DARK, 5-bit rounded
+      // index 2 (the contested middle slot) must be the real ink colour
+      // (4 pixels), not the 1-pixel stray artefact
+      expect(rgb[2]).toEqual([208, 168, 56]); // GOLD, 5-bit rounded
+    } finally {
+      fs.removeSync(dir);
+    }
   });
 });
