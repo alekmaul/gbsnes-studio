@@ -410,6 +410,30 @@ tests exist); `snesWebPlayer.test.js` still green.
   a slot swap picks up the new palette for free). Verified in Mesen (Test_ActorInvoke: player
   on OBJ pal 0, the signpost NPC on OBJ pal 3, real CGRAM contents distinct; emote pal 1 /
   avatar pal 2 intact after the wholesale upload).
+  **A 7th/8th sheet no longer clobbers the palette it shares (user-found: "npc001.png
+  overwrites the palette shared with the player").** `ACTOR_OBJ_PAL_POOL` has only 6 entries,
+  so once a scene has 7+ distinct sprite sheets, `writePal()` used to write the straggler's
+  palette bytes straight over whatever the first claimant (always the player, since it's
+  always `sceneSpriteIds[…][0]`) had written to the same CGRAM bytes - last write wins, so the
+  player would render in the 7th sheet's colours instead of its own. Fixed with a real merge
+  in `buildSceneSprites` (`mergeSpriteIntoPalette`): the first sprite to claim an OBJ palette
+  register keeps its own 0-based colour indices untouched; a later sprite forced onto the same
+  register reuses a colour it already shares with the claimant, otherwise appends its own into
+  a free slot, and has its own tile data re-indexed to match (`snesgfx.js`'s `indicesFromTile`/
+  `tileFromIndices` round-trip a tile to/from raw indices for this). Colour 0 is skipped on
+  both sides - hardware-transparent for any OBJ sprite regardless of what's stored there, never
+  worth a slot. Only once the *combined* colour count of everyone sharing a register exceeds 16
+  does the overflow snap to the nearest already-placed colour, with a warning (mirrors the
+  plain per-sprite `imageToSpriteData` 16-colour overflow above). `imageToSpriteData` now also
+  returns `colors` (the raw 8-bit list, same order as its palette) so a caller can do this kind
+  of cross-sprite merge without re-scanning the PNG. Verified against the real "Sample Project
+  (SNES)": Outside's 7th sheet (`npc001.png`) used to leave OBJ pal 0 with only its own ~2
+  colours (the player's gone); now pal 0 holds 9 populated colour entries (both sheets' full
+  palettes), no overflow warning. New test: `compileSnesData.test.js` ("a 7th sheet sharing pal
+  0 gets its colours merged in, not overwritten") - builds two solid-colour synthetic sprites,
+  confirms both colours are present in the merged CGRAM bytes *and* that each sprite's own tile
+  data resolves to its own colour (not the other's); fails against the pre-fix code (the
+  player's colour is simply missing from the palette).
   `test/data/compiler/compileSnesData.test.js`: 12 `test/projects/*` fixtures compile through
   `compileSnesData`; 6 (Test_Math, Test_CombinedMath, Test_ActorStoreDirection, Test_RelativePos,
   Test_SceneState, Test_ActorInvoke) build end-to-end to a bootable `.sfc` when the vendored
@@ -676,9 +700,13 @@ M13 and never shipped a release (CI couldn't build macOS then) — cut `v1.1.0` 
 publish binaries.
 
 Real remaining **code** gaps, most impactful first:
-1. **≤8 sprite sheets + ≤6 distinct OBJ palettes _per scene_** — sheets are loaded per-scene
-   now (not project-wide), so this only bites a single scene with 9+ distinct actor sheets;
-   the extras fall back to slot 0 / palette 0 (emote+avatar hold 2 of the 8 OBJ palettes).
+1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
+   this only bites a single scene with 9+ distinct actor sheets; the extras fall back to
+   slot 0 (the player's sheet). The related **≤6 distinct OBJ palettes** limit (emote+avatar
+   hold 2 of the 8 OBJ palettes) no longer silently corrupts anything when exceeded - a 7th/8th
+   sheet now *merges* its colours into the palette it's forced to share instead of overwriting
+   it (see the "Per-sprite OBJ palettes" bullet above); only once the combined colour count of
+   everyone sharing a register tops 16 does anything snap to a nearest colour, with a warning.
 2. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
    but a mid-play emulator snapshot would need SnesJs machine-state serialization it doesn't have.
 3. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no

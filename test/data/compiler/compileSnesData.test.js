@@ -1,6 +1,7 @@
 import fs from "fs-extra";
 import os from "os";
 import Path from "path";
+import { PNG } from "pngjs";
 import compileSnesData, {
   resolvePlaceholders
 } from "../../../src/lib/compiler/compileSnesData";
@@ -315,6 +316,135 @@ describe("compileSnesData - per-sprite OBJ palettes", () => {
     });
     // 6 actor sheets + player = 7 in one scene: slot 6 (7th) reuses pal 0
     expect(out.stats.sceneBlobs[0].slice(22, 30)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]);
+  });
+
+  test("a 7th sheet sharing pal 0 gets its colours merged in, not overwritten", async () => {
+    // Player and the 7th sheet are solid, clearly distinct colours. Before the
+    // merge fix, the 7th sheet's writePal() call would simply clobber pal 0
+    // outright - the player's own colour would vanish from CGRAM and the
+    // player would render in the 7th sheet's colour instead.
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-snespal-merge-"));
+    try {
+      await fs.copy(PROJECT_ROOT, dir);
+      const spriteDir = Path.join(dir, "assets", "sprites");
+      const writeSolid = (file, fill) => {
+        const png = new PNG({ width: 16, height: 16 });
+        for (let i = 0; i < 16 * 16; i++) {
+          // pixel 0 (top-left) is whatever - it's forced transparent anyway
+          const [r, g, b] = i === 0 ? [10, 10, 10] : fill;
+          const idx = i << 2;
+          png.data[idx] = r;
+          png.data[idx + 1] = g;
+          png.data[idx + 2] = b;
+          png.data[idx + 3] = 255;
+        }
+        fs.writeFileSync(Path.join(spriteDir, file), PNG.sync.write(png));
+      };
+      const PLAYER_COLOUR = [200, 0, 0];
+      const SEVENTH_COLOUR = [0, 200, 0];
+      writeSolid("player.png", PLAYER_COLOUR);
+      for (let i = 1; i <= 5; i++) writeSolid(`filler${i}.png`, [i * 10, i * 10, i * 10]);
+      writeSolid("seventh.png", SEVENTH_COLOUR);
+
+      const many = {
+        settings: {
+          target: "snes",
+          startSceneId: "s",
+          startX: 1,
+          startY: 1,
+          playerSpriteSheetId: "player"
+        },
+        backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+        spriteSheets: [
+          { id: "player", filename: "player.png", numFrames: 1 },
+          ...Array.from({ length: 5 }, (_, i) => ({
+            id: `filler${i + 1}`,
+            filename: `filler${i + 1}.png`,
+            numFrames: 1
+          })),
+          { id: "seventh", filename: "seventh.png", numFrames: 1 }
+        ],
+        variables: [],
+        scenes: [
+          {
+            id: "s",
+            name: "s",
+            backgroundId: "bg",
+            width: 20,
+            height: 18,
+            actors: [
+              ...Array.from({ length: 5 }, (_, i) => ({
+                id: `a${i}`,
+                x: i + 2,
+                y: 5,
+                spriteSheetId: `filler${i + 1}`,
+                movementType: "static",
+                script: []
+              })),
+              {
+                id: "a5",
+                x: 7,
+                y: 5,
+                spriteSheetId: "seventh",
+                movementType: "static",
+                script: []
+              }
+            ],
+            triggers: [],
+            script: []
+          }
+        ]
+      };
+      const warned = [];
+      const out = await compileSnesData(many, {
+        projectRoot: dir,
+        warnings: m => warned.push(m)
+      });
+      // player=k0->pal0, 5 fillers->pal 3..7, seventh=k6->pal0 (shared with player)
+      expect(out.stats.sceneBlobs[0].slice(22, 30)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]);
+      expect(warned.join(" ")).not.toMatch(/16-colour/); // plenty of room, no overflow
+
+      const palAs = out.assetsData["scene_spr_pal_0_data.as"];
+      const bytes = palAs
+        .split(/\r?\n/)
+        .filter(l => l.startsWith(".db "))
+        .flatMap(l => l.slice(4).split(",").map(x => parseInt(x.trim(), 10)));
+      const pal0 = bytes.slice(0, 32);
+      const toBGR555 = ([r, g, b]) =>
+        (((b >> 3) & 31) << 10) | (((g >> 3) & 31) << 5) | ((r >> 3) & 31);
+      const words = [];
+      for (let i = 0; i < pal0.length; i += 2) words.push(pal0[i] | (pal0[i + 1] << 8));
+      // both colours must be present in the merged palette - neither clobbered
+      expect(words).toContain(toBGR555(PLAYER_COLOUR));
+      expect(words).toContain(toBGR555(SEVENTH_COLOUR));
+
+      // and each sprite's own OBJ tile data must still point at its own
+      // colour, not the other's - decode slot 0 (player) and slot 6 (7th)'s
+      // first tile and check the actual colour index each resolves to
+      const spriteAs = out.assetsData["scene_spr_0_data.as"];
+      const sheetBytes = spriteAs
+        .split(/\r?\n/)
+        .filter(l => l.startsWith(".db "))
+        .flatMap(l => l.slice(4).split(",").map(x => parseInt(x.trim(), 10)));
+      const tileAt = tileIdx => sheetBytes.slice(tileIdx * 32, tileIdx * 32 + 32);
+      const decodeIdx = (tileBytes, x, y) => {
+        const bit = 7 - x;
+        const b0 = (tileBytes[y * 2] >> bit) & 1;
+        const b1 = (tileBytes[y * 2 + 1] >> bit) & 1;
+        const b2 = (tileBytes[16 + y * 2] >> bit) & 1;
+        const b3 = (tileBytes[16 + y * 2 + 1] >> bit) & 1;
+        return b0 | (b1 << 1) | (b2 << 2) | (b3 << 3);
+      };
+      // slot k's top-left OBJ tile is grid tile 2*k; a non-corner pixel (1,1)
+      // is the fill colour, not the forced-transparent corner
+      const playerIdx = decodeIdx(tileAt(2 * 0), 1, 1);
+      const seventhIdx = decodeIdx(tileAt(2 * 6), 1, 1);
+      expect(words[playerIdx]).toBe(toBGR555(PLAYER_COLOUR));
+      expect(words[seventhIdx]).toBe(toBGR555(SEVENTH_COLOUR));
+      expect(playerIdx).not.toBe(seventhIdx);
+    } finally {
+      fs.removeSync(dir);
+    }
   });
 });
 

@@ -224,6 +224,7 @@ const compileSnesData = async (
   // actor sprite slot draws its palette from this pool; a scene with more than
   // 6 distinct sprite sheets reuses palette 0 for the overflow.
   const OBJ_PAL_SIZE = 32;
+  const MAX_OBJ_COLOURS = OBJ_PAL_SIZE / 2; // 16
   const NUM_OBJ_PALS = 8;
   const ACTOR_OBJ_PAL_POOL = [0, 3, 4, 5, 6, 7];
   const objPalForSlot = k =>
@@ -232,6 +233,71 @@ const compileSnesData = async (
     const out = bytes.slice(0, OBJ_PAL_SIZE);
     while (out.length < OBJ_PAL_SIZE) out.push(0);
     return out;
+  };
+  const palBytesFor = colours => {
+    const words = snesgfx.paletteToBGR555(colours, MAX_OBJ_COLOURS);
+    words[0] = 0; // colour 0 is hardware-transparent for every OBJ sprite
+    return snesgfx.paletteBytes(words);
+  };
+
+  // A scene with more than ACTOR_OBJ_PAL_POOL.length (6) distinct sprite
+  // sheets forces two unrelated actors onto the same OBJ palette register
+  // (user-found: "npc001.png overwrites the palette shared with the
+  // player"). Writing the 2nd sprite's palette bytes over the 1st's would
+  // just clobber it outright (last write wins, same CGRAM bytes) - both
+  // sprites' OAM entries point at that one register, so the 1st sprite ends
+  // up drawn with the 2nd's colours instead of its own. Merge instead:
+  // reuse a colour the newcomer already shares with the claimant, otherwise
+  // append it to a free slot; only once the *combined* colour count of every
+  // sprite sharing that register exceeds 16 does an extra colour snap to
+  // the nearest already-placed one (same treatment as the plain per-sprite
+  // maxColors overflow in snesgfx.js), with a warning. Colour index 0 is
+  // skipped on both sides - it's hardware-transparent for any OBJ sprite
+  // regardless of what's stored there, never worth spending a real slot on.
+  const mergeSpriteIntoPalette = (claimedColours, conv, label, sceneName) => {
+    const remap = [0];
+    for (let i = 1; i < conv.colors.length; i++) {
+      const c = conv.colors[i];
+      let found = -1;
+      for (let j = 1; j < claimedColours.length; j++) {
+        const p = claimedColours[j];
+        if (p[0] === c[0] && p[1] === c[1] && p[2] === c[2]) {
+          found = j;
+          break;
+        }
+      }
+      if (found !== -1) {
+        remap.push(found);
+      } else if (claimedColours.length < MAX_OBJ_COLOURS) {
+        claimedColours.push(c);
+        remap.push(claimedColours.length - 1);
+      } else {
+        let best = 1;
+        let bestDist = Infinity;
+        for (let j = 1; j < claimedColours.length; j++) {
+          const p = claimedColours[j];
+          const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2;
+          if (d < bestDist) {
+            bestDist = d;
+            best = j;
+          }
+        }
+        remap.push(best);
+        warnings(
+          `Scene '${sceneName}': sprite sheet '${label}' shares an OBJ ` +
+            `palette with another sheet in this scene and their combined ` +
+            `colours are over the 16-colour limit - extra colours snap to ` +
+            `the nearest one already placed. Reduce the number of distinct ` +
+            `sprite sheets in this scene, or the colours in this sheet.`
+        );
+      }
+    }
+    return conv.tiles.map(tileBytes => {
+      const rows = snesgfx
+        .indicesFromTile(tileBytes)
+        .map(row => row.map(idx => remap[idx]));
+      return snesgfx.tileFromIndices(rows);
+    });
   };
 
   // Frame 0 (4 tiles) always goes in slot k's pose-A region. The rest depend on
@@ -253,6 +319,7 @@ const compileSnesData = async (
   // Build one scene's OBJ sheet (8 KB) + palette image (256 B) + per-slot
   // type/frames/palette arrays, starting from the fixed emote/placeholder sheet.
   const buildSceneSprites = sceneIndex => {
+    const sceneName = scenes[sceneIndex].name || `#${sceneIndex}`;
     const sheet = fixed.spriteTiles.slice(); // emotes (32-63) + placeholder (0)
     const palBytes = new Array(NUM_OBJ_PALS * OBJ_PAL_SIZE).fill(0);
     const writePal = (objPal, bytes) => {
@@ -288,13 +355,28 @@ const compileSnesData = async (
     const pals = [];
     for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
 
+    const objPalColours = {}; // objPal -> this scene's claimed colour list
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
       const conv = spriteConv[id];
-      placeTiles(k, conv.tiles.slice(0, 4));
-      placeFrames(k, conv.tiles, conv.spriteType);
+      const objPal = objPalForSlot(k);
+      let tiles = conv.tiles;
+      if (objPalColours[objPal]) {
+        const label = spriteById(id).filename || spriteById(id).name || id;
+        tiles = mergeSpriteIntoPalette(
+          objPalColours[objPal],
+          conv,
+          label,
+          sceneName
+        );
+      } else {
+        objPalColours[objPal] = conv.colors.slice(); // scene-local copy - conv
+        // is shared/cached across every scene that uses this sprite sheet
+      }
+      placeTiles(k, tiles.slice(0, 4));
+      placeFrames(k, tiles, conv.spriteType);
       types[k] = conv.spriteType;
       frames[k] = conv.frameCount;
-      writePal(objPalForSlot(k), conv.paletteBytes);
+      writePal(objPal, palBytesFor(objPalColours[objPal]));
     });
     sceneAvatarIds[sceneIndex].forEach((id, k) => {
       const conv = spriteConv[id];

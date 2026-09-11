@@ -367,6 +367,10 @@ const imageToSpriteData = async (filename, options = {}) => {
     tiles,
     tileBytes: [].concat(...tiles),
     paletteBytes: paletteBytes(pal),
+    colors, // raw 8-bit [r,g,b] list, same order as the palette - lets a
+    // caller merge two sprites forced onto the same OBJ palette register
+    // (compileSnesData.js's ACTOR_OBJ_PAL_POOL overflow) instead of one
+    // clobbering the other
     colorCount: colors.length,
     frameCount,
     spriteType,
