@@ -557,7 +557,20 @@ tests exist); `snesWebPlayer.test.js` still green.
   `win32-x64`, `linux-x64` and `darwin-x64` (native binaries per platform; the unix ones carry
   a forced exec bit in the index since `core.fileMode` is `false` here). `smconv.spc` (the
   platform-independent SPC700 driver blob) travels in every `tools/`. Only 64-bit hosts (no
-  `win32-ia32`). Decisions log + roadmap live in Claude memory (`snes-port-effort`).
+  `win32-ia32`). **`devkitsnes/{bin,tools}` is trimmed to just what's actually invoked** (user
+  audit + cleanup): `816-tcc`/`wla-65816`/`wlalink` (`bin/`) + `816-opt`/`smconv`+`smconv.spc`
+  (`tools/`) — matches exactly what `buildSnesRom.js` and `compileSnesMusic.js` spawn, plus
+  `snesromusage` (kept as a manual ROM/RAM profiling tool, see `PERF.md`, not build-automated).
+  Removed: `wla-spc700` (this project never assembles its own SPC700 code - it uses the
+  prebuilt `smconv.spc` driver), `gfx2snes`/`gfx4snes`/`tmx2snes`/`bin2txt`/`constify`/
+  `snestools`/`fnt4snes`/`mp44snes` (PVSnesLib's own PNG/BMP/TMX/font/video asset pipeline -
+  this project converts every asset itself in JS, `snes_rules` never has a `.bmp`/`.tmx`/`.wav`
+  to feed them), `snesbrr` (only ever run ad-hoc by `tools/gen-sfx.js` to regenerate the
+  already-committed `.brr` sound effects, never part of an actual build). Confirmed unused by
+  grepping every JS build path (`buildSnesRom.js`, `compileSnesMusic.js`) and every `snes_rules`
+  rule for each tool name; the full suite (429 tests, including the toolchain-gated end-to-end
+  ROM builds) stays green with them gone. Decisions log + roadmap live in Claude memory
+  (`snes-port-effort`).
 - **`appData/snes-js-emulator/`** — M10 (Play button / web export), the SNES counterpart of
   `appData/js-emulator` (GameBoy-Online, the GB target's bundled JS emulator). Vendors
   [angelo-wf/SnesJs](https://github.com/angelo-wf/SnesJs) (MIT, pure JS, LoROM-only — matches
