@@ -50,7 +50,7 @@ export default async projectPath => {
       };
       dialog.showMessageBox(dialogOptions, (buttonIndex, checkboxChecked) => {
         if (buttonIndex === 0) {
-          shell.openExternal("https://www.gbstudio.dev/download/");
+          shell.openExternal("https://github.com/alekmaul/gbsnes-studio/releases");
           return reject();
         }
         if (buttonIndex === 2) {
