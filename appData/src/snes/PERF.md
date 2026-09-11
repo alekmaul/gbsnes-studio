@@ -118,6 +118,27 @@ it tips over one frame.
   and links; a Mesen run of the retargeted sample (spawned directly in Outside) confirmed the
   player still walks and collides normally in all four directions and the scene's one `randomWalk`
   actor still moves over time (its position changed between two WRAM snapshots ~400 frames apart).
+- **`OVERLAY_MOVE_TO` slide (user-found: "le slide... est très lent et pas très joli").**
+  `ui_update_overlay()` (`ui.c`) advances the BG3 curtain one tile row per tick but was doing so by
+  calling `ui_overlay_fill_from()` - rewriting **all 32 rows** of the BG3 tilemap (1024 WRAM writes
+  in 816-tcc-generated C) and forcing a full 2 KB VRAM DMA on *every single tick*, even though at
+  most one row's fill state actually changes per step. Replaced with `ui_overlay_step(old_row,
+  new_row)`: touches only the row(s) that actually changed (almost always exactly 1, up to ~5 at
+  the one hidden/visible boundary crossing) and `UIFlush()` DMAs only that narrow range. No
+  behaviour/timing change (same tick cadence, same final content - see below), ~32× fewer WRAM
+  writes on a typical tick. Verified in Mesen (WRAM + real VRAM, not just the write-side buffer):
+  every row settles to the intended content one frame after its transition, including the
+  hidden-boundary crossing this exists to get right (rows 28-31 all confirmed blank in VRAM, not
+  just WRAM - the original "stray dark line" bug this design predates was not reintroduced). Also
+  *directly observed* the CPU-budget tightness this file already documents: a couple of ticks were
+  caught by the Lua script mid-write (columns 0-8 of a row already rewritten, 9-31 still holding
+  the old value, settled correctly by the very next frame) - i.e. even a ~32-write tick can
+  occasionally straddle a frame boundary on this build, consistent with "a typical scene already
+  spends ~75% of its budget" above. Doesn't fix the coarseness (still 8px/tick, not a smooth
+  pixel-by-pixel wipe like the GB engine's hardware window-Y scroll) - that would need driving the
+  curtain via a real BG3 vscroll register, deferred (BG3 is shared with the dialogue/menu box,
+  which would need to compensate its own draw position to stay fixed on screen while the curtain
+  scrolls - a bigger, riskier change than this mechanical one).
 
 ### Not done — future work
 

@@ -124,6 +124,11 @@ static u8 ui_ov_target;
 static u8 ui_ov_speed;
 static u8 ui_ov_tick;
 static u8 ui_ov_wait;    /* OVERLAY_MOVE_TO blocks the script until it arrives */
+/* ui_overlay_step()'s narrow DMA request for UIFlush() - see its own comment.
+ * [ui_ov_step_row0, ui_ov_step_row1) into ui_map, VRAM-row-aligned. */
+static u8 ui_ov_step_pending;
+static u8 ui_ov_step_row0;
+static u8 ui_ov_step_row1;
 
 #define AVATAR_OID ((u16)(MAX_ACTORS + 1) << 2)
 
@@ -219,6 +224,7 @@ void UIInit(void)
     ui_ov_speed = 0;
     ui_ov_tick = 0;
     ui_ov_wait = 0;
+    ui_ov_step_pending = 0;
     box_row0 = BOX_ROW0;
     box_rows = BOX_ROWS;
 
@@ -600,6 +606,60 @@ void UIOverlayMoveTo(u8 top_row, u8 speed)
     ui_ov_wait = 1;
 }
 
+/* Incremental counterpart to ui_overlay_fill_from(), for the per-tick move in
+ * ui_update_overlay() below. old_row/new_row are always exactly one row apart
+ * (the slide steps one row per tick), so at most a handful of rows actually
+ * change state - rewriting all 32 rows of ui_map and DMAing the whole 2 KB
+ * map on every single tick (what ui_overlay_fill_from() does, fine for its
+ * own one-shot callers UIOverlayShow/UIOverlayHide) was pure waste on a
+ * slide that can run dozens of ticks: most of that cost was the 816-tcc
+ * write loop, not the DMA itself (user-found: "le slide... est très lent").
+ * Still honours ui_overlay_fill_from's UI_SCREEN_ROWS "parked = nothing
+ * filled" rule across the hidden/visible boundary - see its own comment. */
+static void ui_overlay_step(u8 old_row, u8 new_row)
+{
+    u8 was_hidden = (u8)(old_row >= UI_SCREEN_ROWS);
+    u8 now_hidden = (u8)(new_row >= UI_SCREEN_ROWS);
+    u8 r0, r1, r, c;
+
+    if (was_hidden && now_hidden)
+    {
+        return; /* fully retracted before and after - nothing visible moved */
+    }
+    if (was_hidden != now_hidden)
+    {
+        /* crossing the boundary: still bounded to a handful of rows, since
+         * old_row and new_row are exactly one apart. */
+        r0 = was_hidden ? new_row : old_row;
+        r1 = 32;
+    }
+    else if (new_row > old_row)
+    {
+        r0 = old_row;
+        r1 = (u8)(old_row + 1);
+    }
+    else
+    {
+        r0 = new_row;
+        r1 = (u8)(new_row + 1);
+    }
+
+    for (r = r0; r < r1; r++)
+    {
+        u16 e = UI_BLANK;
+        if (!now_hidden && r >= new_row) e = UI_ENTRY(UI_FILL_TILE);
+        for (c = 0; c < 32; c++)
+        {
+            ui_map[r * 32 + c] = e;
+        }
+    }
+
+    ui_ov_step_row0 = r0;
+    ui_ov_step_row1 = r1;
+    ui_ov_step_pending = 1;
+    ui_dirty = 1;
+}
+
 void UIOverlayHide(void)
 {
     u16 i;
@@ -615,6 +675,7 @@ void UIOverlayHide(void)
 
 static void ui_update_overlay(void)
 {
+    u8 old_row;
     if (!ui_overlay)
     {
         return;
@@ -637,9 +698,10 @@ static void ui_update_overlay(void)
         }
         ui_ov_tick = 0;
     }
+    old_row = ui_ov_row;
     if (ui_ov_row < ui_ov_target) ui_ov_row++;
     else ui_ov_row--;
-    ui_overlay_fill_from(ui_ov_row);
+    ui_overlay_step(old_row, ui_ov_row);
 }
 
 /* ---- per-frame ---------------------------------------------------------- */
@@ -819,15 +881,25 @@ void UIFlush(void)
     if (ui_flush_full)
     {
         ui_flush_full = 0;
+        ui_ov_step_pending = 0; /* superseded by the full DMA below */
         dmaCopyVram((u8 *)ui_map, UI_MAP_VRAM, 32 * 32 * 2);
+        return;
     }
-    else
+    if (ui_ov_step_pending)
     {
-        /* BOX_ROW0..BOX_MAP_ROWS: the box can be drawn anywhere in there while
-         * sliding, not just the BOX_ROWS visible rows. */
-        dmaCopyVram((u8 *)&ui_map[BOX_ROW0 * 32], UI_MAP_VRAM + BOX_ROW0 * 32,
-                    (BOX_MAP_ROWS - BOX_ROW0) * 32 * 2);
+        /* ui_overlay_step()'s narrow request - just the row range it touched,
+         * which is almost always a single row (see its own comment). */
+        ui_ov_step_pending = 0;
+        dmaCopyVram((u8 *)&ui_map[ui_ov_step_row0 * 32],
+                    UI_MAP_VRAM + ui_ov_step_row0 * 32,
+                    (u16)(ui_ov_step_row1 - ui_ov_step_row0) * 32 * 2);
     }
+    /* BOX_ROW0..BOX_MAP_ROWS: the box can be drawn anywhere in there while
+     * sliding, not just the BOX_ROWS visible rows. Always covered here too
+     * (one cheap DMA call) so a box change on the same tick as the overlay
+     * step above is never missed. */
+    dmaCopyVram((u8 *)&ui_map[BOX_ROW0 * 32], UI_MAP_VRAM + BOX_ROW0 * 32,
+                (BOX_MAP_ROWS - BOX_ROW0) * 32 * 2);
 }
 
 u8 UIIsClosed(void)

@@ -32,6 +32,10 @@ Changes since the `v1.1.0` tag was cut.
   once per actor on that one frame). Actor AI now updates half the actors per tick instead of
   all of them at once (matching how the Game Boy engine already does it), spreading that cost
   out instead of concentrating it. No gameplay/collision behaviour change.
+- SNES: **the `Overlay: Move To` slide (used by the sample's logo intro) was needlessly slow** —
+  every 8-pixel step of the curtain rewrote the *entire* dialogue-box tilemap and forced a full
+  VRAM refresh, instead of touching just the one row that actually changed. Same visual result,
+  same speed setting, far less CPU work per step.
 
 ## [1.1.0] - 2026-09-09
 

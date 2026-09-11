@@ -724,6 +724,35 @@ by target, `undefined` target still falls back to gb).
   compiles/links, and a Mesen run of the retargeted sample (spawned directly in Outside)
   confirmed normal 4-direction player movement/collision and that the scene's `randomWalk`
   actor still moves over time. Not yet re-profiled with fps numbers - see PERF.md.
+  **`OVERLAY_MOVE_TO` slide was needlessly slow and coarse (user-found: "le slide... est très
+  lent et pas très joli", the sample's Logo intro).** `ui_update_overlay()` (`ui.c`) advances the
+  BG3 curtain one tile row per tick, but did so by calling `ui_overlay_fill_from()` - rewriting
+  **all 32 rows** of the dialogue-box tilemap (1024 WRAM writes in 816-tcc-generated C) and
+  forcing a full 2 KB VRAM DMA on every tick, even though at most one row's fill state actually
+  changes per step. Root cause is architectural, not just this one call site: unlike the Game Boy
+  engine, which slides its equivalent window layer by writing a hardware Y-scroll register per
+  pixel (`UI_b.c` `UIUpdate_b()`, `WY_REG = win_pos_y`, effectively free), this BG3 layer also
+  hosts the dialogue/menu box at a fixed screen position, so a real hardware vscroll wasn't used
+  here - the curtain is redrawn by software instead, at 8px/tick coarseness. Applied the
+  low-risk fix: new `ui_overlay_step(old_row, new_row)` touches only the row(s) that actually
+  changed (almost always exactly 1, up to ~5 rows at the one hidden/visible boundary crossing -
+  see `ui_overlay_fill_from`'s own `UI_SCREEN_ROWS` comment), and `UIFlush()` DMAs only that
+  narrow range instead of the whole map; the box's own existing fixed-range DMA
+  (`BOX_ROW0..BOX_MAP_ROWS`) still always runs too, so a same-tick box change is never missed.
+  No behaviour/timing change - same tick cadence, same final content. A real hardware BG3 vscroll
+  (matching GB's smooth per-pixel slide) was proposed as a further step and declined for now: it
+  would need the box's own draw position to compensate for the shared layer's scroll offset so it
+  stays visually fixed while the curtain moves - a bigger, riskier change than this mechanical
+  one. Verified in Mesen, reading both WRAM (`ui_map`) and the *actual* VRAM BG3 tilemap: every
+  row settles to the intended content one frame after its transition, including the
+  hidden-boundary crossing (rows 28-31 confirmed blank in real VRAM, not just the WRAM buffer -
+  the original "stray dark line" bug a related fix predates was not reintroduced). Also directly
+  observed, mid-verification, the CPU-budget tightness `PERF.md` already documents: a couple of
+  ticks were caught by the Lua script mid-write (some columns of a row already rewritten, the
+  rest still holding the old value, settled correctly the very next frame) - even a ~32-write
+  tick can occasionally straddle a frame boundary on this build. Test: none (C engine change, no
+  JS surface) - the full jest suite plus the toolchain-gated `sneshtml` end-to-end build (real
+  816-tcc/wla-65816/wlalink) all stayed green. See `PERF.md`'s "Done" section for the full writeup.
 - **`appData/templates/snesblank`** (M11) — a "Blank Project (SNES)" option in the New Project
   screen (`Splash.jsx`), alongside the existing `blank`/`gbhtml` (both GB) templates. Reuses the
   `blank` template's assets as-is (a PNG background/sprite sheet's pixels are target-agnostic;
