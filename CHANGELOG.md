@@ -17,9 +17,14 @@ Changes since the `v1.1.0` tag was cut.
   unchanged.
 - The "Download" buttons in the update-available / project-from-a-newer-version dialogs now
   point at this fork's own GitHub releases instead of the original GB Studio's download page.
-- SNES: **emote bubbles (`Actor: Emote`) rendered in the wrong colours** — a colour-scaling bug
-  in the built-in emote graphics turned almost every colour into a different, wrong one (e.g. a
-  pale cream became dark teal). Fixed; no change to the emote artwork itself.
+- SNES: **emote bubbles (`Actor: Emote`) rendered in the wrong colours**, two stacked bugs.
+  First, a colour-scaling bug turned almost every colour into a different, wrong one (e.g. a
+  pale cream became dark teal). Second — the actual cause of the colours still not matching a
+  project's own `assets/ui/emotes.png` after that fix — **emotes.png was never read as a
+  project asset at all**: unlike the font/frame/cursor, it was always loaded from a fixed
+  built-in copy, so editing a project's own emote artwork had no effect on the compiled game.
+  `emotes.png` is now backfilled into and read from `assets/ui/emotes.png` like the rest of the
+  UI graphics (matching the Game Boy target, which already treated it as a project asset).
 
 ### Changed
 - SNES: **performance** — a scene with several simultaneously-moving actors could spike CPU

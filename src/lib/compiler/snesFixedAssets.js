@@ -38,7 +38,11 @@ const TOOLS = path.join(
   "snes",
   "tools"
 );
-const EMOTES_PNG = path.join(TOOLS, "emotes.png");
+// Fallback emotes.png for callers that don't pass a project uiAssetDir (the
+// dummy-asset generator, gen-dummy-gfx.js). A real project's own
+// assets/ui/emotes.png (same file the Game Boy target reads, see
+// compileData.js's ensureProjectAsset) takes priority - see buildSpriteSheet().
+const DEFAULT_EMOTES_PNG = path.join(TOOLS, "emotes.png");
 
 // The BG3 UI graphics come from a project's assets/ui/{ascii,frame,cursor}.png
 // (same files the Game Boy target uses). When no project dir is given - the
@@ -315,7 +319,7 @@ const SPR = [
   "0000110000110000"
 ];
 
-const buildSpriteSheet = async () => {
+const buildSpriteSheet = async emotesPath => {
   const sheet = new Array(SHEET_TILES * 32).fill(0); // 256 tiles, 8 KB. The
   // actor direction regions (tiles 96-255) stay zero here - populated per-
   // project by compileSnesData.js's placeTiles(), same as the avatar region.
@@ -333,7 +337,7 @@ const buildSpriteSheet = async () => {
   }
 
   // emotes.png: 128x16 = 8 emotes of 16x16, first-seen palette (<=16 colours)
-  const pixels = await getPixels(EMOTES_PNG);
+  const pixels = await getPixels(emotesPath);
   const colors = [];
   const seen = new Map();
   const key = (r, g, b, list) => {
@@ -364,7 +368,15 @@ const buildSpriteSheet = async () => {
 };
 
 const snesFixedAssets = async ({ uiAssetDir } = {}) => {
-  const { sheet, emoteColors } = await buildSpriteSheet();
+  // emotes.png is a project asset (assets/ui/emotes.png), same file and same
+  // directory the ascii/frame/cursor UI graphics come from below - not the
+  // fixed appData/src/snes/tools/emotes.png the engine used to always read
+  // regardless of the project. User-found: a project's own emotes.png edits
+  // had no effect on the compiled palette because that file was never read.
+  const emotesPath = uiAssetDir
+    ? path.join(uiAssetDir, "emotes.png")
+    : DEFAULT_EMOTES_PNG;
+  const { sheet, emoteColors } = await buildSpriteSheet(emotesPath);
   const ui = await buildUiGfx(uiAssetDir || DEFAULT_UI_DIR);
   return {
     uiFont: ui.font,

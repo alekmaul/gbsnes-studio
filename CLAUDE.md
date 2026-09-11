@@ -354,6 +354,21 @@ by target, `undefined` target still falls back to gb).
   before the `palBytes()` call; `SPR_PALETTE`'s own (already-correct) path is untouched. Test:
   `snesFixedAssets.test.js` decodes the real `emotes.png`'s palette and checks its actual
   colours survive - fails against the pre-fix code with exactly the garbled values above.
+  **`emotes.png` was never actually a project asset (same bug report, user's follow-up: "the
+  colour still doesn't match `assets/ui/emotes.png` in `sneshtml`").** The scaling fix above was
+  real but incomplete - `snesFixedAssets.js`'s `buildSpriteSheet()` always loaded emote graphics
+  from a fixed `appData/src/snes/tools/emotes.png`, never from the project's own
+  `assets/ui/emotes.png`, so editing that project file (what the user was actually doing) had no
+  effect on the compiled game at all. Unlike `ascii.png`/`frame.png`/`cursor.png` (already
+  project assets, read from `uiAssetDir`) and unlike the Game Boy target - `compileData.js`
+  reads `assets/ui/emotes.png` there via `ensureProjectAsset` - the SNES path had no equivalent.
+  Fixed: `compileSnesData.js`'s `UI_FILES` backfill list now includes `emotes.png` (so an older
+  project without one gets the stock sample's copy, same as the other three), and
+  `snesFixedAssets({ uiAssetDir })` derives the emotes path as `uiAssetDir/emotes.png`, falling
+  back to the old fixed tools copy only when no `uiAssetDir` is given (`gen-dummy-gfx.js`'s
+  committed dummy data stays byte-identical). Test: `snesFixedAssets.test.js` builds a synthetic
+  project `assets/ui/emotes.png` with a colour absent from the tools copy and confirms it - not
+  the tools copy's colours - ends up in the compiled palette.
   **Per-scene OBJ sheets (user-found: a 16-sheet project showed the player sprite for
   everything past the 8th).** The OBJ sheet used to be **one project-wide** 8 KB blob loaded
   at boot - 8 slots for the whole game. Now `compileSnesData.js` builds one 8 KB sheet **per

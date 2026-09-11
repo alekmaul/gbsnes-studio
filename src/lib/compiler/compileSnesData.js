@@ -37,10 +37,12 @@ import migrateProject from "../project/migrateProject";
 
 const EVENT_END = "EVENT_END";
 
-// The BG3 UI graphics (ascii font, nine-slice frame, menu cursor) are project
-// assets, same as on Game Boy. Backfill any that are missing from the stock
-// sample so an older project still builds, and return the assets/ui dir.
-const UI_FILES = ["ascii.png", "frame.png", "cursor.png"];
+// The BG3 UI graphics (ascii font, nine-slice frame, menu cursor) plus the
+// emote bubbles are project assets, same as on Game Boy (compileData.js reads
+// assets/ui/emotes.png via ensureProjectAsset there too). Backfill any that
+// are missing from the stock sample so an older project still builds, and
+// return the assets/ui dir.
+const UI_FILES = ["ascii.png", "frame.png", "cursor.png", "emotes.png"];
 const ensureSnesUiAssets = async (projectRoot, warnings) => {
   const uiDir = Path.join(projectRoot, "assets", "ui");
   for (const name of UI_FILES) {
@@ -199,9 +201,10 @@ const compileSnesData = async (
   const sceneAvatars = sceneAvatarIds.map(ids => ids.map(id => ({ id })));
   const maxAvatars = Math.max(0, ...sceneAvatarIds.map(a => a.length));
 
-  // BG3 UI graphics (font + nine-slice frame + menu cursor) come from the
-  // project's own assets/ui/*.png, same as the Game Boy target. Missing files
-  // are backfilled from the stock sample by ensureSnesUiAssets().
+  // BG3 UI graphics (font + nine-slice frame + menu cursor) and the emote
+  // bubbles come from the project's own assets/ui/*.png, same as the Game Boy
+  // target. Missing files are backfilled from the stock sample by
+  // ensureSnesUiAssets().
   const uiAssetDir = await ensureSnesUiAssets(projectRoot, warnings);
   const fixed = await snesFixedAssets({ uiAssetDir });
 

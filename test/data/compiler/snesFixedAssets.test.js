@@ -94,6 +94,13 @@ describe("snesFixedAssets - BG3 UI graphics", () => {
       writePng(Path.join(dir, "frame.png"), 2, 2, [LIGHT, LIGHT, LIGHT, STRAY]);
       // 2x2: all dark
       writePng(Path.join(dir, "cursor.png"), 2, 2, [DARK, DARK, DARK, DARK]);
+      // emotes.png is read from the same uiAssetDir now (see the "emote
+      // bubble palette" describe block below) - unused by this test, just
+      // needs to exist.
+      fs.copySync(
+        Path.join(UI_DIR, "emotes.png"),
+        Path.join(dir, "emotes.png")
+      );
 
       const a = await snesFixedAssets({ uiAssetDir: dir });
       const words = [];
@@ -136,5 +143,38 @@ describe("snesFixedAssets - emote bubble palette", () => {
     expect(rgb).toContainEqual([8, 24, 32]);
     expect(rgb).toContainEqual([224, 248, 208]);
     expect(rgb).toContainEqual([136, 192, 112]);
+  });
+
+  // Regression: emotes.png must be a project asset (assets/ui/emotes.png),
+  // exactly like ascii/frame/cursor - not the fixed appData/src/snes/tools/
+  // emotes.png the engine used to always read regardless of the project.
+  // User-found: editing a project's own emotes.png (e.g. the sneshtml
+  // template's assets/ui/emotes.png) had no effect on the compiled palette,
+  // because that file was never read - only the unrelated tools copy was.
+  test("a project's own assets/ui/emotes.png is used, not the fixed tools copy", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-emotes-proj-"));
+    try {
+      // ascii/frame/cursor still need to exist for buildUiGfx - reuse the
+      // stock sample's, only emotes.png is the project-specific fixture.
+      fs.copySync(UI_DIR, dir);
+      const MARKER = [101, 255, 0]; // "transparent" marker, forced to black
+      const CUSTOM = [100, 150, 200]; // not one of tools/emotes.png's colours
+      const pixels = [MARKER]; // first-seen colour becomes palette index 0
+      for (let i = 1; i < 128 * 16; i++) pixels.push(CUSTOM);
+      writePng(Path.join(dir, "emotes.png"), 128, 16, pixels);
+
+      const a = await snesFixedAssets({ uiAssetDir: dir });
+      const words = [];
+      for (let i = 0; i < a.emotePaletteBytes.length; i += 2) {
+        words.push(a.emotePaletteBytes[i] | (a.emotePaletteBytes[i + 1] << 8));
+      }
+      const rgb = words.map(wordToRgb8);
+      expect(rgb).toContainEqual([96, 144, 200]); // CUSTOM, 5-bit rounded
+      // none of the fixed tools/emotes.png's real colours should show up
+      expect(rgb).not.toContainEqual([8, 24, 32]);
+      expect(rgb).not.toContainEqual([136, 192, 112]);
+    } finally {
+      fs.removeSync(dir);
+    }
   });
 });
