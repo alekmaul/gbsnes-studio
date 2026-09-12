@@ -540,15 +540,24 @@ by target, `undefined` target still falls back to gb).
   `smconv.exe` straight from a real packaged `app.asar` reproduces the exact ENOENT (`status:
   null`, the error string); spawning the identical file after extracting it to a real temp path
   succeeds (`status: 1, stdout` - a normal no-args usage exit, not a launch failure).
-  **Surfaced, not fixed: the Game Boy target likely has the same class of bug, for a different
-  reason.** `makeBuild.js`'s own toolchain setup tries `fs.ensureSymlink(buildToolsPath,
-  tmpBuildToolsPath)` first, falling back to a real `copy()` only if that throws - but a
-  symlink/junction *pointing into* `app.asar` is created successfully without error (confirmed:
-  `fs.symlinkSync` into an asar-internal target returns normally), so the fallback never
-  triggers, and the resulting symlink is just as unusable as spawning the `app.asar` path
-  directly (confirmed: `fs.existsSync`/spawning through the symlink both fail). This was found
-  while investigating the SNES bug above, not reported by the user for GB, and the Game Boy path
-  is the frozen reference here - flagged rather than fixed unprompted.
+  **A same-shaped worry about the Game Boy target, raised and then retracted.** While
+  investigating the SNES bug above it looked like `makeBuild.js`'s toolchain setup might have the
+  identical problem: it tries `fs.ensureSymlink(buildToolsPath, tmpBuildToolsPath)` first, falling
+  back to a real `copy()` only if that throws - and a symlink/junction *pointing into* `app.asar`
+  really is created without error (confirmed with `fs.symlinkSync` directly), so naively that
+  fallback looks like it'd never trigger. But the user confirmed a real packaged GB build
+  actually works, which meant the symlink branch must not be the one really running. Re-reading
+  the exact code: it's `fs.unlink(tmpBuildToolsPath)` **immediately before** `ensureSymlink`,
+  both inside the same `try`. `fs.unlink` on a path that doesn't exist yet (first build - nothing
+  has been copied there yet) rejects with `ENOENT`; on a path that already exists as a real
+  directory (every later build, since a previous run's `copy()` put a real directory there, not
+  a symlink) it rejects too (`unlink` is for files, not directories). Either way the `catch` fires
+  *before* `ensureSymlink` ever runs, landing on `copy()` - which, like SNES's own `copy()` helper,
+  only uses `readdir`/`lstat`/`createReadStream` (all asar-transparent), so it genuinely extracts
+  the toolchain to a real directory every time. The symlink attempt is effectively unreachable in
+  practice, not resilient - but the practical result is the same: GB was never broken, and this
+  needed no fix. Correcting the record since an earlier, less faithful probe (skipping the
+  preceding failed `unlink`) wrongly suggested otherwise.
 - **`appData/src/snes/`** — the engine tree. Ported so far: `src/game.c` (M3 — Mode 1 BG,
   OAM player, d-pad, camera scroll; M5 — camera pan/lock/shake), `src/script_runner.c` +
   `src/script_cmds.c` (M4 — the bytecode VM), `src/scene.c` (M4b — scenes from `assets.c`
@@ -886,10 +895,11 @@ genuinely shipping inside `app.asar`. See the `fs.pathExists`/asar bullet furthe
 real tool invocation (`smconv`, building the soundbank) still failed - "spawn ...\smconv.exe
 ENOENT" - because nothing inside `app.asar` is a real file a process can be spawned from.
 `resolvePvsHome()` now extracts the toolchain to a real temp folder before any tool runs, reused
-across builds. See the same `buildSnesRom.js` bullet (now extended) for the full writeup,
-including a follow-up finding about the Game Boy target's *own* packaged-build toolchain lookup
-that was surfaced while investigating this - not fixed here, flagged to the user, since the GB
-path is the frozen reference and this wasn't an explicit ask. `package.json` is **1.1.3**.
+across builds. See the same `buildSnesRom.js` bullet (now extended) for the full writeup -
+including an initial worry that the Game Boy target had the same bug, raised while investigating
+this and then retracted once the user confirmed a real packaged GB build actually works (the
+code path that looked suspicious turns out to never really run - see the bullet for why).
+`package.json` is **1.1.3**.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
