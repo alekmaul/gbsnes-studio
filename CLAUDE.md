@@ -497,6 +497,28 @@ by target, `undefined` target still falls back to gb).
   `snes_rules` edit) and its `filterLog` also strips ANSI colour codes and drops the pure
   banner noise (`816opt: (x) version …`, the wla/wlalink box rule lines) so "Build & Run" /
   "Export ROM" output stays legible — `spawnTool` skips any line `filterLog` empties.
+  **"Build ROM" failed with "PVSnesLib toolchain not found" in a real packaged/installed build**
+  (user-found right after downloading the `v1.1.0` Windows release - the toolchain genuinely
+  ships inside `app.asar`, so the error was flatly wrong). Root cause: `resolvePvsHome()` (and
+  three other checks - two more in this file, one in `compileSnesMusic.js`) used fs-extra's
+  `fs.pathExists()`, which is built on Node's `fs.access`/`fs.accessSync` - and those two
+  functions are specifically **not** part of the set Electron's `asar` support makes transparent
+  for paths inside `app.asar` (`fs.stat`/`fs.lstat`/`fs.readdir`/`fs.readFile`/
+  `fs.createReadStream` are). So `pathExists()` unconditionally reports "doesn't exist" for
+  anything packed inside the app, regardless of whether it's actually there - a 100%-reproducible
+  failure in every packaged build, not an intermittent CI/packaging issue. Confirmed directly: a
+  small probe run inside a real (non-dev) Electron process against a real packaged `app.asar`
+  showed `fs.existsSync`/`fs.lstat` succeeding on the toolchain path while `fs.access` failed with
+  the exact "not found" error the user saw. The Game Boy target was never affected - its own
+  toolchain lookup (`ensureBuildTools.js` → the shared `fsCopy.js` `copy()` helper) only ever uses
+  `fs.lstat`/`fs.readdir`/`fs.createReadStream`, never `fs.access`, so it already worked from
+  inside `app.asar` by what turned out to be a lucky implementation detail, not a deliberate
+  choice. Fixed by adding `pathExists()` to `fsCopy.js` itself (`fs.lstat` wrapped in try/catch -
+  the same pattern `copyFile()` in that file already uses) and switching all 4 call sites to it;
+  `fs.pathExists`/`fs.access` no longer appear anywhere in `src/`. Test: `test/helpers/
+  fsCopy.test.js` (plain-filesystem true/false correctness only - jest runs under plain Node, so
+  the asar-transparency difference itself isn't reproducible there; that part was verified against
+  a real packaged build instead, not in the test suite).
 - **`appData/src/snes/`** — the engine tree. Ported so far: `src/game.c` (M3 — Mode 1 BG,
   OAM player, d-pad, camera scroll; M5 — camera pan/lock/shake), `src/script_runner.c` +
   `src/script_cmds.c` (M4 — the bytecode VM), `src/scene.c` (M4b — scenes from `assets.c`
@@ -783,7 +805,7 @@ by target, `undefined` target still falls back to gb).
   so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
   committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
-### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.1)
+### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.2)
 
 The port is **functional end to end**: create an SNES project in the app → script it (dialogue,
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
@@ -825,6 +847,11 @@ the font/frame/cursor already worked); and the "Download" button in the update d
 the itch.io page (`https://portabledev.itch.io/gbsnes-studio`) instead of a GitHub releases page
 (the update *check* itself still queries GitHub for the version number). `package.json` is
 **1.1.1**.
+**1.1.2 (user-driven, critical packaging fix):** a *packaged, installed* build's "Build ROM" for
+SNES failed outright with "PVSnesLib toolchain not found" - the `v1.1.0` Windows release, as
+downloaded and run by the user, could not build an SNES ROM at all, despite the toolchain
+genuinely shipping inside `app.asar`. See the `fs.pathExists`/asar bullet further down
+(`buildSnesRom.js`) for the root cause and fix - `package.json` is **1.1.2**.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
@@ -879,7 +906,7 @@ single C `.rodata` section can't cross a 32 KB bank).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
-Not code: `v1.1.0` and `v1.1.1` are both tagged and released; a full demo game (art/music/level
+Not code: `v1.1.0`, `v1.1.1` and `v1.1.2` are all tagged and released; a full demo game (art/music/level
 design), and the roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are
 data-driven; it would reduce to a compile-time warning if a background exceeds 15 colours per
 palette region).

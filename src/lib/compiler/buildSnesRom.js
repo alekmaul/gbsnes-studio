@@ -3,7 +3,7 @@ import fs from "fs-extra";
 import os from "os";
 import Path from "path";
 import { buildToolsRoot } from "../../consts";
-import copy from "../helpers/fsCopy";
+import copy, { pathExists } from "../helpers/fsCopy";
 
 /*
  * SNES build orchestration (PVSnesLib).
@@ -76,7 +76,7 @@ const resolvePvsHome = async ({ progress }) => {
     `${process.platform}-${process.arch}`,
     "pvsneslib"
   );
-  if (!(await fs.pathExists(vendored))) {
+  if (!(await pathExists(vendored))) {
     throw new Error(
       `PVSnesLib toolchain not found for ${process.platform}-${process.arch} ` +
         `(expected at ${vendored}). Vendor it under buildTools/, or build the ` +
@@ -191,7 +191,7 @@ const spawnTool = (label, cmd, args, cwd, { progress, warnings }) =>
 // dir is on a network/shared mount. Give it a beat before the next step reads it.
 const waitForFile = async (file, tries = 40) => {
   for (let i = 0; i < tries; i++) {
-    if (await fs.pathExists(file)) return;
+    if (await pathExists(file)) return;
     await new Promise(r => setTimeout(r, 25));
   }
   throw new Error(`Expected build output was not produced: ${file}`);
@@ -337,7 +337,7 @@ const buildSnesRom = async ({
 
   // Normalise the symbol file for Mesen (snes_rules strips the ':' too).
   const symSrc = Path.join(buildRoot, "game.sym");
-  if (await fs.pathExists(symSrc)) {
+  if (await pathExists(symSrc)) {
     const sym = await fs.readFile(symSrc, "utf8");
     await fs.writeFile(symOut, sym.replace(/:/g, ""), "utf8");
     await fs.remove(symSrc);

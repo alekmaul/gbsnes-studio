@@ -17,6 +17,7 @@ import childProcess from "child_process";
 import fs from "fs-extra";
 import Path from "path";
 import { assetFilename } from "../helpers/gbstudio";
+import { pathExists } from "../helpers/fsCopy";
 import { resolvePvsHome } from "./buildSnesRom";
 import { modToIt } from "./mod2it";
 
@@ -106,7 +107,7 @@ const compileSnesMusic = async ({
   await fs.ensureDir(Path.join(buildRoot, "src", "res"));
 
   const effectsIt = Path.join(buildRoot, "res", "effectssfx.it");
-  if (!(await fs.pathExists(effectsIt))) {
+  if (!(await pathExists(effectsIt))) {
     warnings("compileSnesMusic: res/effectssfx.it missing from the engine tree");
     return;
   }

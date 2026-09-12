@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.2] - 2026-09-12
+
+### Fixed
+- SNES: **"Build ROM" in a packaged/installed build of the app failed with "PVSnesLib toolchain
+  not found"**, even though the toolchain genuinely ships inside the app — user-found right
+  after downloading the `v1.1.0` Windows release. Root cause: the toolchain-lookup code used
+  `fs.pathExists()` (built on Node's `fs.access`), and `fs.access`/`fs.accessSync` are NOT among
+  the filesystem functions Electron's `asar` support makes transparent for files packed inside
+  `app.asar` (`stat`/`lstat`/`readdir`/`readFile`/`createReadStream` are) — so that check always
+  reported "not found" for anything inside the packaged app, regardless of whether it was really
+  there. Confirmed directly against a real packaged build's `app.asar`: `fs.existsSync`/
+  `fs.lstat` on the exact toolchain path succeeded while `fs.access` failed with the same "not
+  found" error the user saw. Fixed by switching every such check (toolchain lookup, two more
+  build-output checks, and one in the music compiler) to an `fs.lstat`-based helper, which is
+  already how this codebase's own file-copy helper safely reads from inside `app.asar`. The Game
+  Boy target was not affected (it never used the broken check).
+
 ## [1.1.1] - 2026-09-12
 
 ### Fixed

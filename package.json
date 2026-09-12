@@ -1,7 +1,7 @@
 {
   "name": "gbsnes-studio",
   "productName": "GBSNES Studio",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Visual retro game maker",
   "main": "src/index.js",
   "scripts": {
