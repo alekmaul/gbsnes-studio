@@ -68,8 +68,18 @@ const spaceFreeTmp = () => {
   return tmp;
 };
 
-// Locate the vendored PVSnesLib for this platform, copied to a space-free path
-// if the install dir contains spaces (GBDK/tcc/wla all misbehave then).
+// Locate the vendored PVSnesLib for this platform, extracted to a real,
+// space-free path first if needed - either because the install dir contains
+// spaces (GBDK/tcc/wla all misbehave then), or because it's packed inside a
+// packaged app's app.asar. The asar case isn't just "misbehaves": nothing
+// inside app.asar is a real file, and child_process.spawn() needs one -
+// Electron's asar support makes *reading* transparent (stat/lstat/readdir/
+// readFile/createReadStream), never execution - so every tool spawn below
+// (816-tcc, wla-65816, wlalink, 816-opt, smconv) would fail with ENOENT
+// otherwise. User-found: "Build ROM" worked (the toolchain-not-found check
+// was already fixed) but the first real tool invocation (smconv, building
+// the soundbank) failed with exactly that ENOENT, spawning straight out of
+// app.asar.
 const resolvePvsHome = async ({ progress }) => {
   const vendored = Path.join(
     buildToolsRoot,
@@ -83,10 +93,27 @@ const resolvePvsHome = async ({ progress }) => {
         `Game Boy target instead.`
     );
   }
-  if (vendored.indexOf(" ") === -1) {
+
+  const inAsar = vendored.indexOf(".asar") !== -1;
+  if (vendored.indexOf(" ") === -1 && !inAsar) {
     return vendored;
   }
+
   const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib");
+
+  if (inAsar) {
+    // A real extraction (tens of MB) is the one genuinely slow case here -
+    // reuse a previous build's copy instead of redoing it every time.
+    if (await pathExists(dest)) {
+      return dest;
+    }
+    progress("Extracting the build toolchain (first SNES build only)");
+    await copy(vendored, dest, { overwrite: false });
+    return dest;
+  }
+
+  // Not inside asar, just a path with a space in it - a cheap symlink is
+  // enough, same as before.
   progress("Copying toolchain to a space-free path");
   try {
     await fs.remove(dest);

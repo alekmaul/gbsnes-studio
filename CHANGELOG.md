@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.3] - 2026-09-12
+
+### Fixed
+- SNES: **the `v1.1.2` toolchain fix was incomplete — a packaged build's first real tool
+  invocation (`smconv`, building the soundbank) still failed, with "spawn ... smconv.exe
+  ENOENT"**. `v1.1.2` fixed the "toolchain not found" *existence check*, but every build step
+  actually *runs* one of the vendored tools (`816-tcc`, `wla-65816`, `wlalink`, `816-opt`,
+  `smconv`), and nothing inside a packaged app's `app.asar` is a real file a process can be
+  spawned from — Electron's `asar` support makes *reading* those files transparent, never
+  *executing* them. Fixed by extracting the toolchain to a real temporary folder before
+  launching any of it (the same thing the Game Boy target's own toolchain lookup already did,
+  just for a different reason — it doesn't hit this specific bug, see below). Confirmed directly
+  against a real packaged build: spawning a vendored tool straight out of `app.asar` reproduces
+  the exact "ENOENT" the user saw; spawning the same tool after this extraction step does not.
+  The one-time extraction is reused across builds instead of repeating it every time.
+
 ## [1.1.2] - 2026-09-12
 
 ### Fixed

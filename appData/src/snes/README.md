@@ -16,7 +16,7 @@ to finish - UI from project `assets/ui`, per-scene sprite sheets, N-frame animat
 collision / sprite offset, SNES-sized backgrounds) + M13 (release-prep polish: CI for all three
 desktop platforms, multi-bank 65816 asset data, and a run of playthrough-found engine fixes -
 see the M13 list further down). Real `.gbsproj` → SNES ROM via the app's own Build page, no env
-var needed. `package.json` is 1.1.2.**
+var needed. `package.json` is 1.1.3.**
 
 **Per-event support (GB vs SNES): [`EVENTS.md`](EVENTS.md)** — every scripting event, whether it
 works fully / with a caveat / is inert on the SNES target, plus the editor-side (M9) gaps.

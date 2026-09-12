@@ -519,6 +519,36 @@ by target, `undefined` target still falls back to gb).
   fsCopy.test.js` (plain-filesystem true/false correctness only - jest runs under plain Node, so
   the asar-transparency difference itself isn't reproducible there; that part was verified against
   a real packaged build instead, not in the test suite).
+  **The `1.1.2` fix above was only half the story (same-day follow-up, user-found: "spawn
+  ...\smconv.exe ENOENT" building the soundbank).** Fixing the existence check let a packaged
+  build get as far as actually *running* a vendored tool for the first time - and every single
+  one of them (`816-tcc`, `wla-65816`, `wlalink`, `816-opt`, `smconv`) is spawned as a real OS
+  process via `child_process`. Nothing inside `app.asar` is a real file on disk, so
+  `child_process.spawn()` on an asar-internal path always fails with `ENOENT`, full stop -
+  Electron's `asar` support patches *reading* (`stat`/`lstat`/`readdir`/`readFile`/
+  `createReadStream`), never process creation, and there's no patch that could fix this (the OS
+  itself needs a real file to exec). `resolvePvsHome()` returned the raw `vendored` path
+  unconditionally whenever it had no spaces - true for a typical packaged install path - so every
+  tool path built from it (they're all `Path.join(pvsHome, ...)`) pointed straight into
+  `app.asar`. Fixed: detect `vendored.indexOf(".asar") !== -1` and, when true, extract the whole
+  toolchain to a real temp folder first (reusing the existing `copy()` helper already used for
+  the has-a-space case) - skipping the cheap symlink attempt that case also uses, since a symlink
+  into `app.asar` doesn't produce a real file either (confirmed - see below). The extraction
+  happens once and is reused across builds (checks whether the temp destination already exists
+  before repeating it), so only the first SNES build in a session pays the (real, ~tens-of-MB)
+  copy cost. Verified with the same real-Electron-process methodology as the `1.1.2` fix: spawning
+  `smconv.exe` straight from a real packaged `app.asar` reproduces the exact ENOENT (`status:
+  null`, the error string); spawning the identical file after extracting it to a real temp path
+  succeeds (`status: 1, stdout` - a normal no-args usage exit, not a launch failure).
+  **Surfaced, not fixed: the Game Boy target likely has the same class of bug, for a different
+  reason.** `makeBuild.js`'s own toolchain setup tries `fs.ensureSymlink(buildToolsPath,
+  tmpBuildToolsPath)` first, falling back to a real `copy()` only if that throws - but a
+  symlink/junction *pointing into* `app.asar` is created successfully without error (confirmed:
+  `fs.symlinkSync` into an asar-internal target returns normally), so the fallback never
+  triggers, and the resulting symlink is just as unusable as spawning the `app.asar` path
+  directly (confirmed: `fs.existsSync`/spawning through the symlink both fail). This was found
+  while investigating the SNES bug above, not reported by the user for GB, and the Game Boy path
+  is the frozen reference here - flagged rather than fixed unprompted.
 - **`appData/src/snes/`** — the engine tree. Ported so far: `src/game.c` (M3 — Mode 1 BG,
   OAM player, d-pad, camera scroll; M5 — camera pan/lock/shake), `src/script_runner.c` +
   `src/script_cmds.c` (M4 — the bytecode VM), `src/scene.c` (M4b — scenes from `assets.c`
@@ -805,7 +835,7 @@ by target, `undefined` target still falls back to gb).
   so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
   committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
-### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.2)
+### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.3)
 
 The port is **functional end to end**: create an SNES project in the app → script it (dialogue,
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
@@ -852,6 +882,14 @@ SNES failed outright with "PVSnesLib toolchain not found" - the `v1.1.0` Windows
 downloaded and run by the user, could not build an SNES ROM at all, despite the toolchain
 genuinely shipping inside `app.asar`. See the `fs.pathExists`/asar bullet further down
 (`buildSnesRom.js`) for the root cause and fix - `package.json` is **1.1.2**.
+**1.1.3 (same day, user-driven follow-up):** `1.1.2` fixed the *existence check*, but the first
+real tool invocation (`smconv`, building the soundbank) still failed - "spawn ...\smconv.exe
+ENOENT" - because nothing inside `app.asar` is a real file a process can be spawned from.
+`resolvePvsHome()` now extracts the toolchain to a real temp folder before any tool runs, reused
+across builds. See the same `buildSnesRom.js` bullet (now extended) for the full writeup,
+including a follow-up finding about the Game Boy target's *own* packaged-build toolchain lookup
+that was surfaced while investigating this - not fixed here, flagged to the user, since the GB
+path is the frozen reference and this wasn't an explicit ask. `package.json` is **1.1.3**.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
@@ -906,7 +944,7 @@ single C `.rodata` section can't cross a 32 KB bank).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
-Not code: `v1.1.0`, `v1.1.1` and `v1.1.2` are all tagged and released; a full demo game (art/music/level
+Not code: `v1.1.0` through `v1.1.3` are all tagged and released; a full demo game (art/music/level
 design), and the roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are
 data-driven; it would reduce to a compile-time warning if a background exceeds 15 colours per
 palette region).
