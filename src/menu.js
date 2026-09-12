@@ -287,13 +287,16 @@ const buildMenu = async (plugins = []) => {
       role: "help",
       submenu: [
         {
-          label: l10n("MENU_DOCUMENTATION"),
+          // These stay on the original gbstudio.dev site (unchanged GB engine,
+          // no GBSNES-specific doc site) - the "(GB Studio)" suffix makes clear
+          // to the user they're leaving GBSNES Studio's own docs/site.
+          label: `${l10n("MENU_DOCUMENTATION")} (GB Studio)`,
           click() {
             shell.openExternal("https://www.gbstudio.dev/docs/");
           }
         },
         {
-          label: l10n("MENU_LEARN_MORE"),
+          label: `${l10n("MENU_LEARN_MORE")} (GB Studio)`,
           click() {
             shell.openExternal("https://www.gbstudio.dev");
           }
