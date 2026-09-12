@@ -5,13 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.1.4] - 2026-09-12
 
 ### Changed
 - Help menu: the "Documentation" and "Learn More" items now read "Documentation (GB Studio)" /
   "Learn More (GB Studio)" — they intentionally still open the original GB Studio site
   (`gbstudio.dev`, no GBSNES-specific doc site exists yet), and the suffix makes clear you're
   leaving GBSNES Studio's own app when you click them.
+- Refreshed branding artwork: the app icon, the `.gbsproj` project-file icon, the macOS DMG
+  installer background, the Windows installer loading GIF, and the README preview GIF.
 
 ## [1.1.3] - 2026-09-12
 

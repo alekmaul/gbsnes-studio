@@ -844,7 +844,7 @@ by target, `undefined` target still falls back to gb).
   so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
   committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
-### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.3)
+### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.4)
 
 The port is **functional end to end**: create an SNES project in the app → script it (dialogue,
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
@@ -900,6 +900,15 @@ including an initial worry that the Game Boy target had the same bug, raised whi
 this and then retracted once the user confirmed a real packaged GB build actually works (the
 code path that looked suspicious turns out to never really run - see the bullet for why).
 `package.json` is **1.1.3**.
+**1.1.4 (same day, user-driven polish):** Help menu's "Documentation"/"Learn More" items now
+read "... (GB Studio)" - both intentionally still open the original `gbstudio.dev` site (no
+GBSNES-specific doc site exists), and the suffix makes clear the user is leaving the app when
+they click them. Plus a round of refreshed branding artwork: the app icon, the `.gbsproj`
+project-file icon (`.ico`/`.icns` regenerated from the new 1024×1024 PNGs with Pillow, same
+method as before), the macOS DMG installer background (`background.tiff` regenerated from the
+new `background.png` - `tiffutil` isn't available on this Windows box, so a plain LZW-compressed
+TIFF stands in for it; `electron-installer-dmg` only needs a plain image), the Windows installer
+loading GIF, and the README preview GIF. `package.json` is **1.1.4**.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
@@ -954,7 +963,7 @@ single C `.rodata` section can't cross a 32 KB bank).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
-Not code: `v1.1.0` through `v1.1.3` are all tagged and released; a full demo game (art/music/level
+Not code: `v1.1.0` through `v1.1.4` are all tagged and released; a full demo game (art/music/level
 design), and the roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are
 data-driven; it would reduce to a compile-time warning if a background exceeds 15 colours per
 palette region).
