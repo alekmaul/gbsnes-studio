@@ -27,7 +27,9 @@ const clipboardMiddleware: Middleware<{}, RootState> = (store) => (next) => (
   if (actions.copyActor.match(action)) {
     const state = store.getState();
     const customEventsLookup = customEventSelectors.selectEntities(state);
-    const usedCustomEventIds = uniq(getCustomEventIdsInActor(action.payload));
+    const usedCustomEventIds: string[] = uniq(
+      getCustomEventIdsInActor(action.payload)
+    );
     const usedCustomEvents = usedCustomEventIds
       .map((id) => customEventsLookup[id])
       .filter((i) => i);
@@ -52,7 +54,7 @@ const clipboardMiddleware: Middleware<{}, RootState> = (store) => (next) => (
   } else if (actions.copyTrigger.match(action)) {
     const state = store.getState();
     const customEventsLookup = customEventSelectors.selectEntities(state);
-    const usedCustomEventIds = uniq(
+    const usedCustomEventIds: string[] = uniq(
       getCustomEventIdsInEvents(action.payload.script)
     );
     const usedCustomEvents = usedCustomEventIds
@@ -88,7 +90,9 @@ const clipboardMiddleware: Middleware<{}, RootState> = (store) => (next) => (
     };
 
     const customEventsLookup = customEventSelectors.selectEntities(state);
-    const usedCustomEventIds = uniq(getCustomEventIdsInScene(scene));
+    const usedCustomEventIds: string[] = uniq(
+      getCustomEventIdsInScene(scene)
+    );
     const usedCustomEvents = usedCustomEventIds
       .map((id) => customEventsLookup[id])
       .filter((i) => i);
@@ -117,7 +121,7 @@ const clipboardMiddleware: Middleware<{}, RootState> = (store) => (next) => (
   } else if (actions.copyEvent.match(action)) {
     const state = store.getState();
     const customEventsLookup = customEventSelectors.selectEntities(state);
-    const usedCustomEventIds = uniq(
+    const usedCustomEventIds: string[] = uniq(
       getCustomEventIdsInEvents([action.payload])
     );
     const usedCustomEvents = usedCustomEventIds
@@ -138,7 +142,9 @@ const clipboardMiddleware: Middleware<{}, RootState> = (store) => (next) => (
   } else if (actions.copyScript.match(action)) {
     const state = store.getState();
     const customEventsLookup = customEventSelectors.selectEntities(state);
-    const usedCustomEventIds = uniq(getCustomEventIdsInEvents(action.payload));
+    const usedCustomEventIds: string[] = uniq(
+      getCustomEventIdsInEvents(action.payload)
+    );
     const usedCustomEvents = usedCustomEventIds
       .map((id) => customEventsLookup[id])
       .filter((i) => i);

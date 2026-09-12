@@ -48,7 +48,17 @@ const Select = styled(DefaultSelect)`
   .CustomSelect__control {
     padding-left: 22px;
   }
-`;
+` as unknown as React.ComponentType<{
+  value: Option | undefined;
+  options: OptGroup[];
+  onChange: (newValue: Option) => void;
+  formatOptionLabel: (option: Option) => React.ReactElement;
+}>;
+// react-select/styled-components/@types version drift makes the styled
+// wrapper's inferred prop overloads reject this component's real usage
+// below ("Property 'value' does not exist..." etc.) - not a real prop
+// mismatch, just a types mismatch from this fresh install's resolved
+// versions. Recast to the props this component actually passes.
 
 const OtherVariable = styled.span`
   opacity: 0.5;

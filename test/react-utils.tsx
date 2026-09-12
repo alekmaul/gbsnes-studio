@@ -7,6 +7,16 @@ import ThemeProvider from "../src/components/ui/theme/ThemeProvider";
 
 type RenderParameters = Parameters<typeof render>;
 
+// @types/react-redux's Provider (still typed as a class component here) and
+// the @types/react version this fresh install resolved disagree on
+// ElementClass's shape ("Property 'refs' is missing") - a known version-drift
+// mismatch, not a real behavioural issue. Test-only helper, so a loose cast
+// is fine rather than chasing an exact matching pair of type packages.
+const TypedProvider = Provider as unknown as React.ComponentType<{
+  store: Store<RootState, AnyAction>;
+  children?: React.ReactNode;
+}>;
+
 const customRender = (
   ui: RenderParameters[0],
   store?: Store<RootState, AnyAction>,
@@ -15,9 +25,9 @@ const customRender = (
   return render(ui, {
     wrapper: store
       ? ({ children }) => (
-          <Provider store={store}>
+          <TypedProvider store={store}>
             <ThemeProvider>{children}</ThemeProvider>
-          </Provider>
+          </TypedProvider>
         )
       : ({ children }) => <ThemeProvider>{children}</ThemeProvider>,
     ...options,

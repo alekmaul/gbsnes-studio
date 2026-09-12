@@ -90,7 +90,7 @@ export const namedEntityVariables = (
 };
 
 export const groupVariables = (variables: NamedVariable[]): VariableGroup[] => {
-  const groups = uniq(variables.map((f) => f.group));
+  const groups: string[] = uniq(variables.map((f) => f.group));
   return groups.map((g) => {
     const groupVariables = variables.filter((f) => f.group === g);
     return {
