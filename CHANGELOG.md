@@ -5,9 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
-
-Changes since the `v1.1.0` tag was cut.
+## [1.1.1] - 2026-09-12
 
 ### Fixed
 - SNES: **the dialogue text box's editor stayed wrapped at the Game Boy's 18-characters-per-line
@@ -15,12 +13,6 @@ Changes since the `v1.1.0` tag was cut.
   wider SNES screen can actually show. The editor now wraps at the SNES box's real width
   (27 characters, or 23 with an avatar portrait) for a SNES project; Game Boy projects are
   unchanged.
-- The "Download" buttons in the update-available / project-from-a-newer-version dialogs now
-  point at this fork's own GitHub releases instead of the original GB Studio's download page,
-  and then updated again to point at the itch.io page
-  (https://portabledev.itch.io/gbsnes-studio). The update *check* itself is unchanged — it still
-  queries the GitHub repo's latest release for the version number; only where the button sends
-  you to actually download it changed.
 - SNES: **emote bubbles (`Actor: Emote`) rendered in the wrong colours**, two stacked bugs.
   First, a colour-scaling bug turned almost every colour into a different, wrong one (e.g. a
   pale cream became dark teal). Second — the actual cause of the colours still not matching a
@@ -40,6 +32,13 @@ Changes since the `v1.1.0` tag was cut.
   every 8-pixel step of the curtain rewrote the *entire* dialogue-box tilemap and forced a full
   VRAM refresh, instead of touching just the one row that actually changed. Same visual result,
   same speed setting, far less CPU work per step.
+- The "Download" button in the update-available / project-from-a-newer-version dialogs now opens
+  this fork's itch.io page (https://portabledev.itch.io/gbsnes-studio) instead of a GitHub
+  releases page. Checking *whether* an update is available is unchanged — it still queries the
+  GitHub repo for the latest release/version number; only where the button sends you to actually
+  get the binary changed.
+- SNES: tweaked a colour in the Sample Project's `assets/ui` artwork (`ascii.png`, `cursor.png`,
+  `emotes.png`, `frame.png`).
 
 ## [1.1.0] - 2026-09-09
 

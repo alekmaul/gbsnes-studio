@@ -783,7 +783,7 @@ by target, `undefined` target still falls back to gb).
   so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
   committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
-### SNES port — state & what's left (as of 2026-09-09, `package.json` 1.1.0)
+### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.1)
 
 The port is **functional end to end**: create an SNES project in the app → script it (dialogue,
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
@@ -812,8 +812,19 @@ make the player render in another actor's colours); a sprite sheet over the 16-c
 now warns like backgrounds already did; the vendored PVSnesLib toolchain is trimmed to the
 handful of tools actually used to build a ROM (~18 MB off across the 3 platform copies); and
 the Sample Project's own scenes no longer overlap each other in the World editor. `package.json`
-is **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release (CI couldn't
-build macOS then) — cut `v1.1.0` at HEAD to publish binaries.
+was **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release (CI couldn't
+build macOS then) — cut `v1.1.0` to publish binaries.
+**1.1.1 (user-driven, post-release polish):** the dialogue text box's editor pre-wrap is now
+target-aware (SNES 27/23 chars/line instead of the GB's 18/16); a real O(N²) CPU spike in the
+movement/collision path on scenes with several simultaneously-moving actors is fixed (GB-matching
+AI striping); the `Overlay: Move To` curtain slide (the sample's Logo intro) no longer rewrites
+the whole BG3 tilemap + forces a full VRAM DMA on every 8px step, just the row(s) that actually
+changed; the emote bubble palette is fixed (a double bug: an 8-bit/5-bit colour-scaling mistake,
+*and* `emotes.png` was never actually read as a project asset at all - both fixed, matching how
+the font/frame/cursor already worked); and the "Download" button in the update dialogs now opens
+the itch.io page (`https://portabledev.itch.io/gbsnes-studio`) instead of a GitHub releases page
+(the update *check* itself still queries GitHub for the version number). `package.json` is
+**1.1.1**.
 
 Real remaining **code** gaps, most impactful first:
 1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
@@ -831,9 +842,11 @@ Real remaining **code** gaps, most impactful first:
 4. **CPU ceiling on many simultaneously-moving actors** (`816-tcc` codegen, see `PERF.md`) —
    the worst-case O(N²) spike (every mover's `npc_blocking()` scan landing on the same frame)
    is fixed (2026-09-11: destination-tile reuse + inlined tile lookups + GB-matching odd/even
-   AI striping - see the "Perf profile" bullet above), but the underlying "`816-tcc` emits slow
-   code" ceiling is unchanged and hand-asm optimisation of the render/actor hot path is still
-   deliberately deferred. Not yet re-profiled with fps numbers.
+   AI striping - see the "Perf profile" bullet above), and the `Overlay: Move To` curtain slide's
+   own per-tick full-tilemap-rewrite cost is fixed the same way (narrow row-range writes/DMA
+   instead of all 32 rows every tick), but the underlying "`816-tcc` emits slow code" ceiling is
+   unchanged and hand-asm optimisation of the render/actor hot path is still deliberately
+   deferred. Not yet re-profiled with fps numbers.
 
 Done since (M12, playing the sample end to end): **UI graphics from the project's `assets/ui`
 PNGs** (font + 9-slice frame + menu cursor, was a hardcoded font + plain fill). **Per-scene
@@ -866,10 +879,10 @@ single C `.rodata` section can't cross a 32 KB bank).
 Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
 web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
 
-Not code: **cut the `v1.1.0` tag** (CHANGELOG + `package.json` are ready; the release job
-fires on the tag), a full demo game (art/music/level design), and the roadmap's "GB→SNES asset
-conversion assistant" (dubious value now — assets are data-driven; it would reduce to a
-compile-time warning if a background exceeds 15 colours per palette region).
+Not code: `v1.1.0` and `v1.1.1` are both tagged and released; a full demo game (art/music/level
+design), and the roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are
+data-driven; it would reduce to a compile-time warning if a background exceeds 15 colours per
+palette region).
 
 ## The engine (`appData/src/gb/`)
 
