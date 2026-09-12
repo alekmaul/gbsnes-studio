@@ -101,7 +101,7 @@ export const SpriteSheetSelect: FC<SpriteSheetSelectProps> = ({
     const filteredSpriteSheets = spriteSheets.filter(filter || (() => true));
     const plugins = uniq(
       filteredSpriteSheets.map((s) => s.plugin || "")
-    ).sort();
+    ).sort() as string[];
     const options = plugins.reduce(
       (memo, plugin) => {
         buildOptions(

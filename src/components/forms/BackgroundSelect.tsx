@@ -49,7 +49,9 @@ export const BackgroundSelect: FC<BackgroundSelectProps> = ({
   const [currentValue, setCurrentValue] = useState<Option>();
 
   useEffect(() => {
-    const plugins = uniq(backgrounds.map((s) => s.plugin || "")).sort();
+    const plugins = uniq(
+      backgrounds.map((s) => s.plugin || "")
+    ).sort() as string[];
     const options = plugins.reduce((memo, plugin) => {
       memo.push({
         label: plugin,

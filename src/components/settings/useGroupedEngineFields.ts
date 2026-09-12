@@ -16,7 +16,7 @@ export const useGroupedEngineFields = () => {
   const [groupedFields, setGroupedFields] = useState<EngineFieldGroup[]>([]);
 
   useEffect(() => {
-    const groups = uniq(fields.map((f) => f.group));
+    const groups: string[] = uniq(fields.map((f) => f.group));
     setGroupedFields(
       groups.map((g) => {
         const groupFields = fields.filter((f) => f.group === g);

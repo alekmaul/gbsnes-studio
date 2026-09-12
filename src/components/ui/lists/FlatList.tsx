@@ -1,6 +1,15 @@
 import throttle from "lodash/throttle";
 import React, { CSSProperties, useEffect, useRef, useState } from "react";
-import { FixedSizeList as List } from "react-window";
+import { FixedSizeList } from "react-window";
+
+// react-window's FixedSizeList type doesn't propagate FlatList's own <T>
+// generic (a known limitation of this era of react-window's types) - its
+// itemData/props are checked against the base FlatListItem shape, which
+// can't match the more specific T-typed callbacks FlatList actually passes.
+// Used as a plain, loosely-typed component reference here rather than
+// fighting that inference; Row (which actually reads itemData) is typed
+// against the real T.
+const List = FixedSizeList as React.ComponentType<any>;
 import styled from "styled-components";
 import { ThemeInterface } from "../theme/ThemeInterface";
 import { ListItem } from "./ListItem";
@@ -15,9 +24,14 @@ interface RowProps<T> {
   readonly style: CSSProperties;
   readonly data: {
     readonly items: T[];
-    readonly selectedId: string;
+    // Both optional to match what FlatList's <List itemData={{...}}> below
+    // actually passes (selectedId/setSelectedId/renderItem all come from
+    // FlatListProps' own optional props) - Row already handles either being
+    // absent (the `data.selectedId === item.id` comparison and the
+    // `data.renderItem ? ... : item.name` fallback).
+    readonly selectedId?: string;
     readonly setSelectedId?: (value: string, item: T) => void;
-    readonly renderItem: (props: {
+    readonly renderItem?: (props: {
       selected: boolean;
       item: T;
     }) => React.ReactNode;
@@ -73,7 +87,7 @@ export const FlatList = <T extends FlatListItem>({
 }: FlatListProps<T>) => {
   const ref = useRef<HTMLDivElement>(null);
   const [hasFocus, setHasFocus] = useState(false);
-  const list = useRef<List>(null);
+  const list = useRef<FixedSizeList>(null);
 
   const selectedIndex = items.findIndex((item) => item.id === selectedId);
 

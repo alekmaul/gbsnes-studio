@@ -26,9 +26,16 @@ import {
 } from "../entities/entitiesState";
 import { ScriptEvent } from "../entities/entitiesTypes";
 import entitiesActions from "../entities/entitiesActions";
-import { Dictionary } from "lodash";
 import actions from "./electronActions";
 import open from "open";
+
+// The installed @types/lodash generates its top-level index.d.ts as a single
+// `export = _` namespace, so `import { Dictionary } from "lodash"` (a named
+// type import) doesn't resolve - a version-drift artifact of this fresh
+// install, not present in whatever @types/lodash upstream originally had
+// pinned. Dictionary<T> is just {[key: string]: T}; define it locally rather
+// than depend on lodash's own type export shape.
+type Dictionary<T> = Record<string, T>;
 
 const electronMiddleware: Middleware<{}, RootState> = (store) => (next) => (
   action
@@ -174,7 +181,7 @@ const electronMiddleware: Middleware<{}, RootState> = (store) => (next) => (
     if (usedTotal > 0) {
       const sceneNames = uniq(
         usedSceneIds.map((sceneId) => sceneName(sceneId))
-      ).sort();
+      ).sort() as string[];
 
       // Display confirmation and stop delete if cancelled
       const cancel = confirmDeleteCustomEvent(

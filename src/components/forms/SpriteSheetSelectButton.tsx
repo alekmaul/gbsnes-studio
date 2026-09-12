@@ -158,7 +158,10 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   optionalLabel,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
-  const timerRef = useRef<number | null>(null);
+  // ReturnType<typeof setTimeout>, not "number" - see use-delayed-state.ts's
+  // note (@types/node in scope makes the global setTimeout resolve to
+  // Node's NodeJS.Timeout-returning overload, not the DOM one).
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spriteSheet = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, value || "")
   );
