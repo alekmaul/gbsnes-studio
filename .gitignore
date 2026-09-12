@@ -15,6 +15,9 @@ coverage
 .DS_Store
 test/projects/*/build
 
+# Webpack
+.webpack/
+
 # SNES engine (appData/src/snes) standalone build artifacts
 appData/src/snes/hdr.asm
 appData/src/snes/*.sfc

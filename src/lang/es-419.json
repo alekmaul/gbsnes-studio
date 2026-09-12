@@ -261,7 +261,7 @@
   "MENU_DOCUMENTATION": "Documentación",
   "MENU_LEARN_MORE": "Aprender Mas",
   "MENU_SPEECH": "Diálogo",
-  "MENU_ABOUT": "Acerca de GBSNES Studio",
+  "MENU_ABOUT": "Acerca de GB Studio",
   "MENU_CART_TYPE": "Tipo de Cartucho",
   "MENU_COPY_EVENT": "Copiar Evento",
   "MENU_RENAME_EVENT": "Renombrar Evento",
@@ -289,8 +289,8 @@
 
   "// 11": "Warnings -----------------------------------------------------",
 
-  "WARNING_BACKGROUND_TOO_SMALL": "Imagen de Fondo muy pequeña, debe ser por lo menos {width}px x {height}px",
-  "WARNING_BACKGROUND_TOO_LARGE": "Imagen de Fondo muy grande, debe ser como maximo {width}px x {height}px",
+  "WARNING_BACKGROUND_TOO_SMALL": "Imagen de Fondo muy pequeña, debe ser por lo menos 160px x 144px",
+  "WARNING_BACKGROUND_TOO_LARGE": "Imagen de Fondo muy grande, debe ser como maximo 256px x 256px",
   "WARNING_BACKGROUND_NOT_MULTIPLE_OF_8": "Dimensiones de Imagen de Fondo no son un multiplo de 8",
 
   "// 12": "Errors -------------------------------------------------------",
@@ -335,9 +335,9 @@
   "DIALOG_OK": "OK",
   "DIALOG_CANCEL": "Cancelar",
   "DIALOG_UPDATE_AVAILABLE": "Actualización Disponible",
-  "DIALOG_UPDATE_DESCRIPTION": "GBSNES Studio {version} disponible. ¿Te gustaría actualizar?",
+  "DIALOG_UPDATE_DESCRIPTION": "GB Studio {version} disponible. ¿Te gustaría actualizar?",
   "DIALOG_UPDATE_DONT_ASK_AGAIN": "No me preguntes de nuevo",
   "DIALOG_UP_TO_DATE": "¡Estás actualizado!",
-  "DIALOG_NEWEST_VERSION_AVAILABLE": "GBSNES Studio {version} actualmente es la última versión disponible.",
+  "DIALOG_NEWEST_VERSION_AVAILABLE": "GB Studio {version} actualmente es la última versión disponible.",
   "DIALOG_UNABLE_TO_CHECK_LATEST_VERSION": "No se puede comprobar la última versión en este momento"
 }

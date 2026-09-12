@@ -259,7 +259,7 @@
   "MENU_DOCUMENTATION": "帮助文档",
   "MENU_LEARN_MORE": "了解更多",
   "MENU_SPEECH": "语言",
-  "MENU_ABOUT": "关于GBSNES Studio",
+  "MENU_ABOUT": "关于GB Studio",
   "MENU_CART_TYPE": "卡带类型",
   "MENU_COPY_EVENT": "复制事件",
   "MENU_RENAME_EVENT": "重命名事件",
@@ -285,8 +285,8 @@
 
   "// 11": "Warnings -----------------------------------------------------",
 
-  "WARNING_BACKGROUND_TOO_SMALL": "背景图不可小于{width}px x {height}px",
-  "WARNING_BACKGROUND_TOO_LARGE": "背景图不可大于{width}px x {height}px",
+  "WARNING_BACKGROUND_TOO_SMALL": "背景图不可小于160px x 144px",
+  "WARNING_BACKGROUND_TOO_LARGE": "背景图不可大于256px x 256px",
   "WARNING_BACKGROUND_NOT_MULTIPLE_OF_8": "背景尺寸不是8的倍数",
 
   "// 12": "Errors -------------------------------------------------------",
@@ -330,9 +330,9 @@
   "DIALOG_OK": "确定",
   "DIALOG_CANCEL": "取消",
   "DIALOG_UPDATE_AVAILABLE": "有可用的更新",
-  "DIALOG_UPDATE_DESCRIPTION": "GBSNES Studio {version} 已准备好. 现在就要更新吗？",
+  "DIALOG_UPDATE_DESCRIPTION": "GB Studio {version} 已准备好. 现在就要更新吗？",
   "DIALOG_UPDATE_DONT_ASK_AGAIN": "下次不再询问",
   "DIALOG_UP_TO_DATE": "当前已是最新版本！",
-  "DIALOG_NEWEST_VERSION_AVAILABLE": "GBSNES Studio {version} 已是现在最新的版本。",
+  "DIALOG_NEWEST_VERSION_AVAILABLE": "GB Studio {version} 已是现在最新的版本。",
   "DIALOG_UNABLE_TO_CHECK_LATEST_VERSION": "当前无法检查更新"
 }

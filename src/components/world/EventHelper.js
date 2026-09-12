@@ -8,25 +8,36 @@ import {
   EVENT_OVERLAY_MOVE_TO,
   EVENT_IF_ACTOR_AT_POSITION
 } from "../../lib/compiler/eventTypes";
-import { getTarget } from "../../lib/compiler/targets";
 
 const TILE_SIZE = 8;
 
+const argValue = (arg) => {
+  if(arg && arg.value) {
+    if(arg.type === "variable" || arg.type === "property") {
+      return undefined;
+    }
+    return arg.value;
+  }
+  return arg;
+}
+
 class EventHelper extends Component {
   render() {
-    const { event, target } = this.props;
+    const { event } = this.props;
 
     if (event.command === EVENT_CAMERA_MOVE_TO) {
-      const { screenTileWidth, screenTileHeight } = getTarget(target);
+      const x = argValue(event.args.x);
+      const y = argValue(event.args.y);
+      if(x === undefined && y === undefined) {
+        return <div />
+      }      
       return (
         <div className="EventHelper">
           <div
             className="EventHelper__CameraPos"
             style={{
-              left: (event.args.x || 0) * TILE_SIZE,
-              top: (event.args.y || 0) * TILE_SIZE,
-              width: screenTileWidth * TILE_SIZE,
-              height: screenTileHeight * TILE_SIZE
+              left: (x || 0) * TILE_SIZE,
+              top: (y || 0) * TILE_SIZE
             }}
           />
         </div>
@@ -38,13 +49,18 @@ class EventHelper extends Component {
       event.command === EVENT_ACTOR_SET_POSITION ||
       event.command === EVENT_IF_ACTOR_AT_POSITION
     ) {
+      const x = argValue(event.args.x);
+      const y = argValue(event.args.y);      
+      if(x === undefined && y === undefined) {
+        return <div />
+      }
       return (
         <div className="EventHelper">
           <div
             className="EventHelper__PosMarker"
             style={{
-              left: (event.args.x || 0) * TILE_SIZE,
-              top: (event.args.y || 0) * TILE_SIZE
+              left: (x || 0) * TILE_SIZE,
+              top: (y || 0) * TILE_SIZE
             }}
           />
         </div>
@@ -55,14 +71,20 @@ class EventHelper extends Component {
       event.command === EVENT_OVERLAY_SHOW ||
       event.command === EVENT_OVERLAY_MOVE_TO
     ) {
+      const x = argValue(event.args.x);
+      const y = argValue(event.args.y);    
+      const color = argValue(event.args.color);
+      if(x === undefined && y === undefined) {
+        return <div />
+      }      
       return (
         <div className="EventHelper">
           <div
             className="EventHelper__OverlayPos__Overlay"
             style={{
-              left: (event.args.x || 0) * TILE_SIZE,
-              top: (event.args.y || 0) * TILE_SIZE,
-              background: event.args.color === "white" ? "#e0f8cf" : "#081820"
+              left: (x || 0) * TILE_SIZE,
+              top: (y || 0) * TILE_SIZE,
+              background: color === "white" ? "#e0f8cf" : "#081820"
             }}
           />
         </div>
@@ -77,13 +99,11 @@ EventHelper.propTypes = {
   event: PropTypes.shape({
     command: PropTypes.string,
     args: PropTypes.shape({})
-  }),
-  target: PropTypes.string
+  })
 };
 
 EventHelper.defaultProps = {
-  event: {},
-  target: "gb"
+  event: {}
 };
 
 export default EventHelper;

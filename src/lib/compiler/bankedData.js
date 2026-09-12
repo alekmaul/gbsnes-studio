@@ -1,30 +1,28 @@
-import { cIntArray, cIntArrayExternDeclaration } from "../helpers/cGeneration";
-import gbTarget from "./targets/gb";
+import { cIntArray, cIntArrayExternDeclaration, objectIntArray } from "../helpers/cGeneration";
+import { wrap16Bit } from "../helpers/8bit";
 
 const BANKED_DATA_NOT_ARRAY = "BANKED_DATA_NOT_ARRAY";
 const BANKED_DATA_TOO_LARGE = "BANKED_DATA_TOO_LARGE";
 const BANKED_COUNT_OVERFLOW = "BANKED_COUNT_OVERFLOW";
-// Defaults are the Game Boy values (targets/gb.js). Callers pass bankSize /
-// bankOffset / bankController explicitly for other targets.
-const GB_MAX_BANK_SIZE = gbTarget.bankSize; // 16384: bytes until address overflow
-const MIN_DATA_BANK = gbTarget.minDataBank; // 6: first banks reserved by engine
-const MAX_BANKS = gbTarget.maxBanks; // 512: GBDK maximum
+const GB_MAX_BANK_SIZE = 16384; // Calculated by adding bytes until address overflow
+const MIN_DATA_BANK = 6; // First 16 banks are reserved by game engine
+const MAX_BANKS = 512; // GBDK supports max of 512 banks
 
-const MBC1 = gbTarget.bankControllers.mbc1;
-const MBC5 = gbTarget.bankControllers.mbc5;
-const MBC1_DISALLOWED_BANKS = gbTarget.disallowedBanks;
+const MBC1 = "MBC1";
+const MBC5 = "MBC5";
+const MBC1_DISALLOWED_BANKS = [0x20, 0x40, 0x60];
 
 class BankedData {
   constructor({
     bankSize = GB_MAX_BANK_SIZE,
     bankOffset = MIN_DATA_BANK,
-    bankController = MBC5
+    bankController = MBC5,
   } = {}) {
     this.bankSize = bankSize;
     this.bankOffset = bankOffset;
     this.bankController = bankController;
     this.data = [];
-    this.dataWriteBanks = []
+    this.dataWriteBanks = [];
     this.currentBank = -1;
   }
 
@@ -39,18 +37,19 @@ class BankedData {
     const lookBehindDistance = 10;
 
     // Find an existing bank to fit the data
-    for(let i=Math.max(0, this.data.length - lookBehindDistance); i<this.data.length; i++) {
+    for (
+      let i = Math.max(0, this.data.length - lookBehindDistance);
+      i < this.data.length;
+      i++
+    ) {
       if (this.data[i].length + newData.length <= this.bankSize) {
         // Found a bank to write to
         const ptr = {
           bank: this.dataWriteBanks[i],
-          offset: this.data[i].length
+          offset: this.data[i].length,
         };
         // Append contents
-        this.data[i] = [].concat(
-          this.data[i],
-          newData
-        );
+        this.data[i] = [].concat(this.data[i], newData);
         return ptr;
       }
     }
@@ -62,7 +61,7 @@ class BankedData {
     this.dataWriteBanks.push(writeBank);
     const ptr = {
       bank: writeBank,
-      offset: 0
+      offset: 0,
     };
     return ptr;
   }
@@ -90,12 +89,39 @@ class BankedData {
     return this.data
       .map((data, index) => {
         const bank = this.dataWriteBanks[index];
-        return `#pragma bank=${bank}\n\n${cIntArray(
+        return `#pragma bank ${bank}\n\n${cIntArray(
           `bank_${bank}_data`,
           data
         )}\n`;
       })
-      .filter(i => i);
+      .filter((i) => i);
+  }
+
+  exportObjectData() {
+    return this.data
+      .map((data, index) => {
+        const bank = this.dataWriteBanks[index];
+        return `XL
+H A areas 1 global symbols
+M bank_${bank}
+A _CODE size 0 flags 0
+A _DATA size 0 flags 0
+A _OVERLAY size 0 flags 0
+A _ISEG size 0 flags 0
+A _BSEG size 0 flags 0
+A _XSEG size 0 flags 0
+A _GSINIT size 0 flags 0
+A _GSFINAL size 0 flags 0
+A _HOME size 0 flags 0
+A _CODE_${bank} size ${wrap16Bit(data.length).toString(16)} flags 0
+S _bank_${bank}_data Def0000
+${objectIntArray(data)}`;
+        // return `#pragma bank ${bank}\n\n${cIntArray(
+        //   `bank_${bank}_data`,
+        //   data
+        // )}\n`;
+      })
+      .filter((i) => i);
   }
 
   exportCHeader() {
@@ -104,20 +130,20 @@ class BankedData {
         const bank = this.dataWriteBanks[index];
         return cIntArrayExternDeclaration(`bank_${bank}_data`);
       })
-      .filter(i => i)
+      .filter((i) => i)
       .join("\n")}\n\n#endif\n`;
   }
 
   exportUsedBankNumbers() {
     const maxBank = this.dataWriteBanks[this.dataWriteBanks.length - 1];
-    return [...Array(maxBank + 1).keys()].map(
-      bankNum => this.dataWriteBanks.indexOf(bankNum) > -1
+    return Array.from(Array(maxBank + 1).keys()).map(
+      (bankNum) => this.dataWriteBanks.indexOf(bankNum) > -1
     );
   }
 
   mutate(fn) {
-    for(let bank=0; bank<this.data.length; bank++) {
-      for(let offset=0; offset<this.data[bank].length; offset++) {
+    for (let bank = 0; bank < this.data.length; bank++) {
+      for (let offset = 0; offset < this.data[bank].length; offset++) {
         this.data[bank][offset] = fn(this.data[bank][offset]);
       }
     }
@@ -133,5 +159,5 @@ export {
   MIN_DATA_BANK,
   MAX_BANKS,
   MBC1,
-  MBC5
+  MBC5,
 };

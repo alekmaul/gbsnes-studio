@@ -8,10 +8,6 @@
   display: flex;
 }
 
-.InputPicker__Row:nth-child(2) {
-  margin-bottom: 10px;
-}
-
 .InputPicker label,
 .InputPicker label ~ label {
   position: relative;
@@ -93,23 +89,6 @@
   border-bottom-right-radius: 4px;
 }
 
-/* SNES-only third row (X / Y / L / R) */
-.InputPicker__Button--X,
-.InputPicker__Button--Y,
-.InputPicker__Button--L,
-.InputPicker__Button--R {
-  border-top: 0;
-}
-
-.InputPicker__Button--X {
-  border-bottom-left-radius: 4px;
-}
-
-.InputPicker__Button--R {
-  border-right: 1px solid var(--input-border-color);
-  border-bottom-right-radius: 4px;
-}
-
 .InputPicker__Button--Active,
 .InputPicker__Button--Active:hover {
   background-color: var(--highlight-color);
@@ -138,4 +117,9 @@
 
 .InputPicker__Button--Down svg {
   transform: rotate(180deg);
+}
+
+.InputPicker__Selection {
+  margin-top: 10px;
+  min-height: 15px;
 }

@@ -83,14 +83,36 @@ import {
   TIMER_RESTART,
   TIMER_DISABLE,
   TEXT_WITH_AVATAR,
-  MENU
+  MENU,
+  LAUNCH_PROJECTILE,
+  SET_PROPERTY,
+  ACTOR_SET_SPRITE,
+  IF_ACTOR_RELATIVE_TO_ACTOR,
+  PLAYER_BOUNCE,
+  WEAPON_ATTACK,
+  PALETTE_SET_BACKGROUND,
+  PALETTE_SET_ACTOR,
+  PALETTE_SET_UI,
+  ACTOR_STOP_UPDATE,
+  ACTOR_SET_ANIMATE,
+  IF_COLOR_SUPPORTED,
+  ENGINE_FIELD_UPDATE,
+  ENGINE_FIELD_UPDATE_WORD,
+  ENGINE_FIELD_UPDATE_VAR,
+  ENGINE_FIELD_UPDATE_VAR_WORD,
+  ENGINE_FIELD_STORE,
+  ENGINE_FIELD_STORE_WORD
 } from "../events/scriptCommands";
 import {
   getActorIndex,
+  getActor,
   getVariableIndex,
   getSpriteIndex,
   getMusicIndex,
-  compileConditional
+  compileConditional,
+  getSpriteOffset,
+  getSprite,
+  getSpriteSceneIndex,
 } from "../events/helpers";
 import {
   dirDec,
@@ -98,10 +120,21 @@ import {
   inputDec,
   moveSpeedDec,
   animSpeedDec,
-  combineMultipleChoiceText
+  collisionMaskDec,
+  paletteMaskDec,
+  collisionGroupDec,
+  actorRelativeDec,
+  moveTypeDec,
+  heightDec,
+  actorFramesPerDir,
+  spriteTypeDec,
+  textSpeedDec,
 } from "./helpers";
 import { hi, lo } from "../helpers/8bit";
-import { getTarget } from "./targets";
+import trimlines from "../helpers/trimlines";
+import { SPRITE_TYPE_ACTOR } from "../../consts";
+import { is16BitCType } from "../helpers/engineFields";
+import { nextVariable } from "../helpers/variables";
 
 class ScriptBuilder {
   constructor(output, options) {
@@ -109,36 +142,43 @@ class ScriptBuilder {
     this.options = options;
   }
 
-  actorSetActive = id => {
+  actorSetActive = (id) => {
     const output = this.output;
     const { scene, entity } = this.options;
-    const index = id === "$self$"
-      ? getActorIndex(entity.id, scene)
-      : getActorIndex(id, scene);
+    const index =
+      id === "$self$"
+        ? getActorIndex(entity.id, scene)
+        : getActorIndex(id, scene);
     output.push(cmd(ACTOR_SET_ACTIVE));
     output.push(index);
   };
 
-  actorMoveTo = (x = 0, y = 0) => {
+  actorMoveTo = (x = 0, y = 0, useCollisions = false, moveType) => {
     const output = this.output;
     output.push(cmd(ACTOR_MOVE_TO));
     output.push(x);
     output.push(y);
+    output.push(useCollisions ? 1 : 0);
+    output.push(moveTypeDec(moveType));
   };
 
-  actorMoveRelative = (x = 0, y = 0) => {
+  actorMoveRelative = (x = 0, y = 0, useCollisions = false, moveType) => {
     const output = this.output;
     output.push(cmd(ACTOR_MOVE_RELATIVE));
     output.push(Math.abs(x));
     output.push(x < 0 ? 1 : 0);
     output.push(Math.abs(y));
     output.push(y < 0 ? 1 : 0);
+    output.push(useCollisions ? 1 : 0);
+    output.push(moveTypeDec(moveType));
   };
 
-  actorMoveToVariables = (variableX, variableY) => {
+  actorMoveToVariables = (variableX, variableY, useCollisions = false, moveType) => {
     const output = this.output;
     this.vectorsLoad(variableX, variableY);
     output.push(cmd(ACTOR_MOVE_TO_VALUE));
+    output.push(useCollisions ? 1 : 0);
+    output.push(moveTypeDec(moveType));
   };
 
   actorSetPosition = (x = 0, y = 0) => {
@@ -193,7 +233,7 @@ class ScriptBuilder {
     output.push(frame || 0);
   };
 
-  actorSetFrameToVariable = variable => {
+  actorSetFrameToVariable = (variable) => {
     const output = this.output;
     const { variables } = this.options;
     const variableIndex = this.getVariableIndex(variable, variables);
@@ -202,7 +242,7 @@ class ScriptBuilder {
     output.push(lo(variableIndex));
   };
 
-  actorSetFlip = flip => {
+  actorSetFlip = (flip) => {
     const output = this.output;
     output.push(cmd(ACTOR_SET_FLIP));
     output.push(flip ? 1 : 0);
@@ -235,22 +275,50 @@ class ScriptBuilder {
     output.push(cmd(ACTOR_HIDE));
   };
 
-  actorSetCollisions = enabled => {
+  actorStopUpdate = () => {
+    const output = this.output;
+    output.push(cmd(ACTOR_STOP_UPDATE));
+  };  
+
+  actorSetCollisions = (enabled) => {
     const output = this.output;
     output.push(cmd(ACTOR_SET_COLLISIONS));
     output.push(enabled ? 1 : 0);
   };
 
+  actorSetAnimate = (enabled) => {
+    const output = this.output;
+    output.push(cmd(ACTOR_SET_ANIMATE));
+    output.push(enabled ? 1 : 0);
+  }
+
+  actorSetSprite = (spriteSheetId) => {
+    const output = this.output;
+    const { sprites, scene } = this.options;
+    const spriteOffset = getSpriteOffset(spriteSheetId, sprites, scene);
+    const sprite = getSprite(spriteSheetId, sprites);
+    output.push(cmd(ACTOR_SET_SPRITE));
+    output.push(spriteOffset);
+    output.push(sprite.frames);
+  };
+
   // Player
 
-  playerSetSprite = spriteSheetId => {
+  playerSetSprite = (spriteSheetId, persist) => {
     const output = this.output;
     const { sprites } = this.options;
     const spriteIndex = getSpriteIndex(spriteSheetId, sprites);
     output.push(cmd(PLAYER_SET_SPRITE));
     output.push(hi(spriteIndex));
     output.push(lo(spriteIndex));
+    output.push(persist ? 1 : 0);
   };
+
+  playerBounce = (height) => {
+    const output = this.output;
+    output.push(cmd(PLAYER_BOUNCE));
+    output.push(heightDec(height));
+  }
 
   // Sprites
 
@@ -264,12 +332,73 @@ class ScriptBuilder {
     output.push(cmd(HIDE_SPRITES));
   };
 
+  // Weapons
+
+  weaponAttack = (spriteSheetId, offset = 10, collisionGroup, collisionMask) => {
+    const output = this.output;
+    const { sprites, scene } = this.options;
+    const spriteSceneIndex = getSpriteSceneIndex(spriteSheetId, sprites, scene);
+    
+    output.push(cmd(WEAPON_ATTACK));
+    output.push(spriteSceneIndex);
+    output.push(offset);
+    output.push(((collisionMaskDec(collisionMask)) << 4) + collisionGroupDec(collisionGroup));
+  }
+
+  launchProjectile = (spriteSheetId, x, y, dirVariable, speed, collisionGroup, collisionMask) => {
+    const output = this.output;
+    const { sprites, variables, scene } = this.options;
+    const spriteSceneIndex = getSpriteSceneIndex(spriteSheetId, sprites, scene);
+    const dirVariableIndex = this.getVariableIndex(dirVariable, variables);
+
+    output.push(cmd(LAUNCH_PROJECTILE));
+    output.push(spriteSceneIndex);
+    output.push(hi(dirVariableIndex));
+    output.push(lo(dirVariableIndex));
+    output.push(moveSpeedDec(speed));
+    output.push(((collisionMaskDec(collisionMask)) << 4) + collisionGroupDec(collisionGroup));
+  }
+
+  // Palette
+
+  paletteSetBackground = (eventId, mask) => {
+    const output = this.output;
+    const { eventPaletteIndexes } = this.options;
+    const paletteIndex = eventPaletteIndexes[eventId] || 0;
+    output.push(cmd(PALETTE_SET_BACKGROUND));
+    output.push(paletteMaskDec(mask));
+    output.push(hi(paletteIndex));
+    output.push(lo(paletteIndex));
+  }
+
+  paletteSetActor = (eventId) => {
+    const output = this.output;
+    const { eventPaletteIndexes } = this.options;
+    const paletteIndex = eventPaletteIndexes[eventId] || 0;
+    output.push(cmd(PALETTE_SET_ACTOR));
+    output.push(hi(paletteIndex));
+    output.push(lo(paletteIndex));
+  }
+
+  paletteSetUI = (eventId) => {
+    const output = this.output;
+    const { eventPaletteIndexes } = this.options;
+    const paletteIndex = eventPaletteIndexes[eventId] || 0;
+    output.push(cmd(PALETTE_SET_UI));
+    output.push(hi(paletteIndex));
+    output.push(lo(paletteIndex));
+  }  
+
   // Text
 
   textDialogue = (inputText = " ", avatarId) => {
     const output = this.output;
     const { strings, avatars, variables, event } = this.options;
-    const text = this.replaceVariables(inputText, variables, event);
+    let text = this.replaceVariables(inputText, variables, event);
+
+    const maxPerLine = avatarId ? 16 : 18;
+    text = trimlines(text, maxPerLine);
+
     let stringIndex = strings.indexOf(text);
     if (stringIndex === -1) {
       strings.push(text);
@@ -293,7 +422,11 @@ class ScriptBuilder {
   textChoice = (setVariable, args) => {
     const output = this.output;
     const { strings, variables, event } = this.options;
-    const choiceText = combineMultipleChoiceText(args);
+
+    const trueText = trimlines(args.trueText || "", 17, 1)  || "Choice A";
+    const falseText = trimlines(args.falseText || "", 17, 1) || "Choice B";
+    const choiceText = `${trueText}\n${falseText}`;
+
     const text = this.replaceVariables(choiceText, variables, event);
     let stringIndex = strings.indexOf(text);
     if (stringIndex === -1) {
@@ -319,7 +452,7 @@ class ScriptBuilder {
     const output = this.output;
     const { strings, variables, event } = this.options;
     const menuText = options
-      .map((option, index) => option || `Item ${index + 1}`)
+      .map((option, index) => trimlines(option || "", 6, 1) || `Item ${index + 1}`)
       .join("\n");
     const text = this.replaceVariables(menuText, variables, event);
     let stringIndex = strings.indexOf(text);
@@ -362,25 +495,26 @@ class ScriptBuilder {
     output.push(2);
   };
 
-  textSetAnimSpeed = (speedIn, speedOut, textSpeed = 1) => {
+  textSetAnimSpeed = (speedIn, speedOut, textSpeed = 1, allowFastForward = true) => {
     const output = this.output;
     output.push(cmd(TEXT_SET_ANIM_SPEED));
     output.push(speedIn);
     output.push(speedOut);
-    output.push(textSpeed);
+    output.push(textSpeedDec(textSpeed));
+    output.push(allowFastForward ? 1 : 0);
   };
 
   // Variables
 
   getVariableIndex = (variable = "0", variables) => {
-    if (["L0", "L1", "L2", "L3"].indexOf(variable) > -1) {
+    if (["L0", "L1", "L2", "L3", "L4", "L5"].indexOf(variable) > -1) {
       const { entity } = this.options;
       return getVariableIndex(`${entity.id}__${variable}`, variables);
     }
     return getVariableIndex(variable, variables);
   };
 
-  variableSetToTrue = variable => {
+  variableSetToTrue = (variable) => {
     const output = this.output;
     const { variables } = this.options;
     const variableIndex = this.getVariableIndex(variable, variables);
@@ -389,7 +523,7 @@ class ScriptBuilder {
     output.push(lo(variableIndex));
   };
 
-  variableSetToFalse = variable => {
+  variableSetToFalse = (variable) => {
     const output = this.output;
     const { variables } = this.options;
     const variableIndex = this.getVariableIndex(variable, variables);
@@ -408,6 +542,32 @@ class ScriptBuilder {
     output.push(value);
   };
 
+  variableSetToProperty = (variable, property) => {
+    const output = this.output;
+    const { variables, scene, entity } = this.options;
+    const variableIndex = this.getVariableIndex(variable, variables);
+    const actorValue = property && property.replace(/:.*/,"");
+    const propertyValue = property && property.replace(/.*:/,"");
+    const actorIndex =
+      actorValue === "$self$"
+        ? getActorIndex(entity.id, scene)
+        : getActorIndex(actorValue, scene);    
+    const properties = [
+      "xpos",
+      "ypos",
+      "direction",
+      "moveSpeed",
+      "animSpeed",
+      "frame"
+    ]
+    const propertyIndex = properties.indexOf(propertyValue);
+    output.push(cmd(SET_PROPERTY));
+    output.push(hi(variableIndex));
+    output.push(lo(variableIndex));
+    output.push(Math.max(0, propertyIndex));
+    output.push(actorIndex);    
+  }
+
   variableCopy = (setVariable, otherVariable) => {
     const output = this.output;
     this.vectorsLoad(setVariable, otherVariable);
@@ -425,16 +585,18 @@ class ScriptBuilder {
     output.push(range);
   };
 
-  variablesAdd = (setVariable, otherVariable) => {
+  variablesAdd = (setVariable, otherVariable, clamp) => {
     const output = this.output;
     this.vectorsLoad(setVariable, otherVariable);
     output.push(cmd(MATH_ADD_VALUE));
+    output.push(clamp ? 1 : 0);
   };
 
-  variablesSub = (setVariable, otherVariable) => {
+  variablesSub = (setVariable, otherVariable, clamp) => {
     const output = this.output;
     this.vectorsLoad(setVariable, otherVariable);
     output.push(cmd(MATH_SUB_VALUE));
+    output.push(clamp ? 1 : 0);
   };
 
   variablesMul = (setVariable, otherVariable) => {
@@ -467,7 +629,7 @@ class ScriptBuilder {
     output.push(lo(indexY));
   };
 
-  variableInc = variable => {
+  variableInc = (variable) => {
     const output = this.output;
     const { variables } = this.options;
     const variableIndex = this.getVariableIndex(variable, variables);
@@ -476,7 +638,7 @@ class ScriptBuilder {
     output.push(lo(variableIndex));
   };
 
-  variableDec = variable => {
+  variableDec = (variable) => {
     const output = this.output;
     const { variables } = this.options;
     const variableIndex = this.getVariableIndex(variable, variables);
@@ -510,12 +672,142 @@ class ScriptBuilder {
     output.push(flags);
   };
 
+  temporaryEntityVariable = (index) => {
+    const { entity } = this.options;
+    return  `${entity.id}__${index}`;    
+  }
+
+  variableFromUnion = (unionValue, defaultVariable) => {
+    if(unionValue.type === "variable") {
+      return unionValue.value;
+    }
+    this.variableSetToUnionValue(defaultVariable, unionValue);
+    return defaultVariable;
+  }
+
+  variableSetToUnionValue = (variable, unionValue) => {
+    if(unionValue.type === "number"){
+      this.variableSetToValue(variable, unionValue.value);
+      return variable;
+    }
+    if(unionValue.type === "direction"){
+      this.variableSetToValue(variable, dirDec(unionValue.value));
+      return variable;
+    }    
+    if(unionValue.type === "property"){
+      this.variableSetToProperty(variable, unionValue.value);
+      return variable;
+    }
+    if(unionValue.type === "variable") {
+      this.variableCopy(variable, unionValue.value);
+      return variable;
+    }
+    throw new Error(`Union type "${unionValue.type}" unknown.`);    
+  }
+
+  // Engine Fields
+
+  engineFieldSetToValue = (key, value) => {
+    const output = this.output;
+    const { engineFields } = this.options;
+    const engineField = engineFields[key];
+    if (engineField !== undefined) {
+      const cType = engineField.field.cType;
+      let newValue = value;
+      if (newValue === "" || newValue === undefined) {
+        newValue = engineField.field.defaultValue || 0
+      }      
+      if (newValue === true) {
+        newValue = 1;
+      }
+      if (newValue === false) {
+        newValue = 0;
+      }      
+      if (is16BitCType(cType)) {
+        if (newValue < 0) {
+          // Convert negative to two's complement
+          newValue = 0xFFFF & ~(-newValue-1);
+        }
+        output.push(cmd(ENGINE_FIELD_UPDATE_WORD));
+        output.push(hi(engineField.offset));
+        output.push(lo(engineField.offset));
+        output.push(hi(newValue));
+        output.push(lo(newValue));
+      } else {
+        if (newValue < 0) {
+          // Convert negative to two's complement
+          newValue = 0xFF & ~(-newValue-1);
+        }        
+        output.push(cmd(ENGINE_FIELD_UPDATE));
+        output.push(hi(engineField.offset));
+        output.push(lo(engineField.offset));
+        output.push(newValue);
+      }
+    }
+  }
+
+  engineFieldSetToVariable = (key, variable) => {
+    const output = this.output;
+    const { engineFields, variables } = this.options;
+    const engineField = engineFields[key];
+    if (engineField !== undefined) {
+      const cType = engineField.field.cType;
+      if (is16BitCType(cType)) {
+        const loVariable = nextVariable(variable);
+        const hiIndex = this.getVariableIndex(variable, variables);
+        const loIndex = this.getVariableIndex(loVariable, variables); 
+        output.push(cmd(ENGINE_FIELD_UPDATE_VAR_WORD));
+        output.push(hi(engineField.offset));
+        output.push(lo(engineField.offset));
+        output.push(hi(hiIndex));
+        output.push(lo(hiIndex));
+        output.push(hi(loIndex));
+        output.push(lo(loIndex));
+      } else {
+        const variableIndex = this.getVariableIndex(variable, variables);
+        output.push(cmd(ENGINE_FIELD_UPDATE_VAR));
+        output.push(hi(engineField.offset));
+        output.push(lo(engineField.offset));
+        output.push(hi(variableIndex));
+        output.push(lo(variableIndex));
+      }
+    }
+  }  
+
+  engineFieldStoreInVariable = (key, variable) => {
+    const output = this.output;
+    const { engineFields, variables } = this.options;
+    const engineField = engineFields[key];
+    if (engineField !== undefined) {
+      const cType = engineField.field.cType;
+      if (is16BitCType(cType)) {
+        const loVariable = nextVariable(variable);
+        const hiIndex = this.getVariableIndex(variable, variables);
+        const loIndex = this.getVariableIndex(loVariable, variables);
+        output.push(cmd(ENGINE_FIELD_STORE_WORD));
+        output.push(hi(engineField.offset));
+        output.push(lo(engineField.offset));
+        output.push(hi(loIndex));
+        output.push(lo(loIndex));
+        output.push(hi(hiIndex));
+        output.push(lo(hiIndex));
+      } else {
+        const variableIndex = this.getVariableIndex(variable, variables);
+        output.push(cmd(ENGINE_FIELD_STORE));
+        output.push(hi(engineField.offset));
+        output.push(lo(engineField.offset));
+        output.push(hi(variableIndex));
+        output.push(lo(variableIndex));
+      }
+    }
+  }    
+
   // Scenes
 
   sceneSwitch = (sceneId, x = 0, y = 0, direction = "down", fadeSpeed = 2) => {
     const output = this.output;
     const { scenes } = this.options;
-    const sceneIndex = scenes.findIndex(s => s.id === sceneId);
+    const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
     if (sceneIndex > -1) {
       output.push(cmd(SWITCH_SCENE));
       output.push(hi(sceneIndex));
@@ -524,6 +816,7 @@ class ScriptBuilder {
       output.push(y);
       output.push(dirDec(direction));
       output.push(fadeSpeed);
+      this.scriptEnd();
     }
   };
 
@@ -551,26 +844,12 @@ class ScriptBuilder {
 
   // Overlays
 
-  // Overlay Y is authored as a Game Boy tile row (0 = full-screen overlay,
-  // 18 = just off the bottom of the GB screen = hidden). The overlay always
-  // spans from row Y to the bottom of the screen, so on a taller target the
-  // same authored row has to be scaled by the screen height or "hide" (18)
-  // stops short and leaves a strip visible. target undefined -> "gb", ratio
-  // 18/18 = 1, so GB output is byte-for-byte unchanged.
-  scaleOverlayRow = y => {
-    const { target } = this.options || {};
-    const gbRows = getTarget("gb").screenTileHeight;
-    const rows = getTarget(target).screenTileHeight;
-    if (rows === gbRows) return y;
-    return Math.round((y * rows) / gbRows);
-  };
-
   overlayShow = (color = "white", x = 0, y = 0) => {
     const output = this.output;
     output.push(cmd(OVERLAY_SHOW));
     output.push(color === "white" ? 1 : 0);
     output.push(x);
-    output.push(this.scaleOverlayRow(y));
+    output.push(y);
   };
 
   overlayHide = () => {
@@ -582,7 +861,7 @@ class ScriptBuilder {
     const output = this.output;
     output.push(cmd(OVERLAY_MOVE_TO));
     output.push(x);
-    output.push(this.scaleOverlayRow(y));
+    output.push(y);
     output.push(speed);
   };
 
@@ -597,7 +876,7 @@ class ScriptBuilder {
     output.push(lo(variableIndex));
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
 
@@ -618,7 +897,7 @@ class ScriptBuilder {
     output.push(comparator || 0);
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
 
@@ -712,17 +991,17 @@ class ScriptBuilder {
     output.push(operatorDec(operator));
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
 
   ifInput = (input, truePath = [], falsePath = []) => {
     const output = this.output;
     output.push(cmd(IF_INPUT));
-    this.inputMask(input);
+    output.push(inputDec(input));
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
 
@@ -733,7 +1012,7 @@ class ScriptBuilder {
     output.push(y || 0);
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
 
@@ -743,22 +1022,38 @@ class ScriptBuilder {
     output.push(dirDec(direction));
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
+
+  ifActorRelativeToActor = (operation, otherId, truePath = [], falsePath = []) => {
+    const output = this.output;
+    const { scene, entity } = this.options;
+    const otherIndex =
+      otherId === "$self$"
+        ? getActorIndex(entity.id, scene)
+        : getActorIndex(otherId, scene);
+    output.push(cmd(IF_ACTOR_RELATIVE_TO_ACTOR));
+    output.push(actorRelativeDec(operation));
+    output.push(otherIndex);
+    compileConditional(truePath, falsePath, {
+      ...this.options,
+      output,
+    }); 
+  }
 
   ifDataSaved = (truePath = [], falsePath = []) => {
     const output = this.output;
     output.push(cmd(IF_SAVED_DATA));
     compileConditional(truePath, falsePath, {
       ...this.options,
-      output
+      output,
     });
   };
 
   // Goto
 
-  labelDefine = name => {
+  labelDefine = (name) => {
     const { labels } = this.options;
     const output = this.output;
     const ptr = output.length;
@@ -772,7 +1067,7 @@ class ScriptBuilder {
     }
   };
 
-  labelGoto = name => {
+  labelGoto = (name) => {
     const { labels } = this.options;
     const output = this.output;
     if (labels[name] !== undefined) {
@@ -789,29 +1084,13 @@ class ScriptBuilder {
 
   // Input
 
-  // Push the button mask carried by IF_INPUT / AWAIT_INPUT / SET_INPUT_SCRIPT /
-  // REMOVE_INPUT_SCRIPT. One byte on the Game Boy (8 buttons); two little-endian
-  // bytes on the SNES, whose extra X/Y/L/R bits live in KEY_BITS 8..11. The
-  // target descriptor's inputMaskBytes is the single source of truth.
-  inputMask = input => {
-    const output = this.output;
-    const { target } = this.options || {};
-    const mask = inputDec(input);
-    if (getTarget(target).inputMaskBytes === 2) {
-      output.push(mask & 0xff);
-      output.push((mask >> 8) & 0xff);
-    } else {
-      output.push(mask & 0xff);
-    }
-  };
-
-  inputAwait = input => {
+  inputAwait = (input) => {
     const output = this.output;
     output.push(cmd(AWAIT_INPUT));
-    this.inputMask(input);
+    output.push(inputDec(input));
   };
 
-  inputScriptSet = (input, script) => {
+  inputScriptSet = (input, persist, script) => {
     const output = this.output;
     const { compileEvents, banked } = this.options;
 
@@ -826,30 +1105,28 @@ class ScriptBuilder {
     const bankPtr = banked.push(subScript);
 
     output.push(cmd(SET_INPUT_SCRIPT));
-    this.inputMask(input);
+    output.push(inputDec(input));
+    output.push(persist ? 1 : 0);    
     output.push(bankPtr.bank);
     output.push(hi(bankPtr.offset));
     output.push(lo(bankPtr.offset));
   };
 
-  inputScriptRemove = input => {
+  inputScriptRemove = (input) => {
     const output = this.output;
     output.push(cmd(REMOVE_INPUT_SCRIPT));
-    this.inputMask(input);
+    output.push(inputDec(input));
   };
 
   // Camera
 
   cameraMoveTo = (x = 0, y = 0, speed = 0) => {
     const output = this.output;
-    const { scene, target } = this.options;
+    const { scene } = this.options;
     output.push(cmd(CAMERA_MOVE_TO));
-    // Limit camera move to be within scene bounds. Margins are the target's
-    // screen size in tiles (target undefined -> "gb", so GB behaviour here is
-    // unchanged: 20x18, same literals as before this became target-aware).
-    const { screenTileWidth, screenTileHeight } = getTarget(target);
-    const camX = Math.min(x, scene.width - screenTileWidth);
-    const camY = Math.min(y, scene.height - screenTileHeight);
+    // Limit camera move to be within scene bounds
+    const camX = Math.min(x, scene.width - 20);
+    const camY = Math.min(y, scene.height - 18);
     output.push(camX);
     output.push(camY);
     // Direct speed in binary, first bits 0000 to 1111 are "&" compared with binary time
@@ -865,9 +1142,11 @@ class ScriptBuilder {
     output.push(speedFlag);
   };
 
-  cameraShake = frames => {
+  cameraShake = (shouldShakeX, shouldShakeY, frames) => {
     const output = this.output;
     output.push(cmd(CAMERA_SHAKE));
+    output.push(shouldShakeX ? 1 : 0);
+    output.push(shouldShakeY ? 1 : 0);
     output.push(frames);
   };
 
@@ -905,13 +1184,14 @@ class ScriptBuilder {
 
   // Sound
 
-  soundStartTone = (period = 1600) => {
+  soundStartTone = (period = 1600, toneFrames = 30) => {
     const output = this.output;
 
     // start playing tone
     output.push(cmd(SOUND_START_TONE));
     output.push(hi(period));
     output.push(lo(period));
+    output.push(lo(toneFrames));
   };
 
   soundStopTone = () => {
@@ -963,7 +1243,7 @@ class ScriptBuilder {
     output.push(cmd(NEXT_FRAME));
   };
 
-  wait = frames => {
+  wait = (frames) => {
     const output = this.output;
     output.push(cmd(WAIT));
     output.push(frames);
@@ -1018,13 +1298,25 @@ class ScriptBuilder {
     output.push(cmd(TIMER_DISABLE));
   };
 
+  // Device
+
+  ifColorSupported = (truePath = [], falsePath = []) => {
+    const output = this.output;
+    output.push(cmd(IF_COLOR_SUPPORTED));
+    compileConditional(truePath, falsePath, {
+      ...this.options,
+      output,
+    });
+
+  }
+
   // Helpers
 
   getSprite = (name, plugin = "") => {
     const { sprites } = this.options;
     const searchName = name.toUpperCase();
     const searchPlugin = plugin.toUpperCase();
-    const sprite = sprites.find(s => {
+    const sprite = sprites.find((s) => {
       return (
         (searchName === s.name.toUpperCase() ||
           searchName === s.filename.toUpperCase()) &&
@@ -1037,7 +1329,7 @@ class ScriptBuilder {
     throw new Error(`Sprite ${name} not found`);
   };
 
-  getActor = name => {
+  getActor = (name) => {
     if (name === "player") {
       return name;
     }
@@ -1054,26 +1346,61 @@ class ScriptBuilder {
     throw new Error(`Actor ${name} not found`);
   };
 
+  getActorById = (id) => {
+    const output = this.output;
+    const { scene, entity } = this.options;
+    return id === "$self$" ? getActor(entity.id, scene) : getActor(id, scene);
+  };
+
   replaceVariables = (string, variables, event) => {
-    const getVariableSymbol = index => `$${String(index).padStart(2, "0")}$`;
-    
-    return string
-    // Replace Global variables
-    .replace(/\$([0-9]+)\$/g, (match, globalVariable) => {
-      const index = this.getVariableIndex(globalVariable, variables);
-      return getVariableSymbol(index);
-    })
-    // Replace Local variables
-    .replace(/\$(L[0-9])\$/g, (match, localVariable) => {
-      const index = this.getVariableIndex(localVariable, variables);
-      return getVariableSymbol(index);
-    })
-    // Replace Custom Event variables
-    .replace(/\$V([0-9])\$/g, (match, customVariable) => {
-      const mappedVariable = event.args[`$variable[${customVariable}]$`];
-      const index = this.getVariableIndex(mappedVariable, variables);
-      return getVariableSymbol(index);
-    });
+    const getVariableSymbol = (index) => `$${String(index).padStart(2, "0")}$`;
+    const getVariableCharSymbol = (index) => `#${String(index).padStart(2, "0")}#`;
+
+    return (
+      string
+        // Replace Global variables
+        .replace(/\$([0-9]+)\$/g, (match, globalVariable) => {
+          const index = this.getVariableIndex(globalVariable, variables);
+          return getVariableSymbol(index);
+        })
+        // Replace Local variables
+        .replace(/\$(L[0-9])\$/g, (match, localVariable) => {
+          const index = this.getVariableIndex(localVariable, variables);
+          return getVariableSymbol(index);
+        })
+        // Replace Temp variables
+        .replace(/\$(T[0-9])\$/g, (match, tempVariable) => {
+          const index = this.getVariableIndex(tempVariable, variables);
+          return getVariableSymbol(index);
+        })   
+        // Replace Custom Event variables
+        .replace(/\$V([0-9])\$/g, (match, customVariable) => {
+          const mappedVariable = event.args[`$variable[${customVariable}]$`];
+          const index = this.getVariableIndex(mappedVariable, variables);
+          return getVariableSymbol(index);
+        })
+        // Replace Global variable characters
+        .replace(/#([0-9]+)#/g, (match, globalVariable) => {
+          const index = this.getVariableIndex(globalVariable, variables);
+          return getVariableCharSymbol(index);
+        })
+        // Replace Local variable characters
+        .replace(/#(L[0-9])#/g, (match, localVariable) => {
+          const index = this.getVariableIndex(localVariable, variables);
+          return getVariableCharSymbol(index);
+        })
+        // Replace Temp variable characters
+        .replace(/#(T[0-9])#/g, (match, tempVariable) => {
+          const index = this.getVariableIndex(tempVariable, variables);
+          return getVariableCharSymbol(index);
+        })   
+        // Replace Custom Event variable characters
+        .replace(/#V([0-9])#/g, (match, customVariable) => {
+          const mappedVariable = event.args[`$variable[${customVariable}]$`];
+          const index = this.getVariableIndex(mappedVariable, variables);
+          return getVariableCharSymbol(index);
+        })        
+    );
   };
 }
 

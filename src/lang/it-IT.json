@@ -343,7 +343,7 @@
   "MENU_DOCUMENTATION": "Documentazione",
   "MENU_LEARN_MORE": "Maggiorni Informazioni",
   "MENU_SPEECH": "Voce",
-  "MENU_ABOUT": "About GBSNES Studio",
+  "MENU_ABOUT": "About GB Studio",
   "MENU_CART_TYPE": "Tipo di Cartuccia",
   "MENU_COPY_EVENT": "Copia Evento",
   "MENU_RENAME_EVENT": "Rinomina Evento",
@@ -379,8 +379,8 @@
 
   "// 11": "Warnings -----------------------------------------------------",
 
-  "WARNING_BACKGROUND_TOO_SMALL": "Il Background è troppo piccolo, dovrebbe essere almeno di {width}px x {height}px",
-  "WARNING_BACKGROUND_TOO_LARGE": "Il Background è troppo grande, dovrebbe essere al massimo di {width}px x {height}px",
+  "WARNING_BACKGROUND_TOO_SMALL": "Il Background è troppo piccolo, dovrebbe essere almeno di 160px x 144px",
+  "WARNING_BACKGROUND_TOO_LARGE": "Il Background è troppo grande, dovrebbe essere al massimo di 256px x 256px",
   "WARNING_BACKGROUND_NOT_MULTIPLE_OF_8": "Le dimensioni del Background non sono un multiplo di 8",
 
   "// 12": "Errors -------------------------------------------------------",
@@ -392,7 +392,6 @@
   "ERROR_OPEN_GBSPROJ_FILE": "Seleziona un file .gbsproj o .json",
   "ERROR_MISSING_PROJECT": "Il file di progetto è mancante",
   "ERROR_MOVED_OR_DELETED": "Potrebbe essere spostato oppure eliminato",
-  "ERROR_PLEASE_SELECT_A_DIFFERENT_LOCATION": "Selezionare una posizione differente",
 
   "// 13": "Splash -------------------------------------------------------",
 
@@ -431,18 +430,18 @@
   "DIALOG_CANCEL": "Annulla",
   "DIALOG_DELETE": "Elimina",
   "DIALOG_UPDATE_AVAILABLE": "Aggiornamento disponibile",
-  "DIALOG_UPDATE_DESCRIPTION": "GBSNES Studio {version} disponibile. Vuoi aggiornarlo?",
+  "DIALOG_UPDATE_DESCRIPTION": "GB Studio {version} disponibile. Vuoi aggiornarlo?",
   "DIALOG_UPDATE_DONT_ASK_AGAIN": "Non chiedermelo più",
   "DIALOG_UP_TO_DATE": "Sei aggiornato!",
-  "DIALOG_NEWEST_VERSION_AVAILABLE": "GBSNES Studio {version} è la versione più recente disponibile.",
+  "DIALOG_NEWEST_VERSION_AVAILABLE": "GB Studio {version} è la versione più recente disponibile.",
   "DIALOG_UNABLE_TO_CHECK_LATEST_VERSION": "Al momento non è possibile verificare la presenza di un aggiornamento.",
-  "DIALOG_PROJECT_NEED_MIGRATION": "Il Progetto GBSNES Studio Necessita di Essere Aggiornato",
-  "DIALOG_MIGRATION_DESCRIPTION": "Il tuo progetto è stato creato con la versione {currentVersion} e deve essere aggiornatoalla versione {version}. Questo potrebbe impedire che venga aperto con versioni più vecchie di GBSNES Studio.\n\nSi raccomanda di creare un backup prima di procedere.",
+  "DIALOG_PROJECT_NEED_MIGRATION": "Il Progetto GB Studio Necessita di Essere Aggiornato",
+  "DIALOG_MIGRATION_DESCRIPTION": "Il tuo progetto è stato creato con la versione {currentVersion} e deve essere aggiornatoalla versione {version}. Questo potrebbe impedire che venga aperto con versioni più vecchie di GB Studio.\n\nSi raccomanda di creare un backup prima di procedere.",
   "DIALOG_MIGRATE": "Aggiorna a {version}",
-  "DIALOG_FUTURE": "Progetto GBSNES Studio non supportato",
-  "DIALOG_FUTURE_DESCRIPTION": "Questo progetto è stato creato con la versione {currentVersion} che è superiore alla versione supportata da GBSNES Studio. La versione più recente supportata è la {version}.\n\nSi consiglia di aggiornare GBSNES Studio.",
+  "DIALOG_FUTURE": "Progetto GB Studio non supportato",
+  "DIALOG_FUTURE_DESCRIPTION": "Questo progetto è stato creato con la versione {currentVersion} che è superiore alla versione supportata da GB Studio. La versione più recente supportata è la {version}.\n\nSi consiglia di aggiornare GB Studio.",
   "DIALOG_OPEN_ANYWAY": "Apri Comunque",
-  "DIALOG_LANGUAGE_CHANGES_NEED_RESTART": "GBSNES Studio deve essere rilanciato perché le modifiche al linguaggio possano avere effetto",
+  "DIALOG_LANGUAGE_CHANGES_NEED_RESTART": "GB Studio deve essere rilanciato perché le modifiche al linguaggio possano avere effetto",
   "DIALOG_LANGUAGE_SAVE_AND_RESTART": "Salva il tuo progetto e rilancia l'applicazione.",
   "DIALOG_DELETE_CUSTOM_EVENT": "Delete Custom Event \"{name}\"?",
   "DIALOG_DELETE_CUSTOM_EVENT_USED": "{count} utilizzi di questo evento verranno rimossi.\n\nTrovati in: {sceneNames}",
@@ -464,7 +463,7 @@
 
   "// 17 ": "Error ------------------------------------------------------",
 
-  "ERROR_TITLE": "GBSNES Studio ha riscontrato un errore",
+  "ERROR_TITLE": "GB Studio ha riscontrato un errore",
   "ERROR_WHAT_CAN_I_DO": "Cosa posso fare?",
   "ERROR_VIEW_STACK_TRACE": "Visualizza lo Stack Trace",
   "ERROR_CLOSE": "Chiudi"

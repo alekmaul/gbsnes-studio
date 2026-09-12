@@ -276,7 +276,7 @@
   "MENU_DOCUMENTATION": "Documentation",
   "MENU_LEARN_MORE": "Learn More",
   "MENU_SPEECH": "Speech",
-  "MENU_ABOUT": "About GBSNES Studio",
+  "MENU_ABOUT": "About GB Studio",
   "MENU_CART_TYPE": "Cartridge Type",
   "MENU_COPY_EVENT": "Copy Event",
   "MENU_RENAME_EVENT": "Rename Event",
@@ -307,8 +307,8 @@
 
   "// 11": "Warnings -----------------------------------------------------",
 
-  "WARNING_BACKGROUND_TOO_SMALL": "Background is too small, must be at least {width}px x {height}px",
-  "WARNING_BACKGROUND_TOO_LARGE": "Background is too large, must be at most {width}px x {height}px",
+  "WARNING_BACKGROUND_TOO_SMALL": "Background is too small, must be at least 160px x 144px",
+  "WARNING_BACKGROUND_TOO_LARGE": "Background is too large, must be at most 256px x 256px",
   "WARNING_BACKGROUND_NOT_MULTIPLE_OF_8": "Background dimensions are not a multiple of 8",
 
   "// 12": "Errors -------------------------------------------------------",
@@ -357,15 +357,15 @@
   "DIALOG_OK": "OK",
   "DIALOG_CANCEL": "Cancel",
   "DIALOG_UPDATE_AVAILABLE": "Update available",
-  "DIALOG_UPDATE_DESCRIPTION": "GBSNES Studio {version} available. Would you like to update?",
+  "DIALOG_UPDATE_DESCRIPTION": "GB Studio {version} available. Would you like to update?",
   "DIALOG_UPDATE_DONT_ASK_AGAIN": "Dont ask me again",
   "DIALOG_UP_TO_DATE": "You’re up-to-date!",
-  "DIALOG_NEWEST_VERSION_AVAILABLE": "GBSNES Studio {version} is currently the newest version available.",
+  "DIALOG_NEWEST_VERSION_AVAILABLE": "GB Studio {version} is currently the newest version available.",
   "DIALOG_UNABLE_TO_CHECK_LATEST_VERSION": "Unable to check latest version at the moment",
-  "DIALOG_PROJECT_NEED_MIGRATION": "GBSNES Studio Project Requires Migrating",
-  "DIALOG_MIGRATION_DESCRIPTION": "Your project was created with version {currentVersion} and needs to be migrated to version {version}. This may prevent your project being opened in older versions of GBSNES Studio.\n\nIt is recommended to back up your project before continuing.",
+  "DIALOG_PROJECT_NEED_MIGRATION": "GB Studio Project Requires Migrating",
+  "DIALOG_MIGRATION_DESCRIPTION": "Your project was created with version {currentVersion} and needs to be migrated to version {version}. This may prevent your project being opened in older versions of GB Studio.\n\nIt is recommended to back up your project before continuing.",
   "DIALOG_MIGRATE": "Migrate to {version}",
-  "DIALOG_FUTURE": "GBSNES Studio Project Not Supported",
-  "DIALOG_FUTURE_DESCRIPTION": "This project file was created with version {currentVersion} which is newer than this version of GBSNES Studio supports. Maximum supported is {version}.\n\nYou may need to update GBSNES Studio.",
+  "DIALOG_FUTURE": "GB Studio Project Not Supported",
+  "DIALOG_FUTURE_DESCRIPTION": "This project file was created with version {currentVersion} which is newer than this version of GB Studio supports. Maximum supported is {version}.\n\nYou may need to update GB Studio.",
   "DIALOG_OPEN_ANYWAY": "Open Anyway"
 }

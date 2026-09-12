@@ -1,31 +1,31 @@
 import React, { Component } from "react";
 import PropTypes from "prop-types";
-import cx from "classnames";
 import { connect } from "react-redux";
 import l10n from "../../lib/helpers/l10n";
-import * as actions from "../../actions";
-import GBControlsPreview from "../library/GBControlsPreview";
-import SNESControlsPreview from "../library/SNESControlsPreview";
-import { FormField } from "../library/Forms";
-import Button from "../library/Button";
+import { Button } from "../ui/buttons/Button";
+import settingsActions from "../../store/features/settings/settingsActions";
+import { Input } from "../ui/form/Input";
+import { SearchableSettingRow } from "../ui/form/SearchableSettingRow";
+import { CardButtons } from "../ui/cards/Card";
+import { SettingRowInput, SettingRowLabel } from "../ui/form/SettingRow";
 
 const directions = [
   {
     key: "up",
-    label: "Up"
+    label: "Up",
   },
   {
     key: "down",
-    label: "Down"
+    label: "Down",
   },
   {
     key: "left",
-    label: "Left"
+    label: "Left",
   },
   {
     key: "right",
-    label: "Right"
-  }
+    label: "Right",
+  },
 ];
 
 const buttons = [
@@ -33,20 +33,12 @@ const buttons = [
   { key: "b", label: "B" },
   {
     key: "start",
-    label: "Start"
+    label: "Start",
   },
   {
     key: "select",
-    label: "Select"
-  }
-];
-
-// Shown only for a SNES project, as an extra column.
-const snesButtons = [
-  { key: "x", label: "X" },
-  { key: "y", label: "Y" },
-  { key: "l", label: "L" },
-  { key: "r", label: "R" }
+    label: "Select",
+  },
 ];
 
 const keyMap = {
@@ -58,10 +50,6 @@ const keyMap = {
   b: "customControlsB",
   start: "customControlsStart",
   select: "customControlsSelect",
-  x: "customControlsX",
-  y: "customControlsY",
-  l: "customControlsL",
-  r: "customControlsR"
 };
 
 const defaultValues = {
@@ -73,82 +61,54 @@ const defaultValues = {
   customControlsB: ["Control", "k", "x"],
   customControlsStart: ["Enter"],
   customControlsSelect: ["Shift"],
-  // SNES-only (X / Y / L / R) - the same keys the bundled web player falls back
-  // to. Ignored by the Game Boy target.
-  customControlsX: ["i"],
-  customControlsY: ["u"],
-  customControlsL: ["o"],
-  customControlsR: ["p"]
 };
 
 class CustomControlsPicker extends Component {
   constructor() {
     super();
     this.inputRef = React.createRef();
-    this.state = {
-      input: ""
-    };
   }
 
-  onKeyDown = e => {
+  onKeyDown = (input) => (e) => {
     const { settings, editProjectSettings } = this.props;
-    const { input } = this.state;
-    if (input) {
-      e.preventDefault();
-      const inputKey = keyMap[input];
-      const currentValue = Array.isArray(settings[inputKey])
-        ? settings[inputKey]
-        : defaultValues[inputKey];
+    e.preventDefault();
+    const inputKey = keyMap[input];
+    const currentValue = Array.isArray(settings[inputKey])
+      ? settings[inputKey]
+      : defaultValues[inputKey];
+    e.currentTarget.blur();
 
-      this.setState({ input: "" });
-      this.inputRef.current.blur();
-
-      if (e.key === "Backspace") {
-        editProjectSettings({
-          [inputKey]: []
-        });
-      } else {
-        const patch = Object.values(keyMap).reduce((memo, otherInputKey) => {
-          if (inputKey !== otherInputKey) {
-            const otherValue = Array.isArray(settings[otherInputKey])
-              ? settings[otherInputKey]
-              : defaultValues[otherInputKey];
-            if (otherValue.indexOf(e.key) > -1) {
-              return {
-                ...memo,
-                [otherInputKey]: otherValue.filter(k => k !== e.key)
-              };
-            }
-            return memo;
-          }
-          if (currentValue.indexOf(e.key) > -1) {
+    if (e.key === "Backspace" || e.key === "Delete") {
+      editProjectSettings({
+        [inputKey]: [],
+      });
+    } else {
+      const patch = Object.values(keyMap).reduce((memo, otherInputKey) => {
+        if (inputKey !== otherInputKey) {
+          const otherValue = Array.isArray(settings[otherInputKey])
+            ? settings[otherInputKey]
+            : defaultValues[otherInputKey];
+          if (otherValue.indexOf(e.key) > -1) {
             return {
               ...memo,
-              [inputKey]: currentValue.filter(k => k !== e.key)
+              [otherInputKey]: otherValue.filter((k) => k !== e.key),
             };
           }
+          return memo;
+        }
+        if (currentValue.indexOf(e.key) > -1) {
           return {
             ...memo,
-            [inputKey]: [].concat(currentValue, e.key)
+            [inputKey]: currentValue.filter((k) => k !== e.key),
           };
-        }, {});
-        editProjectSettings(patch);
-      }
+        }
+        return {
+          ...memo,
+          [inputKey]: [].concat(currentValue, e.key),
+        };
+      }, {});
+      editProjectSettings(patch);
     }
-  };
-
-  onSelectInput = input => {
-    this.setState({ input });
-    this.inputRef.current.focus();
-  };
-
-  onFocus = input => e => {
-    this.setState({ input });
-    this.inputRef.current.focus();
-  };
-
-  onBlur = e => {
-    this.setState({ input: "" });
   };
 
   noop = () => {};
@@ -159,89 +119,67 @@ class CustomControlsPicker extends Component {
       Object.keys(defaultValues).reduce((memo, key) => {
         return {
           ...memo,
-          [key]: undefined
+          [key]: undefined,
         };
       }, {})
     );
   };
 
-  renderField = item => {
-    const { settings } = this.props;
-    const { input } = this.state;
-    return (
-      <FormField key={item.key}>
-        <label htmlFor="buttonUps">
-          {item.label}
-          <input
-            id="buttonUp"
-            value={(
-              settings[keyMap[item.key]] ||
-              defaultValues[keyMap[item.key]] ||
-              []
-            ).join(", ")}
-            onChange={this.noop}
-            placeholder=""
-            className={cx("CustomControlsPicker__Input", {
-              "CustomControlsPicker__Input--Focus": item.key === input
-            })}
-            onFocus={this.onFocus(item.key)}
-          />
-        </label>
-      </FormField>
-    );
-  };
-
   render() {
-    const { settings } = this.props;
-    const { input } = this.state;
-    const isSnes = settings.target === "snes";
+    const { settings, searchTerm } = this.props;
     return (
-      <div className="CustomControlsPicker">
-        <div
-          className={cx("CustomControlsPicker__Columns", {
-            "CustomControlsPicker__Columns--snes": isSnes
-          })}
-        >
-          <div className="CustomControlsPicker__Column">
-            {directions.map(this.renderField)}
-          </div>
-          <div className="CustomControlsPicker__Column">
-            {buttons.map(this.renderField)}
-          </div>
-          {isSnes && (
-            <div className="CustomControlsPicker__Column">
-              {snesButtons.map(this.renderField)}
-            </div>
-          )}
-          <div
-            className="CustomControlsPicker__Column"
-            style={{ marginTop: 30 }}
+      <>
+        {directions.map((direction) => (
+          <SearchableSettingRow
+            key={direction.id}
+            searchTerm={searchTerm}
+            searchMatches={[direction.label]}
           >
-            {isSnes ? (
-              <SNESControlsPreview
-                selected={input}
-                onSelect={this.onSelectInput}
+            <SettingRowLabel>{direction.label}</SettingRowLabel>
+
+            <SettingRowInput>
+              <Input
+                id="directionUp"
+                value={(
+                  settings[keyMap[direction.key]] ||
+                  defaultValues[keyMap[direction.key]] ||
+                  []
+                ).join(", ")}
+                onChange={this.noop}
+                placeholder=""
+                onKeyDown={this.onKeyDown(direction.key)}
               />
-            ) : (
-              <GBControlsPreview
-                selected={input}
-                onSelect={this.onSelectInput}
+            </SettingRowInput>
+          </SearchableSettingRow>
+        ))}
+        {buttons.map((button) => (
+          <SearchableSettingRow
+            key={button.key}
+            searchTerm={searchTerm}
+            searchMatches={[button.label]}
+          >
+            <SettingRowLabel>{button.label}</SettingRowLabel>
+            <SettingRowInput>
+              <Input
+                id="buttonUp"
+                value={(
+                  settings[keyMap[button.key]] ||
+                  defaultValues[keyMap[button.key]] ||
+                  []
+                ).join(", ")}
+                onChange={this.noop}
+                placeholder=""
+                onKeyDown={this.onKeyDown(button.key)}
               />
-            )}
-          </div>
-        </div>
-        <input
-          className="CustomControlsPicker__HiddenInput"
-          ref={this.inputRef}
-          onKeyDown={this.onKeyDown}
-          onBlur={this.onBlur}
-        />
-        <div style={{ marginTop: 30 }}>
+            </SettingRowInput>
+          </SearchableSettingRow>
+        ))}
+        <CardButtons>
           <Button onClick={this.onRestoreDefault}>
             {l10n("FIELD_RESTORE_DEFAULT")}
           </Button>
-        </div>
-      </div>
+        </CardButtons>        
+      </>
     );
   }
 }
@@ -258,25 +196,24 @@ CustomControlsPicker.propTypes = {
     customControlsB: CustomControlPropType,
     customControlsStart: CustomControlPropType,
     customControlsSelect: CustomControlPropType,
-    customControlsX: CustomControlPropType,
-    customControlsY: CustomControlPropType,
-    customControlsL: CustomControlPropType,
-    customControlsR: CustomControlPropType,
-    target: PropTypes.string
   }).isRequired,
-  editProjectSettings: PropTypes.func.isRequired
+  editProjectSettings: PropTypes.func.isRequired,
+  searchTerm: PropTypes.string
+};
+
+CustomControlsPicker.defaultProps = {
+  searchTerm: ""
 };
 
 function mapStateToProps(state) {
-  const project = state.entities.present.result;
-  const { settings } = project;
+  const settings = state.project.present.settings;
   return {
-    settings
+    settings,
   };
 }
 
 const mapDispatchToProps = {
-  editProjectSettings: actions.editProjectSettings
+  editProjectSettings: settingsActions.editSettings,
 };
 
 export default connect(

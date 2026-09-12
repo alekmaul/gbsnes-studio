@@ -1,28 +1,17 @@
-import trimlines from "../helpers/trimlines";
-import l10n from "../helpers/l10n";
-import { getTarget } from "../compiler/targets";
+const trimlines = require("../helpers/trimlines");
+const l10n = require("../helpers/l10n").default;
 
-export const id = "EVENT_TEXT";
+const id = "EVENT_TEXT";
 
-// How many characters the dialogue box's editor pre-wrap fits on one line -
-// per target (the SNES box is much wider than the GB's), with/without the
-// avatar portrait eating into it. `target` is threaded in at runtime by
-// ScriptEditor.js / ScriptEventBlock.js (Redux `settings.target`) - a static
-// field definition has no project context, but updateFn/postUpdate are plain
-// functions invoked fresh each edit, so they can take it as an extra arg.
-const maxPerLineFor = (target, hasAvatar) => {
-  const t = getTarget(target);
-  return hasAvatar ? t.maxTextLineCharsWithAvatar : t.maxTextLineChars;
-};
-
-export const fields = [
+const fields = [
   {
     key: "text",
     type: "textarea",
     placeholder: l10n("FIELD_TEXT_PLACEHOLDER"),
-    updateFn: (string, field, args, target) => {
-      const maxPerLine = maxPerLineFor(target, args.avatarId);
-      return trimlines(string, maxPerLine);
+    updateFn: (string, field, args) => {
+      const maxPerLine = args.avatarId ? 16 : 18;
+      const maxTotal = args.avatarId ? 48 : 52;
+      return trimlines(string, maxPerLine, 4, maxTotal);
     },
     multiple: true,
     defaultValue: ""
@@ -35,19 +24,20 @@ export const fields = [
     defaultValue: "",
     optional: true,
     filter: sprite => sprite.numFrames === 1,
-    postUpdate: (args, target) => {
-      const maxPerLine = maxPerLineFor(target, args.avatarId);
+    postUpdate: (args) => {
+      const maxPerLine = args.avatarId ? 16 : 18;
+      const maxTotal = args.avatarId ? 48 : 52;
       return {
         ...args,
         text: Array.isArray(args.text)
-          ? args.text.map(string => trimlines(string, maxPerLine))
-          : trimlines(args.text, maxPerLine)
+          ? args.text.map(string => trimlines(string, maxPerLine, 4, maxTotal))
+          : trimlines(args.text, maxPerLine, 4, maxTotal)
       };
     }
   }
 ];
 
-export const compile = (input, helpers) => {
+const compile = (input, helpers) => {
   const {
     textDialogue,
     textSetOpenInstant,
@@ -83,4 +73,10 @@ export const compile = (input, helpers) => {
   } else {
     textDialogue(input.text || " ", input.avatarId);
   }
+};
+
+module.exports = {
+  id,
+  fields,
+  compile
 };

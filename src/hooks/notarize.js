@@ -6,8 +6,8 @@ const buildOutput = require("path").resolve(
   "..",
   "..",
   "out",
-  "GBSNES Studio-darwin-x64",
-  "GBSNES Studio.app"
+  "GB Studio-darwin-x64",
+  "GB Studio.app"
 );
 
 module.exports = () => {
