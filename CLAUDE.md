@@ -17,7 +17,12 @@ locales). The npm `name`, `executableName`, Squirrel/Store names and CI artifact
 are `gbsnes-studio` / `gbsnes_studio` / `gbsnesstudio`. Still `gbstudio`-flavoured (not renamed
 on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
 `src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
-upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio`.
+upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
+the latest release version (`github.repos.getLatestRelease`, unchanged) — but the "Download"
+button in both the update-available dialog (`updateChecker.js`) and the
+project-from-a-newer-version dialog (`migrateWarning.js`) opens
+`https://portabledev.itch.io/gbsnes-studio`, not a GitHub releases page: GitHub is the version
+source of truth, itch.io is where a user actually gets the binary.
 Icons/artwork under `src/assets/app/` are GBSNES-branded: `icon/app_icon.{png,ico,icns}` (a
 GB/SNES hybrid handheld), `icon/gbsproj.{png,ico,icns}` (a "GBSNES Studio Project" cartridge,
 the `.gbsproj` file-type icon) and `dmg/background.{png,tiff}` (the macOS installer window).

@@ -16,7 +16,11 @@ Changes since the `v1.1.0` tag was cut.
   (27 characters, or 23 with an avatar portrait) for a SNES project; Game Boy projects are
   unchanged.
 - The "Download" buttons in the update-available / project-from-a-newer-version dialogs now
-  point at this fork's own GitHub releases instead of the original GB Studio's download page.
+  point at this fork's own GitHub releases instead of the original GB Studio's download page,
+  and then updated again to point at the itch.io page
+  (https://portabledev.itch.io/gbsnes-studio). The update *check* itself is unchanged — it still
+  queries the GitHub repo's latest release for the version number; only where the button sends
+  you to actually download it changed.
 - SNES: **emote bubbles (`Actor: Emote`) rendered in the wrong colours**, two stacked bugs.
   First, a colour-scaling bug turned almost every colour into a different, wrong one (e.g. a
   pale cream became dark teal). Second — the actual cause of the colours still not matching a
