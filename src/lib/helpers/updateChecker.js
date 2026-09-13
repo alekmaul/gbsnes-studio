@@ -1,10 +1,8 @@
 import { dialog, shell } from "electron";
 import semverValid from "semver/functions/valid";
 import semverGt from "semver/functions/gt";
-import Octokit from "@octokit/rest";
 import settings from "electron-settings";
 
-const github = new Octokit();
 const oneHour = 60 * 60 * 1000;
 
 const cache = {
@@ -14,10 +12,28 @@ const cache = {
   },
 };
 
+// @octokit/rest is loaded lazily (not statically imported) because just
+// *importing* it - not even constructing an instance - runs code in
+// @octokit/rest/lib/constructor.js that throws given this dependency tree's
+// current transitive is-plain-object version mismatch (a fresh-install
+// version-drift issue, same class as the others fixed earlier in this
+// migration). main.ts statically imports this whole module, so a throw here
+// at import time would crash the app before any window even opens. Deferring
+// the import into getLatestVersion() means the throw happens inside this
+// function's own try, so callers' existing error handling (checkForUpdate())
+// turns it into a harmless "can't check for updates" instead.
+let github;
+
 export const getLatestVersion = async () => {
   const now = new Date().getTime();
   if (cache.latest.timestamp > now) {
     return cache.latest.value;
+  }
+
+  if (!github) {
+    // eslint-disable-next-line global-require
+    const Octokit = require("@octokit/rest").default;
+    github = new Octokit();
   }
 
   const latest = await github.repos.getLatestRelease({
@@ -77,8 +93,11 @@ export const checkForUpdate = async (force) => {
           message: l10n("DIALOG_UNABLE_TO_CHECK_LATEST_VERSION"),
         };
         await dialog.showMessageBox(dialogOptions);
-        return;
       }
+      // Not just the force path: needsUpdate() below calls getLatestVersion()
+      // again on its own, which would throw the exact same error a second
+      // time, unhandled, if this falls through instead of returning.
+      return;
     }
 
     if (await needsUpdate()) {

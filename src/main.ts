@@ -83,7 +83,10 @@ const createSplash = async (forceTab?: SplashTab) => {
       splashWindow.show();
       if (!hasCheckedForUpdate) {
         hasCheckedForUpdate = true;
-        checkForUpdate();
+        // Fire-and-forget background check - never let it crash the app
+        // (offline, GitHub down, or a broken dependency should just mean
+        // no update notification, not an unhandled rejection).
+        checkForUpdate().catch(() => {});
       }
     }, 40);
   });
@@ -469,7 +472,7 @@ menu.on("pasteInPlace", () => {
 });
 
 menu.on("checkUpdates", () => {
-  checkForUpdate(true);
+  checkForUpdate(true).catch(() => {});
 });
 
 menu.on("preferences", () => {
