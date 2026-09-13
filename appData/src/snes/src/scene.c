@@ -47,6 +47,20 @@ static TRIGGER triggers[MAX_TRIGGERS];
 static u8 check_triggers = 1;
 static u8 scene_col[SCENE_COL_BYTES];
 
+/* v2 M5a: project-wide Engine Field (engine.json "topdown_grid",
+ * defaultValue 8) - no real Engine Field data pipeline exists on this
+ * target yet (M7 builds compileSnesData.js), so this is a plain global for
+ * now rather than something a real project can actually set. 16 selects GB
+ * Studio 2.0.0-beta5's coarser 16px movement grid; the default (8)
+ * reproduces this engine's original per-tile movement exactly. */
+u8 topdown_grid = 8;
+
+/* Set while the player is partway through the first 8px leg of a 16px grid
+ * move already validated as clear the whole way (Update_TopDown). */
+static u8 topdown_move_pending = 0;
+static s8 topdown_move_dx = 0;
+static s8 topdown_move_dy = 0;
+
 /* SET_INPUT_SCRIPT / SET_TIMER_SCRIPT (M7-cont.). Input scripts are global,
  * one slot per GB-layout button bit, and persist across scene loads (matches
  * the GB engine - only REMOVE_INPUT_SCRIPT clears one). The timer script is a
@@ -660,20 +674,54 @@ static void SceneTryInteract(void)
  * matches what GB's own Start_TopDown wants (camera_deadzone.x/y = 0), so
  * there's nothing to reset here yet. Real deadzone support lands with
  * whichever later genre actually needs slack (Platformer/Adventure/Point and
- * Click all want a non-zero one). */
+ * Click all want a non-zero one).
+ *
+ * topdown_grid == 16: snap the spawn position down to an even tile pair on
+ * both axes (a 16px cell boundary), matching GB's own Start_TopDown snap -
+ * without this a project that starts the player on an odd tile could never
+ * reach a fully-16px-aligned position at all. */
 void Start_TopDown(void)
 {
+    topdown_move_pending = 0;
+    if (topdown_grid == 16)
+    {
+        s16 tx = SceneActorTileX(0) & ~1;
+        s16 ty = SceneActorTileY(0) & ~1;
+        actors[0].x = (tx << 3) + 8;
+        actors[0].y = (ty << 3) + 8;
+    }
 }
 
 // Player d-pad movement + A-button interact - the exact logic that used to
 // live directly in SceneHandleInput before the genre dispatch existed.
-// GB Studio 2.0.0-beta5's topdown_grid (8/16px) field is not yet read here -
-// this only reproduces the existing 8px-tile behaviour, byte-identical.
-// 16px-grid support is real follow-up work (2x2-tile lookahead collision,
-// per the M4 audit), deliberately not bundled into this first dispatch pass.
+//
+// topdown_grid == 16 (GB Studio 2.0.0-beta5's grid-size Engine Field - no
+// real Engine Field data pipeline exists on this target yet, M7 builds
+// compileSnesData.js, so this is a plain global for now, not something a
+// real project can set): the player re-steers only every 16px instead of
+// every 8px. Implemented as two chained 8px legs through the existing
+// actor_try_move (each already doing this engine's normal single-tile
+// can_step/npc_blocking check) rather than porting GB's own TileAt2x2 - but
+// the *decision* to start is gated on a widened check at the FULL 2-tile
+// destination first (can_step/npc_blocking called with a doubled offset,
+// reusing them exactly as-is): without that upfront check, a wall exactly
+// on the second leg's tile (but not the first) would strand the player
+// mid-cell, breaking the "always 16px-aligned at rest" invariant GB's mode
+// guarantees. topdown_grid == 8 (the default - engine.json's own
+// defaultValue) reproduces the original single-leg behaviour byte-for-byte.
 void Update_TopDown(void)
 {
+    s16 tile_x = SceneActorTileX(0);
+    s16 tile_y = SceneActorTileY(0);
     s8 dx = 0, dy = 0;
+
+    if (topdown_move_pending)
+    {
+        // Second 8px leg of a 16px move already validated as clear below.
+        topdown_move_pending = 0;
+        actor_try_move(0, topdown_move_dx, topdown_move_dy);
+        return;
+    }
 
     if ((joy & KEY_A) && !(prev_joy & KEY_A))
     {
@@ -690,13 +738,32 @@ void Update_TopDown(void)
     else if (joy & KEY_UP)    dy = -1;
     else if (joy & KEY_DOWN)  dy = 1;
 
-    if (dx || dy)
+    if (!dx && !dy)
     {
+        actors[0].moving = 0;
+        return;
+    }
+
+    if (topdown_grid == 16)
+    {
+        s16 destTx = tile_x + 2 * dx;
+        s16 destTy = tile_y + 2 * dy;
+        if (npc_blocking(0, destTx, destTy) != 0xFF || !can_step(destTx, destTy))
+        {
+            actors[0].moving = 0;
+            return;
+        }
         actor_try_move(0, dx, dy);
+        if (actors[0].moving)
+        {
+            topdown_move_pending = 1;
+            topdown_move_dx = dx;
+            topdown_move_dy = dy;
+        }
     }
     else
     {
-        actors[0].moving = 0;
+        actor_try_move(0, dx, dy);
     }
 }
 

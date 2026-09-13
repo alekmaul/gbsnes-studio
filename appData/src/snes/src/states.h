@@ -1,6 +1,8 @@
 #ifndef STATES_H
 #define STATES_H
 
+#include "gbs_types.h"
+
 /*
  * v2 M5a: genre dispatch, mirrors GB's include/main.h (startFuncs[] /
  * updateFuncs[] / stateBanks[]) - scene_type (scene.h) indexes these.
@@ -17,6 +19,10 @@
 
 void Start_TopDown(void);
 void Update_TopDown(void);
+
+/* Top Down's grid-size Engine Field (engine.json "topdown_grid", 8 or 16) -
+ * a plain global until M7 gives it a real Engine Field pipeline. */
+extern u8 topdown_grid;
 
 extern void (*const startFuncs[])(void);
 extern void (*const updateFuncs[])(void);
