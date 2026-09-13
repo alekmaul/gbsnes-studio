@@ -582,3 +582,120 @@ sélectionnant effectivement la bonne région pour une vraie tuile peinte) n'a p
 séparément — c'est une capacité matérielle SNES déjà existante et déjà exercée côté sprites
 (palettes OBJ par acteur), pas du nouveau code de ce jalon ; seul l'upload CGRAM multi-région
 (le vrai changement) avait besoin d'être prouvé.
+
+## 14. M7 (compilateur de données SNES sur la nouvelle base) — fait, 2026-09-13
+
+Le vrai objectif de l'utilisateur pour ce chantier : pouvoir enfin tester un vrai projet sur
+SNES, pas seulement la fixture factice. `compileSnesData.js`, `snesgfx.js`,
+`snesFixedAssets.js` sont réintégrés (portés depuis `main`/v1.1.4), et une découverte
+importante a précédé le portage lui-même : le tout début de ce jalon a servi à investiguer
+(agent dédié) précisément ce qui a changé dans l'API du compilateur partagé entre 1.2.2 et
+2.0.0-beta5 avant d'écrire la moindre ligne — voir le rapport complet dans l'historique de
+conversation, résumé ci-dessous.
+
+### Trouvaille majeure : `scriptBuilder.js` avait perdu toute conscience de cible SNES
+
+L'import en bloc de GB Studio 2.0.0-beta5 (M1) a remplacé `scriptBuilder.js`/`helpers.js` dans
+leur intégralité — silencieusement supprimant trois comportements SNES que v1.1.4 avait
+construits, sans que rien ne le remarque avant M7 (rien n'exerçait `scriptBuilder.js` pour SNES
+entre M1 et M7) :
+- `KEY_BITS` (`helpers.js`) avait perdu les bits X/Y/L/R propres au SNES.
+- `inputMask()` avait disparu — `IF_INPUT`/`AWAIT_INPUT`/`SET_INPUT_SCRIPT`/
+  `REMOVE_INPUT_SCRIPT` poussaient tous inconditionnellement l'octet unique de `inputDec()`.
+  Le moteur SNES (déjà vérifié fonctionnel depuis M5) attend un masque de **2 octets**
+  little-endian pour ces quatre opcodes précisément — sans ce correctif, le compilateur aurait
+  silencieusement émis un masque d'1 octet que le moteur lit comme 2, corrompant tout le reste
+  du script.
+- `scaleOverlayRow()` avait disparu — la ligne d'`OVERLAY_SHOW`/`OVERLAY_MOVE_TO` était émise
+  telle quelle (0-18), sans mise à l'échelle pour l'écran SNES plus haut.
+- Le clamp aux bords de scène de `cameraMoveTo` était figé à l'écran GB (20x18 tuiles) quelle
+  que soit la cible.
+
+Restauré en reportant le code équivalent de v1.1.4, ré-appliqué à la main contre le
+`scriptBuilder.js` de v2 (significativement divergé entretemps — palettes, armes, engine
+fields, octets `persist` ajoutés) plutôt que patché en aveugle. `target` non défini reste `"gb"`
+partout, donc la sortie compilée de Game Boy est prouvée inchangée — suite `scriptBuilder.test.js`
+(116 tests) et suite jest complète toutes deux au vert. Commit `9b5d619`, séparé du port de
+`compileSnesData.js` lui-même car c'est un vrai correctif de régression autonome, pas une
+étape du portage.
+
+### Décisions de périmètre réelles, pas devinées
+
+- **Scène `scene_type`** : un vrai champ string ("0".."4") sur chaque scène dénormalisée,
+  numérotation réelle de l'éditeur GB Studio 2.0 (déjà confirmée en M5b). Inséré comme octet 6
+  du blob de scène (après la hauteur, avant la table [24] des slots sprite) - décale tous les
+  offsets qui suivaient la hauteur dans l'ancien format v1.1.4 de +1.
+- **`actor.spriteType`** : un vrai champ explicite en 2.0 (`static`/`actor`/`actor_animated`/
+  `animated`), indépendant du `movementType` — remplace l'heuristique v1.1.4 (`moveDec(movementType)
+  === 1 ? SPRITE_STATIC : ...`) par le même helper partagé `spriteTypeDec()` que Game Boy utilise
+  désormais lui-même. Un acteur peut maintenant se déplacer tout en gardant un sprite décoratif à
+  cycle automatique, ce que l'ancienne heuristique ne pouvait pas exprimer.
+- **Palettes multi-régions (6 par scène, cf. M6)** : PAS câblées ici. GB Studio 2.0 calcule
+  désormais des données de palette par scène bien plus riches (`precompilePalettes` dans
+  `compileData.js` — jusqu'à 6 régions BG + 7 palettes acteur par scène, dédupliquées) mais
+  `snesgfx.js` n'extrait toujours qu'**une seule** palette par image, comme avant. Câbler la
+  vraie fonctionnalité "peinture de palette" de l'éditeur dans `snesgfx.js` est un vrai chantier
+  séparé, pas fait ici. Un projet qui n'utilise pas la peinture de palette (couleurs naturelles
+  du fond) compile et joue correctement quand même — le support multi-région du moteur (M6) est
+  simplement inutilisé tant qu'aucun compilateur n'émet plus d'une région.
+- **Engine Fields** (`topdown_grid`, les constantes physiques du Platformer) : PAS câblées non
+  plus. `appData/src/snes/` n'a toujours pas d'`engine.json` ni de page Settings pour en éditer
+  par projet (c'est plutôt le territoire de M9) — le moteur garde ses globals à valeur par
+  défaut codée en dur (héritage de M5). Le vrai pipeline Engine Field de GB Studio 2.0
+  (`precompileEngineFields`/`compileEngineFields`, `engineFieldValues`) est un vrai chantier de
+  conception séparé, pas quelque chose à moitié câbler ici.
+- **Armes/projectiles, groupes de collision, scripts `updateScript`/`hit1-3Script`, palettes
+  par acteur** : tous des concepts 2.0.0-beta5 entièrement nouveaux sans équivalent 1.2.2,
+  identifiés par l'agent de recherche mais délibérément pas portés — la scène/l'acteur SNES
+  garde son format v1.1.4 pour ces aspects. Cohérent avec le sous-système Projectiles déjà
+  différé plusieurs fois dans M5.
+
+### Deux vrais bugs d'environnement trouvés en testant, pas du code cassé
+
+En portant `snesFixedAssets.js` et en écrivant `compileSnesData.js`, deux échecs sont apparus
+qui n'avaient **rien à voir** avec la logique portée elle-même — une différence de cible
+babel/polyfill entre l'environnement où v1.1.4 avait été écrit et celui de v2 :
+
+1. `[...seen.values()]` (spread d'un itérateur de `Map`) plantait avec `RangeError: Invalid
+   array length` dans `snesFixedAssets.js`. Cause : le helper `__spreadArrays` que le babel de
+   ce projet génère pour le spread de tableau suppose que chaque source à étaler a une vraie
+   propriété `.length` (vrai pour un tableau, faux pour un itérateur de `Map` - `.length` vaut
+   `undefined`, la somme accumulée devient `NaN`, `Array(NaN)` lève l'erreur). Corrigé avec
+   `Array.from(seen.values())`, qui consomme n'importe quel itérable directement sans passer
+   par ce helper.
+2. **Bien plus insidieux** : `for (const id of aSet)` où `aSet` est un `Set` construit à la
+   volée n'exécutait **jamais le corps de la boucle**, sans la moindre erreur — `spriteConv`
+   restait vide après la boucle, provoquant un plantage plus loin (`conv is undefined`) dont la
+   vraie cause n'avait aucun rapport visible. Trouvé uniquement en ajoutant des `console.error`
+   temporaires ligne par ligne jusqu'à isoler que le corps de boucle ne s'exécutait tout
+   simplement pas. Corrigé en convertissant en tableau d'abord
+   (`Array.from(new Set(...))`) et en itérant avec une boucle `for` indexée classique plutôt
+   qu'un `for...of` sur le `Set` directement. Même classe de piège que le bug précédent
+   (itérables "exotiques" non sûrs dans cet environnement), mais silencieux plutôt qu'une
+   exception claire - bien plus dangereux. Audité tout le reste des trois fichiers portés pour
+   le même motif (`for...of`/spread sur autre chose qu'un tableau brut) : aucune autre occurrence.
+
+### Vérifié de bout en bout, avec un vrai projet, pas seulement une fixture synthétique
+
+`yarn jest` : 559/561 (mêmes 2 échecs préexistants et différés, 11 nouveaux tests pour
+`compileSnesData.js` — fixture réelle `Test_Math`, byte du `scene_type` aux 5 valeurs de genre,
+`actor.spriteType` indépendant du mouvement).
+
+**La preuve la plus forte** : le vrai projet `test/projects/Test_Math` a été compilé par le
+nouveau `compileSnesData.js`, sa sortie écrite dans l'arbre réel du moteur (`appData/src/snes/src/
+{assets.c,assets.h,data/*}`, remplaçant temporairement la fixture factice committée), puis
+buildé avec la vraie toolchain autonome (`816-tcc`/`816-opt`/`wla-65816`/`wlalink`, pas de
+mock) — lien réussi, ROM produite. Démarré dans Mesen (process tué avant et après, résultat
+non périmé confirmé) : boot propre 120 frames sans plantage, et surtout — lecture directe de
+`script_variables[]` en WRAM confirme `v1=10, v2=25, v3=50, v4=100`, exactement la séquence
+`SET_VALUE` du script réel du projet. Preuve de bout en bout, pas juste "ça compile" :
+projet réel → JS → bytecode → assemblage/édition de liens réels → exécution réelle correcte.
+Arbre moteur remis à l'état committé (`git checkout --`) avant ce commit.
+
+**Pas encore possible malgré M7** : créer ce projet de test depuis l'app elle-même. Il n'y a
+toujours aucun template SNES (`snesblank`/`sneshtml` de v1.1.4 pas encore réintégrés) ni
+sélecteur de cible dans la page Settings (territoire M9) sur `v2` — pour l'instant, tester un
+projet réel suppose soit un `.gbsproj` édité à la main avec `"target": "snes"`, soit ce genre de
+vérification directe via jest. Et sans `buildSnesRom.js` (M8), il n'y a encore aucun bouton
+"Build ROM" fonctionnel dans l'app pour la cible SNES — M7 fournit le compilateur, pas encore
+le chemin utilisateur complet.

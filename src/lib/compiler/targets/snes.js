@@ -14,17 +14,17 @@
  *       reads are direct far dereferences (no bank switching)
  *   D5  explicit palettes; the tileset limit is really a VRAM budget
  *
- * Nothing here is consumed by any code yet - compileSnesData.js,
- * buildSnesRom.js and the appData/src/snes/ engine itself don't exist on
- * this branch until M4-M8 rebuild them. This file exists now (M3) so that
- * work has a target descriptor to plug into from the start, matching how
- * targets/gb.js works, rather than each of M4-M8 re-deriving these numbers.
+ * Consumed by compileSnesData.js (M7) and scriptBuilder.js's SNES-aware
+ * paths (input mask width, overlay row scaling, camera clamp). This file
+ * existed since M3, before any of that code did, so work had a target
+ * descriptor to plug into from the start, matching how targets/gb.js works.
  *
  * A few fields are left as the *old* v1.1.4 values on purpose, flagged
- * below, because GB Studio 2.0.0-beta5 raised the equivalent Game Boy limits
- * (targets/gb.js) in ways that have no corresponding SNES engine change yet -
- * claiming a specific new SNES number now would be guessing at a rebuilt
- * scene/actor format (M5) that doesn't exist. Revisit once M5 lands.
+ * below: M5 (all 5 genres) landed without changing the scene/actor blob's
+ * *entity-count* format (MAX_ACTORS/MAX_TRIGGERS are still 9/9 in
+ * gbs_types.h - M5 was genre dispatch + movement, not an entity-count
+ * increase), so there is still no rebuilt format to derive a new number
+ * from. Revisit if/when the entity-count ceiling itself is ever raised.
  */
 const snesTarget = {
   id: "snes",
