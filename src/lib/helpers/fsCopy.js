@@ -49,4 +49,24 @@ const copy = async (src, dest, options) => {
   }
 };
 
+// fs-extra's own pathExists()/fs.access() is NOT asar-aware - Electron's asar
+// support patches stat/lstat/readdir/readFile/createReadStream (what copy()
+// above already relies on, which is why it works from inside a packaged
+// app.asar), but explicitly NOT access/accessSync. A path that genuinely
+// exists inside app.asar therefore makes pathExists() always report false,
+// even though fs.existsSync()/fs.lstat() on the exact same path succeed.
+// Confirmed with a real packaged build on v1: resolvePvsHome() (buildSnesRom.js)
+// used fs.pathExists() to find the vendored PVSnesLib toolchain and always
+// failed with "toolchain not found" although the files were really there.
+// Re-added here ahead of the SNES compiler port (M7/M8) so that work can
+// reuse this asar-safe helper from the start instead of rediscovering the bug.
+export const pathExists = async path => {
+  try {
+    await fs.lstat(path);
+    return true;
+  } catch (e) {
+    return false;
+  }
+};
+
 export default copy;
