@@ -240,3 +240,34 @@ plus simple des 5** (aucune collision à porter). Ordre révisé, du moins risqu
 `On Update` (le mécanisme `movement_ptr`) et **Projectiles** sont tous deux transverses aux 5
 genres — à porter une fois, tôt (dès Top Down pour `On Update`, avant Shoot Em Up pour
 Projectiles), pas répétés par genre.
+
+### Note pour M5d (Platformer) — le moteur map/objets de PVSnesLib
+
+Référence pointée par l'utilisateur : l'exemple
+[`likemario`](https://github.com/alekmaul/pvsneslib/tree/master/snes-examples/systems/games/likemario)
+du dépôt PVSnesLib lui-même, qui utilise le **moteur map/objets intégré** de la lib (pas du code
+d'exemple isolé — les routines vivent dans `pvsneslib/source/maps.asm` et `objects.asm`, donc
+déjà vendorées avec la toolchain actuelle). Ce que ça offre, pertinent pour la physique
+plateforme :
+
+- `objCollidMap()` — collision tuile automatique + détection de sol (`obj->tilestand`), à partir
+  d'un octet d'attribut par tuile.
+- Position/vitesse en virgule fixe par objet (`xpos`/`ypos`/`xvel`/`yvel`) + `objUpdateXY()` pour
+  intégrer la vélocité — exactement la même famille de représentation que `Platform.c` (`pl_pos_x`
+  en `<<4`/`>>4`, voir section 7 ci-dessus).
+- Une petite machine à états par objet (`objInitFunctions(init, update, draw)` + `objUpdateAll()`)
+  — une forme d'acteur générique, mais **indépendante de notre modèle de scripts/events**.
+
+**Tension réelle à trancher au moment de M5d, pas maintenant** : `mapLoad()`/`objLoadObjects()`
+attendent leurs propres formats binaires (`.m16`/`.o16`/`.b16`/`.t16`), générés par les outils
+`tmx2snes`/`gfx4snes` de PVSnesLib à partir d'une carte Tiled — exactement les outils **retirés
+volontairement** de notre toolchain vendorée (voir la section "Toolchain" de `CLAUDE.md` : "ce
+projet convertit chaque asset lui-même en JS, `snes_rules` n'a jamais de `.tmx`/`.bmp` à leur
+donner"). Adopter le moteur map/objets *en entier* impliquerait de réintroduire cette chaîne
+d'outils et de réencoder les données de scène GB Studio dans leurs formats — un changement
+d'architecture, pas un emprunt ponctuel. Ce qui est probablement récupérable sans ça : la
+**démarche** (représentation virgule fixe, ordre collision-puis-déplacement) comme référence pour
+écrire notre propre `Platform.c` équivalent, éventuellement `objCollidMap()`/`objUpdateXY()`
+directement si leurs structures internes s'avèrent alimentables depuis nos propres données de
+tuiles sans passer par `mapLoad()` — à vérifier en lisant `objects.asm`/`maps.asm` au moment de
+M5d, pas en le supposant maintenant.
