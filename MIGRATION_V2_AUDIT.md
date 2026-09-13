@@ -857,3 +857,56 @@ chargeur d'events sandboxé). Aucun harnais de test de composant React n'existe 
 projet (précédent établi) — les changements sur `InputPicker.js`/`ScriptEditorEvent.js`
 sont vérifiés par la compilation complète + la couverture de test déjà existante de la
 logique côté compilateur qu'ils appellent, pas par un nouveau test de composant.
+
+## 17. M10 (schéma projet & migrations) — fait, 2026-09-13
+
+Objectif du roadmap : un projet `.gbsproj` SNES sauvegardé en `v1.1.4` s'ouvre et migre
+proprement vers le nouveau format 2.0.0. Trois étapes précises.
+
+### Étape 1 — réintégrer les settings SNES dans `migrateProject.js`
+
+Rien à réintégrer, une fois vérifié : `migrateProject.js` ne lit/réécrit jamais
+`settings` champ par champ — ses deux migrations qui touchent `settings` (le correctif
+`startMoveSpeed`/`startAnimSpeed`, la migration `defaultFadeStyle` →
+`engineFieldValues`) font toutes les deux `{ ...data.settings, <champs connus> }`. Tout
+réglage non reconnu — SNES ou non — survit donc déjà intact toute la chaîne
+`1.0.0`→`2.0.0`→`200r6`. Fixé par un nouveau test dans `migrateProject.test.js`
+(`target`/`snesRegion`/`snesSramSize`/`customControlsX-Y-L-R` tous présents inchangés
+après migration).
+
+### Étape 2 — écrire l'étape `1.1.x → 2.0.0` pour un projet SNES
+
+Rien à écrire non plus : la chaîne de migration GB existante gère déjà correctement un
+vrai projet SNES. Vérifié contre `appData/templates/sneshtml` (un vrai projet SNES
+`v1.1.4` déjà committé, toujours à sa forme d'origine `"1.2.0"`/pas de `_release` —
+`createProject.js` copie les templates tels quels, seul `loadProjectData.js` migre à
+l'ouverture, donc ce fichier n'était en réalité jamais passé par `migrateProject`
+auparavant). A spécifiquement exercé la migration "Movement Type → On Update" (sneshtml
+a de vrais acteurs `randomWalk`/`faceInteraction`) : `migrateFrom120To200Actors` est
+additive (`...actor` avant d'ajouter `updateScript`/`spriteType`), donc l'ancien
+`movementType` survit à côté du nouveau champ `updateScript` (inutilisé côté SNES —
+cf. l'investigation "On Update" du M5, le moteur n'a toujours pas de mécanisme de
+contextes de script parallèles). Aucune régression comportementale : l'IA legacy par
+hash par-frame du moteur SNES (`scene.c` `SceneUpdateAi`) lit toujours le `movementType`
+préservé, exactement comme avant.
+
+### Étape 3 — fixture de test réelle
+
+`appData/templates/sneshtml` EST déjà cette fixture (le projet d'exemple SNES) —
+`test/migrate/migrateSnesProject.test.js` l'utilise directement plutôt que de committer
+une deuxième copie des mêmes données : vérifie la forme pré-migration, la version/
+release post-migration, la survie des settings SNES, la coexistence
+`updateScript`/`movementType`, et une recompilation complète via `compileSnesData()`
+sans le moindre avertissement sur les 8 scènes.
+
+### Vérifié au-delà des tests committés
+
+Buildé `sneshtml` (migré) via le vrai point d'entrée `buildProject()` jusqu'à un
+`.sfc` réel de 262144 octets, démarré dans Mesen (processus tué avant et après) : le
+compteur de tick de la boucle principale avance régulièrement sur 90 frames et
+`scene_index` vaut 4 à la frame 120 (la chaîne `SWITCH_SCENE` scriptée de l'intro
+tourne réellement, pas juste un boot inerte) — la preuve la plus forte possible qu'un
+projet réel migré ne régresse pas.
+
+`yarn jest` : **576/578** (mêmes 2 échecs préexistants et sans rapport, +6 nouveaux
+tests).
