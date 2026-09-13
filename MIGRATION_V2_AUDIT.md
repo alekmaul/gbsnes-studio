@@ -418,3 +418,77 @@ entrée tenue** (`x=88,y=80` du début à la fin, `dir_x=0,dir_y=1` conforme au 
 papier. Le comportement réellement piloté par le d-pad (diagonale, glissement le long d'un mur,
 triggers walk-over en mouvement libre) n'est **pas** vérifié par script Lua, conformément à la
 décision actée pour M5b — laissé au test interactif de l'utilisateur.
+
+## 11. M5d (Platformer) — fait, 2026-09-13, avec une vraie correction rétroactive sur M5b/M5c
+
+Le "vrai morceau" annoncé par l'audit M4 : physique virgule fixe neuve de bout en bout
+(accélération/décélération marche/course, gravité, saut à hauteur variable via maintien du
+bouton B). `Start_Platform`/`Update_Platform` suivent l'échelle de virgule fixe exacte de
+`Platform.c` de GB (position en 1/16px, vélocité en 1/4096px/frame, appliquée via `pos += vel
+>> 8`) pour que les valeurs par défaut des Engine Fields (copiées telles quelles depuis
+`engine.json` - toujours pas de vrai pipeline Engine Field sur cette cible, M7, même raisonnement
+que `topdown_grid`) produisent les mêmes vitesses réelles que celles décrites par l'éditeur GB
+Studio - une échelle différente rendrait ces nombres arbitraires. Position/vélocité tiennent en
+`s16` simple (pas de 32 bits, jamais utilisés ailleurs sur cette cible et donc non éprouvés sous
+816-tcc) : la largeur de scène max de cette cible (2040px, 255 tuiles) × 16 = 32640, dans la
+plage `s16`.
+
+**Explicitement pas porté cette étape, documenté plutôt qu'à moitié inventé** : les échelles
+(`TILE_PROP_LADDER` — nécessiterait un second canal de données par tuile que le bitmap de
+collision 1-bit/tuile de ce moteur n'a pas la place d'accueillir, un vrai pipeline M7 le rendrait
+possible proprement) ; la collision directionnelle par tuile de GB (`COLLISION_LEFT/RIGHT/TOP/
+BOTTOM`, ex. plateformes à sens unique) — le bitmap de collision de ce moteur est un seul bit
+plein/vide par tuile depuis M4c, une tuile pleine bloque dans toutes les directions ici, une
+simplification documentée, pas un portage partiel de l'octet plus riche de GB ; `player_iframes`/
+`hit_actor`/`collision_group`, même dépendance Projectiles/M5e déjà différée en M5c.
+
+### La vraie découverte de cette étape : un bug transverse trouvé, pas supposé
+
+En traçant la chute (gravité) du joueur sans aucune entrée tenue, `plat_vel_y` restait figé à
+zéro frame après frame — alors que la gravité aurait dû l'accumuler dès la première frame. Après
+une instrumentation fine (compteur d'appels, lecture directe de `script_ptr`/`ui_state`), la
+cause réelle est apparue : **`SceneHandleInput()`'s garde "mid-step"** (`if (!ACTOR_ON_TILE(0))
+return;`, qui ne laisse tourner `updateFuncs[scene_type]()` que quand le joueur est exactement
+calé sur une tuile) **tournait sans condition de genre depuis le début du dispatch M5a** — utile
+uniquement pour le mouvement par case de Top Down, mais appliqué sans distinction à **tous les
+genres**. Point and Click (le curseur) et Adventure (mouvement libre au pixel) quittent
+l'alignement sur tuile dès leur tout premier vrai pas de mouvement - une fois quitté, cette garde
+les aurait **gelés définitivement** : `updateFuncs[scene_type]()` (et les scripts d'input,
+`SET_INPUT_SCRIPT`, gardés par le même test) ne se relance plus jamais pour le reste de la scène.
+
+Corrigé en conditionnant la garde à `scene_type == SCENE_TYPE_TOPDOWN` - Point and Click,
+Adventure et désormais Platformer tournent chaque frame sans condition d'alignement, comme leur
+mouvement continu l'exige. Effet de bord positif, pas du scope creep : `SET_INPUT_SCRIPT`
+fonctionne maintenant aussi dans ces genres, alors qu'il était accidentellement restreint à Top
+Down par le même bug.
+
+**Portée rétroactive réelle, pas seulement théorique** : ce bug était déjà livré dans les commits
+M5b (`f8f280c`) et M5c (`fd1212d`) - le curseur Point and Click et le mouvement Adventure
+auraient été **cassés en jeu réel** dès la première pression de touche du joueur. Les
+vérifications Mesen "300 frames sans dérive" de ces deux commits n'étaient, avec le recul, pas
+fausses mais **incomplètes de la même façon que l'incident `1e0cfb2` de M5a** : sans entrée
+simulée, la position ne bougeait de toute façon jamais, donc "pas de dérive" restait vrai que le
+gate ait été cassé ou non - ces tests ne prouvaient PAS que `Update_PointNClick`/`Update_Adventure`
+tournaient de façon répétée sur de vraies frames. Une re-vérification ciblée après correction
+(scène factice avec script neutralisé à `END` pour lever le blocage `script_ptr` du script
+d'ouverture réel de la scène 1, qui ne se termine jamais sans une pression A - un piège de test
+distinct découvert au passage) a produit une preuve non tautologique cette fois : un compteur
+d'appels temporaire dans `Update_Adventure` montre une croissance quasi 1:1 avec les frames
+réelles (34 à la frame 50, 134 à la frame 150, 284 à la frame 300) - `Update_Adventure` tourne
+bien à chaque frame désormais, avec une position toujours stable sans entrée. Le compteur a été
+retiré avant commit.
+
+**Vérifié pour M5d lui-même** : build `make` réel propre, `yarn jest` 548/550. Boot Mesen (scène
+factice basculée temporairement à `scene_type=1`, `git checkout --` avant commit) : `plat_vel_y`
+grimpe correctement 0→1792→3584→...→20000 (le plafond exact de `plat_max_fall_vel`) sur les
+frames 14-25 puis reste plafonné - la chute libre et son plafonnement fonctionnent tels que
+conçus. Le comportement réellement piloté par le d-pad (marche/course, saut, collision murs/
+plafond) reste laissé au test interactif de l'utilisateur, comme pour M5b/M5c.
+
+**Leçon méthodologique retenue pour M5e** : toujours neutraliser le script d'ouverture de la
+scène de test factice à `END` avant un test multi-frames sans entrée (sinon `script_ptr` reste
+non nul et `SceneHandleInput()` ne tourne jamais, quel que soit le genre) ; toujours tuer le
+process Mesen juste après avoir lu le résultat d'un test, pas seulement en fin de session -
+`emu.stop(0)` n'arrête que l'émulation, pas le process, et un process laissé vivant peut
+ré-écraser le fichier de résultat d'un test suivant avec des données périmées (source d'une
+fausse alerte pendant cette étape même).

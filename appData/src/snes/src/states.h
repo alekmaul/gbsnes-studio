@@ -37,6 +37,8 @@ void Start_PointNClick(void);
 void Update_PointNClick(void);
 void Start_Adventure(void);
 void Update_Adventure(void);
+void Start_Platform(void);
+void Update_Platform(void);
 void Start_Noop(void);
 void Update_Noop(void);
 

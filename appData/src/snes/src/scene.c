@@ -1066,6 +1066,290 @@ void Update_Adventure(void)
     }
 }
 
+/* v2 M5d: Platformer genre pair (states.h) - the real work per the M4
+ * audit: fixed-point physics (walk/run acceleration+deceleration, gravity,
+ * variable-height jump) built fresh, not a Top Down/Adventure variant.
+ *
+ * Deliberately NOT ported this milestone (documented, not half-invented):
+ * - Ladders (GB's TILE_PROP_LADDER) - would need a second per-tile data
+ *   channel this engine's 1-bit-per-tile collision bitmap has no room for;
+ *   a real per-tile "ladder" flag needs the M7 data compiler that actually
+ *   derives collision from project art, not something to bolt onto the
+ *   dummy-fixture format now.
+ * - Directional per-tile collision (GB's COLLISION_LEFT/RIGHT/TOP/BOTTOM -
+ *   e.g. one-way platforms) - this engine's collision bitmap is a single
+ *   solid/not-solid bit per tile (established since M4c); a solid tile
+ *   blocks from every direction here, a documented simplification, not a
+ *   partial port of GB's richer per-tile byte.
+ * - player_iframes/hit_actor/collision_group (hit-invincibility) - same
+ *   Projectiles/M5e dependency already deferred in M5c (Adventure).
+ * - GB's pre-jump ceiling peek (declining a jump that would immediately
+ *   headbutt a ceiling) - skipped for simplicity; the real ceiling-
+ *   collision check later in this same function still catches it a frame
+ *   later, just marginally less precise on the very first jump frame.
+ *
+ * Fixed-point scale matches GB's own Platform.c exactly - position in
+ * 1/16px, velocity in 1/4096px/frame, applied via `pos += vel >> 8` - so
+ * the Engine Field defaults below (copied verbatim from engine.json; no
+ * real Engine Field pipeline exists on this target yet, M7, same reasoning
+ * as topdown_grid) produce the same real-world speeds GB Studio's own
+ * field labels describe them as - a different scale would make these
+ * numbers meaningless. Both axes safely fit a plain s16 at this scale:
+ * this target's own max scene width (2040px, 255 tiles, matching GB's D2
+ * decision) times 16 is 32640, within s16 range - no need for wider
+ * (untested on this toolchain) 32-bit arithmetic anywhere.
+ *
+ * Position/velocity are tracked separately from actors[0].x/y (matching
+ * GB's own pl_pos_x/pl_vel_x, not player.pos) so sub-pixel motion survives
+ * across frames even though actors[0].x/y (synced at the end of every
+ * call) are whole pixels; re-synced from actors[0].x/y at the top of every
+ * call (keeping the accumulated fractional part) so a script repositioning
+ * the player (e.g. ACTOR_MOVE_TO) is honoured, mirroring GB's own re-sync.
+ */
+static s16 plat_min_vel = 304;
+static s16 plat_walk_vel = 6400;
+static s16 plat_run_vel = 10496;
+static s16 plat_walk_acc = 152;
+static s16 plat_run_acc = 228;
+static s16 plat_dec = 208;
+static s16 plat_jump_vel = 16384;
+static s16 plat_grav = 1792;
+static s16 plat_hold_grav = 512;
+static s16 plat_max_fall_vel = 20000;
+
+static s16 plat_x = 0;   /* 1/16px, sprite horizontal centre - see actors[].x */
+static s16 plat_y = 0;   /* 1/16px, sprite feet/bottom - see actors[].y */
+static s16 plat_vel_x = 0;
+static s16 plat_vel_y = 0;
+static u8 plat_grounded = 0;
+static s16 plat_last_trigger_tx = -1;
+static s16 plat_last_trigger_ty = -1;
+
+void Start_Platform(void)
+{
+    plat_x = actors[0].x << 4;
+    plat_y = actors[0].y << 4;
+    plat_vel_x = 0;
+    plat_vel_y = 0;
+    plat_grounded = 0;
+    plat_last_trigger_tx = -1;
+    plat_last_trigger_ty = -1;
+
+    if (actors[0].dir_x == 0)
+    {
+        actors[0].dir_y = 0;
+        actors[0].dir_x = 1;
+    }
+
+    // GB's own camera deadzone here (4x/16y) has nothing to port to yet -
+    // this engine's camera still has no deadzone concept at all (same
+    // deferred note every other genre's Start_ already carries).
+}
+
+void Update_Platform(void)
+{
+    s16 px, py;
+    s16 tile_x, tile_y;
+    u8 hit_actor;
+
+    // Re-sync from actors[0].x/y (in case a script moved the player),
+    // keeping the accumulated fractional (low 4 bits) part - see the
+    // function-group comment above.
+    plat_x = (actors[0].x << 4) + (plat_x & 0xF);
+    plat_y = (actors[0].y << 4) + (plat_y & 0xF);
+
+    actors[0].dir_y = 0;
+
+    if (joy & KEY_LEFT)
+    {
+        actors[0].dir_x = -1;
+        if (joy & KEY_A)
+        {
+            plat_vel_x -= plat_run_acc;
+            if (plat_vel_x < -plat_run_vel) plat_vel_x = -plat_run_vel;
+            if (plat_vel_x > -plat_min_vel) plat_vel_x = -plat_min_vel;
+        }
+        else
+        {
+            plat_vel_x -= plat_walk_acc;
+            if (plat_vel_x < -plat_walk_vel) plat_vel_x = -plat_walk_vel;
+            if (plat_vel_x > -plat_min_vel) plat_vel_x = -plat_min_vel;
+        }
+    }
+    else if (joy & KEY_RIGHT)
+    {
+        actors[0].dir_x = 1;
+        if (joy & KEY_A)
+        {
+            plat_vel_x += plat_run_acc;
+            if (plat_vel_x > plat_run_vel) plat_vel_x = plat_run_vel;
+            if (plat_vel_x < plat_min_vel) plat_vel_x = plat_min_vel;
+        }
+        else
+        {
+            plat_vel_x += plat_walk_acc;
+            if (plat_vel_x > plat_walk_vel) plat_vel_x = plat_walk_vel;
+            if (plat_vel_x < plat_min_vel) plat_vel_x = plat_min_vel;
+        }
+    }
+    else if (plat_grounded)
+    {
+        if (plat_vel_x < 0)
+        {
+            plat_vel_x += plat_dec;
+            if (plat_vel_x > 0) plat_vel_x = 0;
+        }
+        else if (plat_vel_x > 0)
+        {
+            plat_vel_x -= plat_dec;
+            if (plat_vel_x < 0) plat_vel_x = 0;
+        }
+    }
+
+    plat_x += plat_vel_x >> 8;
+    px = plat_x >> 4;
+    py = plat_y >> 4;
+
+    if (plat_grounded && (joy & KEY_A) && !(prev_joy & KEY_A))
+    {
+        tile_x = px >> 3;
+        tile_y = (py - 1) >> 3;
+        if (actors[0].dir_x > 0)
+        {
+            hit_actor = actor_at_tile(tile_x + 2, tile_y);
+        }
+        else
+        {
+            hit_actor = actor_at_tile(tile_x - 1, tile_y);
+        }
+        if (hit_actor != 0xFF)
+        {
+            run_script(actors[hit_actor].events_ptr, hit_actor);
+        }
+    }
+
+    if ((joy & KEY_B) && !(prev_joy & KEY_B) && plat_grounded)
+    {
+        plat_vel_y = -plat_jump_vel;
+        plat_grounded = 0;
+    }
+
+    if (joy & KEY_B)
+    {
+        if (plat_vel_y < 0) plat_vel_y += plat_hold_grav;
+        else plat_vel_y += plat_grav;
+    }
+    else
+    {
+        plat_vel_y += plat_grav;
+    }
+    if (plat_vel_y > plat_max_fall_vel) plat_vel_y = plat_max_fall_vel;
+
+    plat_y += plat_vel_y >> 8;
+    px = plat_x >> 4;
+    py = plat_y >> 4;
+
+    // Wall collision - the sprite's leading vertical edge against the tile
+    // column it would newly enter, checked at both the feet row and the
+    // head row (this engine's sprite is a real 16px tall, unlike GB's own
+    // ~8px physics-body convention here - see the function-group comment).
+    if (plat_vel_x < 0)
+    {
+        s16 col = (px - 8) >> 3;
+        if (col_solid(col, (py - 1) >> 3) || col_solid(col, (py - 16) >> 3))
+        {
+            plat_vel_x = 0;
+            px = ((col + 1) << 3) + 8;
+            plat_x = px << 4;
+        }
+    }
+    else if (plat_vel_x > 0)
+    {
+        s16 col = (px + 7) >> 3;
+        if (col_solid(col, (py - 1) >> 3) || col_solid(col, (py - 16) >> 3))
+        {
+            plat_vel_x = 0;
+            px = (col << 3) - 8;
+            plat_x = px << 4;
+        }
+    }
+
+    // Ground / ceiling collision - the sprite's leading horizontal edge
+    // (feet falling, head rising) against both columns it spans.
+    if (plat_vel_y >= 0)
+    {
+        s16 row = py >> 3;
+        s16 col_l = (px - 8) >> 3;
+        s16 col_r = (px + 7) >> 3;
+        if (col_solid(col_l, row) || col_solid(col_r, row))
+        {
+            plat_grounded = 1;
+            plat_vel_y = 0;
+            py = row << 3;
+            plat_y = py << 4;
+        }
+        else
+        {
+            plat_grounded = 0;
+        }
+    }
+    else
+    {
+        s16 row = (py - 16) >> 3;
+        s16 col_l = (px - 8) >> 3;
+        s16 col_r = (px + 7) >> 3;
+        if (col_solid(col_l, row) || col_solid(col_r, row))
+        {
+            plat_vel_y = 0;
+            py = ((row + 1) << 3) + 16;
+            plat_y = py << 4;
+        }
+    }
+
+    // Clamp to the scene, matching Point and Click's own scene-bounds
+    // clamp - a screen/scene edge with no floor tile still acts as an
+    // implicit floor (GB's own behaviour), so the player can't fall
+    // forever off the bottom of a scene that simply has no ground there.
+    if (px < 8)
+    {
+        px = 8;
+        plat_x = px << 4;
+        plat_vel_x = 0;
+    }
+    else if (px > ((s16)scene_width << 3))
+    {
+        px = (s16)scene_width << 3;
+        plat_x = px << 4;
+        plat_vel_x = 0;
+    }
+    if (py < 8)
+    {
+        py = 8;
+        plat_y = py << 4;
+        plat_vel_y = 0;
+    }
+    else if (py > ((s16)scene_height << 3))
+    {
+        py = (s16)scene_height << 3;
+        plat_y = py << 4;
+        plat_vel_y = 0;
+        plat_grounded = 1;
+    }
+
+    actors[0].x = px;
+    actors[0].y = py;
+    actors[0].animate = (u8)(plat_grounded && plat_vel_x != 0);
+
+    tile_x = SceneActorTileX(0);
+    tile_y = SceneActorTileY(0);
+    if (tile_x != plat_last_trigger_tx || tile_y != plat_last_trigger_ty)
+    {
+        plat_last_trigger_tx = tile_x;
+        plat_last_trigger_ty = tile_y;
+        SceneActivateTriggerAt(tile_x, tile_y);
+    }
+}
+
 void SceneHandleInput(void)
 {
     if (script_ptr)
@@ -1078,9 +1362,25 @@ void SceneHandleInput(void)
         }
         return;
     }
-    if (!ACTOR_ON_TILE(0))
+    // v2 M5d, real bug found and fixed: this gate used to run unconditionally
+    // for every genre, but "mid-step" (not exactly tile-aligned) is only a
+    // meaningful concept for Top Down's tile-locked movement. Point and
+    // Click's cursor, Adventure's free-pixel movement, and Platform's
+    // fixed-point physics ALL leave tile alignment on their very first real
+    // movement step and, unconditionally gated like this, would have been
+    // permanently frozen from that point on - updateFuncs[scene_type]() (and
+    // input scripts, below) would simply never run again for the rest of the
+    // scene. Caught by Platform's gravity trace going dead after exactly 2
+    // frames (y left alignment, then froze) - see MIGRATION_V2_AUDIT.md's
+    // M5d section for the retroactive correction this forced on M5b/M5c's
+    // own "verified" claims, which turn out to have exercised this same gate
+    // without ever actually re-running past the first aligned frame either.
+    if (scene_type == SCENE_TYPE_TOPDOWN)
     {
-        return; // mid-step
+        if (!ACTOR_ON_TILE(0))
+        {
+            return; // mid-step
+        }
     }
 
     // Input scripts: one slot per button (SET_INPUT_SCRIPT), only re-checked
