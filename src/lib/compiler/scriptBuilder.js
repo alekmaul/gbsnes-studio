@@ -135,6 +135,7 @@ import trimlines from "../helpers/trimlines";
 import { SPRITE_TYPE_ACTOR } from "../../consts";
 import { is16BitCType } from "../helpers/engineFields";
 import { nextVariable } from "../helpers/variables";
+import { getTarget } from "./targets";
 
 class ScriptBuilder {
   constructor(output, options) {
@@ -844,12 +845,26 @@ class ScriptBuilder {
 
   // Overlays
 
+  // Overlay Y is a row on GB's 18-tall screen (0 = full-screen, 18 = just
+  // off the bottom = hidden). The overlay always spans from row Y to the
+  // bottom of the screen, so on a taller target the same authored row has
+  // to be scaled by the screen height or "hide" (18) stops short and
+  // leaves a strip visible. target undefined -> "gb", ratio 18/18 = 1, so
+  // GB output is byte-for-byte unchanged.
+  scaleOverlayRow = (y) => {
+    const { target } = this.options || {};
+    const gbRows = getTarget("gb").screenTileHeight;
+    const rows = getTarget(target).screenTileHeight;
+    if (rows === gbRows) return y;
+    return Math.round((y * rows) / gbRows);
+  };
+
   overlayShow = (color = "white", x = 0, y = 0) => {
     const output = this.output;
     output.push(cmd(OVERLAY_SHOW));
     output.push(color === "white" ? 1 : 0);
     output.push(x);
-    output.push(y);
+    output.push(this.scaleOverlayRow(y));
   };
 
   overlayHide = () => {
@@ -861,7 +876,7 @@ class ScriptBuilder {
     const output = this.output;
     output.push(cmd(OVERLAY_MOVE_TO));
     output.push(x);
-    output.push(y);
+    output.push(this.scaleOverlayRow(y));
     output.push(speed);
   };
 
@@ -998,7 +1013,7 @@ class ScriptBuilder {
   ifInput = (input, truePath = [], falsePath = []) => {
     const output = this.output;
     output.push(cmd(IF_INPUT));
-    output.push(inputDec(input));
+    this.inputMask(input);
     compileConditional(truePath, falsePath, {
       ...this.options,
       output,
@@ -1084,10 +1099,27 @@ class ScriptBuilder {
 
   // Input
 
+  // Splits the input bitmask into 1 byte (GB) or 2 bytes little-endian
+  // (SNES, carrying X/Y/L/R in the extra byte - KEY_BITS bits 8..11 in
+  // ./helpers.js) depending on target. target undefined -> "gb" -> 1 byte,
+  // so Game Boy's own compiled output is byte-for-byte unchanged; the
+  // target descriptor's inputMaskBytes is the single source of truth.
+  inputMask = (input) => {
+    const output = this.output;
+    const { target } = this.options || {};
+    const mask = inputDec(input);
+    if (getTarget(target).inputMaskBytes === 2) {
+      output.push(mask & 0xff);
+      output.push((mask >> 8) & 0xff);
+    } else {
+      output.push(mask & 0xff);
+    }
+  };
+
   inputAwait = (input) => {
     const output = this.output;
     output.push(cmd(AWAIT_INPUT));
-    output.push(inputDec(input));
+    this.inputMask(input);
   };
 
   inputScriptSet = (input, persist, script) => {
@@ -1105,8 +1137,8 @@ class ScriptBuilder {
     const bankPtr = banked.push(subScript);
 
     output.push(cmd(SET_INPUT_SCRIPT));
-    output.push(inputDec(input));
-    output.push(persist ? 1 : 0);    
+    this.inputMask(input);
+    output.push(persist ? 1 : 0);
     output.push(bankPtr.bank);
     output.push(hi(bankPtr.offset));
     output.push(lo(bankPtr.offset));
@@ -1115,18 +1147,21 @@ class ScriptBuilder {
   inputScriptRemove = (input) => {
     const output = this.output;
     output.push(cmd(REMOVE_INPUT_SCRIPT));
-    output.push(inputDec(input));
+    this.inputMask(input);
   };
 
   // Camera
 
   cameraMoveTo = (x = 0, y = 0, speed = 0) => {
     const output = this.output;
-    const { scene } = this.options;
+    const { scene, target } = this.options;
     output.push(cmd(CAMERA_MOVE_TO));
-    // Limit camera move to be within scene bounds
-    const camX = Math.min(x, scene.width - 20);
-    const camY = Math.min(y, scene.height - 18);
+    // Limit camera move to be within scene bounds. Margins are the target's
+    // screen size in tiles (target undefined -> "gb", so GB behaviour here
+    // is unchanged: 20x18, same literals as before this became target-aware).
+    const { screenTileWidth, screenTileHeight } = getTarget(target);
+    const camX = Math.min(x, scene.width - screenTileWidth);
+    const camY = Math.min(y, scene.height - screenTileHeight);
     output.push(camX);
     output.push(camY);
     // Direct speed in binary, first bits 0000 to 1111 are "&" compared with binary time

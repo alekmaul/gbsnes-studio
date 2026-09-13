@@ -38,16 +38,25 @@ const KEY_BITS = {
   b: 0x20,
   select: 0x40,
   start: 0x80,
+  // SNES-only extra face/shoulder buttons. The Game Boy has no way to select
+  // these (InputPicker only offers them for a SNES project) and the GB
+  // engine reads a 1-byte mask, so on the GB target these bits are never
+  // emitted - scriptBuilder's inputMask() splits the mask into two bytes
+  // only for the SNES target (targets/snes.js inputMaskBytes: 2).
+  x: 0x0100,
+  y: 0x0200,
+  l: 0x0400,
+  r: 0x0800,
 };
 
 export const inputDec = (input) => {
   let output = 0;
   if (Array.isArray(input)) {
     for (let i = 0; i < input.length; i++) {
-      output |= KEY_BITS[input[i]];
+      output |= KEY_BITS[input[i]] || 0;
     }
   } else {
-    output = KEY_BITS[input];
+    output = KEY_BITS[input] || 0;
   }
   if (output === 0) {
     // If no input set game would hang
