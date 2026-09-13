@@ -321,8 +321,11 @@ const MOVE_AI_RANDOM_WALK = 5;
 // trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
 // then the collision bitmap: ceil(width*height/8) bytes
 //
-// v2 M5a: scene_type indexes states.h's startFuncs[]/updateFuncs[] - only
-// Top Down (0) exists so far.
+// v2 M5a/M5b: scene_type indexes states.h's startFuncs[]/updateFuncs[] -
+// values are GB Studio 2.0.0-beta5's real scene.type numbering (0 Top Down,
+// 4 Point and Click, ...), not M5's build order. Both dummy scenes below
+// stay Top Down - neither exercises Point and Click's dispatch slot, since
+// this generator can't be re-run yet (M7) to add a real fixture for it.
 const SCENE_TYPE_TOPDOWN = 0;
 const SPRITE_STATIC = 0;
 // [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]

@@ -271,3 +271,76 @@ d'architecture, pas un emprunt ponctuel. Ce qui est probablement récupérable s
 directement si leurs structures internes s'avèrent alimentables depuis nos propres données de
 tuiles sans passer par `mapLoad()` — à vérifier en lisant `objects.asm`/`maps.asm` au moment de
 M5d, pas en le supposant maintenant.
+
+## 9. M5b (Point and Click) — fait, 2026-09-13
+
+Confirme la conclusion clé de la section 7 : Point and Click n'est **pas** une variante de Top
+Down mais un curseur flottant, sans collision, qui réutilise le slot acteur 0 (exactement comme
+la référence GB réutilise `player` pour son curseur). Implémenté directement dans `scene.c`
+(`Start_PointNClick`/`Update_PointNClick`), à côté de la paire Top Down déjà là — voir le
+commentaire de `states.h` sur le report délibéré de l'éclatement en fichiers par genre (le
+"second genre" qui devait déclencher ce découpage à l'époque de M5a est arrivé, mais le coût
+réel du découpage sous 816-tcc — statics/externs inter-fichiers déjà documentés comme source de
+bugs — dépasse le bénéfice à seulement 2 genres).
+
+**Découverte importante, corrige un numérotage supposé à tort** : les indices `scene_type` ne
+sont pas libres — ils doivent correspondre exactement aux valeurs `scene.type` réelles de
+l'éditeur GB Studio 2.0.0-beta5 (`src/components/forms/SceneTypeSelect.tsx` : 0 Top Down,
+1 Platformer, 2 Adventure, 3 Shoot Em Up, 4 Point and Click), pas à l'ordre dans lequel M5
+construit les genres (Top Down → Point and Click → Adventure → Platformer → Shoot Em Up, voir
+section 7). Point and Click est donc à l'**index 4**, pas 1. `states.c`'s `startFuncs[]`/
+`updateFuncs[]` sont maintenant dimensionnées à 5 entrées (`NUM_SCENE_TYPES`), les 3 genres pas
+encore construits (1/2/3) pointant vers des no-ops explicites plutôt que de rester non remplis
+(plantage) ou de pointer vers Top Down par défaut (comportement trompeur).
+
+**Deuxième correction architecturale, trouvée en implémentant, pas supposée** : le déclenchement
+des triggers "walk-over" (`SceneCheckTriggers`) tournait sans condition de genre depuis
+`SceneUpdate()` — ça marchait par coïncidence quand Top Down était le seul genre (son propre
+comportement matchait par hasard), mais ça aurait fait déclencher un trigger "walk-over" par un
+simple passage du curseur Point and Click au-dessus, alors que la référence GB
+(`states/PointNClick.c`) n'appelle jamais son équivalent `ActivateTriggerAt` du tout. Corrigé en
+gardant l'appel existant mais en le conditionnant à `scene_type == SCENE_TYPE_TOPDOWN` à
+l'intérieur de `SceneCheckTriggers` elle-même (pas déplacé dans un fichier par genre — même
+décision de report que ci-dessus) ; un futur genre qui veut ses propres triggers walk-over
+(Adventure/Platformer, probablement) rouvrira cette garde à ce moment-là.
+
+**Fidélité au comportement de référence, avec deux adaptations documentées, pas des écarts
+silencieux** :
+- Le hover-test GB (`ActorAtTile`/`TriggerAtTile`, `Actor_b.c`/`Trigger_b.c`) est porté tel quel
+  (tolérance d'une tuile de chaque côté pour les acteurs, d'une tuile à gauche pour les
+  triggers ; test trigger sur `tile_y - 1`, pas la tuile du curseur elle-même — un choix
+  d'auteur GB délibéré, gardé tel quel).
+- Le garde `events_ptr.bank != 0` de GB (n'affiche le curseur "hover" que sur un acteur/trigger
+  qui a un vrai script) n'a pas d'équivalent portable : `BANK_PTR` sur cette cible n'a qu'un
+  pointeur brut, pas de champ bank/sentinelle "pas de script" — ce qui n'existera réellement
+  qu'avec le compilateur M7. Documenté en commentaire plutôt que deviné ; comme
+  `SceneTryInteract` (Top Down) le fait déjà, tout acteur/trigger touché est traité comme
+  "hoverable"/interactif pour l'instant.
+- `last_hit_trigger` (GB) est déclaré puis jamais réaffecté dans la référence elle-même — la
+  comparaison qui s'appuie sur lui est donc toujours vraie en pratique. Pas porté (code mort de
+  la référence, pas un comportement à reproduire).
+- Le déplacement du curseur est un déplacement pixel direct (pas de `actor_try_move`/
+  `can_step`), avec `actors[0].moving` forcé à 0 en permanence : la boucle de pas générique
+  (`SceneUpdateActors`, qui déplace aussi bien le joueur Top Down que les PNJ) ne doit jamais
+  s'en emparer, sinon le curseur se caler/bloquerait aux limites de tuile de 8px comme un
+  acteur qui marche, au lieu de glisser librement — exactement la trouvaille clé de l'audit M4
+  ("collision-free floating cursor").
+- Caméra : `Start_PointNClick` de GB pose `camera_deadzone = 24` ; notre moteur n'a toujours
+  aucune notion de deadzone (`CameraInit` centre toujours durement sur l'acteur 0 - la même
+  note que `Start_TopDown` porte déjà). Report délibéré, pas un oubli : le curseur hérite du
+  même verrouillage dur que Top Down pour l'instant.
+
+**Vérifié** : build réel `make` (toolchain vendorée, 816-tcc/816-opt/wla-65816/wlalink) propre,
+aucune régression (`yarn jest` : 548/550, mêmes 2 échecs pré-existants déboqués depuis M1). Boot
+Mesen : (a) les fixtures réelles (`scene_type` 0) tournent 120 frames sans rien changer de
+comportement ; (b) un test de démarrage/plantage dédié (scène 1 du générateur de dummy, patchée
+temporairement à `scene_type = 4` + position de départ dans cette scène, `git checkout --` avant
+le commit) confirme que `startFuncs[4]`/`updateFuncs[4]` s'exécutent sans plantage sur 300
+frames, que `scene_type` se relit correctement à 4 en WRAM, et que la position du curseur reste
+stable et cohérente (`x=88,y=80`, exactement `tile*8+8` pour le point de départ testé) sans
+aucune entrée simulée. **Le comportement piloté par le curseur lui-même (déplacement au d-pad,
+hover, A pour interagir) n'est PAS vérifié par un test Mesen automatisé** — décision actée avec
+l'utilisateur le 2026-09-13 (voir la mémoire Claude `gbsnes-v2-migration`) après l'échec
+confirmé de toute méthode de simulation d'entrée Lua sur ce build de Mesen : la vérification du
+comportement piloté par le d-pad pour M5b et la suite repose désormais sur un test interactif
+par l'utilisateur, pas sur un script Lua.

@@ -18,8 +18,9 @@
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
 u8 scene_loaded = 0;
-/* v2 M5a: which genre's Start_/Update_ function pair (states.c) drives this
- * scene. Only Top Down (0) exists so far - see states.h. */
+/* v2 M5a/M5b: which genre's Start_/Update_ function pair (states.c) drives
+ * this scene - see states.h for the index values (GB's real scene.type
+ * numbering, not M5's build order) and which genres exist so far. */
 u8 scene_type = 0;
 /* Set by SceneInit, consumed by main() one frame later: hold the screen
  * force-blanked until the scene's opening script has run and reached VRAM. */
@@ -767,6 +768,147 @@ void Update_TopDown(void)
     }
 }
 
+/* v2 M5b: Point and Click genre pair (states.h). The M4 audit's key finding:
+ * this is a collision-free floating cursor, not a Top Down variant - A
+ * interacts with whatever the cursor hovers, there's no tile-locked walk.
+ * Reuses actor slot 0 (the GB reference does the same - "player" is just its
+ * own cursor actor), so it gets the existing camera-lock-onto-actor-0 and
+ * SceneRenderActors OBJ rendering for free.
+ *
+ * GB's own Start_PointNClick also sets camera_offset=0/camera_deadzone=24 -
+ * this engine's camera has no deadzone concept at all yet (CameraInit always
+ * centers hard on actor 0 - same note as Start_TopDown above), so the cursor
+ * gets the same hard camera lock Top Down does for now; real deadzone
+ * support stays deferred to whichever genre first needs it. */
+void Start_PointNClick(void)
+{
+    // GB forces sprite_type to SPRITE_STATIC regardless of what the assigned
+    // sheet's own frame count implied (frames_len_for() already ran in
+    // SceneInit, before startFuncs[] - so a directional 3-frame sheet keeps
+    // frames_len 1 and Update_PointNClick's hover frame never shows, exactly
+    // matching GB's `frames_len != 1` guard there), so ANY sheet's frame 0/1
+    // can be repurposed as a flat "normal cursor"/"hovering cursor" pair
+    // rather than a direction pose.
+    actors[0].sprite_type = SPRITE_STATIC;
+    actors[0].dir_x = 0;
+    actors[0].dir_y = 1;
+}
+
+// ActorAtTile_b/TriggerAtTile_b equivalents (GB's Actor_b.c/Trigger_b.c) - a
+// generous cursor hover hit-test, not a collision check: GB widens the actor
+// test a tile either side horizontally (tx_a-1..tx_a+1, vs. the actor's own
+// 2-tile-wide footprint) and the trigger test a tile to the left
+// ((tx_a+1)>=tx_b), so the cursor doesn't have to land on an actor/trigger's
+// exact top-left tile to hover it. Loop starts at 1 (skip the cursor itself,
+// same as SceneTryInteract/SceneUpdateAi above); GB's own call site always
+// passes inc_noclip=TRUE, so collisions_enabled is deliberately not checked.
+//
+// GB additionally gates both hover states on `events_ptr.bank != 0` (only a
+// script-bearing actor/trigger shows as hoverable) - this engine's BANK_PTR
+// is a plain pointer with no bank field and no established "no script"
+// sentinel yet (M7 doesn't exist), so that check has nothing to port to; any
+// hit actor/trigger counts as hoverable here, matching how SceneTryInteract
+// (Top Down's own A-button interact, above) already runs whatever script is
+// there unconditionally.
+static u8 actor_at_tile(s16 tx, s16 ty)
+{
+    u8 i;
+    for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
+    {
+        s16 ax, ay;
+        if (!actors[i].enabled) continue;
+        ax = SceneActorTileX(i);
+        ay = SceneActorTileY(i);
+        // Sequential ifs, not one wide &&/|| chain: see the actor_on_tile
+        // comment up top.
+        if (ty != ay && ty != ay + 1) continue;
+        if (tx != ax - 1 && tx != ax && tx != ax + 1) continue;
+        return i;
+    }
+    return 0xFF;
+}
+
+static u8 trigger_at_tile(s16 tx, s16 ty)
+{
+    u8 i;
+    for (i = 0; i < scene_num_triggers && i < MAX_TRIGGERS; i++)
+    {
+        s16 tx_c = triggers[i].x + triggers[i].w - 1;
+        s16 ty_c = triggers[i].y + triggers[i].h - 1;
+        if (tx + 1 < triggers[i].x) continue;
+        if (tx > tx_c) continue;
+        if (ty < triggers[i].y) continue;
+        if (ty > ty_c) continue;
+        return i;
+    }
+    return 0xFF;
+}
+
+// Cursor movement is a direct pixel nudge (no actor_try_move/can_step at
+// all - a genuinely collision-free floating cursor, per the M4 audit), so
+// actors[0].moving stays 0 all the time here: the generic per-tile stepping
+// loop in SceneUpdateActors (which owns Top Down's player movement instead -
+// actor_try_move only arms `moving`+facing there) must never pick this actor
+// up, or it would snap/halt the cursor to 8px tile boundaries like a walking
+// actor instead of letting it glide freely.
+void Update_PointNClick(void)
+{
+    s16 tile_x = SceneActorTileX(0);
+    s16 tile_y = SceneActorTileY(0);
+    s16 max_x = (s16)scene_width << 3;
+    s16 max_y = (s16)scene_height << 3;
+    u8 hit_actor, hit_trigger;
+
+    actors[0].moving = 0;
+
+    if ((joy & KEY_LEFT) && actors[0].x > 8)
+    {
+        actors[0].x--;
+    }
+    else if ((joy & KEY_RIGHT) && actors[0].x < max_x)
+    {
+        actors[0].x++;
+    }
+
+    if ((joy & KEY_UP) && actors[0].y > 8)
+    {
+        actors[0].y--;
+    }
+    else if ((joy & KEY_DOWN) && actors[0].y < max_y)
+    {
+        actors[0].y++;
+    }
+
+    // One tile above the cursor's own tile for triggers, matching GB's own
+    // `TriggerAtTile(tile_x, tile_y - 1)` call exactly - a deliberate GB
+    // authoring choice (the cursor's hotspot reads as above its drawn tile),
+    // kept as-is per the "behavioural reference" policy rather than guessed
+    // away. The actor hit-test uses the cursor's own tile, also matching GB.
+    hit_trigger = trigger_at_tile(tile_x, tile_y - 1);
+    hit_actor = actor_at_tile(tile_x, tile_y);
+
+    if ((hit_actor != 0xFF || hit_trigger != 0xFF) && actors[0].frames_len != 1)
+    {
+        actors[0].frame = 1;
+    }
+    else
+    {
+        actors[0].frame = 0;
+    }
+
+    if ((joy & KEY_A) && !(prev_joy & KEY_A))
+    {
+        if (hit_actor != 0xFF)
+        {
+            run_script(actors[hit_actor].events_ptr, hit_actor);
+        }
+        else if (hit_trigger != 0xFF)
+        {
+            run_script(triggers[hit_trigger].events_ptr, 0);
+        }
+    }
+}
+
 void SceneHandleInput(void)
 {
     if (script_ptr)
@@ -817,6 +959,16 @@ static void SceneCheckTriggers(void)
     // Sequential ifs, not `a || b || c`: 816-tcc mis-links the branch targets of
     // a 3-term boolean chain in a conditional (a walk trigger was firing while a
     // scripted ACTOR_MOVE_TO of the player was still paused mid-script).
+    //
+    // v2 M5b: walk-over (type 0) triggers are a Top Down concept - GB's own
+    // PointNClick.c never calls its ActivateTriggerAt equivalent at all (the
+    // M4 audit's "collision-free floating cursor" finding). This check used
+    // to run unconditionally every frame from SceneUpdate() below, which
+    // only ever mattered while Top Down was the sole genre; once the cursor
+    // (still actor 0) can wander across a walk-trigger's tile in Point and
+    // Click, it would fire spuriously. Gated here rather than moved into a
+    // per-genre "states" file - see states.h's file-split deferral note.
+    if (scene_type != SCENE_TYPE_TOPDOWN) return;
     if (!check_triggers) return;
     if (script_ptr) return;
     if (!actor_on_tile(0)) return;
