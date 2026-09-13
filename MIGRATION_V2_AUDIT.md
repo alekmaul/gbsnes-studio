@@ -910,3 +910,68 @@ projet réel migré ne régresse pas.
 
 `yarn jest` : **576/578** (mêmes 2 échecs préexistants et sans rapport, +6 nouveaux
 tests).
+
+## 18. M11 (éditeur — Settings, Controls, Navigator) — fait, 2026-09-13
+
+Objectif du roadmap : la page Settings (Target Platform, SNES Options), le pad SNES
+dans Controls, et les avertissements target-aware retrouvent leur place dans la
+nouvelle UI. Trois étapes.
+
+### Étape 1 — `SettingsPage.tsx`
+
+Nouveau composant `TargetPicker.js` (calqué sur `CartPicker.js` déjà existant) : un
+select gb/snes qui écrit dans `settings.target` (le champ TS ajouté en M9 — c'est la
+première UI qui l'écrit réellement). Choisir SNES fait apparaître une carte "SNES
+Options" (région NTSC/PAL, taille de SRAM — deux réglages que `buildSnesRom.js` lit
+déjà avec des valeurs par défaut sensées depuis le M8, juste sans UI) plus un `Alert`
+listant les vrais manques actuels côté SNES (peinture de palette, Engine Fields,
+armes/projectiles, budget de 8 feuilles de sprites par scène, pas encore de lecteur
+web) pour ne pas laisser l'auteur du projet deviner. Choisir SNES masque aussi les
+cartes/menus "GB Color Options" et "Cartridge Type" (concepts GB/MBC sans signification
+SNES), même pattern que le portage v1.1.4 mature. Nouvelles clés l10n ajoutées
+uniquement dans `en.json` — le mécanisme de repli de `l10n.js` (la table `translations`
+itère sur les clés d'`en.json` lui-même) fait retomber automatiquement toute autre
+locale sur l'anglais pour elles ; pas de mise à jour des 13 locales tentée ici.
+
+### Étape 2 — `CustomControlsPicker.js`
+
+Quatrième rangée de champs de touches pour X/Y/L/R (`compiler/helpers.js` `KEY_BITS`),
+affichée uniquement quand `settings.target === "snes"`, réutilisant la logique
+existante de liste à plat/multi-touches sans changement. `GBControlsPreview.js` s'est
+avéré être du code mort sur cette branche (jamais référencé nulle part) — pas de
+"SNESControlsPreview" inventé en écho ; l'UI Controls de cette build est une simple
+liste de bindings, pas le widget grille+aperçu du v1.1.4 mature.
+
+### Étape 3 — deux vrais points GB-codés-en-dur trouvés et rendus target-aware
+
+- **`SceneInfo.js`** (les badges de budget acteur/sprite/trigger par scène) lisait
+  directement les constantes GB-only de `consts.js` — lit maintenant
+  `getTarget(settings.target)`. `maxActorsSmall` est `null` côté SNES (pas de
+  distinction petite/grande scène sur ce moteur), géré explicitement plutôt que de
+  produire un NaN silencieux. Le badge "nombre de frames" devient un badge "nombre de
+  feuilles" sur SNES (`maxSpriteFrames` `null` là-bas vs `maxSpriteSheets: 8`) — le
+  budget VRAM par frame de GB n'a pas d'équivalent SNES, mais le budget fixe de 8
+  feuilles par scène du moteur SNES (`compileSnesData.js` `SPRITE_SLOTS`) en a un, et
+  `usedSpriteSheets` était déjà collecté de toute façon.
+- **`EventHelper.js`** (le rectangle de viewport affiché sur l'événement Camera:MoveTo)
+  était codé en dur à la taille d'écran GB (160×144px, CSS) — dimensionné maintenant en
+  ligne depuis `getTarget(target).screenTileWidth/Height`, `target` propagé depuis
+  `Scene.js` (qui calculait déjà `settings` localement pour d'autres champs, juste pas
+  encore exposé comme prop). La règle sœur `.EventHelper__OverlayPos` reste intacte —
+  confirmée toujours morte/non référencée sur cette branche aussi, et sa boîte fixe
+  256×256 couvre déjà confortablement les deux tailles d'écran réelles de toute façon.
+
+`target` non défini retombe partout sur `"gb"` (comportement par défaut de
+`getTarget`), donc l'UI de tout projet GB existant est inchangée.
+
+### Vérifié
+
+`yarn jest` : **576/578** (mêmes 2 échecs préexistants et sans rapport, aucune
+régression — pas de nouveau test de composant, aucun harnais de ce type n'existe sur
+ce projet, même précédent que les changements `InputPicker`/`ScriptEditorEvent` du
+M9). `electron-forge package` compile proprement (webpack + TS). Un vrai lancement
+`yarn start` (compilé, webpack buildé, fenêtre app lancée sans erreur de rendu dans le
+journal) confirme qu'il ne plante pas au démarrage ; arrêté proprement ensuite. eslint
+sur chaque fichier touché : zéro nouveau problème (le seul avertissement introduit en
+chemin, une destructuration `scene` inutilisée dans `SceneInfo.js`, trouvé et corrigé
+avant le commit).
