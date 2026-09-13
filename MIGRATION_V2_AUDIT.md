@@ -149,3 +149,94 @@ base de code à copier telle quelle.** Le moteur GB de référence a changé de 
 `core/`+`states/` bien plus granulaire que notre `scene.c` monolithique actuel) — reconstruire en
 suivant cette même granularité (fichiers séparés par responsabilité) plutôt que de forcer le
 nouveau contrat dans l'ancienne organisation en un seul `scene.c`. Détail dans le milestone M5.
+
+## 7. M4 — les 5 genres de scène du moteur GB 2.0
+
+Lecture ligne à ligne des 5 fichiers `appData/src/gb/src/states/*.c` (969 lignes au total) et du
+mécanisme de dispatch commun (`Core_Main.c`), pour fixer l'ordre d'implémentation SNES (M5) et le
+contrat partagé entre genres.
+
+### Mécanisme de dispatch (commun aux 5 genres)
+
+`scene_type` (un octet, dans les données de scène compilées) sélectionne le genre. `Core_Main.c`
+appelle `startFuncs[scene_type]()` une fois au chargement de la scène et `updateFuncs[scene_type]()`
+une fois par frame — deux tables de pointeurs de fonctions bankées, indexées par genre. Rien
+d'autre ne dépend du genre dans la boucle principale : `UpdateCamera()`, `UpdateActors()`,
+`UpdateProjectiles_b()`, la VM de script, tournent identiquement quel que soit `scene_type`. Pour
+le SNES, ça veut dire : une table `stateBanks[]`/fonctions `Start_<Genre>`/`Update_<Genre>` par
+genre, brancher `scene_type` dans le blob de scène compilé, et rien à changer dans `game.c`/
+`scene.c` au-delà de ce dispatch.
+
+### Par genre
+
+- **Top Down** (168 lignes) — mouvement **verrouillé sur une grille** (8 ou **16px**, nouveau champ
+  moteur `topdown_grid` — absent en 1.2.2, c'est ce qui avait cassé le tout premier build M1 avant
+  que `engineFields` soit branché). Collision testée sur la case cible avant de bouger
+  (`TileAt2x1`/`TileAt2x2` selon la grille). C'est le genre le plus proche du moteur SNES actuel
+  (`v1.1.4`) — mouvement tuile-par-tuile déjà implémenté, juste sans le mode grille 16px.
+- **Platformer** (299 lignes) — **physique en virgule fixe 4.4** (`<<4`/`>>4`) : gravité, saut,
+  échelles, accélération marche/course distinctes, toutes pilotées par des Engine Property Fields
+  (`plat_walk_vel`, `plat_run_acc`, `plat_grav`, `plat_jump_vel`, `plat_max_fall_vel`,
+  `plat_hold_grav`, `plat_dec`, `plat_min_vel`, `plat_run_vel`). Aucun équivalent SNES aujourd'hui —
+  c'est le plus gros morceau de travail C neuf des 5 genres.
+- **Adventure** (164 lignes) — mouvement **libre au pixel** (pas verrouillé sur une grille),
+  8 directions, collision testée au pixel avec biais gauche/droite pour ne pas glisser sur les
+  coins, `player_iframes` (invincibilité temporaire après un coup). Différent de Top Down dans le
+  modèle de mouvement (continu vs. par case), mais réutilise les mêmes primitives de collision par
+  tuile.
+- **Point and Click** (98 lignes) — **surprise de l'audit : ce n'est PAS une variante de Top Down**,
+  contrairement à l'hypothèse de départ du roadmap. `player` ici est un **curseur libre sans
+  collision du tout** (juste un clamp aux bords d'écran) ; A déclenche le script de l'acteur/trigger
+  survolé. C'est le genre le plus simple des 5 — pas de moteur de collision à porter du tout.
+- **Shoot Em Up** (190 lignes) — **défilement forcé** (horizontal ou vertical selon la direction du
+  joueur au démarrage de la scène), le joueur ne contrôle que l'axe perpendiculaire, la caméra est
+  décalée pour anticiper. Pas de code de projectile dans ce fichier — les projectiles sont un
+  sous-système partagé (voir ci-dessous), pas propres à ce genre.
+
+### Sous-systèmes partagés (pas propres à un genre)
+
+- **`On Update` par acteur** (remplace `movementType` de la 1.2.0/`v1.1.4`) — en 1.2.2, un acteur
+  avait un champ figé (`static` / `randomFace` / `randomWalk`, 2 comportements IA câblés en dur
+  dans le moteur). En 2.0.0-beta5, **c'est devenu un vrai script** : `migrateProject.js` convertit
+  `randomFace`/`randomWalk` en scripts générés (`generateRandomLookScript()`/
+  `generateRandomWalkScript()`) placés dans un nouveau champ `updateScript`, exactement comme
+  `startScript`/`hit1Script`/etc. Côté moteur, chaque acteur a un `movement_ptr` (`Actor.h`) lancé
+  en **contexte de script d'arrière-plan** (`ScriptStartBg`, le même mécanisme déjà utilisé pour
+  `SET_TIMER_SCRIPT`) dès que l'acteur devient actif (`ActivateActor_b`). **Bonne nouvelle pour le
+  SNES** : le moteur `v1.1.4` a *déjà* ce mécanisme de contexte de script d'arrière-plan opérationnel
+  (`SET_INPUT_SCRIPT`/`SET_TIMER_SCRIPT` "tournent pour de vrai" d'après le README SNES) — ajouter
+  `movement_ptr` par acteur devrait être une extension mécanique de ce qui existe déjà, pas un
+  sous-système à inventer. `eventActorStopUpdateScript.js` confirme le même patron start/stop que
+  les autres scripts d'arrière-plan.
+- **Projectiles** (`Projectiles.c` + `Projectiles_b.c`, 309 lignes) — pool de taille fixe
+  (`MAX_PROJECTILES`, allocation round-robin), filtré par un système `col_group`/`col_mask` (le
+  même `collision_group` déjà lu dans les 5 fichiers `states/*.c`). Deux primitives : `WeaponAttack`
+  (coup mêlée épinglé sur un acteur, durée de vie courte fixe) et `ProjectileLaunch` (projectile
+  libre avec sa propre direction/vitesse/durée de vie). `UpdateProjectiles_b()` tourne **chaque
+  frame, pour tous les genres** (appelé une fois dans `Core_Main.c`, pas dans les fichiers
+  `states/*.c`) — `EVENT_LAUNCH_PROJECTILE`/`EVENT_WEAPON_ATTACK` sont des events génériques,
+  utilisables depuis n'importe quel genre, pas réservés au Shoot Em Up. Aucun équivalent SNES
+  aujourd'hui.
+- **`Palette.c`** — non lu en détail ici (pertinent pour M6, pas M4).
+
+### Ordre d'implémentation révisé pour M5
+
+L'ordre proposé par le roadmap (Top Down → Platformer → Adventure/Point and Click → Shoot Em Up)
+supposait Point and Click proche de Top Down. Ce n'est pas le cas — c'est en réalité le genre **le
+plus simple des 5** (aucune collision à porter). Ordre révisé, du moins risqué au plus risqué :
+
+1. **Top Down** — le plus proche de l'existant `v1.1.4` (mouvement par case déjà implémenté),
+   sert de test du contrat commun (dispatch `scene_type`, `On Update`) lui-même.
+2. **Point and Click** — trivial une fois Top Down en place (curseur + interaction, zéro collision
+   neuve) ; bon deuxième genre pour valider le dispatch sans complexité ajoutée.
+3. **Adventure** — variante mouvement-libre-au-pixel de Top Down, réutilise les mêmes primitives
+   de collision par tuile.
+4. **Platformer** — le vrai morceau : physique virgule fixe neuve de bout en bout (gravité, saut,
+   échelles). Fait après avoir le contrat commun bien éprouvé sur 3 genres plus simples.
+5. **Shoot Em Up** — fait en dernier : nécessite le sous-système Projectiles (à porter une fois,
+   avant ou pendant ce genre puisqu'il est utilisable par tous) et le modèle de défilement forcé,
+   le plus éloigné de l'existant.
+
+`On Update` (le mécanisme `movement_ptr`) et **Projectiles** sont tous deux transverses aux 5
+genres — à porter une fois, tôt (dès Top Down pour `On Update`, avant Shoot Em Up pour
+Projectiles), pas répétés par genre.
