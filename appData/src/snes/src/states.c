@@ -10,17 +10,17 @@ void Start_Noop(void) {}
 void Update_Noop(void) {}
 
 void (*const startFuncs[NUM_SCENE_TYPES])(void) = {
-    Start_TopDown,   /* 0 */
-    Start_Noop,      /* 1 Platformer - not yet built (M5d) */
-    Start_Noop,      /* 2 Adventure - not yet built (M5c) */
-    Start_Noop,      /* 3 Shoot Em Up - not yet built (M5e) */
+    Start_TopDown,     /* 0 */
+    Start_Noop,        /* 1 Platformer - not yet built (M5d) */
+    Start_Adventure,   /* 2 */
+    Start_Noop,        /* 3 Shoot Em Up - not yet built (M5e) */
     Start_PointNClick, /* 4 */
 };
 
 void (*const updateFuncs[NUM_SCENE_TYPES])(void) = {
     Update_TopDown,
     Update_Noop,
-    Update_Noop,
+    Update_Adventure,
     Update_Noop,
     Update_PointNClick,
 };

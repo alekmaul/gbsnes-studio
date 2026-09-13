@@ -132,6 +132,10 @@ void dir_to_vec(u8 d, s8 *dx, s8 *dy)
     *dy = d == 8 ? -1 : d == 1 ? 1 : 0;
 }
 
+// Forward declaration: defined near SceneCheckTriggers below, but Update_
+// Adventure (also below, but earlier in the file) needs to call it too.
+static u8 SceneActivateTriggerAt(s16 tx, s16 ty);
+
 static void run_script(BANK_PTR ptr, u8 actor)
 {
     BANK_PTR local = ptr;
@@ -909,6 +913,159 @@ void Update_PointNClick(void)
     }
 }
 
+/* v2 M5c: Adventure genre pair (states.h). Per the M4 audit, this is a
+ * free-pixel movement variant of Top Down - both axes can move every frame
+ * (real diagonal movement, unlike Top Down's single-axis-at-a-time input
+ * priority) and the player is not tile-locked, reusing the same A-button
+ * facing-interact (SceneTryInteract) and walk-over triggers (via
+ * SceneActivateTriggerAt, called directly here rather than through
+ * SceneCheckTriggers - see that function's own M5c comment for why). */
+static s16 adv_last_trigger_tx = -1;
+static s16 adv_last_trigger_ty = -1;
+
+void Start_Adventure(void)
+{
+    // Guaranteed not to match any real tile, so the very first check on
+    // scene entry always runs fresh rather than being suppressed by a
+    // stale tile pair left over from whatever scene/genre ran before.
+    adv_last_trigger_tx = -1;
+    adv_last_trigger_ty = -1;
+
+    // GB's own Start_Adventure sets an 8px camera deadzone - this engine's
+    // camera still has no deadzone concept at all (CameraInit always
+    // centers hard on actor 0 - same note Start_TopDown/Start_PointNClick
+    // already carry), so Adventure gets the same hard lock for now.
+}
+
+// Narrow, direction-biased collision test - deliberately NOT the full 16x16
+// sprite or Top Down's 2-tile-wide can_step/npc_blocking footprint. GB's own
+// Adventure.c also narrows its hitbox well below the sprite's full width,
+// specifically so continuous 1px movement never has to reason about a
+// footprint spanning 3 tile columns/rows at once (a narrow single-point
+// test only ever touches one tile per axis, at any alignment). GB's exact
+// pixel bias assumes a different, top-left-based position convention than
+// this engine's centre-x/feet-y one (see gbs_types.h/SceneRenderActors) and
+// isn't Mesen-verifiable this session (the input-simulation gap - see
+// memory gbsnes-v2-migration), so this re-derives the same *idea* - a small,
+// direction-biased look-ahead point test - rather than copying GB's own
+// constants, which would risk porting a fencepost error with no way to
+// catch it interactively.
+void Update_Adventure(void)
+{
+    s16 x = actors[0].x;
+    s16 y = actors[0].y;
+    s16 body_row = (y - 1) >> 3;  // just above the feet - avoids the exact
+                                   // tile-boundary case when y % 8 == 0
+    s16 feet_col = x >> 3;        // column under the horizontal centre
+    s16 tile_x, tile_y;
+    s8 backup_dx, backup_dy;
+    u8 input_x = 0, input_y = 0;
+
+    actors[0].moving = 0;
+
+    if (joy & KEY_LEFT)       { actors[0].dir_x = -1; actors[0].moving = 1; input_x = 1; }
+    else if (joy & KEY_RIGHT) { actors[0].dir_x = 1;  actors[0].moving = 1; input_x = 1; }
+
+    if (joy & KEY_UP)         { actors[0].dir_y = -1; actors[0].moving = 1; input_y = 1; }
+    else if (joy & KEY_DOWN)  { actors[0].dir_y = 1;  actors[0].moving = 1; input_y = 1; }
+
+    // Cancel a stale facing on the axis with no input held this frame, but
+    // only when the OTHER axis has input - both held keeps both (a real
+    // diagonal), neither held keeps both as-is (facing persists while idle,
+    // matching how actor_face/dir_x/dir_y already behave everywhere else in
+    // this engine). Ported from GB's own Adventure.c verbatim - it's plain
+    // control flow, not pixel-geometry-dependent, so there was nothing to
+    // re-derive here.
+    if (input_x && !input_y) actors[0].dir_y = 0;
+    else if (input_y && !input_x) actors[0].dir_x = 0;
+
+    if ((joy & KEY_A) && !(prev_joy & KEY_A))
+    {
+        SceneTryInteract();
+        if (script_ptr)
+        {
+            actors[0].moving = 0;
+            return;
+        }
+    }
+
+    // Saved so a fully-blocked step (below) can restore the player's
+    // intended facing rather than leaving it at 0,0 - matches GB's own
+    // `backup_dir`: bumping a wall should still visibly face into it, only
+    // the actual movement is cancelled.
+    backup_dx = actors[0].dir_x;
+    backup_dy = actors[0].dir_y;
+
+    if (actors[0].dir_x != 0)
+    {
+        s16 test_col = (x + actors[0].dir_x) >> 3;
+        if (col_solid(test_col, body_row))
+        {
+            actors[0].dir_x = 0;
+        }
+    }
+    if (actors[0].dir_y != 0)
+    {
+        s16 test_row = ((y + actors[0].dir_y) - 1) >> 3;
+        if (col_solid(feet_col, test_row))
+        {
+            actors[0].dir_y = 0;
+        }
+    }
+
+    if (actors[0].moving)
+    {
+        if (!actors[0].dir_x && !actors[0].dir_y)
+        {
+            actors[0].moving = 0;
+            actors[0].dir_x = backup_dx;
+            actors[0].dir_y = backup_dy;
+        }
+    }
+
+    tile_x = SceneActorTileX(0);
+    tile_y = SceneActorTileY(0);
+    if (tile_x != adv_last_trigger_tx || tile_y != adv_last_trigger_ty)
+    {
+        adv_last_trigger_tx = tile_x;
+        adv_last_trigger_ty = tile_y;
+        if (SceneActivateTriggerAt(tile_x, tile_y))
+        {
+            return;
+        }
+    }
+
+    // player_iframes / hit_actor / collision_group (GB's own "touch an
+    // enemy, flash, take no more damage for N frames" mechanic) is NOT
+    // ported here - it depends on a collision_group field this engine's
+    // ACTOR struct doesn't have yet, and on the Projectiles subsystem the
+    // M4 audit scoped as cross-genre, built once, around M5e - not
+    // something to half-invent now. Adventure has no damage-on-touch this
+    // milestone.
+
+    // Gated on `moving`, not on dir_x/dir_y being nonzero: dir_x/dir_y are
+    // the actor's persistent *facing* (read by rendering and by
+    // SceneTryInteract) and stay whatever they last were on a frame with no
+    // input held - only `moving` reflects whether input was actually held
+    // THIS frame (and survives the wall-bump restore above unchanged: it
+    // was already cleared to 0 there). Gating on dir_x/dir_y directly would
+    // make the player drift forever in its last-faced direction after
+    // releasing the d-pad, and/or after a wall-bump restore reintroduces a
+    // nonzero dir with no movement intended - matches GB's own
+    // Adventure.c, which gates its own position update on `player.moving`.
+    if (actors[0].moving)
+    {
+        if (actors[0].dir_x)
+        {
+            actors[0].x += (s16)actors[0].dir_x * actors[0].move_speed;
+        }
+        if (actors[0].dir_y)
+        {
+            actors[0].y += (s16)actors[0].dir_y * actors[0].move_speed;
+        }
+    }
+}
+
 void SceneHandleInput(void)
 {
     if (script_ptr)
@@ -951,10 +1108,35 @@ void SceneHandleInput(void)
     updateFuncs[scene_type]();
 }
 
+// v2 M5c: shared "walk onto a trigger" primitive (GB's own ActivateTriggerAt,
+// Trigger.c - a genuinely shared helper there too, called directly from each
+// state's own Update_ function, not gated through one generic scene-wide
+// hook). Scans type-0 (walk-over) triggers at tile (tx,ty) and runs the
+// first match's script. Returns 1 if a trigger fired. Callers own their own
+// debounce (GB's own ActivateTriggerAt compares against a remembered last
+// checked tile; this engine's two callers below use different, already-
+// proven debounce styles - Top Down's movement-armed `check_triggers` flag,
+// Adventure's tile-compare - rather than being unified, since both already
+// work and unifying them risks regressing Top Down's proven behaviour for
+// no behavioural gain).
+static u8 SceneActivateTriggerAt(s16 tx, s16 ty)
+{
+    u8 i;
+    for (i = 0; i < scene_num_triggers && i < MAX_TRIGGERS; i++)
+    {
+        if (triggers[i].type != 0) continue;
+        if (!in_box(tx, ty, triggers[i].x, triggers[i].y,
+                    triggers[i].w, triggers[i].h)) continue;
+        actors[0].moving = 0;
+        run_script(triggers[i].events_ptr, 0);
+        return 1;
+    }
+    return 0;
+}
+
 static void SceneCheckTriggers(void)
 {
     s16 tx, ty;
-    u8 i;
 
     // Sequential ifs, not `a || b || c`: 816-tcc mis-links the branch targets of
     // a 3-term boolean chain in a conditional (a walk trigger was firing while a
@@ -968,6 +1150,15 @@ static void SceneCheckTriggers(void)
     // (still actor 0) can wander across a walk-trigger's tile in Point and
     // Click, it would fire spuriously. Gated here rather than moved into a
     // per-genre "states" file - see states.h's file-split deferral note.
+    //
+    // v2 M5c: Adventure DOES want walk-over triggers (GB's own Adventure.c
+    // calls ActivateTriggerAt too) but not through this function - its free
+    // pixel movement is rarely exactly tile-aligned on both axes, so the
+    // `actor_on_tile(0)` gate below (tuned for Top Down's per-tile stepping)
+    // would make triggers unreliable there. Update_Adventure calls
+    // SceneActivateTriggerAt directly instead, every frame, with its own
+    // tile-compare debounce - matching GB's real per-genre-owned call sites
+    // more closely than forcing every genre through one shared gate would.
     if (scene_type != SCENE_TYPE_TOPDOWN) return;
     if (!check_triggers) return;
     if (script_ptr) return;
@@ -976,20 +1167,9 @@ static void SceneCheckTriggers(void)
     tx = SceneActorTileX(0);
     ty = SceneActorTileY(0);
 
-    for (i = 0; i < scene_num_triggers; i++)
+    if (SceneActivateTriggerAt(tx, ty))
     {
-        if (triggers[i].type != 0)
-        {
-            continue;
-        }
-        if (in_box(tx, ty, triggers[i].x, triggers[i].y,
-                   triggers[i].w, triggers[i].h))
-        {
-            check_triggers = 0;
-            actors[0].moving = 0;
-            run_script(triggers[i].events_ptr, 0);
-            return;
-        }
+        check_triggers = 0;
     }
 }
 
@@ -1143,6 +1323,18 @@ static void SceneUpdateActors(void)
             if (i == script_actor) is_cmd = 1;
         }
         if (!actors[i].enabled)
+        {
+            continue;
+        }
+        // v2 M5c: Adventure's own Update_Adventure already applied this
+        // frame's movement directly (free-pixel, not tile-quantized - see
+        // its own comment on why it can't use actor_try_move/this stepping
+        // loop). It still sets actors[0].moving purely so the walk-cycle
+        // gate below (SceneAnimateActors) animates - stepping position
+        // again here would double-move the player. Scoped to i==0 only:
+        // NPCs (movement_type-driven AI, still tile-locked everywhere)
+        // keep using this loop exactly as before, in every genre.
+        if (i == 0 && scene_type == SCENE_TYPE_ADVENTURE)
         {
             continue;
         }

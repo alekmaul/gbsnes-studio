@@ -35,6 +35,8 @@ void Start_TopDown(void);
 void Update_TopDown(void);
 void Start_PointNClick(void);
 void Update_PointNClick(void);
+void Start_Adventure(void);
+void Update_Adventure(void);
 void Start_Noop(void);
 void Update_Noop(void);
 

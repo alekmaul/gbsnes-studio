@@ -344,3 +344,77 @@ l'utilisateur le 2026-09-13 (voir la mémoire Claude `gbsnes-v2-migration`) apr�
 confirmé de toute méthode de simulation d'entrée Lua sur ce build de Mesen : la vérification du
 comportement piloté par le d-pad pour M5b et la suite repose désormais sur un test interactif
 par l'utilisateur, pas sur un script Lua.
+
+## 10. M5c (Adventure) — fait, 2026-09-13
+
+Confirme la description de l'audit M4 : une variante "mouvement libre au pixel" de Top Down —
+les deux axes peuvent bouger la même frame (vraie diagonale, contrairement à la priorité
+d'un-axe-à-la-fois de Top Down), le joueur n'est plus calé sur la grille de tuiles. Réutilise
+l'interaction bouton A existante (`SceneTryInteract`, déjà genre-agnostique dans son
+implémentation) et les triggers walk-over, mais **pas** via `SceneCheckTriggers` — voir plus
+bas pourquoi.
+
+**Décision de conception centrale, pas empruntée telle quelle à GB** : la référence GB
+(`states/Adventure.c`) résout la collision avec une hitbox volontairement **plus étroite** que
+le sprite entier, biaisée dans la direction du déplacement (`pos.x + 4 + dir.x`, `pos.y + 7`) —
+un choix délibéré, pas un détail accessoire : une hitbox étroite (≤8px) ne peut jamais chevaucher
+plus de 2 tuiles par axe, quel que soit l'alignement, ce qui rend un mouvement au pixel près
+tractable avec de l'arithmétique de tuile simple. La reconstruction fidèle de la valeur exacte
+des biais GB était risquée sans pouvoir la vérifier interactivement cette session (le trou de
+simulation d'input) — l'arithmétique de biais de GB suppose en plus une convention de position
+différente (coin haut-gauche) de celle de ce moteur (centre-x / bas-pied, voir
+`gbs_types.h`/`SceneRenderActors`). Plutôt que de porter les constantes de GB verbatim au
+risque d'une erreur de bord non détectable, l'**idée** est reconstruite proprement pour notre
+propre convention : un point de test unique, biaisé d'un pixel dans la direction du mouvement,
+au niveau de la colonne du centre horizontal (axe X) ou de la ligne juste au-dessus des pieds
+(axe Y) — `col_solid()` existant, pas de nouvelle primitive de collision.
+
+**Vrai bug trouvé et corrigé en écrivant le code, pas supposé à l'avance** : la première version
+appliquait le déplacement final en testant `dir_x`/`dir_y` directement (`if (dir_x) x += ...`).
+Comme `dir_x`/`dir_y` sont la **direction persistante** de l'acteur (relue par le rendu et par
+`SceneTryInteract`, jamais remise à 0 juste parce qu'aucune touche n'est tenue), un joueur qui
+relâche le d-pad continuait à glisser indéfiniment dans sa dernière direction — un vrai bug de
+dérive. Corrigé en calquant exactement GB : le déplacement final est gardé par `actors[0].moving`
+(mis à jour tous les frames, reflète uniquement si une touche est *réellement* tenue cette
+frame), pas par `dir_x`/`dir_y`. Trouvé et corrigé **avant** commit grâce à la relecture
+attentive imposée par l'absence de vérification Mesen comportementale — sans cette relecture, le
+bug serait passé inaperçu jusqu'à un test interactif utilisateur.
+
+Autre fidélité portée depuis GB : `backup_dir` — quand un déplacement est totalement bloqué
+(les deux axes annulés par collision la même frame), la direction/facing du joueur est restaurée
+à ce qu'elle était avant les tests de collision plutôt que de rester à 0,0 — heurter un mur
+laisse le joueur visuellement tourné vers lui, seul le mouvement est annulé.
+
+**Deuxième trouvaille architecturale, cette fois pas un bug mais un vrai choix à faire** : la
+référence GB appelle `ActivateTriggerAt` **sans condition d'alignement** (chaque frame, quelle
+que soit la position exacte) — contrairement à `SceneCheckTriggers` de ce moteur (M5b), qui
+n'agit que quand le joueur est exactement calé sur une tuile (`actor_on_tile`), une hypothèse
+raisonnable pour Top Down mais qui rendrait les triggers quasiment inopérants pour Adventure
+(le joueur est rarement exactement aligné sur les deux axes en mouvement libre/diagonal).
+Plutôt que de forcer Adventure à travers la même porte que Top Down, la logique de scan/lancement
+de trigger a été extraite dans un nouveau petit primitif partagé, `SceneActivateTriggerAt(tx,
+ty)` — mirroir direct du `ActivateTriggerAt` de GB, qui est lui-même déjà une fonction partagée
+appelée directement par chaque genre, pas un hook générique caché derrière une seule scène de
+mise à jour. `SceneCheckTriggers` (Top Down) l'utilise en gardant exactement son ancien
+comportement (`check_triggers`/`actor_on_tile`) ; `Update_Adventure` l'appelle directement,
+chaque frame, avec son propre anti-rebond par comparaison de tuile (`adv_last_trigger_tx/ty`,
+mirroir du `last_trigger_tx/ty` réel de GB) plutôt que le flag `check_triggers` orienté
+mouvement de Top Down.
+
+**Explicitement pas porté, documenté en commentaire plutôt que deviné** : `player_iframes`/
+`hit_actor`/`collision_group` (le mécanisme GB "toucher un ennemi, invincibilité temporaire") —
+dépend d'un champ `collision_group` que la struct `ACTOR` de ce moteur n'a pas encore, et du
+sous-système Projectiles que l'audit M4 place en transverse, construit une fois, autour de M5e —
+pas quelque chose à moitié inventer maintenant. Adventure n'a donc pas de dégâts au contact ce
+jalon.
+
+**Vérifié** : build `make` réel propre, `yarn jest` 548/550 (mêmes 2 échecs préexistants). Deux
+vérifications Mesen en tâche de fond : les fixtures réelles (`scene_type` 0) tournent 120 frames
+sans changement ; un test de démarrage/plantage dédié (scène factice basculée temporairement à
+`scene_type=2`, `git checkout --` avant commit) confirme 300 frames sans plantage, une lecture
+WRAM cohérente de `scene_type=2`, et surtout **une position parfaitement stable sans aucune
+entrée tenue** (`x=88,y=80` du début à la fin, `dir_x=0,dir_y=1` conforme au spawn, `moving=0`)
+— la preuve concrète que le bug de dérive ci-dessus est bien corrigé, pas juste plausible sur le
+papier. Le comportement réellement piloté par le d-pad (diagonale, glissement le long d'un mur,
+triggers walk-over en mouvement libre) n'est **pas** vérifié par script Lua, conformément à la
+décision actée pour M5b — laissé au test interactif de l'utilisateur.
