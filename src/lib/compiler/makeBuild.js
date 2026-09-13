@@ -134,7 +134,14 @@ const makeBuild = async ({
   });
   await fs.writeFile(`${buildRoot}/${makeScriptFile}`, makeScript);
 
-  const command = process.platform === "win32" ? makeScriptFile : `/bin/sh ${makeScriptFile}`;
+  // A bare script name relies on cmd.exe searching the current directory,
+  // which Windows disables when NoDefaultCurrentDirectoryInExePath is set
+  // (a Defender ASR-style hardening flag) - spawn the script by its
+  // absolute path instead so the build doesn't depend on that setting.
+  const command =
+    process.platform === "win32"
+      ? `${buildRoot}/${makeScriptFile}`
+      : `/bin/sh ${makeScriptFile}`;
   const args = ["rom"];
 
   const options = {
