@@ -5,6 +5,39 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - `v2` branch, in progress
+
+Rebuilding GBSNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
+2.0.0-beta5** instead of 1.2.2 — webpack + TypeScript replacing `electron-compile`, Redux
+Toolkit, GBDK 2020, and the new genre-based GB engine (Top Down / Platformer / Shoot Em Up /
+Point and Click / Adventure). `main` stays untouched and frozen at `v1.1.4` while this runs.
+`package.json` on `v2` deliberately stays `1.1.4` until this ships — no `2.0.0` tag/release yet,
+so no version-numbered entry here either. Tracked as 14 milestones; the roadmap artifact and
+`MIGRATION_V2_AUDIT.md` (repo root, `v2` branch) are the detailed decision log. 12 of 14 done
+as of 2026-09-13:
+
+- **M0-M1**: audit of the 1.2.2→2.0.0-beta5 diff; the bare GB target builds, packages, and
+  boots a real project's ROM on the new base (no SNES yet).
+- **M2**: SNES toolchain re-vendored and confirmed packaging-safe (`app.asar`) under webpack.
+- **M3**: compile-target descriptors (`targets/gb.js`/`targets/snes.js`) reintroduced.
+- **M4-M5**: all 5 GB Studio 2.0 scene genres (Top Down, Point and Click, Adventure,
+  Platformer, Shoot Em Up) implemented on the SNES engine.
+- **M6**: SNES engine supports up to 6 background palette regions per scene.
+- **M7**: the SNES data compiler (`compileSnesData.js`) ported onto the new compiler pipeline.
+- **M8**: SNES ROM building (`buildSnesRom.js`/`compileSnesMusic.js`) wired into the app's real
+  `buildProject()` — "Build ROM" works end to end for SNES again.
+- **M9**: SNES-aware script events (dialogue wrap, camera/overlay clamps, X/Y/L/R input)
+  confirmed working under GB Studio 2.0's event model; fixed a real pre-existing crash in the
+  dialogue/menu/choice text editors (GB included) found along the way.
+- **M10**: a real `v1.1.4` SNES project (the sample game) verified to migrate and recompile
+  cleanly on the new project schema.
+- **M11**: Settings page gained a Target Platform selector + SNES Options card; Controls page
+  gained X/Y/L/R key bindings; the World editor's scene-info budget badges and camera-viewport
+  overlay are target-aware.
+
+Remaining: **M12** (SNES web player/Play button, branding polish, 3-platform CI) and **M13**
+(full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).
+
 ## [1.1.4] - 2026-09-12
 
 ### Changed
