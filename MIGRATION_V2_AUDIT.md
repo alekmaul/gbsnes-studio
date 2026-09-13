@@ -537,3 +537,48 @@ l'explique). Un faux résultat identique au test précédent a été intercepté
 (process Mesen laissé vivant, résultat périmé réécrit) - re-testé après avoir tué le process,
 confirmé frais. Le comportement piloté par le d-pad (esquive perpendiculaire) reste laissé au
 test interactif de l'utilisateur, comme pour M5b-d.
+
+## 13. M6 (couleur, palettes multiples par scène) — fait, 2026-09-13
+
+Objectif de l'artefact de roadmap : le moteur SNES expose 6 palettes BG par scène comme le
+nouveau modèle couleur de GB Studio 2.0 (`Palette.c` de GB : un blob de 48 octets, 6 régions de
+8 couleurs DMG-packées, sélectionnées par tuile via un octet d'attribut VRAM banque 1), au lieu
+d'une seule palette BG globale.
+
+**Trouvaille de conception, pas devinée** : le format de tuilemap 16 bits de ce moteur
+(`snesgfx.js` : `tile | pal<<10 | prio<<13 | xflip<<14 | yflip<<15`) porte **déjà** le sélecteur
+de palette par tuile équivalent — une vraie capacité matérielle SNES (jusqu'à 8 palettes BG 4bpp
+adressables), pas quelque chose à ajouter. Le format de tuile n'avait donc besoin d'aucun
+changement ; seul le nombre de créneaux CGRAM réellement remplis par `SceneInit` à partir des
+données de scène devait passer de 1 à jusqu'à 6.
+
+**Contrainte réelle trouvée en traçant l'utilisation actuelle de la CGRAM, pas supposée** : le
+créneau physique 1 (couleurs 16-31) n'est **pas libre** — `ui.c` y charge déjà sa propre palette
+de dialogue (`ui_pal`, BG3) aux couleurs 16-19, chargée juste après l'appel de palette de scène
+à chaque chargement de scène. Une tuile BG 4bpp échantillonne toujours ses 16 couleurs
+complètes ; laisser une palette de scène atterrir dans le créneau 1 aurait fait écraser
+silencieusement ses propres index de couleur 0-3 par les couleurs d'encre de l'UI quelques
+instants plus tard — pas un cas limite à corriger, une corruption garantie pour tout art
+utilisant réellement cette région. Les 6 régions logiques sont donc mappées vers les créneaux
+physiques `{0, 2, 3, 4, 5, 6}` (créneau 1 sauté, créneau 7 laissé libre).
+
+**Implémentation** : `SceneUploadBgPalette()` (nouvelle fonction, `scene.c`) remplace l'unique
+`dmaCopyCGram` de M6-v1 par une boucle de jusqu'à 6 appels, chacun vers le créneau physique
+correct. Rétrocompatible par construction : `bg_pals_len[bg_index]` peut toujours couvrir moins
+de 6 régions complètes (même une dernière région partielle) — les fixtures factices actuelles
+(32 et 28 octets, une seule région) sont uploadées à l'identique, octet pour octet, vers le
+créneau 0 uniquement, sans aucun changement de comportement.
+
+**Vérifié avec un vrai test CGRAM, pas juste "ça compile"** : build `make` réel propre, `yarn
+jest` 548/550 (mêmes 2 échecs préexistants). Boot Mesen des fixtures réelles inchangé (120
+frames). Test dédié (patch jetable donnant à `bg0` 4 régions aux motifs d'octets distincts
+`0x22`/`0x33`/`0x44`, `bg_pals_len[0]` porté à 128, `git checkout --` avant commit) : lecture
+directe de la CGRAM réelle dans Mesen (`emu.memType.snesCgRam`) confirme que la région 0
+(inchangée) atterrit toujours au créneau 0 octet pour octet identique aux données d'origine, et
+que les régions 1/2/3 atterrissent exactement aux créneaux physiques 2/3/4 attendus (`0x22`,
+`0x33`, `0x44` relus tels quels) — la palette UI (couleur 16) confirmée intacte et inchangée par
+le nouvel upload multi-région. Le rendu réel par tuile (le bit `pal<<10` du tuilemap
+sélectionnant effectivement la bonne région pour une vraie tuile peinte) n'a pas été testé
+séparément — c'est une capacité matérielle SNES déjà existante et déjà exercée côté sprites
+(palettes OBJ par acteur), pas du nouveau code de ce jalon ; seul l'upload CGRAM multi-région
+(le vrai changement) avait besoin d'être prouvé.

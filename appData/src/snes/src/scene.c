@@ -7,6 +7,9 @@
          IF_ACTOR_AT_POSITION, simple NPC AI (random walk / face).
     M6:  per-scene BG upload (tiles + map + palette + map size) from the
          assets bg_*_ptrs tables - the BG is no longer a one-time main() setup.
+    v2 M6: up to 6 BG palette regions per scene (GB Studio 2.0's colour
+           model - was a single palette), addressed by the existing
+           snesgfx.js tilemap `pal<<10` bits - see SceneUploadBgPalette.
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
 #include "scene.h"
@@ -479,6 +482,55 @@ static u8 frames_len_for(u8 sprite_type, u8 slot)
     return 1;
 }
 
+/* v2 M6: up to 6 BG palette regions per scene, matching GB Studio 2.0.0-
+ * beta5's colour model (Palette.c: a 48-byte, 6x8-colour-DMG-packed blob
+ * per scene selected per background tile via a CGB VRAM-bank-1 attribute
+ * byte). This engine's own tilemap format already carries the equivalent
+ * per-tile selector (snesgfx.js: `tile | pal<<10 | ...`, a genuine SNES
+ * hardware capability - up to 8 addressable 4bpp BG palettes) - so the
+ * *tile format* needed no change at all, only how many CGRAM palette slots
+ * SceneInit actually populates from scene data.
+ *
+ * `bg_pals_ptrs[bg_index]` is up to 6 concatenated 32-byte (16-colour,
+ * BGR555) regions, logical region 0..5, in that order - the same layout a
+ * hand-authored `gen-dummy-gfx.js` blob or (eventually) M7's real
+ * compileSnesData.js would emit. `bg_pals_len[bg_index]` may cover fewer
+ * than all 6 (even a partial last region) for backward compatibility with
+ * the existing single-palette dummy fixtures (32 or 28 bytes) - those
+ * upload unchanged, to physical slot 0 only, byte-for-byte identical to
+ * before this milestone.
+ *
+ * Physical CGRAM destination: SNES BG palettes are 8 addressable 16-colour
+ * (32-byte) slots (colour index N*16, i.e. dmaCopyCGram byte-offset N*16
+ * in *colour* units). Slot 1 (colours 16-31) is NOT free - ui.c's own
+ * dialogue-box palette (`ui_pal`, BG3) already claims colours 16-19 within
+ * it, uploaded unconditionally on every scene load right after this call.
+ * A scene's own 4bpp BG tile always samples its full 16-colour region, so
+ * letting a scene palette land in slot 1 would have its own colour
+ * indices 0-3 silently overwritten by the UI's ink colours moments later -
+ * not a fixed-up edge case, a guaranteed corruption for any art actually
+ * using that region. So slot 1 is skipped entirely: the 6 logical regions
+ * map to physical slots {0, 2, 3, 4, 5, 6} - slot 7 stays free (GB only
+ * ever needs 6, nothing to put there yet).
+ */
+static const u16 bg_pal_slot_color[6] = { 0, 32, 48, 64, 80, 96 };
+
+static void SceneUploadBgPalette(u8 bg_index)
+{
+    const u8 *src = bg_pals_ptrs[bg_index];
+    s16 remaining = (s16)bg_pals_len[bg_index];
+    u8 i;
+
+    for (i = 0; i < 6; i++)
+    {
+        u16 chunk_len;
+        if (remaining <= 0) break;
+        chunk_len = (remaining > 32) ? 32 : (u16)remaining;
+        dmaCopyCGram((u8 *)(src + (u16)i * 32), bg_pal_slot_color[i], chunk_len);
+        remaining -= 32;
+    }
+}
+
 void SceneInit(void)
 {
     const unsigned char *s = scenes[scene_index];
@@ -522,7 +574,7 @@ void SceneInit(void)
     setScreenOff();
     dmaCopyVram((u8 *)bg_tiles_ptrs[bg_index], 0x2000, bg_tiles_len[bg_index]);
     dmaCopyVram((u8 *)bg_maps_ptrs[bg_index], 0x0000, bg_maps_len[bg_index]);
-    dmaCopyCGram((u8 *)bg_pals_ptrs[bg_index], 0, bg_pals_len[bg_index]);
+    SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
     /* this scene's OBJ tile sheet (8 KB) + 8-palette CGRAM image (bakes in the

@@ -358,6 +358,14 @@ function cArray(name, bytes, type = "unsigned char") {
   return `const ${type} ${name}[${bytes.length}] = {\n${lines.join(",\n")}\n};\n`;
 }
 
+// v2 M6: SceneInit (scene.c) now accepts up to 6 concatenated 32-byte
+// regions per background (GB Studio 2.0's per-scene colour model - see
+// SceneUploadBgPalette's own comment for the physical CGRAM slot mapping),
+// but this generator still only ever emits 1 region per background - a
+// real multi-region dummy fixture needs the same not-yet-ported snesgfx.js
+// machinery already blocking gen-dummy-gfx.js from re-running at all (M7).
+// Verified against a disposable hand-patched 4-region test instead (not
+// committed) - see MIGRATION_V2_AUDIT.md's M6 section.
 const bgPal0 = palBytes(bgPalette);
 
 // This file lives at appData/src/snes/tools/ ; write next door into src/
