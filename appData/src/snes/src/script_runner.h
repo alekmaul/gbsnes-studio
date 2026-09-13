@@ -15,7 +15,7 @@
 #include "gbs_types.h"
 
 #define SCRIPT_STACK_SIZE 8
-#define SCRIPT_CMD_COUNT 94
+#define SCRIPT_CMD_COUNT 112
 
 extern const unsigned char *script_ptr;
 extern const unsigned char *script_start_ptr;

@@ -6,6 +6,12 @@
     control flow, instant actor ops, wait); everything that needs Scene, UI,
     fades, sound, music or SRAM is Script_Noop_b for now and is filled in over
     M5 (UI/fades/camera), M8 (sound/music) and M4b (Scene / actor walking).
+
+    (M4/M5/M8/M4b above are this file's ORIGINAL v1 SNES-port milestones, from
+    before this engine was ported onto GB Studio 2.0.0-beta5. The "v2 M<n>"
+    comments below the 0x5D row are a DIFFERENT, later milestone sequence for
+    that base-migration project - see the roadmap artifact / Claude memory
+    `gbsnes-v2-migration`. Don't confuse the two numbering schemes.)
 ---------------------------------------------------------------------------------*/
 #include "script_runner.h"
 #include "scene.h"
@@ -137,13 +143,19 @@ void Script_IfInput_b(void)
     script_continue = 1;
 }
 
-// SET_INPUT_SCRIPT. args: mask lo/hi (GB layout + X/Y/L/R), bank (unused, always
-// 0), event_ptrs index hi/lo. Registers a background script that fires on the
-// next press of one of the masked buttons (SceneHandleInput / SceneSetInputScript).
+// SET_INPUT_SCRIPT. args: mask lo/hi (GB layout + X/Y/L/R), persist, bank
+// (unused, always 0), event_ptrs index hi/lo. v2 (2.0.0-beta5) inserted a new
+// "persist" byte right after the mask (GB: mask, persist, bank, idxHi, idxLo -
+// 5 bytes; here the mask is 2 bytes for X/Y/L/R, so persist lands at [2] and
+// bank/idx each shift one position later than the v1.1.4 layout). Getting
+// this positionally right matters even though `persist` itself isn't wired
+// up yet (SceneSetInputScript has no concept of it) - reading idx from the
+// old ARG16(3, 4) would silently read half the persist byte + half the bank
+// byte as the event_ptrs index instead of the real one.
 void Script_SetInputScript_b(void)
 {
     u16 mask = script_cmd_args[0] | ((u16)script_cmd_args[1] << 8);
-    u16 idx = ARG16(3, 4);
+    u16 idx = ARG16(4, 5);
     SceneSetInputScript(mask, event_ptrs[idx]);
     ADVANCE();
     script_continue = 1;
@@ -349,6 +361,9 @@ void Script_MusicStop_b(void)
 // frequency. snesmod's BRR path has no "hold an arbitrary raw frequency"
 // primitive, so play the beep sample at a mid pitch; SOUND_STOP_TONE is a
 // no-op (the sample is a short one-shot). Layers over the music.
+// args grew by one in v2 (2.0.0-beta5): a duration byte (toneFrames) appended
+// after the period - moot for this fixed one-shot-sample approximation, so
+// it's consumed by ADVANCE()'s table-driven length but not read here.
 void Script_SoundStartTone_b(void)
 {
     SoundPlayEffect(SFX_BEEP, 3);
@@ -427,9 +442,16 @@ void Script_CameraLock_b(void)
     script_action_complete = 0;
 }
 
+// CAMERA_SHAKE. args: shouldShakeX, shouldShakeY, frames (v2: 2.0.0-beta5
+// split what used to be a single "frames" byte at position 0 into three -
+// the duration moved to position 2). The engine's own shake (game.c) is
+// X-axis only; shouldShakeY has nothing to hook into yet, so it's read but
+// not acted on. Getting the duration's byte position right matters
+// regardless - reading it from the old position 0 would silently use
+// shouldShakeX (0 or 1) as the frame count instead of the real duration.
 void Script_CameraShake_b(void)
 {
-    shake_time = script_cmd_args[0];
+    shake_time = script_cmd_args[2];
     ADVANCE();
     script_action_complete = 0;
 }
@@ -582,8 +604,28 @@ void Script_MathSub_b(void)    { VAR(ARG16(0, 1)) -= script_cmd_args[2];        
 void Script_MathMul_b(void)    { VAR(ARG16(0, 1)) *= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
 void Script_MathDiv_b(void)    { VAR(ARG16(0, 1)) /= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
 void Script_MathMod_b(void)    { VAR(ARG16(0, 1)) %= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
-void Script_MathAddVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) + VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
-void Script_MathSubVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) - VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
+// MATH_ADD_VALUE / MATH_SUB_VALUE. args: clamp (0/1) - new in v2 (2.0.0-beta5,
+// was 0 args before). When set, saturates at 0/255 instead of wrapping -
+// simple and target-independent, so implemented for real now rather than
+// left a no-op like the genre-specific new opcodes above.
+void Script_MathAddVal_b(void)
+{
+    u8 a = VAR(script_ptr_x);
+    u8 b = VAR(script_ptr_y);
+    u8 clamp = script_cmd_args[0];
+    VAR(script_ptr_x) = (!clamp || a < (u8)(255 - b)) ? (u8)(a + b) : 255;
+    ADVANCE();
+    script_continue = 1;
+}
+void Script_MathSubVal_b(void)
+{
+    u8 a = VAR(script_ptr_x);
+    u8 b = VAR(script_ptr_y);
+    u8 clamp = script_cmd_args[0];
+    VAR(script_ptr_x) = (!clamp || a > b) ? (u8)(a - b) : 0;
+    ADVANCE();
+    script_continue = 1;
+}
 void Script_MathMulVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) * VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
 void Script_MathDivVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) / VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
 void Script_MathModVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) % VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
@@ -605,6 +647,10 @@ void Script_ActorActivate_b(void)
 // actually be switched to. sprite_slot_for_index[] (compileSnesData.js) maps
 // every project sprite to its slot, or 0xFF if it was never loaded - no-op
 // on 0xFF rather than pointing OAM at tiles that were never uploaded.
+// args grew by one in v2 (2.0.0-beta5): a "persist across scene switch" flag
+// appended after the sheet index - consumed by ADVANCE()'s table-driven
+// length but not acted on yet (this engine has no map_next_sprite-style
+// carry-over concept to hook it into).
 void Script_PlayerSetSprite_b(void)
 {
     u16 idx = ARG16(0, 1);
@@ -648,12 +694,22 @@ void Script_ActorSetPos_b(void)
     ADVANCE();                                          \
     script_action_complete = 0
 
+// ACTOR_MOVE_TO. args: x, y, useCollisions, moveType (v2: 2.0.0-beta5 appended
+// the last two - a collision-aware destination clamp and a horizontal/
+// vertical/diagonal move-type choice, neither implemented on this engine yet.
+// x/y are unchanged in meaning/position from v1.1.4; the two new trailing
+// bytes are consumed by ADVANCE()'s table-driven length below but otherwise
+// ignored for now - real wiring belongs with whichever genre needs it first
+// (v2 M5a Top Down / M5c Adventure).
 void Script_ActorMoveTo_b(void)
 {
     BEGIN_MOVE(((s16)script_cmd_args[0] << 3) + 8,
                ((s16)script_cmd_args[1] << 3) + 8);
 }
 
+// ACTOR_MOVE_RELATIVE. args: dxAbs, dxSign, dyAbs, dySign, useCollisions,
+// moveType - the last two are new in v2 (2.0.0-beta5), same deferred status
+// as ACTOR_MOVE_TO above; the first four are unchanged.
 void Script_ActorMoveRel_b(void)
 {
     s16 dx = (s16)script_cmd_args[0] << 3;
@@ -662,6 +718,9 @@ void Script_ActorMoveRel_b(void)
                actors[script_actor].y + (script_cmd_args[3] ? -dy : dy));
 }
 
+// ACTOR_MOVE_TO_VALUE. x/y arrive via LOAD_VECTORS (script_ptr_x/y), not
+// inline bytes. args: useCollisions, moveType - both new in v2, same
+// deferred status as ACTOR_MOVE_TO above.
 void Script_ActorMoveToVal_b(void)
 {
     BEGIN_MOVE(((s16)VAR(script_ptr_x) << 3) + 8,
@@ -764,6 +823,9 @@ void Script_ActorHide_b(void)           { actors[script_actor].enabled = 0;     
 void Script_ActorSetCollisions_b(void)  { actors[script_actor].collisions_enabled = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
 void Script_ActorSetMoveSpeed_b(void)   { actors[script_actor].move_speed = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
 void Script_ActorSetAnimSpeed_b(void)   { actors[script_actor].anim_speed = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
+// args grew by one in v2 (2.0.0-beta5): a "fast-forward while A/B held" flag
+// appended after in/out/draw speed - consumed by ADVANCE()'s table-driven
+// length but not implemented (this engine's UI has no fast-forward path yet).
 void Script_TextSetAnimSpeed_b(void)
 {
     UISetTextAnimSpeed(script_cmd_args[0], script_cmd_args[1], script_cmd_args[2]);
@@ -813,6 +875,18 @@ void Script_ActorInvoke_b(void)
     script_continue = 1;
 }
 
+/* -------- M4/M5 (v2): opcodes new in GB Studio 2.0.0-beta5 -------- */
+
+// IF_COLOR_SUPPORTED. args: hi(offset), lo(offset) - jump target. On the Game
+// Boy this branches only on real CGB hardware; the SNES is always "colour
+// capable" the same way, so the jump is taken unconditionally - matching what
+// a CGB build of the same project does, not a guess.
+void Script_IfColorSupported_b(void)
+{
+    script_ptr = script_start_ptr + ARG16(0, 1);
+    script_continue = 1;
+}
+
 /*---------------------------------------------------------------------------------
     Dispatch table - index order MUST match src/lib/events/scriptCommands.js
     (and appData/src/gb/src/ScriptRunner.c script_cmds[]).
@@ -834,14 +908,14 @@ void Script_ActorInvoke_b(void)
     X(Script_FadeIn_b, 1) /* 0x0D FADE_IN */ \
     X(Script_LoadScene_b, 6) /* 0x0E SWITCH_SCENE */ \
     X(Script_ActorSetPos_b, 2) /* 0x0F ACTOR_SET_POSITION */ \
-    X(Script_ActorMoveTo_b, 2) /* 0x10 ACTOR_MOVE_TO */ \
+    X(Script_ActorMoveTo_b, 4) /* 0x10 ACTOR_MOVE_TO */ \
     X(Script_ShowSprites_b, 0) /* 0x11 SHOW_SPRITES */ \
     X(Script_HideSprites_b, 0) /* 0x12 HIDE_SPRITES */ \
-    X(Script_PlayerSetSprite_b, 2) /* 0x13 PLAYER_SET_SPRITE */ \
+    X(Script_PlayerSetSprite_b, 3) /* 0x13 PLAYER_SET_SPRITE */ \
     X(Script_ActorShow_b, 0) /* 0x14 ACTOR_SHOW */ \
     X(Script_ActorHide_b, 0) /* 0x15 ACTOR_HIDE */ \
     X(Script_ActorEmote_b, 1) /* 0x16 ACTOR_EMOTE */ \
-    X(Script_CameraShake_b, 1) /* 0x17 CAMERA_SHAKE */ \
+    X(Script_CameraShake_b, 3) /* 0x17 CAMERA_SHAKE */ \
     X(Script_Noop_b, 0) /* 0x18 RETURN_TO_TITLE */ \
     X(Script_ShowOverlay_b, 3) /* 0x19 OVERLAY_SHOW */ \
     X(Script_HideOverlay_b, 0) /* 0x1A OVERLAY_HIDE */ \
@@ -868,16 +942,16 @@ void Script_ActorInvoke_b(void)
     X(Script_SetFlagRandomValue_b, 4) /* 0x2F SET_RANDOM_VALUE */ \
     X(Script_ActorGetPos_b, 0) /* 0x30 ACTOR_GET_POSITION */ \
     X(Script_ActorSetPosToVal_b, 0) /* 0x31 ACTOR_SET_POSITION_TO_VALUE */ \
-    X(Script_ActorMoveToVal_b, 0) /* 0x32 ACTOR_MOVE_TO_VALUE */ \
-    X(Script_ActorMoveRel_b, 4) /* 0x33 ACTOR_MOVE_RELATIVE */ \
+    X(Script_ActorMoveToVal_b, 2) /* 0x32 ACTOR_MOVE_TO_VALUE */ \
+    X(Script_ActorMoveRel_b, 6) /* 0x33 ACTOR_MOVE_RELATIVE */ \
     X(Script_ActorSetPosRel_b, 4) /* 0x34 ACTOR_SET_POSITION_RELATIVE */ \
     X(Script_MathAdd_b, 3) /* 0x35 MATH_ADD */ \
     X(Script_MathSub_b, 3) /* 0x36 MATH_SUB */ \
     X(Script_MathMul_b, 3) /* 0x37 MATH_MUL */ \
     X(Script_MathDiv_b, 3) /* 0x38 MATH_DIV */ \
     X(Script_MathMod_b, 3) /* 0x39 MATH_MOD */ \
-    X(Script_MathAddVal_b, 0) /* 0x3A MATH_ADD_VALUE */ \
-    X(Script_MathSubVal_b, 0) /* 0x3B MATH_SUB_VALUE */ \
+    X(Script_MathAddVal_b, 1) /* 0x3A MATH_ADD_VALUE */ \
+    X(Script_MathSubVal_b, 1) /* 0x3B MATH_SUB_VALUE */ \
     X(Script_MathMulVal_b, 0) /* 0x3C MATH_MUL_VALUE */ \
     X(Script_MathDivVal_b, 0) /* 0x3D MATH_DIV_VALUE */ \
     X(Script_MathModVal_b, 0) /* 0x3E MATH_MOD_VALUE */ \
@@ -886,7 +960,7 @@ void Script_ActorInvoke_b(void)
     X(Script_LoadVectors_b, 4) /* 0x41 LOAD_VECTORS */ \
     X(Script_ActorSetMoveSpeed_b, 1) /* 0x42 ACTOR_SET_MOVE_SPEED */ \
     X(Script_ActorSetAnimSpeed_b, 1) /* 0x43 ACTOR_SET_ANIM_SPEED */ \
-    X(Script_TextSetAnimSpeed_b, 3) /* 0x44 TEXT_SET_ANIM_SPEED */ \
+    X(Script_TextSetAnimSpeed_b, 4) /* 0x44 TEXT_SET_ANIM_SPEED */ \
     X(Script_ScenePushState_b, 0) /* 0x45 SCENE_PUSH_STATE */ \
     X(Script_ScenePopState_b, 1) /* 0x46 SCENE_POP_STATE */ \
     X(Script_ActorInvoke_b, 0) /* 0x47 ACTOR_INVOKE */ \
@@ -894,7 +968,7 @@ void Script_ActorInvoke_b(void)
     X(Script_StackPop_b, 0) /* 0x49 STACK_POP */ \
     X(Script_SceneResetStack_b, 0) /* 0x4A SCENE_STATE_RESET */ \
     X(Script_ScenePopAllState_b, 1) /* 0x4B SCENE_POP_ALL_STATE */ \
-    X(Script_SetInputScript_b, 5) /* 0x4C SET_INPUT_SCRIPT */ \
+    X(Script_SetInputScript_b, 6) /* 0x4C SET_INPUT_SCRIPT */ \
     X(Script_RemoveInputScript_b, 2) /* 0x4D REMOVE_INPUT_SCRIPT */ \
     X(Script_ActorSetFrame_b, 1) /* 0x4E ACTOR_SET_FRAME */ \
     X(Script_ActorSetFlip_b, 1) /* 0x4F ACTOR_SET_FLIP */ \
@@ -902,7 +976,7 @@ void Script_ActorInvoke_b(void)
     X(Script_ActorSetFrameToVal_b, 2) /* 0x51 ACTOR_SET_FRAME_TO_VALUE */ \
     X(Script_VariableAddFlags_b, 3) /* 0x52 VARIABLE_ADD_FLAGS */ \
     X(Script_VariableClearFlags_b, 3) /* 0x53 VARIABLE_CLEAR_FLAGS */ \
-    X(Script_SoundStartTone_b, 2) /* 0x54 SOUND_START_TONE */ \
+    X(Script_SoundStartTone_b, 3) /* 0x54 SOUND_START_TONE */ \
     X(Script_SoundStopTone_b, 0) /* 0x55 SOUND_STOP_TONE */ \
     X(Script_SoundPlayBeep_b, 1) /* 0x56 SOUND_PLAY_BEEP */ \
     X(Script_SoundPlayCrash_b, 0) /* 0x57 SOUND_PLAY_CRASH */ \
@@ -911,7 +985,25 @@ void Script_ActorInvoke_b(void)
     X(Script_TimerDisable_b, 0) /* 0x5A TIMER_DISABLE */ \
     X(Script_TextWithAvatar_b, 4) /* 0x5B TEXT_WITH_AVATAR */ \
     X(Script_Menu_b, 7) /* 0x5C MENU */ \
-    X(Script_ActorSetCollisions_b, 1) /* 0x5D ACTOR_SET_COLLISIONS */
+    X(Script_ActorSetCollisions_b, 1) /* 0x5D ACTOR_SET_COLLISIONS */ \
+    X(Script_Noop_b, 5) /* 0x5E LAUNCH_PROJECTILE - Projectiles subsystem, v2 M5e */ \
+    X(Script_Noop_b, 4) /* 0x5F SET_PROPERTY - union-type generic property setter */ \
+    X(Script_Noop_b, 2) /* 0x60 ACTOR_SET_SPRITE - per-actor sprite override, needs On Update port */ \
+    X(Script_Noop_b, 4) /* 0x61 IF_ACTOR_RELATIVE_TO_ACTOR - needs On Update port */ \
+    X(Script_Noop_b, 1) /* 0x62 PLAYER_BOUNCE - Platformer, v2 M5d */ \
+    X(Script_Noop_b, 3) /* 0x63 WEAPON_ATTACK - Projectiles subsystem, v2 M5e */ \
+    X(Script_Noop_b, 3) /* 0x64 PALETTE_SET_BACKGROUND - full colour, v2 M6 */ \
+    X(Script_Noop_b, 2) /* 0x65 PALETTE_SET_ACTOR - full colour, v2 M6 */ \
+    X(Script_Noop_b, 2) /* 0x66 PALETTE_SET_UI - full colour, v2 M6 */ \
+    X(Script_Noop_b, 0) /* 0x67 ACTOR_STOP_UPDATE - stops movement_ptr, needs On Update port */ \
+    X(Script_Noop_b, 1) /* 0x68 ACTOR_SET_ANIMATE - needs On Update port */ \
+    X(Script_IfColorSupported_b, 2) /* 0x69 IF_COLOR_SUPPORTED */ \
+    X(Script_Noop_b, 3) /* 0x6A ENGINE_FIELD_UPDATE - runtime engine-field writes, as needed per genre */ \
+    X(Script_Noop_b, 4) /* 0x6B ENGINE_FIELD_UPDATE_WORD */ \
+    X(Script_Noop_b, 4) /* 0x6C ENGINE_FIELD_UPDATE_VAR */ \
+    X(Script_Noop_b, 6) /* 0x6D ENGINE_FIELD_UPDATE_VAR_WORD */ \
+    X(Script_Noop_b, 4) /* 0x6E ENGINE_FIELD_STORE */ \
+    X(Script_Noop_b, 6) /* 0x6F ENGINE_FIELD_STORE_WORD */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};
