@@ -773,3 +773,87 @@ bout en bout à travers le vrai point d'entrée `buildProject()` de l'app, la m�
 créer et builder un projet SNES **entièrement depuis l'UI** (sans éditer un `.gbsproj` à la
 main) : un template SNES (`snesblank`/`sneshtml` de v1.1.4 pas encore réintégrés) et un
 sélecteur de cible dans la page Settings — territoire M9, pas encore commencé.
+
+## 16. M9 (événements — audit des SNES-aware events) — fait, 2026-09-13
+
+Objectif du roadmap : chaque event SNES-aware existant retrouve son comportement
+target-aware sous la nouvelle forme des events (types union) de GB Studio 2.0.0-beta5.
+Trois étapes précises listées dans la feuille de route.
+
+### Étape 1 — `eventTextDialogue.js`
+
+Le pré-wrap éditeur (ce que l'éditeur découpe en lignes pendant que l'utilisateur tape)
+était câblé sur des littéraux GB purs (`maxPerLine = args.avatarId ? 16 : 18`,
+`maxTotal = args.avatarId ? 48 : 52`) — aucune notion de cible. Rendu target-aware via
+`getTarget(target)`, avec deux nouveaux champs sur `targets/{gb,snes}.js` :
+`maxTextTotalChars`/`maxTextTotalCharsWithAvatar` (le budget de caractères combiné sur
+toute la boîte, une notion introduite par GB Studio 2.0 — 1.2.2 ne wrappait qu'au niveau
+de chaque ligne). La valeur SNES (78/69) est dérivée proportionnellement des nombres
+GB déjà réglés par l'équipe GB Studio (52/18, 48/16) faute de constante moteur
+équivalente à en dériver directement — même classe de valeur "provisoire mais
+documentée" que les autres champs encore non révisés de `targets/snes.js`.
+
+`target` est maintenant propagé depuis Redux (`settings.target`) via
+`ScriptEventFormInput`/`ScriptEditorEvent` (tous deux déjà connectés à Redux pour
+d'autres besoins — étendus plutôt qu'un nouveau pattern introduit) jusqu'aux appels
+`updateFn`/`postUpdate` du champ. `target` non défini retombe sur `"gb"` (comportement
+par défaut de `getTarget`), donc tout projet GB existant est inchangé au bit près.
+`DialoguePreview.tsx` (le nouvel aperçu live de 2.0) dimensionne maintenant son canvas
+sur la vraie largeur d'écran de la cible au lieu d'un `20` codé en dur.
+
+`settings.target` n'est pas encore un vrai réglage Redux migré/éditable dans l'UI (ça,
+c'est M10/M11) — ajouté seulement le champ TS `target?: string` à `SettingsState`
+maintenant (peuplé aujourd'hui uniquement via le spread JSON brut de `loadProject`) pour
+que ce code type-check ; la vraie migration/UI des réglages SNES reste le travail de
+M10/M11.
+
+### Étape 2 — `eventCameraMoveTo.js` / `eventOverlayShow.js` / `eventOverlayMoveTo.js`
+
+Vérifié, aucun changement de code nécessaire. Aucun des champs x/y de ces trois events
+n'a été fusionné dans les nouveaux champs de type union de GB Studio 2.0 sur cette build
+(toujours de simples champs `"number"`) — le clamp target-aware `cameraMoveTo` et le
+`scaleOverlayRow` de `scriptBuilder.js` (tous deux du M7) reçoivent donc toujours des
+nombres déjà résolus exactement comme avant. Le risque redouté par la feuille de route
+("après la fusion en types union") ne s'est pas matérialisé sur cette version bêta.
+
+### Étape 3 — Les 4 events X/Y/L/R
+
+Le chemin de compilation fonctionnait déjà correctement (masque d'input SNES 2 octets
+du M7) — le vrai manque était que `InputPicker.js` (le sélecteur de boutons de
+l'éditeur) n'avait tout simplement **aucune entrée** pour X/Y/L/R : un auteur de projet
+SNES ne pouvait jamais les sélectionner du tout, peu importe la cible. Ajouté une
+troisième rangée de boutons (X/Y/L/R, correspondant aux bits `KEY_BITS` de
+`compiler/helpers.js`), affichée uniquement quand `settings.target === "snes"`,
+réutilisant la logique multi-sélection déjà générique du picker (déjà assez générale
+pour le nouveau modèle d'input de GB Studio 2.0 — "attacher un script à plusieurs
+boutons à la fois").
+
+### Un vrai bug préexistant trouvé en écrivant le premier test qui exerçait réellement le code
+
+`const trimlines = require("../helpers/trimlines");` (sans `.default`) — `trimlines.js`
+exporte sa fonction en `export default`, donc ce `require()` brut renvoyait l'objet de
+module entier (`{ default: fn, varRegex, ... }`), pas la fonction elle-même. Résultat :
+`updateFn`/`postUpdate` plantaient avec `TypeError: trimlines is not a function` pour
+**tout projet, y compris GB**, dès qu'un utilisateur tapait dans la zone de texte d'un
+event `TEXT` ou basculait son avatar. Aucun test existant n'appelait jamais ces
+fonctions directement (seul `compile()` était couvert) — le bug était invisible jusqu'à
+ce que mes propres nouveaux tests l'exercent. Même bug exact, même correctif, dans
+`eventMenu.js` et `eventTextChoice.js` (motif de `require` identique).
+
+### Un vrai obstacle d'architecture découvert et résolu
+
+Les fichiers d'event sont chargés dans un bac à sable `vm2` `NodeVM`
+(`src/lib/events/index.js`) avec une liste blanche de `require()` autorisés (pour
+isoler le code des plugins/events tiers). Importer `targets/index.js` depuis un fichier
+d'event exige de l'ajouter à cette liste (`mock: { "../compiler/targets":
+compilerTargets }`), comme les 6 autres modules partagés déjà câblés là.
+
+### Vérifié
+
+`yarn jest` : **570/572** (mêmes 2 échecs préexistants et sans rapport, +4 nouveaux
+tests couvrant les largeurs de wrap gb/snes/target-indéfini et `postUpdate`).
+`electron-forge package` compile et empaquette proprement (webpack + TS, y compris le
+chargeur d'events sandboxé). Aucun harnais de test de composant React n'existe dans ce
+projet (précédent établi) — les changements sur `InputPicker.js`/`ScriptEditorEvent.js`
+sont vérifiés par la compilation complète + la couverture de test déjà existante de la
+logique côté compilateur qu'ils appellent, pas par un nouveau test de composant.
