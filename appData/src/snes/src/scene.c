@@ -1350,6 +1350,199 @@ void Update_Platform(void)
     }
 }
 
+/* v2 M5e: Shoot Em Up genre pair (states.h) - the last of the 5 genres,
+ * the furthest from anything already built per the M4 audit: a forced
+ * auto-scroll along one axis (decided once, at Start_Shmup, from the
+ * player's initial facing - matches GB exactly), with player input only
+ * steering the PERPENDICULAR axis. Once the scrollable edge of the scene
+ * is reached, the scroll axis simply locks in place - matches GB's own
+ * Update_Shmup precisely: once shooter_reached_end, the primary axis's
+ * position is never touched again (not auto-scrolled AND not player-
+ * controlled), only the perpendicular axis keeps moving - e.g. so a ship
+ * can lock horizontally in a boss arena and still dodge vertically.
+ *
+ * Deliberately NOT ported this milestone (documented, not half-invented -
+ * the same dependency M5c/M5d already deferred): the actual "combat"
+ * reaction to touching an enemy (GB's player_iframes/collision_group/
+ * hit_actor, running the enemy's script on contact) - needs a
+ * collision_group ACTOR field this engine doesn't have, and the
+ * Projectiles subsystem (EVENT_LAUNCH_PROJECTILE/EVENT_WEAPON_ATTACK, a
+ * projectile pool) the M4 audit scoped as cross-genre and built once, not
+ * something to half-invent at the tail of M5's genre-by-genre sequence.
+ * All 5 genres now share this one remaining dependency - the natural next
+ * major piece of work once M5 itself is done. A Shoot Em Up scene this
+ * milestone auto-scrolls, dodges, and can reach trigger-driven exits, but
+ * nothing shoots or hurts yet.
+ *
+ * Collision uses the same narrow, direction-biased single-point test
+ * Adventure already established (see its own comment) rather than GB's
+ * own per-direction pixel biases (which differ oddly by direction there -
+ * e.g. a 2-tile look-ahead on one side, none on the other, tuned to GB's
+ * own hitbox convention this engine doesn't share) - consistent with this
+ * engine's own established style, not a guess at GB's exact intent.
+ *
+ * Camera: GB's own Start_Shmup biases the view ahead of the scroll
+ * direction with a fixed pixel camera_offset - this engine's camera has
+ * no offset/deadzone concept at all yet (same deferred note every other
+ * genre's Start_ already carries), so Shmup gets the same hard lock
+ * centred on the player for now. The "reached the scrollable edge"
+ * threshold below is derived from this engine's own real camera clamp
+ * (game.c's cam_max_x/cam_max_y formula, mirrored here since those helpers
+ * are file-static to game.c) rather than GB's offset-tuned magic numbers,
+ * which assume a camera feature this target doesn't have.
+ */
+// game.c's own SCREEN_W_HALF/SCREEN_H_HALF are file-static - redefined here
+// rather than exported, since they're plain screen-geometry constants
+// (256x224 NTSC / 2).
+#define SHMUP_SCREEN_W_HALF 128
+#define SHMUP_SCREEN_H_HALF 112
+
+static u8 shmup_horizontal = 0;
+static s8 shmup_direction = 1;
+static u8 shmup_reached_end = 0;
+static s16 shmup_last_trigger_tx = -1;
+static s16 shmup_last_trigger_ty = -1;
+
+void Start_Shmup(void)
+{
+    if (actors[0].dir_x < 0)
+    {
+        // Right to left scrolling. Face the ship right so a single-facing
+        // sprite doesn't flip - matches GB (a left-facing variant is up to
+        // the project's own sprite sheet, same as GB's own comment there).
+        shmup_horizontal = 1;
+        shmup_direction = -1;
+        actors[0].dir_x = 1;
+    }
+    else if (actors[0].dir_x > 0)
+    {
+        shmup_horizontal = 1;
+        shmup_direction = 1;
+    }
+    else if (actors[0].dir_y < 0)
+    {
+        shmup_horizontal = 0;
+        shmup_direction = -1;
+    }
+    else
+    {
+        shmup_horizontal = 0;
+        shmup_direction = 1;
+    }
+
+    shmup_reached_end = 0;
+    actors[0].animate = 1;
+    shmup_last_trigger_tx = -1;
+    shmup_last_trigger_ty = -1;
+}
+
+void Update_Shmup(void)
+{
+    // Mirrors game.c's own (file-static) cam_max_x/cam_max_y: the furthest
+    // the camera can scroll before the scene's far edge is already fully
+    // on-screen. 256/224 are this target's real screen pixel dimensions
+    // (SCREEN_W_HALF*2/SCREEN_H_HALF*2 in game.c).
+    s16 cam_max_x = (s16)scene_width * 8 - 256;
+    s16 cam_max_y = (s16)scene_height * 8 - 224;
+    s16 tile_x, tile_y;
+
+    if (cam_max_x < 0) cam_max_x = 0;
+    if (cam_max_y < 0) cam_max_y = 0;
+
+    tile_x = SceneActorTileX(0);
+    tile_y = SceneActorTileY(0);
+    if (tile_x != shmup_last_trigger_tx || tile_y != shmup_last_trigger_ty)
+    {
+        shmup_last_trigger_tx = tile_x;
+        shmup_last_trigger_ty = tile_y;
+        if (SceneActivateTriggerAt(tile_x, tile_y))
+        {
+            return;
+        }
+    }
+
+    if (shmup_horizontal)
+    {
+        s16 body_col = actors[0].x >> 3;
+
+        if ((joy & KEY_UP) && actors[0].y > 8 &&
+            !col_solid(body_col, ((actors[0].y - 1) - 1) >> 3))
+        {
+            actors[0].dir_y = -1;
+            actors[0].dir_x = 0;
+        }
+        else if ((joy & KEY_DOWN) && actors[0].y < ((s16)scene_height << 3) &&
+                 !col_solid(body_col, ((actors[0].y + 1) - 1) >> 3))
+        {
+            actors[0].dir_y = 1;
+            actors[0].dir_x = 0;
+        }
+        else
+        {
+            actors[0].dir_y = 0;
+            actors[0].dir_x = 1;
+        }
+
+        if (!shmup_reached_end)
+        {
+            if (shmup_direction == 1)
+            {
+                if (actors[0].x >= cam_max_x + SHMUP_SCREEN_W_HALF) shmup_reached_end = 1;
+            }
+            else
+            {
+                if (actors[0].x <= SHMUP_SCREEN_W_HALF) shmup_reached_end = 1;
+            }
+        }
+
+        if (!shmup_reached_end)
+        {
+            actors[0].x += (s16)shmup_direction * actors[0].move_speed;
+        }
+        actors[0].y += (s16)actors[0].dir_y * actors[0].move_speed;
+    }
+    else
+    {
+        s16 body_row = (actors[0].y - 1) >> 3;
+
+        if ((joy & KEY_LEFT) && actors[0].x > 8 &&
+            !col_solid(((actors[0].x - 1) - 8) >> 3, body_row))
+        {
+            actors[0].dir_x = -1;
+            actors[0].dir_y = 0;
+        }
+        else if ((joy & KEY_RIGHT) && actors[0].x < ((s16)scene_width << 3) &&
+                 !col_solid(((actors[0].x + 1) + 7) >> 3, body_row))
+        {
+            actors[0].dir_x = 1;
+            actors[0].dir_y = 0;
+        }
+        else
+        {
+            actors[0].dir_x = 0;
+            actors[0].dir_y = shmup_direction;
+        }
+
+        if (!shmup_reached_end)
+        {
+            if (shmup_direction == 1)
+            {
+                if (actors[0].y >= cam_max_y + SHMUP_SCREEN_H_HALF) shmup_reached_end = 1;
+            }
+            else
+            {
+                if (actors[0].y <= SHMUP_SCREEN_H_HALF) shmup_reached_end = 1;
+            }
+        }
+
+        if (!shmup_reached_end)
+        {
+            actors[0].y += (s16)shmup_direction * actors[0].move_speed;
+        }
+        actors[0].x += (s16)actors[0].dir_x * actors[0].move_speed;
+    }
+}
+
 void SceneHandleInput(void)
 {
     if (script_ptr)

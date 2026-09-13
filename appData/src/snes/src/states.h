@@ -39,6 +39,8 @@ void Start_Adventure(void);
 void Update_Adventure(void);
 void Start_Platform(void);
 void Update_Platform(void);
+void Start_Shmup(void);
+void Update_Shmup(void);
 void Start_Noop(void);
 void Update_Noop(void);
 

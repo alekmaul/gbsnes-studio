@@ -492,3 +492,48 @@ process Mesen juste après avoir lu le résultat d'un test, pas seulement en fin
 `emu.stop(0)` n'arrête que l'émulation, pas le process, et un process laissé vivant peut
 ré-écraser le fichier de résultat d'un test suivant avec des données périmées (source d'une
 fausse alerte pendant cette étape même).
+
+## 12. M5e (Shoot Em Up) — fait, 2026-09-13 — les 5 genres sont maintenant en place
+
+Le dernier des 5 genres, le plus éloigné de l'existant selon l'audit M4 : un défilement forcé
+sur un axe (décidé une fois, à `Start_Shmup`, depuis la direction initiale du joueur - reproduit
+GB exactement), l'entrée du joueur ne pilotant que l'axe **perpendiculaire**. Une fois le bord
+défilable de la scène atteint, l'axe de défilement se **fige** définitivement - reproduit
+`Update_Shmup` de GB au plus près : passé `shooter_reached_end`, la position sur l'axe principal
+n'est plus jamais touchée (ni auto-défilée, ni pilotée par le joueur), seul l'axe perpendiculaire
+continue de bouger - par exemple pour qu'un vaisseau se verrouille horizontalement dans une
+arène de boss tout en pouvant encore esquiver verticalement.
+
+**Explicitement pas porté cette étape, même dépendance déjà différée en M5c/M5d** : la vraie
+réaction "combat" au contact d'un ennemi (`player_iframes`/`collision_group`/`hit_actor` de GB,
+qui lance le script de l'ennemi au contact) — nécessite un champ `collision_group` sur `ACTOR`
+que ce moteur n'a pas, et le sous-système Projectiles (`EVENT_LAUNCH_PROJECTILE`/
+`EVENT_WEAPON_ATTACK`, un pool de projectiles) que l'audit M4 place en transverse, construit une
+fois, pas quelque chose à moitié inventer en fin de séquence M5. Les 5 genres partagent
+maintenant cette seule dépendance restante — le prochain gros morceau naturel une fois M5
+terminé. Une scène Shoot Em Up à ce stade défile, esquive, et peut atteindre une sortie
+déclenchée par trigger — mais rien ne tire ni ne fait de dégâts encore.
+
+La collision réutilise le même test à point unique biaisé par direction qu'Adventure a déjà
+établi, plutôt que les biais par direction de GB (asymétriques d'un côté à l'autre, réglés sur
+une convention de hitbox que ce moteur ne partage pas) - cohérent avec le style déjà établi de
+ce moteur, pas une supposition sur l'intention exacte de GB. Le seuil "bord atteint" est dérivé
+du vrai clamp caméra de ce moteur (formule `cam_max_x`/`cam_max_y` de `game.c`, redupliquée ici
+car ces fonctions sont statiques au fichier) plutôt que des constantes GB réglées pour son propre
+système de décalage caméra, que cette cible n'a pas.
+
+**Vérifié, et cette fois sans avoir besoin de simuler la moindre entrée** : le défilement forcé
+étant inconditionnel (pas piloté par le joueur), un test sans aucune touche tenue observe déjà
+le comportement réel du genre. Build `make` réel propre, `yarn jest` 548/550. Boot Mesen (scène
+factice basculée temporairement à `scene_type=3`, script neutralisé, `git checkout --` avant
+commit) : sens gauche→droite (`START_DIR=4`) - `x` grimpe régulièrement de 88 à 128px, exactement
+1px/frame, atteint le seuil (`SHMUP_SCREEN_W_HALF`, 128, cohérent avec `cam_max_x=0` pour cette
+scène étroite de 20 tuiles), `reached_end` passe à 1 pile à ce moment, puis `x` reste figé à 128
+jusqu'à la frame 250 - le verrouillage fonctionne comme conçu. Sens droite→gauche (`START_DIR=2`)
+- vérifié séparément : `x` démarre déjà sous le seuil (88 ≤ 128), donc `reached_end=1` dès la
+première frame et la position ne bouge jamais, `dir_x` confirmé forcé à `1` (le vaisseau fait
+face à droite malgré le défilement vers la gauche, exactement comme le commentaire de GB
+l'explique). Un faux résultat identique au test précédent a été intercepté en cours de route
+(process Mesen laissé vivant, résultat périmé réécrit) - re-testé après avoir tué le process,
+confirmé frais. Le comportement piloté par le d-pad (esquive perpendiculaire) reste laissé au
+test interactif de l'utilisateur, comme pour M5b-d.

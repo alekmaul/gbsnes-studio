@@ -321,12 +321,12 @@ const MOVE_AI_RANDOM_WALK = 5;
 // trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
 // then the collision bitmap: ceil(width*height/8) bytes
 //
-// v2 M5a/M5b/M5c/M5d: scene_type indexes states.h's startFuncs[]/
-// updateFuncs[] - values are GB Studio 2.0.0-beta5's real scene.type
-// numbering (0 Top Down, 1 Platformer, 2 Adventure, 4 Point and Click, ...),
-// not M5's build order. Both dummy scenes below stay Top Down - neither
-// exercises the other genres' dispatch slots, since this generator can't be
-// re-run yet (M7) to add a real fixture for them.
+// v2 M5a-e: scene_type indexes states.h's startFuncs[]/updateFuncs[] - all
+// 5 slots are now real genres (0 Top Down, 1 Platformer, 2 Adventure,
+// 3 Shoot Em Up, 4 Point and Click), GB Studio 2.0.0-beta5's real
+// scene.type numbering, not M5's build order. Both dummy scenes below stay
+// Top Down - neither exercises the other 4 genres' dispatch slots, since
+// this generator can't be re-run yet (M7) to add real fixtures for them.
 const SCENE_TYPE_TOPDOWN = 0;
 const SPRITE_STATIC = 0;
 // [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
