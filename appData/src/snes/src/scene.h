@@ -37,6 +37,9 @@ extern const unsigned char *sprite_slot_for_index;
 extern u16 scene_index;
 extern u16 scene_next_index;
 extern u8 scene_loaded;
+/* v2 M5a: which genre drives this scene - indexes states.h's startFuncs[] /
+ * updateFuncs[]. */
+extern u8 scene_type;
 extern u8 scene_unblank_pending;
 
 extern u8 scene_num_actors;

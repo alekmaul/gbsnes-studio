@@ -314,11 +314,16 @@ const scriptTimerHandler = [
 const MOVE_AI_RANDOM_WALK = 5;
 
 // ---- scene data blobs ----------------------------------------------
-// header:  [bg_index, num_actors, num_triggers, scene_script_idx, width, height]
+// header:  [bg_index, num_actors, num_triggers, scene_script_idx, width,
+//           height, scene_type]
 // actor:   [tile_x, tile_y, dir, movement_type, sprite_idx, script_idx,
 //           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate] (9)
 // trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
 // then the collision bitmap: ceil(width*height/8) bytes
+//
+// v2 M5a: scene_type indexes states.h's startFuncs[]/updateFuncs[] - only
+// Top Down (0) exists so far.
+const SCENE_TYPE_TOPDOWN = 0;
 const SPRITE_STATIC = 0;
 // [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
 // (compileSnesData.js). Dummy: slot 0 static, palettes 0/3..7.
@@ -328,7 +333,7 @@ const dummySprSlots = [].concat(
   [0, 3, 4, 5, 6, 7, 0, 0]
 );
 const scene0 = [
-  0, 1, 2, EV_SCENE0, MAP_W, MAP_H, // bg 0 = the 64x64 dummy map
+  0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
   18, 24, 8, MOVE_AI_RANDOM_WALK, 0, EV_NPC, SPRITE_STATIC, 3, 0, // wandering NPC (off the walk path)
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
@@ -338,7 +343,7 @@ const scene0 = [
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, ...dummySprSlots, ...scene1Collision];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...scene1Collision];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

@@ -13,10 +13,14 @@
 #include "assets.h"
 #include "script_runner.h"
 #include "fade.h"
+#include "states.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
 u8 scene_loaded = 0;
+/* v2 M5a: which genre's Start_/Update_ function pair (states.c) drives this
+ * scene. Only Top Down (0) exists so far - see states.h. */
+u8 scene_type = 0;
 /* Set by SceneInit, consumed by main() one frame later: hold the screen
  * force-blanked until the scene's opening script has run and reached VRAM. */
 u8 scene_unblank_pending = 0;
@@ -471,7 +475,12 @@ void SceneInit(void)
     scene_num_triggers = s[2];
     scene_width = s[4] ? s[4] : SCENE_TILE_W;
     scene_height = s[5] ? s[5] : SCENE_TILE_H;
-    p = s + 6;
+    /* v2 M5a: new header byte, see states.h. Existing dummy fixtures/
+     * gen-dummy-gfx.js were updated to emit it - this is the only consumer
+     * of this exact byte layout today (compileSnesData.js doesn't exist on
+     * this branch yet, see M7). */
+    scene_type = s[6];
+    p = s + 7;
 
     /* [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
      * sprite_pal[8] - see compileSnesData.js. */
@@ -590,6 +599,12 @@ void SceneInit(void)
      * ramps from black via FadeUpdate, unchanged. */
     scene_unblank_pending = 1;
 
+    /* v2 M5a: per-genre setup (camera deadzone, movement-mode reset, ...) -
+     * see states.h. Runs before the scene's own opening script so a script
+     * that immediately moves the camera/player overrides genre defaults,
+     * matching GB's Core_Main.c order (startFuncs[] then ScriptStart). */
+    startFuncs[scene_type]();
+
     run_script(event_ptrs[scene_script_idx], 0);
 }
 
@@ -640,10 +655,53 @@ static void SceneTryInteract(void)
     }
 }
 
-void SceneHandleInput(void)
+/* v2 M5a: Top Down genre pair (states.h). Camera has no deadzone concept at
+ * all yet (CameraInit always centers directly on the player) - that already
+ * matches what GB's own Start_TopDown wants (camera_deadzone.x/y = 0), so
+ * there's nothing to reset here yet. Real deadzone support lands with
+ * whichever later genre actually needs slack (Platformer/Adventure/Point and
+ * Click all want a non-zero one). */
+void Start_TopDown(void)
+{
+}
+
+// Player d-pad movement + A-button interact - the exact logic that used to
+// live directly in SceneHandleInput before the genre dispatch existed.
+// GB Studio 2.0.0-beta5's topdown_grid (8/16px) field is not yet read here -
+// this only reproduces the existing 8px-tile behaviour, byte-identical.
+// 16px-grid support is real follow-up work (2x2-tile lookahead collision,
+// per the M4 audit), deliberately not bundled into this first dispatch pass.
+void Update_TopDown(void)
 {
     s8 dx = 0, dy = 0;
 
+    if ((joy & KEY_A) && !(prev_joy & KEY_A))
+    {
+        SceneTryInteract();
+        if (script_ptr)
+        {
+            actors[0].moving = 0;
+            return;
+        }
+    }
+
+    if (joy & KEY_LEFT)       dx = -1;
+    else if (joy & KEY_RIGHT) dx = 1;
+    else if (joy & KEY_UP)    dy = -1;
+    else if (joy & KEY_DOWN)  dy = 1;
+
+    if (dx || dy)
+    {
+        actor_try_move(0, dx, dy);
+    }
+    else
+    {
+        actors[0].moving = 0;
+    }
+}
+
+void SceneHandleInput(void)
+{
     if (script_ptr)
     {
         // While a script runs the player is not d-pad controllable, but a
@@ -677,29 +735,11 @@ void SceneHandleInput(void)
         }
     }
 
-    if ((joy & KEY_A) && !(prev_joy & KEY_A))
-    {
-        SceneTryInteract();
-        if (script_ptr)
-        {
-            actors[0].moving = 0;
-            return;
-        }
-    }
-
-    if (joy & KEY_LEFT)       dx = -1;
-    else if (joy & KEY_RIGHT) dx = 1;
-    else if (joy & KEY_UP)    dy = -1;
-    else if (joy & KEY_DOWN)  dy = 1;
-
-    if (dx || dy)
-    {
-        actor_try_move(0, dx, dy);
-    }
-    else
-    {
-        actors[0].moving = 0;
-    }
+    /* v2 M5a: player movement + A-button interact are genre-specific from
+     * here on (Top Down's tile-locked d-pad + facing-tile interact vs., e.g.,
+     * Point and Click's cursor-hover interact with no movement at all) -
+     * see states.h. */
+    updateFuncs[scene_type]();
 }
 
 static void SceneCheckTriggers(void)
