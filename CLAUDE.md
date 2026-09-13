@@ -30,6 +30,32 @@ The `.ico`/`.icns` are regenerated from the 1024×1024 `.png` with Pillow (`Imag
 format="ICO"|"ICNS")`) — no ImageMagick on this box; Python 3 + Pillow is at `C:\python3`.
 `forge.config.js` `icon: "…/app_icon"` lets electron-forge pick `.icns`/`.ico`/`.png` per OS.
 
+## GBSNES Studio v2 (separate branch, in progress)
+
+Everything else in this file describes `main` (GB Studio 1.2.2-based, `v1.1.4`, released).
+A second, larger effort lives on the **`v2` branch**: rebuild GBSNES Studio (GB engine +
+the SNES/PVSnesLib target) on top of **GB Studio 2.0.0-beta5** instead of 1.2.2 — webpack +
+TypeScript replacing `electron-compile`, Redux Toolkit replacing hand-written
+reducers/actions/middleware, GBDK 2020, a genre-based GB engine (Top Down / Platformer /
+Shoot Em Up / Point and Click / Adventure) replacing the old monolithic one. `main` stays
+untouched and frozen at `v1.1.4` while this runs. Strategy: **rebuild** the SNES target
+feature-by-feature on the new base using the current `v1.1.4` SNES implementation as a
+*behavioural reference*, not code to copy verbatim — not a git merge/rebase of the two
+years of upstream divergence.
+
+Tracked as 14 milestones (M0 audit → M13 `v2.0.0` tag) in a roadmap artifact (not this
+file) — ask to have it re-shared if the link is lost, or check Claude's memory
+(`gbsnes-v2-migration`) for the URL and full narrative. `MIGRATION_V2_AUDIT.md` (repo root,
+`v2` branch) has the detailed 1.2.2→2.0.0-beta5 file/architecture diff from M0.
+
+**Status as of 2026-09-13:** M0 (audit) and M1 (bare GB 2.0.0-beta5 target builds, packages,
+and boots a real project to a ROM in Mesen — no SNES yet) are done. M2 (re-vendor the
+PVSnesLib toolchain under the new webpack build) is next, not yet started. `package.json`
+on `v2` is deliberately still `1.1.4` (not bumped to `2.0.0` until M13) — so `CHANGELOG.md`
+has no `v2` entries yet on purpose; the roadmap artifact and Claude's memory are the
+authoritative status/decision log for this effort until it ships, at which point it gets a
+normal `CHANGELOG.md [2.0.0]` entry like any other release.
+
 ## Commands
 
 ```bash
