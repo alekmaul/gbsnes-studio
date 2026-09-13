@@ -103,6 +103,14 @@ const snesTarget = {
   // (28) - 1, minus the avatar portrait's xoff (4 tiles) when one is shown.
   maxTextLineChars: 27,
   maxTextLineCharsWithAvatar: 23,
+  // Combined character budget across all lines of one dialogue box (M9).
+  // The SNES box is content-sized up to BOX_ROWS (8, appData/src/snes/src/
+  // ui.c) rather than GB's fixed 4-line box, so there's no equivalent
+  // runtime constant to derive this from directly - scaled proportionally
+  // from GB Studio's own tuned totals (52/18, 48/16) by the wider line
+  // count, same as maxTextLineChars itself was derived from TXT_COLS.
+  maxTextTotalChars: 78,
+  maxTextTotalCharsWithAvatar: 69,
 };
 
 export default snesTarget;

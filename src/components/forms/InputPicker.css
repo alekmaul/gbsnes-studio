@@ -89,6 +89,33 @@
   border-bottom-right-radius: 4px;
 }
 
+/* SNES-only X/Y/L/R third row (InputPicker--WithExtra) - the bottom-row
+   corner rounding above targets A/B/Start/Select assuming they're the last
+   row; move it down to X/R instead when a third row is shown. */
+.InputPicker--WithExtra .InputPicker__Button--A,
+.InputPicker--WithExtra .InputPicker__Button--B,
+.InputPicker--WithExtra .InputPicker__Button--Start,
+.InputPicker--WithExtra .InputPicker__Button--Select {
+  border-bottom-left-radius: 0;
+  border-bottom-right-radius: 0;
+}
+
+.InputPicker__Button--X,
+.InputPicker__Button--Y,
+.InputPicker__Button--L,
+.InputPicker__Button--R {
+  border-top: 0;
+}
+
+.InputPicker__Button--X {
+  border-bottom-left-radius: 4px;
+}
+
+.InputPicker__Button--R {
+  border-right: 1px solid var(--input-border-color);
+  border-bottom-right-radius: 4px;
+}
+
 .InputPicker__Button--Active,
 .InputPicker__Button--Active:hover {
   background-color: var(--highlight-color);

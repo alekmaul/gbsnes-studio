@@ -6,7 +6,8 @@ import l10n from "../../lib/helpers/l10n";
 
 class InputPicker extends Component {
   render() {
-    const { id, value, onChange } = this.props;
+    const { id, value, onChange, target } = this.props;
+    const showExtra = target === "snes";
     const inputs = [
       {
         key: "left",
@@ -55,17 +56,49 @@ class InputPicker extends Component {
         name: "Select",
         label: "Select",
         title: "Select"
+      },
+      // SNES-only extra buttons (compiler/helpers.js KEY_BITS, M9) - only
+      // shown/selectable when the project targets SNES, matching the 2-byte
+      // input mask scriptBuilder.js emits for this target.
+      {
+        key: "x",
+        name: "X",
+        label: "X",
+        title: "X"
+      },
+      {
+        key: "y",
+        name: "Y",
+        label: "Y",
+        title: "Y"
+      },
+      {
+        key: "l",
+        name: "L",
+        label: "L",
+        title: "L"
+      },
+      {
+        key: "r",
+        name: "R",
+        label: "R",
+        title: "R"
       }
     ];
 
     return (
-      <div id={id} className="InputPicker">
+      <div id={id} className={cx("InputPicker", { "InputPicker--WithExtra": showExtra })}>
         <div className="InputPicker__Row">
           {inputs.slice(0, 4).map(renderButton(id, value, onChange))}
         </div>
         <div className="InputPicker__Row">
           {inputs.slice(4, 8).map(renderButton(id, value, onChange))}
         </div>
+        {showExtra && (
+          <div className="InputPicker__Row">
+            {inputs.slice(8, 12).map(renderButton(id, value, onChange))}
+          </div>
+        )}
         {Array.isArray(value) &&
           <div className="InputPicker__Selection">
             {inputs
@@ -125,12 +158,14 @@ InputPicker.propTypes = {
     PropTypes.string,
     PropTypes.arrayOf(PropTypes.string)
   ]),
-  onChange: PropTypes.func.isRequired
+  onChange: PropTypes.func.isRequired,
+  target: PropTypes.string
 };
 
 InputPicker.defaultProps = {
   id: undefined,
-  value: ""
+  value: "",
+  target: undefined
 };
 
 export default InputPicker;

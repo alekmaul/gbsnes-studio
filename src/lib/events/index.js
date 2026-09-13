@@ -10,6 +10,7 @@ import * as gbStudioHelpers from "../helpers/gbstudio";
 import * as eventSystemHelpers from "../helpers/eventSystem";
 import * as compileEntityEvents from "../compiler/compileEntityEvents";
 import trimLines from "../helpers/trimlines";
+import * as compilerTargets from "../compiler/targets";
 
 const VM2 = __non_webpack_require__("vm2");
 const NodeVM = VM2.NodeVM;
@@ -26,7 +27,8 @@ const vm = new NodeVM({
       "../helpers/gbstudio": gbStudioHelpers,
       "../helpers/eventSystem": eventSystemHelpers,
       "../compiler/compileEntityEvents": compileEntityEvents,
-      "../helpers/trimlines": trimLines
+      "../helpers/trimlines": trimLines,
+      "../compiler/targets": compilerTargets
     }
   }
 });

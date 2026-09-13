@@ -3,6 +3,7 @@ import PropTypes from "prop-types";
 import { clipboard } from "electron";
 import cx from "classnames";
 import uuid from "uuid/v4";
+import { connect } from "react-redux";
 import { DragSource, DropTarget } from "react-dnd";
 import { TriangleIcon } from "../library/Icons";
 import AddCommandButton from "./AddCommandButton";
@@ -136,14 +137,14 @@ class ScriptEditorEvent extends Component {
   };
 
   onEdit = (newValue, postUpdate) => {
-    const { onEdit, action, id } = this.props;
+    const { onEdit, action, id, target } = this.props;
     if (postUpdate) {
       return onEdit(
         id,
         postUpdate({
           ...action.args,
           ...newValue
-        }, action.args)
+        }, action.args, target)
       );
     }
     return onEdit(id, newValue);
@@ -428,8 +429,22 @@ ScriptEditorEvent.propTypes = {
   onMouseEnter: PropTypes.func.isRequired,
   connectDragSource: PropTypes.func.isRequired,
   connectDragPreview: PropTypes.func.isRequired,
-  connectDropTarget: PropTypes.func.isRequired
+  connectDropTarget: PropTypes.func.isRequired,
+  target: PropTypes.string
 };
+
+ScriptEditorEvent.defaultProps = {
+  target: undefined
+};
+
+function mapStateToProps(state) {
+  const settings = state.project.present.settings;
+  return {
+    target: settings.target
+  };
+}
+
+const ConnectedScriptEditorEvent = connect(mapStateToProps)(ScriptEditorEvent);
 
 const ScriptEditorEventDnD = DropTarget(
   ItemTypes.CARD,
@@ -444,7 +459,7 @@ const ScriptEditorEventDnD = DropTarget(
     connectDragSource: dndConnect.dragSource(),
     connectDragPreview: dndConnect.dragPreview(),
     isDragging: monitor.isDragging()
-  }))(ScriptEditorEvent)
+  }))(ConnectedScriptEditorEvent)
 );
 
 export default ScriptEditorEventDnD;

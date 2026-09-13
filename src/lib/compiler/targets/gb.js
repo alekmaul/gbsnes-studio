@@ -87,11 +87,16 @@ const gbTarget = {
   inputMaskBytes: 1,
 
   // Dialogue box text wrap width, in characters (eventTextDialogue.js's
-  // editor pre-wrap, mirroring the GB engine's own box column count). Not
-  // yet wired to this descriptor (eventTextDialogue.js has no target
-  // context to read it from) - historical literals, unchanged from v1.1.4.
+  // editor pre-wrap, mirroring the GB engine's own box column count).
   maxTextLineChars: 18,
   maxTextLineCharsWithAvatar: 16,
+  // Combined character budget across all lines of one dialogue box
+  // (eventTextDialogue.js / ScriptEventFormInput.js's textarea maxlength) -
+  // these are the historical GB Studio literals (18+18+16 / 16*3), now
+  // wired through targets/{gb,snes}.js instead of hardcoded at both call
+  // sites (M9).
+  maxTextTotalChars: 52,
+  maxTextTotalCharsWithAvatar: 48,
 };
 
 export default gbTarget;

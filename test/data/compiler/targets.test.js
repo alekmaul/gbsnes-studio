@@ -57,6 +57,8 @@ describe("compile targets", () => {
     // dialogue box editor pre-wrap width (eventTextDialogue.js), historical literals
     expect(gb.maxTextLineChars).toBe(18);
     expect(gb.maxTextLineCharsWithAvatar).toBe(16);
+    expect(gb.maxTextTotalChars).toBe(52);
+    expect(gb.maxTextTotalCharsWithAvatar).toBe(48);
   });
 
   test("bankedData and consts still expose the same Game Boy values", () => {
@@ -98,6 +100,8 @@ describe("compile targets", () => {
     expect(snes.maxSpriteSheets).toBe(8);
     expect(snes.maxTextLineChars).toBe(27);
     expect(snes.maxTextLineCharsWithAvatar).toBe(23);
+    expect(snes.maxTextTotalChars).toBe(78);
+    expect(snes.maxTextTotalCharsWithAvatar).toBe(69);
   });
 
   test("gb and snes screen geometry differ (used for camera clamps)", () => {

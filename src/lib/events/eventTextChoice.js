@@ -1,4 +1,4 @@
-const trimlines = require("../helpers/trimlines");
+const trimlines = require("../helpers/trimlines").default;
 const l10n = require("../helpers/l10n").default;
 
 const trimChoiceItem = (string) => {

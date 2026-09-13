@@ -32,6 +32,7 @@ import { SliderField } from "../ui/form/SliderField";
 import { CheckboxField } from "../ui/form/CheckboxField";
 import { Input } from "../ui/form/Input";
 import { Select } from "../ui/form/Select";
+import { getTarget } from "../../lib/compiler/targets";
 
 const argValue = (arg) => {
   if(arg && arg.value !== undefined) {
@@ -45,7 +46,7 @@ const argValue = (arg) => {
 
 class ScriptEventFormInput extends Component {
   onChange = e => {
-    const { onChange, field, value, index, args, type } = this.props;
+    const { onChange, field, value, index, args, type, target } = this.props;
     const { updateFn } = field;
     let newValue = e && e.currentTarget ? castEventValue(e) : e;
     if (type === "direction" && newValue === value) {
@@ -54,9 +55,9 @@ class ScriptEventFormInput extends Component {
     }
     if (type === "select") {
       newValue = newValue.value;
-    }  
+    }
     if (updateFn) {
-      newValue = updateFn(newValue, field, args);
+      newValue = updateFn(newValue, field, args, target);
     }
     onChange(newValue, index);
   };
@@ -89,15 +90,20 @@ class ScriptEventFormInput extends Component {
   }  
 
   render() {
-    const { type, id, value, defaultValue, args, field, entityId, allowRename, scope, defaultBackgroundPaletteIds, defaultUIPaletteId } = this.props;
+    const { type, id, value, defaultValue, args, field, entityId, allowRename, scope, defaultBackgroundPaletteIds, defaultUIPaletteId, target } = this.props;
 
     if (type === "textarea") {
+      const textTarget = getTarget(target);
       return (
         <ScriptEventFormTextArea
           id={id}
           value={value}
           rows={field.rows}
-          maxlength={args.avatarId ? 48 : 52}
+          maxlength={
+            args.avatarId
+              ? textTarget.maxTextTotalCharsWithAvatar
+              : textTarget.maxTextTotalChars
+          }
           placeholder={field.placeholder}
           onChange={this.onChange}
           entityId={entityId}
@@ -251,7 +257,14 @@ class ScriptEventFormInput extends Component {
       return <CollisionMaskPicker id={id} value={value} onChange={this.onChange} includePlayer={field.includePlayer} />;
     }    
     if (type === "input") {
-      return <InputPicker id={id} value={value} onChange={this.onChange} />;
+      return (
+        <InputPicker
+          id={id}
+          value={value}
+          onChange={this.onChange}
+          target={target}
+        />
+      );
     }
     if (type === "fadeSpeed") {
       return <FadeSpeedSelect id={id} value={value} onChange={this.onChange} />;
@@ -348,6 +361,7 @@ class ScriptEventFormInput extends Component {
               args={args}
               onChange={this.onChangeUnionValue}
               scope={scope}
+              target={target}
             />
           </div>
           <DropdownButton
@@ -382,7 +396,8 @@ ScriptEventFormInput.propTypes = {
   onChange: PropTypes.func.isRequired,
   scope: PropTypes.string.isRequired,
   defaultBackgroundPaletteIds: PropTypes.arrayOf(PropTypes.string).isRequired,
-  defaultUIPaletteId: PropTypes.string.isRequired
+  defaultUIPaletteId: PropTypes.string.isRequired,
+  target: PropTypes.string
 };
 
 ScriptEventFormInput.defaultProps = {
@@ -393,6 +408,7 @@ ScriptEventFormInput.defaultProps = {
   args: {},
   type: "",
   allowRename: true,
+  target: undefined
 };
 
 function mapStateToProps(state) {
@@ -403,10 +419,12 @@ function mapStateToProps(state) {
   const defaultBackgroundPaletteIds =
     settings.defaultBackgroundPaletteIds || [];
   const defaultUIPaletteId = settings.defaultUIPaletteId || "";
+  const target = settings.target;
   return {
     scope,
     defaultBackgroundPaletteIds,
-    defaultUIPaletteId
+    defaultUIPaletteId,
+    target
   };
 }
 
