@@ -1,4 +1,5 @@
 import path from "path";
+import gbTarget from "./lib/compiler/targets/gb";
 
 const isDist = __dirname.indexOf(".webpack") > -1;
 const isCli = __dirname.indexOf("out/cli") > -1;
@@ -20,13 +21,16 @@ const localesRoot = path.normalize(`${rootDir}/src/lang`);
 const eventsRoot = path.normalize(`${rootDir}/src/lib/events`);
 const assetsRoot = path.normalize(`${rootDir}/src/assets`);
 
-const MAX_ACTORS = 30;
-const MAX_ACTORS_SMALL = 10;
-const MAX_TRIGGERS = 30;
-const MAX_FRAMES = 25;
-const SCREEN_WIDTH = 20;
-const SCREEN_HEIGHT = 18;
-const MAX_ONSCREEN = 10;
+// Per-scene entity limits — the Game Boy values (targets/gb.js). Whichever
+// target's own data compiler is running reads these from its own target
+// descriptor instead once it exists (see M6/M7 for SNES).
+const MAX_ACTORS = gbTarget.maxActors;
+const MAX_ACTORS_SMALL = gbTarget.maxActorsSmall;
+const MAX_TRIGGERS = gbTarget.maxTriggers;
+const MAX_FRAMES = gbTarget.maxSpriteFrames;
+const SCREEN_WIDTH = gbTarget.screenTileWidth;
+const SCREEN_HEIGHT = gbTarget.screenTileHeight;
+const MAX_ONSCREEN = gbTarget.maxOnscreenActors;
 
 const MIDDLE_MOUSE = 2;
 

@@ -1,16 +1,19 @@
 import { cIntArray, cIntArrayExternDeclaration, objectIntArray } from "../helpers/cGeneration";
 import { wrap16Bit } from "../helpers/8bit";
+import gbTarget from "./targets/gb";
 
 const BANKED_DATA_NOT_ARRAY = "BANKED_DATA_NOT_ARRAY";
 const BANKED_DATA_TOO_LARGE = "BANKED_DATA_TOO_LARGE";
 const BANKED_COUNT_OVERFLOW = "BANKED_COUNT_OVERFLOW";
-const GB_MAX_BANK_SIZE = 16384; // Calculated by adding bytes until address overflow
-const MIN_DATA_BANK = 6; // First 16 banks are reserved by game engine
-const MAX_BANKS = 512; // GBDK supports max of 512 banks
+// Defaults are the Game Boy values (targets/gb.js). Callers pass bankSize /
+// bankOffset / bankController explicitly for other targets.
+const GB_MAX_BANK_SIZE = gbTarget.bankSize; // 16384: bytes until address overflow
+const MIN_DATA_BANK = gbTarget.minDataBank; // 6: first banks reserved by engine
+const MAX_BANKS = gbTarget.maxBanks; // 512: GBDK maximum
 
-const MBC1 = "MBC1";
-const MBC5 = "MBC5";
-const MBC1_DISALLOWED_BANKS = [0x20, 0x40, 0x60];
+const MBC1 = gbTarget.bankControllers.mbc1;
+const MBC5 = gbTarget.bankControllers.mbc5;
+const MBC1_DISALLOWED_BANKS = gbTarget.disallowedBanks;
 
 class BankedData {
   constructor({
