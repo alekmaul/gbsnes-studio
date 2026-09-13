@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import { connect } from "react-redux";
 import cx from "classnames";
 import debounce from "lodash/debounce";
-import { MAX_ACTORS, MAX_ACTORS_SMALL, MAX_FRAMES, MAX_TRIGGERS, MAX_ONSCREEN, SCREEN_WIDTH, SCREEN_HEIGHT } from "../../consts";
+import { getTarget } from "../../lib/compiler/targets";
 import {
   SceneShape,
   ActorShape,
@@ -29,6 +29,7 @@ class SceneInfo extends Component {
       loaded: false,
       actorCount: 0,
       frameCount: 0,
+      sheetCount: 0,
       triggerCount: 0,
       warnings: [],
       tooltipType: "",
@@ -70,7 +71,13 @@ class SceneInfo extends Component {
       actorsLookup,
       triggersLookup,
       spriteSheetsLookup,
+      target,
     } = this.props;
+    const {
+      maxOnscreenActors,
+      screenTileWidth,
+      screenTileHeight,
+    } = getTarget(target);
 
     const warnings = [];
 
@@ -108,6 +115,10 @@ class SceneInfo extends Component {
     const frameCount = usedSpriteSheets.reduce((memo, spriteSheet) => {
       return memo + (spriteSheet ? spriteSheet.numFrames : 0);
     }, 0);
+    // SNES has a fixed per-scene OBJ sheet budget (compileSnesData.js
+    // SPRITE_SLOTS) instead of a VRAM frame-count budget - count distinct
+    // sheets instead of summing frames (targets/snes.js maxSpriteSheets).
+    const sheetCount = usedSpriteSheets.length;
 
     function checkScreenAt(x, y) {
       let near = 0;
@@ -115,9 +126,9 @@ class SceneInfo extends Component {
         const otherActor = fullScene.actors[j];
         if (
           otherActor.x >= x - 1 &&
-          otherActor.x <= x + 2 + SCREEN_WIDTH &&
+          otherActor.x <= x + 2 + screenTileWidth &&
           otherActor.y >= y &&
-          otherActor.y <= y + SCREEN_HEIGHT
+          otherActor.y <= y + screenTileHeight
         ) {
           near++;
         }
@@ -127,8 +138,8 @@ class SceneInfo extends Component {
 
     const checkScreenCache = {};
     function cachedCheckScreenAt(checkX, checkY) {
-      const x = clamp(checkX, 0, fullScene.width - SCREEN_WIDTH);
-      const y = clamp(checkY, 0, fullScene.height - SCREEN_HEIGHT);   
+      const x = clamp(checkX, 0, fullScene.width - screenTileWidth);
+      const y = clamp(checkY, 0, fullScene.height - screenTileHeight);
       const key = `${x}_${y}`;
       if (checkScreenCache[key] === undefined) {
         checkScreenCache[key] = checkScreenAt(x, y);
@@ -137,18 +148,23 @@ class SceneInfo extends Component {
     }
 
     function checkForTooCloseActors() {
+      if (!maxOnscreenActors) {
+        // No practical onscreen-actor budget on this target (SNES's OAM
+        // budget is far larger than the Game Boy's - targets/snes.js).
+        return;
+      }
       for (let i=fullScene.actors.length-1; i>0; i--) {
         const actor = fullScene.actors[i];
         const actorX = clamp(actor.x, 0, 255);
         const actorY = clamp(actor.y, 0, 255);
-        for(let x=actorX - SCREEN_WIDTH; x<actorX + SCREEN_WIDTH; x++) {
-          for(let y=actorY - SCREEN_HEIGHT; y<actorY + SCREEN_HEIGHT; y++) {
+        for(let x=actorX - screenTileWidth; x<actorX + screenTileWidth; x++) {
+          for(let y=actorY - screenTileHeight; y<actorY + screenTileHeight; y++) {
             const near = cachedCheckScreenAt(x, y);
-            if (near > MAX_ONSCREEN) {
+            if (near > maxOnscreenActors) {
               const actorName = actor.name || `Actor ${i + 1}`
               warnings.push(l10n("WARNING_TOO_MANY_ONSCREEN_ACTORS", { actorName }));
-              warnings.push(l10n("WARNING_ONSCREEN_ACTORS_LIMIT", { maxOnscreen: MAX_ONSCREEN }));
-              return;              
+              warnings.push(l10n("WARNING_ONSCREEN_ACTORS_LIMIT", { maxOnscreen: maxOnscreenActors }));
+              return;
             }
           }
         }
@@ -157,9 +173,7 @@ class SceneInfo extends Component {
 
     checkForTooCloseActors();
 
-    const maxActors = (scene.width <= SCREEN_WIDTH && scene.height <= SCREEN_HEIGHT)
-      ? MAX_ACTORS_SMALL
-      : MAX_ACTORS;
+    const maxActors = this.getMaxActors();
 
     if (scene.actors.length > maxActors) {
       warnings.push(l10n("WARNING_ACTORS_LIMIT"));
@@ -168,10 +182,28 @@ class SceneInfo extends Component {
     this.setState({
       loaded: true,
       actorCount: scene.actors.length,
+      sheetCount,
       triggerCount: scene.triggers.length,
       frameCount,
       warnings
     });
+  };
+
+  // A scene no bigger than one screen gets a lower actor cap on Game Boy
+  // (maxActorsSmall) - the SNES target has no such distinction yet
+  // (targets/snes.js maxActorsSmall: null), so always use the flat cap then.
+  getMaxActors = () => {
+    const { scene, target } = this.props;
+    const { maxActors, maxActorsSmall, screenTileWidth, screenTileHeight } =
+      getTarget(target);
+    if (
+      maxActorsSmall != null &&
+      scene.width <= screenTileWidth &&
+      scene.height <= screenTileHeight
+    ) {
+      return maxActorsSmall;
+    }
+    return maxActors;
   };
 
   onHoverOn = (type) => (e) => {
@@ -206,16 +238,24 @@ class SceneInfo extends Component {
   }
 
   render() {
-    const { loaded, actorCount, frameCount, triggerCount, warnings, tooltipType, tooltipX, tooltipY } = this.state;
-    const { scene } = this.props;
+    const { loaded, actorCount, frameCount, sheetCount, triggerCount, warnings, tooltipType, tooltipX, tooltipY } = this.state;
+    const { target: targetId } = this.props;
 
     if (!loaded) {
       return null;
     }
 
-    const maxActors = (scene.width <= SCREEN_WIDTH && scene.height <= SCREEN_HEIGHT)
-      ? MAX_ACTORS_SMALL
-      : MAX_ACTORS;
+    const target = getTarget(targetId);
+    const maxActors = this.getMaxActors();
+    const maxTriggers = target.maxTriggers;
+    // Game Boy has a per-scene VRAM frame budget; SNES instead has a fixed
+    // number of loadable OBJ sheets per scene (maxSpriteFrames is null
+    // there) - show whichever budget applies to this target.
+    const showSheetBudget = target.maxSpriteFrames == null;
+    const spriteBudgetCount = showSheetBudget ? sheetCount : frameCount;
+    const spriteBudgetMax = showSheetBudget
+      ? target.maxSpriteSheets
+      : target.maxSpriteFrames;
 
     const actorWarning = warnings.length > 0;
     const actorError = actorCount > maxActors;
@@ -261,15 +301,15 @@ class SceneInfo extends Component {
         {"\u00A0 \u00A0"}
         <span
           className={cx("Scene__InfoButton", {
-            "Scene__Info--Warning": frameCount === MAX_FRAMES,
-            "Scene__Info--Error": frameCount > MAX_FRAMES,
+            "Scene__Info--Warning": spriteBudgetCount === spriteBudgetMax,
+            "Scene__Info--Error": spriteBudgetCount > spriteBudgetMax,
           })}
           onMouseEnter={this.onHoverOn("frames")}
           onClick={this.onOpenTooltip("frames")}
           onMouseLeave={this.onHoverOff}
           aria-describedby="scene_info_frames"
         >
-          F: {frameCount}/{MAX_FRAMES}
+          {showSheetBudget ? "S" : "F"}: {spriteBudgetCount}/{spriteBudgetMax}
         </span>
         <Portal>
           <div
@@ -283,24 +323,35 @@ class SceneInfo extends Component {
               bottom: tooltipY,
             }}
           >
-            <div>{l10n("FIELD_NUM_FRAMES_LABEL")}</div>
-            <div>{l10n("FIELD_FRAMES_COUNT", {frameCount, maxFrames: MAX_FRAMES})}</div>
-            {frameCount > MAX_FRAMES && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
-            {frameCount > MAX_FRAMES && <div>{l10n("WARNING_FRAMES_LIMIT")}</div>}
+            {showSheetBudget ? (
+              <>
+                <div>{l10n("FIELD_NUM_SHEETS_LABEL")}</div>
+                <div>{l10n("FIELD_SHEETS_COUNT", { sheetCount, maxSheets: spriteBudgetMax })}</div>
+                {spriteBudgetCount > spriteBudgetMax && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
+                {spriteBudgetCount > spriteBudgetMax && <div>{l10n("WARNING_SHEETS_LIMIT")}</div>}
+              </>
+            ) : (
+              <>
+                <div>{l10n("FIELD_NUM_FRAMES_LABEL")}</div>
+                <div>{l10n("FIELD_FRAMES_COUNT", { frameCount, maxFrames: spriteBudgetMax })}</div>
+                {spriteBudgetCount > spriteBudgetMax && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
+                {spriteBudgetCount > spriteBudgetMax && <div>{l10n("WARNING_FRAMES_LIMIT")}</div>}
+              </>
+            )}
           </div>
         </Portal>
         {"\u00A0 \u00A0"}
         <span
           className={cx("Scene__InfoButton", {
-            "Scene__Info--Warning": triggerCount === MAX_TRIGGERS,
-            "Scene__Info--Error": triggerCount > MAX_TRIGGERS,
+            "Scene__Info--Warning": triggerCount === maxTriggers,
+            "Scene__Info--Error": triggerCount > maxTriggers,
           })}
           onMouseEnter={this.onHoverOn("triggers")}
           onClick={this.onOpenTooltip("triggers")}
-          onMouseLeave={this.onHoverOff}          
+          onMouseLeave={this.onHoverOff}
           aria-describedby="scene_info_triggers"
         >
-          T: {triggerCount}/{MAX_TRIGGERS}
+          T: {triggerCount}/{maxTriggers}
         </span>
         <Portal>
           <div
@@ -315,9 +366,9 @@ class SceneInfo extends Component {
             }}
           >
             <div>{l10n("FIELD_NUM_TRIGGERS_LABEL")}</div>
-            <div>{l10n("FIELD_TRIGGERS_COUNT", { triggerCount, maxTriggers: MAX_TRIGGERS })}</div>
-            {triggerCount > MAX_TRIGGERS && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
-            {triggerCount > MAX_TRIGGERS && <div>{l10n("WARNING_TRIGGERS_LIMIT")}</div>}
+            <div>{l10n("FIELD_TRIGGERS_COUNT", { triggerCount, maxTriggers })}</div>
+            {triggerCount > maxTriggers && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
+            {triggerCount > maxTriggers && <div>{l10n("WARNING_TRIGGERS_LIMIT")}</div>}
           </div>
         </Portal>
       </>
@@ -330,6 +381,11 @@ SceneInfo.propTypes = {
   actorsLookup: PropTypes.objectOf(ActorShape).isRequired,
   triggersLookup: PropTypes.objectOf(TriggerShape).isRequired,
   spriteSheetsLookup: PropTypes.objectOf(SpriteShape).isRequired,
+  target: PropTypes.string,
+};
+
+SceneInfo.defaultProps = {
+  target: undefined,
 };
 
 function mapStateToProps(state, props) {
@@ -337,8 +393,10 @@ function mapStateToProps(state, props) {
   const triggersLookup = triggerSelectors.selectEntities(state);
   const spriteSheetsLookup = spriteSheetSelectors.selectEntities(state);
   const scene = sceneSelectors.selectById(state, props.id);
+  const target = state.project.present.settings.target;
 
   return {
+    target,
     scene,
     actorsLookup,
     triggersLookup,

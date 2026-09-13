@@ -5,7 +5,9 @@ import l10n from "../../lib/helpers/l10n";
 import castEventValue from "../../lib/helpers/castEventValue";
 import CustomControlsPicker from "../../components/forms/CustomControlsPicker";
 import CartPicker from "../../components/forms/CartPicker";
+import TargetPicker from "../../components/forms/TargetPicker";
 import PaletteSelect from "../../components/forms/PaletteSelectOld";
+import Alert, { AlertItem } from "../../components/library/Alert";
 import { Button } from "../../components/ui/buttons/Button";
 import { SettingsState } from "../../store/features/settings/settingsState";
 import settingsActions from "../../store/features/settings/settingsActions";
@@ -77,6 +79,8 @@ const SettingsPage: FC = () => {
     defaultBackgroundPaletteIds,
   } = settings;
 
+  const isSnes = settings.target === "snes";
+
   const onSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.currentTarget.value);
   };
@@ -131,9 +135,19 @@ const SettingsPage: FC = () => {
                 onChange={onSearch}
               />
             </SettingsSearchWrapper>
-            <SettingsMenuItem onClick={onMenuItem("settingsColor")}>
-              {l10n("SETTINGS_GBC")}
+            <SettingsMenuItem onClick={onMenuItem("settingsTargetPlatform")}>
+              {l10n("SETTINGS_TARGET_PLATFORM")}
             </SettingsMenuItem>
+            {isSnes && (
+              <SettingsMenuItem onClick={onMenuItem("settingsSnesOptions")}>
+                {l10n("SETTINGS_SNES_OPTIONS")}
+              </SettingsMenuItem>
+            )}
+            {!isSnes && (
+              <SettingsMenuItem onClick={onMenuItem("settingsColor")}>
+                {l10n("SETTINGS_GBC")}
+              </SettingsMenuItem>
+            )}
             {groupedFields.map((group) => (
               <SettingsMenuItem
                 key={group.name}
@@ -145,9 +159,11 @@ const SettingsPage: FC = () => {
             <SettingsMenuItem onClick={onMenuItem("settingsControls")}>
               {l10n("SETTINGS_CONTROLS")}
             </SettingsMenuItem>
-            <SettingsMenuItem onClick={onMenuItem("settingsCartType")}>
-              {l10n("SETTINGS_CART_TYPE")}
-            </SettingsMenuItem>
+            {!isSnes && (
+              <SettingsMenuItem onClick={onMenuItem("settingsCartType")}>
+                {l10n("SETTINGS_CART_TYPE")}
+              </SettingsMenuItem>
+            )}
             <SettingsMenuItem onClick={onMenuItem("settingsCustomHead")}>
               {l10n("SETTINGS_CUSTOM_HEADER")}
             </SettingsMenuItem>
@@ -155,6 +171,35 @@ const SettingsPage: FC = () => {
         </SettingsMenuColumn>
       )}
       <SettingsContentColumn>
+        <SearchableCard
+          searchTerm={searchTerm}
+          searchMatches={[l10n("SETTINGS_TARGET_PLATFORM")]}
+        >
+          <CardAnchor id="settingsTargetPlatform" />
+          <CardHeading>{l10n("SETTINGS_TARGET_PLATFORM")}</CardHeading>
+          <TargetPicker searchTerm={searchTerm} />
+        </SearchableCard>
+
+        {isSnes && (
+          <SearchableCard
+            searchTerm={searchTerm}
+            searchMatches={[l10n("SETTINGS_SNES_OPTIONS")]}
+          >
+            <CardAnchor id="settingsSnesOptions" />
+            <CardHeading>{l10n("SETTINGS_SNES_OPTIONS")}</CardHeading>
+            {!searchTerm && (
+              <Alert variant="warning">
+                <AlertItem>{l10n("WARNING_SNES_PALETTES")}</AlertItem>
+                <AlertItem>{l10n("WARNING_SNES_ENGINE_FIELDS")}</AlertItem>
+                <AlertItem>{l10n("WARNING_SNES_PROJECTILES")}</AlertItem>
+                <AlertItem>{l10n("WARNING_SNES_SPRITE_SHEETS")}</AlertItem>
+                <AlertItem>{l10n("WARNING_SNES_NO_WEB_PLAYER")}</AlertItem>
+              </Alert>
+            )}
+          </SearchableCard>
+        )}
+
+        {!isSnes && (
         <SearchableCard
           searchTerm={searchTerm}
           searchMatches={[
@@ -262,6 +307,7 @@ const SettingsPage: FC = () => {
             </>
           )}
         </SearchableCard>
+        )}
 
         <EngineFieldsEditor searchTerm={searchTerm} />
 
@@ -283,6 +329,7 @@ const SettingsPage: FC = () => {
           <CustomControlsPicker searchTerm={searchTerm} />
         </SearchableCard>
 
+        {!isSnes && (
         <SearchableCard
           searchTerm={searchTerm}
           searchMatches={[l10n("SETTINGS_CART_TYPE")]}
@@ -291,6 +338,7 @@ const SettingsPage: FC = () => {
           <CardHeading>{l10n("SETTINGS_CART_TYPE")}</CardHeading>
           <CartPicker searchTerm={searchTerm} />
         </SearchableCard>
+        )}
 
         <SearchableCard
           searchTerm={searchTerm}
