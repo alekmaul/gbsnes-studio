@@ -699,3 +699,77 @@ projet réel suppose soit un `.gbsproj` édité à la main avec `"target": "snes
 vérification directe via jest. Et sans `buildSnesRom.js` (M8), il n'y a encore aucun bouton
 "Build ROM" fonctionnel dans l'app pour la cible SNES — M7 fournit le compilateur, pas encore
 le chemin utilisateur complet.
+
+## 15. M8 (build ROM SNES sous webpack) — fait, 2026-09-13
+
+Objectif : rendre `buildSnesRom.js`/`compileSnesMusic.js`/`mod2it.js` exécutables depuis
+`buildProject()` (le point d'entrée que `buildGame.js`/le webpack build appellent), pour
+produire un vrai `.sfc` bootable depuis l'app — pas seulement depuis un test jest qui écrit
+directement dans l'arbre du moteur (la méthode utilisée pour vérifier M7).
+
+### Ce qui a été porté
+
+Les trois fichiers (`buildSnesRom.js`, `compileSnesMusic.js`, `mod2it.js`) sont repris de la
+version mature v1.1.4 (branche `main`) **quasi verbatim** — contrairement à `compileSnesData.js`
+(M7), ils n'ont aucune dépendance sur quoi que ce soit qui a changé dans le passage à
+2.0.0-beta5 :
+
+- **`buildSnesRom.js`** — orchestration pure JS (pas de `make`/shell) : `816-tcc → 816-opt →
+  wla-65816` par fichier `.c`, `wla-65816` par `.asm`, `linkfile` (+ objets `pvsneslib/lib/
+  LoROM_FastROM/*.obj`), `wlalink → build/rom/game.sfc`. LoROM + FastROM, SRAM 8 Ko, header
+  généré depuis `devkitsnes/include/hdr.asm.in`.
+  Les correctifs asar `resolvePvsHome()` (v1.1.2/v1.1.3 sur `main` — extraction hors
+  `app.asar` avant tout `spawn`, cf. la longue note dans CLAUDE.md) s'appliquent tels quels :
+  `helpers/fsCopy.js` a déjà `pathExists()` (asar-safe, `fs.lstat` pas `fs.access`) sur `v2`
+  depuis M2, réimporté précisément en prévision de ce portage.
+- **`compileSnesMusic.js`** — `.mod` du projet → `.it` (via `mod2it.js`) → `smconv -s`
+  construit un soundbank à partir du module d'effets vendored (`res/effectssfx.it`, toujours
+  module 0) puis des morceaux du projet (modules 1..N). Un morceau illisible/inconvertible
+  retombe sur le module d'effets (silencieux, averti) plutôt que de décaler les index suivants.
+  Sans musique projet → no-op, l'arbre gardé le soundbank de preuve-de-concept committé.
+- **`mod2it.js`** — convertisseur pur `.mod` ProTracker 4 canaux → `.it` Impulse Tracker minimal
+  (un instrument passe-plat par échantillon, patterns IT compressés). Zéro dépendance sur le
+  reste du compilateur — copié tel quel.
+
+### Câblage dans `buildProject.js`
+
+`resolveTarget()`/`buildProjectSnes()` réintroduits exactement sur le modèle du chemin GB déjà
+en place : eject `appData/src/snes` → `compileSnesData` (M7) → écriture `src/assets.{c,h}` +
+`src/data/*` (suppression du `assets_spr.asm` périmé) → `compileSnesMusic` → `buildSnesRom`.
+Pas d'export web player pour l'instant (`snesEmulatorRoot`/`appData/snes-js-emulator` n'existent
+pas encore sur cette branche — territoire M10) ; `buildType` est supposé `"rom"`.
+
+### Une vraie divergence 2.0-only trouvée en testant
+
+`ejectBuild.js` lit **sans filet** `<engineDir>/engine.json`.`version` juste après avoir copié
+le moteur (`readEngineVersion`, pas dans un try/catch) — un besoin qui n'existe que depuis
+2.0.0-beta5 (les Engine Fields n'existaient pas en 1.2.2, donc `appData/src/snes/engine.json`
+n'a jamais existé, même dans la version mature v1.1.4). Sans ce fichier, tout build SNES aurait
+planté à l'éjection. Corrigé en ajoutant un `engine.json` minimal (`{"version": "2.0.0-e1",
+"fields": []}`) — `fields: []` car le pipeline Engine Fields n'est toujours pas câblé côté SNES
+(déferral explicite de M7, territoire M9).
+
+### Vérifié de bout en bout, deux façons
+
+1. **`yarn jest`** : les nouveaux `buildSnesRom.test.js`/`compileSnesMusic.test.js` (gated sur
+   la présence de la toolchain vendored, comme `compileSnesData.test.js`) tournent **pour de
+   vrai** (pas skip) : `buildSnesRom` seul construit un `.sfc` LoROM/FastROM 8 banques bootable
+   depuis le squelette moteur nu ; `compileSnesMusic` + `buildProject()` reconstruisent un
+   soundbank réel à partir de la musique `.mod` du projet `Test_SoundEffects` (2 banques,
+   `MUSIC_SET_BANKS()` généré) et produisent un `.sfc` bootable. Suite complète : 566/568
+   (mêmes 2 échecs préexistants et sans rapport, `entitiesState.test.ts`).
+2. **La preuve la plus forte** : un vrai projet (`test/projects/Test_ActorInvoke`, `target:
+   "snes"`) construit **par `buildProject()` lui-même** — pas le contournement jest-écrit-dans-
+   l'arbre-moteur utilisé pour vérifier M7 — jusqu'à un `.sfc` de 262144 octets (8×32 Ko).
+   Démarré dans Mesen (processus tué avant et après le lancement, résultat non périmé) : le
+   compteur de tick de la boucle principale (`time`, WRAM) a avancé sur 90 frames
+   (235 à la frame 30, débordement 8-bit attendu vers 64 à la frame 120 — confirme une boucle
+   qui tourne en continu, pas bloquée) et `scene_index` valait 0, la première scène du projet,
+   sans plantage ni gel.
+
+**Ce que ça débloque réellement** : "Build ROM" pour la cible SNES fonctionne maintenant de
+bout en bout à travers le vrai point d'entrée `buildProject()` de l'app, la même fonction que
+`buildGame.js`/le middleware appellent. Ce qui manque encore pour que l'utilisateur puisse
+créer et builder un projet SNES **entièrement depuis l'UI** (sans éditer un `.gbsproj` à la
+main) : un template SNES (`snesblank`/`sneshtml` de v1.1.4 pas encore réintégrés) et un
+sélecteur de cible dans la page Settings — territoire M9, pas encore commencé.
