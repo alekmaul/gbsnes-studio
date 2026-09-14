@@ -58,7 +58,13 @@ const createSplash = async (forceTab?: SplashTab) => {
   // Create the browser window.
   splashWindow = new BrowserWindow({
     width: 640,
-    height: 400,
+    // Was 400 - fit the original single unlabelled template row. The SNES
+    // templates now render on their own labelled row underneath the GB one
+    // (Splash.tsx SplashTemplateSelect, M11 follow-up) and this window
+    // isn't resizable, so the extra ~120px is needed or the second row and
+    // the selected-template description below it are clipped by the OS
+    // window edge outright (nothing here scrolls - user-found).
+    height: 560,
     useContentSize: true,
     resizable: false,
     maximizable: false,
