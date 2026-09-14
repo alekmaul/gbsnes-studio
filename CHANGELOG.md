@@ -37,7 +37,9 @@ as of 2026-09-13:
 - The "New Project" splash screen now actually offers the SNES sample/blank templates —
   they existed on disk and were fully working since M2/M10, but the template picker's own
   list never included them, so there was no way to create a SNES project from the app's UI
-  at all until now (user-found).
+  at all until now (user-found). The template picker also now puts each platform's
+  templates on its own labelled row instead of one strip that overflowed off-window once
+  a 4th/5th template was added (user-found the same day).
 
 Remaining: **M12** (SNES web player/Play button, branding polish, 3-platform CI) and **M13**
 (full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).
