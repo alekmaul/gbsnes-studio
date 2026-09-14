@@ -1011,3 +1011,16 @@ liste à un seul groupe (ou sans `group`) reste rendue exactement comme avant �
 pas une refonte. `flex-wrap` ajouté aussi à la rangée elle-même en filet de sécurité
 indépendant pour une fenêtre étroite. Vérifié : `electron-forge package` compile
 proprement, `yarn jest` toujours 578/580, `yarn start` démarre sans erreur.
+
+### M11 — addendum 3, 2026-09-14 (même jour, signalé par l'utilisateur)
+
+Deux symptômes rapportés ensemble, même cause : "on ne voit plus l'explication en
+cliquant sur un template" + "il faut que la fenêtre soit plus haute, on ne voit pas la
+fin pour la SNES". La fenêtre Splash (`main.ts`) est une `BrowserWindow` fixe
+640×400, non redimensionnable, et rien dans son contenu ne scrolle — dimensionnée à
+l'origine pour exactement une rangée de tuiles sans label. Avec la rangée SNES
+labellisée ajoutée en dessous (addendum 2), le contenu dépasse les 400px et le bas
+de la fenêtre (2e rangée + description du template sélectionné) est purement coupé
+par le bord de la fenêtre OS. Corrigé : `height: 400` → `560`. Vérifié :
+`electron-forge package` compile, `yarn jest` toujours 578/580, `yarn start` démarre
+sans erreur.
