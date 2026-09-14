@@ -975,3 +975,25 @@ journal) confirme qu'il ne plante pas au démarrage ; arrêté proprement ensuit
 sur chaque fichier touché : zéro nouveau problème (le seul avertissement introduit en
 chemin, une destructuration `scene` inutilisée dans `SceneInfo.js`, trouvé et corrigé
 avant le commit).
+
+### M11 — addendum, 2026-09-14 (trouvé par l'utilisateur en testant l'app réelle)
+
+L'écran "New Project" (`Splash.tsx`) ne proposait que 3 templates (gbs2/gbhtml/blank) —
+aucun moyen de créer un projet SNES depuis l'UI de l'app, alors que
+`appData/templates/{sneshtml,snesblank}` existent sur cette branche depuis avant le M2
+(déjà confirmés empaquetés dans `app.asar` à l'époque) et que tout le chemin
+`createProject()`→`migrateProject()`→`compileSnesData()` était déjà vérifié bout en
+bout contre eux (M10). Aucun des 14 jalons ne nommait explicitement cette liste UI —
+jamais touchée jusqu'ici. Corrigé en ajoutant deux entrées à `Splash.tsx` (id
+`sneshtml`/`snesblank` — `createProject()` résout déjà un id directement vers son
+dossier `appData/templates/<id>`, rien d'autre à câbler). Images d'aperçu : `snesblank`
+réutilise son propre fond `placeholder.png` (comme le "blank" GB dont l'aperçu est déjà
+son propre canevas vide, pas une capture) ; `sneshtml` utilise son art `outside.png`.
+Une vraie capture Mesen a été tentée en premier (ROM buildée, `emu.takeScreenshot()`)
+mais l'intro Logo/Titre du jeu de démo exige un appui Start pour atteindre une scène
+avec du vrai art de jeu, et l'investigation de cette session (déjà close) sur la
+simulation d'input Lua dans Mesen a établi que ce n'est pas fiable ici — une image de
+fond statique est honnête et rend mieux qu'une capture "TITLE SCREEN" noire de toute
+façon. Nouveau test (aucune couverture `createProject` n'existait avant du tout sur
+cette branche) : `test/data/project/createSnesProject.test.js`. `yarn jest` :
+**578/580** (mêmes 2 échecs préexistants, +2 nouveaux tests).
