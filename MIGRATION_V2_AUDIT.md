@@ -997,3 +997,17 @@ fond statique est honnête et rend mieux qu'une capture "TITLE SCREEN" noire de 
 façon. Nouveau test (aucune couverture `createProject` n'existait avant du tout sur
 cette branche) : `test/data/project/createSnesProject.test.js`. `yarn jest` :
 **578/580** (mêmes 2 échecs préexistants, +2 nouveaux tests).
+
+### M11 — addendum 2, 2026-09-14 (même jour, trouvé en testant l'ajout ci-dessus)
+
+`SplashTemplateSelectOptions` était une seule rangée flex sans `flex-wrap` — les 5
+tuiles (3 GB + 2 SNES) débordaient hors de l'écran au lieu de passer à la ligne (capture
+d'écran de l'utilisateur montrant la 5e tuile coupée au bord de la fenêtre). Corrigé :
+`Template`/`TemplateInfo` gagnent un champ optionnel `group` ; `SplashTemplateSelect`
+rend maintenant une rangée par groupe distinct (ordre de première apparition), avec un
+petit label au-dessus de chaque rangée dès qu'il y a plus d'un groupe — "Game Boy" et
+"Super Nintendo" sur deux rangées bien séparées au lieu d'une bande qui déborde. Une
+liste à un seul groupe (ou sans `group`) reste rendue exactement comme avant — additif,
+pas une refonte. `flex-wrap` ajouté aussi à la rangée elle-même en filet de sécurité
+indépendant pour une fenêtre étroite. Vérifié : `electron-forge package` compile
+proprement, `yarn jest` toujours 578/580, `yarn start` démarre sans erreur.
