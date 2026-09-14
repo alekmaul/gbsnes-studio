@@ -62,6 +62,7 @@ type TemplateInfo = {
   preview: string;
   videoPreview: boolean;
   description: string;
+  group?: string;
 };
 
 const splashTabs = ["new", "recent"] as const;
@@ -74,6 +75,7 @@ const templates: TemplateInfo[] = [
     preview: gbs2Preview,
     videoPreview: true,
     description: l10n("SPLASH_SAMPLE_PROJECT_DESCRIPTION"),
+    group: "Game Boy",
   },
   {
     id: "gbhtml",
@@ -81,6 +83,7 @@ const templates: TemplateInfo[] = [
     preview: gbhtmlPreview,
     videoPreview: true,
     description: l10n("SPLASH_SAMPLE_PROJECT_ORIGINAL_DESCRIPTION"),
+    group: "Game Boy",
   },
   {
     id: "blank",
@@ -88,6 +91,7 @@ const templates: TemplateInfo[] = [
     preview: blankPreview,
     videoPreview: false,
     description: l10n("SPLASH_BLANK_PROJECT_DESCRIPTION"),
+    group: "Game Boy",
   },
   {
     id: "sneshtml",
@@ -95,6 +99,7 @@ const templates: TemplateInfo[] = [
     preview: sneshtmlPreview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_SAMPLE_PROJECT_DESCRIPTION"),
+    group: "Super Nintendo",
   },
   {
     id: "snesblank",
@@ -102,6 +107,7 @@ const templates: TemplateInfo[] = [
     preview: snesblankPreview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_BLANK_PROJECT_DESCRIPTION"),
+    group: "Super Nintendo",
   },
 ];
 

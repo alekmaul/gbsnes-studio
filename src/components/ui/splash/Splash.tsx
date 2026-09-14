@@ -180,6 +180,12 @@ export interface Template {
   preview: string;
   videoPreview: boolean;
   description: string;
+  // Templates sharing a group render on their own row, in first-seen group
+  // order, with a small label above it (e.g. separating GB from SNES
+  // templates so a growing list doesn't just overflow off one row).
+  // Omitted (or all templates sharing one group) -> a single unlabelled row,
+  // unchanged from before.
+  group?: string;
 }
 
 export interface SplashTemplateSelectProps {
@@ -196,11 +202,24 @@ export const SplashTemplateSelectWrapper = styled.div`
 export const SplashTemplateSelectOptions = styled.div`
   display: flex;
   flex-direction: row;
+  flex-wrap: wrap;
   width: 100%;
   margin-bottom: 5px;
 
   & > * {
     margin-right: 10px;
+    margin-bottom: 10px;
+  }
+`;
+
+export const SplashTemplateGroupLabel = styled.div`
+  font-size: 11px;
+  font-weight: bold;
+  color: ${(props) => props.theme.colors.secondaryText};
+  margin-bottom: 5px;
+
+  &:not(:first-child) {
+    margin-top: 5px;
   }
 `;
 
@@ -287,34 +306,54 @@ export const SplashTemplateSelect: FC<SplashTemplateSelectProps> = ({
   onChange,
 }) => {
   const selectedTemplate = templates.find((template) => template.id === value);
+
+  const groupNames: string[] = [];
+  const groups: Record<string, Template[]> = {};
+  templates.forEach((template) => {
+    const groupName = template.group || "";
+    if (!groups[groupName]) {
+      groupNames.push(groupName);
+      groups[groupName] = [];
+    }
+    groups[groupName].push(template);
+  });
+  const isGrouped = groupNames.length > 1;
+
   return (
     <SplashTemplateSelectWrapper>
-      <SplashTemplateSelectOptions>
-        {templates.map((template) => (
-          <SplashTemplateButtonWrapper key={template.id}>
-            <SplashTemplateButton
-              id={`${name}_${template.id}`}
-              name={name}
-              value={template.id}
-              checked={template.id === value}
-              onChange={() => onChange(template.id)}
-            />
-            <SplashTemplateLabel
-              htmlFor={`${name}_${template.id}`}
-              title={template.name}
-            >
-              {template.videoPreview ? (
-                <SplashTemplateVideo
-                  src={template.preview}
-                  playing={template.id === value}
+      {groupNames.map((groupName) => (
+        <React.Fragment key={groupName || "__ungrouped"}>
+          {isGrouped && groupName && (
+            <SplashTemplateGroupLabel>{groupName}</SplashTemplateGroupLabel>
+          )}
+          <SplashTemplateSelectOptions>
+            {groups[groupName].map((template) => (
+              <SplashTemplateButtonWrapper key={template.id}>
+                <SplashTemplateButton
+                  id={`${name}_${template.id}`}
+                  name={name}
+                  value={template.id}
+                  checked={template.id === value}
+                  onChange={() => onChange(template.id)}
                 />
-              ) : (
-                <img src={template.preview} />
-              )}
-            </SplashTemplateLabel>
-          </SplashTemplateButtonWrapper>
-        ))}
-      </SplashTemplateSelectOptions>
+                <SplashTemplateLabel
+                  htmlFor={`${name}_${template.id}`}
+                  title={template.name}
+                >
+                  {template.videoPreview ? (
+                    <SplashTemplateVideo
+                      src={template.preview}
+                      playing={template.id === value}
+                    />
+                  ) : (
+                    <img src={template.preview} />
+                  )}
+                </SplashTemplateLabel>
+              </SplashTemplateButtonWrapper>
+            ))}
+          </SplashTemplateSelectOptions>
+        </React.Fragment>
+      ))}
       {selectedTemplate && (
         <>
           <SplashTemplateName>{selectedTemplate.name}</SplashTemplateName>
