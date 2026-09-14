@@ -558,6 +558,62 @@ by target, `undefined` target still falls back to gb).
   practice, not resilient - but the practical result is the same: GB was never broken, and this
   needed no fix. Correcting the record since an earlier, less faithful probe (skipping the
   preceding failed `unlink`) wrongly suggested otherwise.
+  **"spawn .../smconv EACCES" building a ROM on a real packaged Linux build (user-found).**
+  A third bug in the same family as the two above, past the asar-extraction fix: `fsCopy.js`'s
+  `copyFile()` wrote every extracted file through a plain `fs.createWriteStream(dest, { mode })`
+  with `mode` always `undefined` (neither call site - `resolvePvsHome()` nor `makeBuild.js`'s own
+  GBDK extraction - ever passed one), so every copy landed with Node's default stream mode
+  (`0o666`, no executable bit) regardless of the source file's real permissions. Invisible on
+  Windows (no POSIX execute-bit concept to lose) and never exercised on macOS in dev/test (the
+  toolchain there is a plain local path, no extraction needed - `resolvePvsHome()`'s early return
+  for "no space, not in asar"), but on a real Linux packaged build a copied binary can no longer
+  be spawned at all - `EACCES`, not "command not found". Fixed by reading the source file's real
+  mode (`fs.lstat`) and applying it to the destination twice: once via `createWriteStream`'s own
+  `mode` option (best-effort, still subject to the process umask), and again via an explicit
+  `fs.chmod()` after the write completes (bypasses umask entirely - the one that actually
+  guarantees the bit survives). Fixed at the shared helper level, so it also covers `makeBuild.js`'s
+  own GBDK-toolchain extraction fallback path for free. While verifying this, found and fixed a
+  real latent race the permission fix's own test surfaced (harmless before, since nothing had
+  depended on the exact timing): `copyFile()`'s write-completion promise resolved on the *input*
+  stream's `'end'` event, which can fire before the piped *output* stream has actually finished
+  flushing to disk - `chmod()`-ing immediately after that occasionally hit a file that didn't
+  fully exist yet (a real `ENOENT`, caught by an actual test failure while verifying the fix, not
+  theorised). Now resolves on the output stream's `'finish'` event instead. New tests in
+  `fsCopy.test.js` (skipped on Windows, which has no executable-bit concept to test) verify a
+  copied file and a copied directory tree both keep their source permissions including the
+  executable bit - the real validation happens on this project's own Linux CI test job.
+  **The vendored macOS PVSnesLib toolchain is genuinely arm64, not x64 - user asked directly
+  ("we must have an arm64 version too"), and checking found something more specific than
+  missing: it was already arm64, just mislabeled.** `file` on every binary under
+  `buildTools/darwin-x64/pvsneslib/` (`816-tcc`, `wla-65816`, `wlalink`, `816-opt`, `smconv`,
+  `snesromusage`) showed genuine `Mach-O 64-bit arm64` executables, not x64 - compared against
+  `buildTools/darwin-x64/gbdk/bin/lcc`, a real `x86_64` binary, and `buildTools/linux-x64/...`,
+  real ELF x86-64. Root cause: unlike GBDK's own toolchain (a prebuilt upstream download, genuinely
+  x64), this project's PVSnesLib binaries are built by its own CI, and GitHub's macOS runners have
+  been arm64-only (`macos-15`) since the last Intel image (`macos-13`) was retired in 2025 - so
+  whatever vendored them compiled natively for the runner's own arm64 hardware without cross-
+  compiling to x86_64, then filed the result under the `darwin-x64` name matching the *app's own*
+  packaging arch (Electron 4, this project's pinned version, never shipped a native darwin-arm64
+  build at all, so the whole app - unrelated to this specific toolchain - is always packaged and
+  run as x64 across the board, Rosetta-translated on Apple Silicon; see `.github/workflows/
+  build.yml`'s own comment on this). The mislabeling was silently harmless on real Apple Silicon
+  hardware (a genuine arm64 binary spawns fine as a child of the Rosetta-translated x64 Electron
+  process - process architecture doesn't have to match its parent's on macOS) but would have hard-
+  failed outright on a real Intel Mac (no emulation exists to run arm64 code on real x64 silicon,
+  only the other direction). Fixed honestly rather than left coincidentally-working: moved
+  `pvsneslib` out of `buildTools/darwin-x64/` into a new sibling `buildTools/darwin-arm64/`
+  (`gbdk`/`mod2gbt` stay in `darwin-x64`, genuinely x64, untouched). New shared helper
+  `pvsneslibVendorDir()` in `consts.js` centralises the one non-obvious rule this creates -
+  resolve to `darwin-arm64` on macOS regardless of what `process.arch` reports (which, under
+  Rosetta, always says `"x64"`, even on real Apple Silicon) - consumed by `buildSnesRom.js`
+  `resolvePvsHome()` and every toolchain-gated test's own `hasToolchain` check (previously each
+  reconstructed the same `${platform}-${arch}` path independently). `after-copy.js` (the
+  electron-packager `afterCopy` hook, a standalone pre-babel script that can't import `consts.js`)
+  gets its own explicit two-folder copy on darwin instead of one, so both `gbdk` and `pvsneslib`
+  land in the packaged app. **Real Intel Macs are not supported for the SNES target** until actual
+  x64 PVSnesLib binaries are vendored (not attempted here - no x64 macOS build environment
+  available; GitHub no longer offers one either) - `resolvePvsHome()`'s "toolchain not found" error
+  says so explicitly on darwin now, rather than silently pointing at the wrong architecture.
 - **`appData/src/snes/`** — the engine tree. Ported so far: `src/game.c` (M3 — Mode 1 BG,
   OAM player, d-pad, camera scroll; M5 — camera pan/lock/shake), `src/script_runner.c` +
   `src/script_cmds.c` (M4 — the bytecode VM), `src/scene.c` (M4b — scenes from `assets.c`
@@ -666,10 +722,13 @@ by target, `undefined` target still falls back to gb).
   `.obj`/`.ps`/`.dbg` a standalone `make` drops there.
 - **Toolchain** vendored (subset) under `buildTools/<platform>-<arch>/pvsneslib/` — PVSnesLib
   V4.7.0 `devkitsnes/{bin,tools,include,snes_rules}` + `pvsneslib/{include,lib}`, for
-  `win32-x64`, `linux-x64` and `darwin-x64` (native binaries per platform; the unix ones carry
+  `win32-x64`, `linux-x64` and `darwin-arm64` (native binaries per platform; the unix ones carry
   a forced exec bit in the index since `core.fileMode` is `false` here). `smconv.spc` (the
   platform-independent SPC700 driver blob) travels in every `tools/`. Only 64-bit hosts (no
-  `win32-ia32`). **`devkitsnes/{bin,tools}` is trimmed to just what's actually invoked** (user
+  `win32-ia32`). **macOS is `darwin-arm64`, not `darwin-x64`, even though the packaged app
+  itself is always x64** (see the `buildSnesRom.js`/`consts.js` bullet below for why) - GBDK's
+  own toolchain stays a real `darwin-x64/gbdk`, genuinely built for x64 by upstream, sitting as
+  a sibling folder to `darwin-arm64/pvsneslib`. **`devkitsnes/{bin,tools}` is trimmed to just what's actually invoked** (user
   audit + cleanup): `816-tcc`/`wla-65816`/`wlalink` (`bin/`) + `816-opt`/`smconv`+`smconv.spc`
   (`tools/`) — matches exactly what `buildSnesRom.js` and `compileSnesMusic.js` spawn, plus
   `snesromusage` (kept as a manual ROM/RAM profiling tool, see `PERF.md`, not build-automated).

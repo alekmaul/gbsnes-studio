@@ -2,7 +2,7 @@ import childProcess from "child_process";
 import fs from "fs-extra";
 import os from "os";
 import Path from "path";
-import { buildToolsRoot } from "../../consts";
+import { pvsneslibVendorDir } from "../../consts";
 import copy, { pathExists } from "../helpers/fsCopy";
 
 /*
@@ -81,16 +81,16 @@ const spaceFreeTmp = () => {
 // the soundbank) failed with exactly that ENOENT, spawning straight out of
 // app.asar.
 const resolvePvsHome = async ({ progress }) => {
-  const vendored = Path.join(
-    buildToolsRoot,
-    `${process.platform}-${process.arch}`,
-    "pvsneslib"
-  );
+  const vendored = pvsneslibVendorDir();
   if (!(await pathExists(vendored))) {
+    const intelMacNote =
+      process.platform === "darwin"
+        ? " macOS only ships an arm64 toolchain - a real Intel Mac isn't supported yet."
+        : "";
     throw new Error(
       `PVSnesLib toolchain not found for ${process.platform}-${process.arch} ` +
         `(expected at ${vendored}). Vendor it under buildTools/, or build the ` +
-        `Game Boy target instead.`
+        `Game Boy target instead.${intelMacNote}`
     );
   }
 

@@ -2,7 +2,7 @@ import fs from "fs-extra";
 import os from "os";
 import Path from "path";
 import buildProject from "../../../src/lib/compiler/buildProject";
-import { snesEmulatorRoot, buildToolsRoot } from "../../../src/consts";
+import { snesEmulatorRoot, pvsneslibVendorDir } from "../../../src/consts";
 
 const DIR = Path.join(__dirname, "..", "..", "projects", "Test_ActorInvoke");
 
@@ -41,11 +41,7 @@ describe("SNES web-player template", () => {
 });
 
 // Toolchain-gated: the full web export (needs buildSnesRom).
-const vendored = Path.join(
-  buildToolsRoot,
-  `${process.platform}-${process.arch}`,
-  "pvsneslib"
-);
+const vendored = pvsneslibVendorDir();
 const maybe = fs.existsSync(vendored) ? describe : describe.skip;
 
 maybe("buildProject (snes, web) end to end", () => {

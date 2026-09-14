@@ -5,12 +5,10 @@ import createProject from "../../../src/lib/project/createProject";
 import migrateProject from "../../../src/lib/project/migrateProject";
 import compileSnesData from "../../../src/lib/compiler/compileSnesData";
 import buildProject from "../../../src/lib/compiler/buildProject";
-import { buildToolsRoot } from "../../../src/consts";
+import { pvsneslibVendorDir } from "../../../src/consts";
 
 const TMP_DIR = Path.join(os.tmpdir(), "gbs-snestemplate-test");
-const hasToolchain = fs.existsSync(
-  Path.join(buildToolsRoot, `${process.platform}-${process.arch}`, "pvsneslib")
-);
+const hasToolchain = fs.existsSync(pvsneslibVendorDir());
 
 describe("snesblank template", () => {
   beforeAll(async () => {

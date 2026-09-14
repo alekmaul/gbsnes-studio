@@ -6,7 +6,7 @@ import compileSnesData, {
   resolvePlaceholders
 } from "../../../src/lib/compiler/compileSnesData";
 import buildProject from "../../../src/lib/compiler/buildProject";
-import { buildToolsRoot } from "../../../src/consts";
+import { pvsneslibVendorDir } from "../../../src/consts";
 
 const PROJECT_DIR = Path.join(
   __dirname,
@@ -567,11 +567,7 @@ describe("compileSnesData - all test/projects fixtures", () => {
 });
 
 // Toolchain-gated: the full project -> bootable .sfc path.
-const vendored = Path.join(
-  buildToolsRoot,
-  `${process.platform}-${process.arch}`,
-  "pvsneslib"
-);
+const vendored = pvsneslibVendorDir();
 const maybe = fs.existsSync(vendored) ? describe : describe.skip;
 
 maybe("buildProject (snes) - fixtures end to end", () => {
