@@ -568,6 +568,8 @@
   "SPLASH_SAMPLE_PROJECT_DESCRIPTION": "A GBC template containing examples of top down, platformer, point and click and shooter scenes",
   "SPLASH_SAMPLE_PROJECT_ORIGINAL_DESCRIPTION": "The original GB Studio template. A short 4 color top down game",
   "SPLASH_BLANK_PROJECT_DESCRIPTION": "A completely blank canvas",
+  "SPLASH_SNES_SAMPLE_PROJECT_DESCRIPTION": "A Super Nintendo template containing an 8-scene sample game (dialogue, menus, actors, a save point)",
+  "SPLASH_SNES_BLANK_PROJECT_DESCRIPTION": "A completely blank canvas, targeting the Super Nintendo",
   "SPLASH_PATH": "Path",
   "SPLASH_CREATE": "Create Project",
   "SPLASH_CREATING": "Creating",
