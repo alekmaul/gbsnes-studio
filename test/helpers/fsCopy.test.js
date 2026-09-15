@@ -99,4 +99,28 @@ maybeOnPosix("fsCopy - copy preserves executable permissions", () => {
       fs.removeSync(dir);
     }
   });
+
+  // Regression: forcing mode: 0o755 (buildSnesRom.js resolvePvsHome() /
+  // makeBuild.js, both extracting a toolchain packed inside app.asar) still
+  // produced EACCES on a real packaged Linux build even after the fix
+  // above - because the *source* file's own reported mode (asar's own
+  // stat/lstat reporting for a file inside the archive, on this project's
+  // old pinned asar/Electron 4) isn't something this helper - or anything
+  // else - should trust for a file living inside app.asar. An explicit
+  // `mode` option must win outright, not just supply a fallback default.
+  test("an explicit mode option overrides the source file's own mode, not just a fallback default", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-copyperm-override-"));
+    try {
+      const src = Path.join(dir, "not-executable-at-the-source");
+      const dest = Path.join(dir, "must-be-executable-at-the-dest");
+      fs.writeFileSync(src, "#!/bin/sh\necho hi\n");
+      fs.chmodSync(src, 0o644); // deliberately NOT executable at the source
+
+      await copy(src, dest, { mode: 0o755 });
+
+      expect(fs.lstatSync(dest).mode & 0o777).toBe(0o755);
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
 });

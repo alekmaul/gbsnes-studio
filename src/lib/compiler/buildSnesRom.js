@@ -99,16 +99,16 @@ const resolvePvsHome = async ({ progress }) => {
     return vendored;
   }
 
-  // "-v2": bumped from the original "gbs-pvsneslib" name on purpose. Anyone
-  // who hit the EACCES permission bug (fsCopy.js copyFile() not preserving
-  // the executable bit - fixed alongside this) already has a real, still-
-  // broken extraction sitting at the old path; the cache-reuse check below
-  // has no way to tell a bad extraction from a good one, so it would keep
-  // serving the stale copy forever even after upgrading to a build with the
-  // fix (confirmed - user-found, same error persisted after updating).
-  // Renaming the destination is the simplest way to invalidate every such
-  // cache in the wild at once, no validation logic needed.
-  const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib-v2");
+  // "-v3": bumped twice now. "-v2" invalidated caches poisoned by the first
+  // bug (copyFile() not preserving the executable bit at all); this bump
+  // invalidates caches poisoned by the *second* bug in the same fix - see
+  // the explicit `mode: 0o755` below. Anyone who already has a real, still-
+  // broken extraction sitting at an old path would otherwise keep hitting
+  // it forever - the cache-reuse check has no way to tell a bad extraction
+  // from a good one - even after upgrading to a build with the fix
+  // (confirmed twice now: user-found, the identical EACCES persisted after
+  // each of the last two "fixes").
+  const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib-v3");
   // Written only after a copy fully completes - guards the cache-reuse
   // check below against a partial/interrupted extraction (crashed mid-copy)
   // looking like a valid one, the same class of problem the rename above
@@ -123,7 +123,19 @@ const resolvePvsHome = async ({ progress }) => {
     }
     progress("Extracting the build toolchain (first SNES build only)");
     await fs.remove(dest);
-    await copy(vendored, dest, { overwrite: false });
+    // mode: 0o755, not left to fsCopy.js's own "preserve the source file's
+    // mode" default - `vendored` is a path *inside* app.asar, and this old
+    // asar format (0.11.0, matching this project's pinned Electron 4) only
+    // stores a boolean "executable" flag per file, not real POSIX
+    // permission bits; whether Electron's own asar-transparent fs.lstat()
+    // reconstructs a mode reflecting that flag isn't something to trust
+    // blindly - forcing every extracted file executable sidesteps the
+    // question entirely (harmless on the handful of non-binary files in
+    // this tree - headers, .obj library objects - matching the same
+    // explicit override ensureBuildTools.js already uses for exactly this
+    // reason). Confirmed needed: the source-preserving version of this fix
+    // still produced the identical EACCES on a real packaged Linux build.
+    await copy(vendored, dest, { overwrite: false, mode: 0o755 });
     await fs.writeFile(doneMarker, "");
     return dest;
   }

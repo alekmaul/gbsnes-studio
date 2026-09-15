@@ -75,19 +75,18 @@ const makeBuild = ({
     }`;
 
     const tmpPath = getTmp();
-    // "-v2": bumped from the plain "_gbs" name on purpose - anyone who hit
-    // the EACCES permission bug (fsCopy.js copyFile() not preserving the
-    // executable bit on Linux/macOS, fixed alongside this) already has a
-    // real, still-broken extraction sitting at the old path. The symlink
-    // branch just below is effectively unreachable in practice (see the
-    // long-form note in CLAUDE.md - fs.unlink() throws for both "doesn't
-    // exist yet" and "already a real directory", landing in the copy()
-    // catch either time), so once that directory exists it's never
-    // refreshed - not even by upgrading to a build with the fix (confirmed:
-    // user-found, "make: lcc: Permission non accordée" after updating).
-    // Renaming invalidates every such cache in the wild at once, same fix
-    // as resolvePvsHome() in buildSnesRom.js got for the identical bug.
-    const tmpBuildToolsPath = `${tmpPath}/_gbs-v2`;
+    // "-v3": bumped twice now, same reasoning as resolvePvsHome() in
+    // buildSnesRom.js (see its own long comment) - "-v2" invalidated caches
+    // from the first bug (no chmod at all), this bump invalidates caches
+    // from the second bug (source-mode preservation isn't trustworthy for a
+    // path inside app.asar - see the explicit `mode: 0o755` below). The
+    // symlink branch just below is effectively unreachable in practice
+    // (fs.unlink() throws for both "doesn't exist yet" and "already a real
+    // directory", landing in the copy() catch either time - see CLAUDE.md),
+    // so once a bad extraction exists at a given path it's never refreshed -
+    // confirmed twice now: user-found, "make: lcc: Permission non accordée"
+    // persisted after each of the last two fixes.
+    const tmpBuildToolsPath = `${tmpPath}/_gbs-v3`;
 
     // Symlink build tools so that path doesn't contain any spaces
     // GBDKDIR doesn't work if path has spaces :-(
@@ -95,8 +94,19 @@ const makeBuild = ({
       await fs.unlink(tmpBuildToolsPath);
       await fs.ensureSymlink(buildToolsPath, tmpBuildToolsPath);
     } catch (e) {
+      // mode: 0o755, not left to fsCopy.js's own "preserve the source
+      // file's mode" default - buildToolsPath is a path *inside* app.asar,
+      // and this old asar format (0.11.0, matching this project's pinned
+      // Electron 4) only stores a boolean "executable" flag per file, not
+      // real POSIX permission bits; whether Electron's own asar-transparent
+      // fs.lstat() reconstructs a mode reflecting that flag isn't something
+      // to trust blindly - forcing every extracted file executable
+      // sidesteps the question entirely (harmless on the non-binary files
+      // in this tree - headers, examples, docs - matching the same
+      // explicit override ensureBuildTools.js already uses).
       await copy(buildToolsPath, tmpBuildToolsPath, {
-        overwrite: firstBuild
+        overwrite: firstBuild,
+        mode: 0o755
       });
     }
     
