@@ -99,16 +99,32 @@ const resolvePvsHome = async ({ progress }) => {
     return vendored;
   }
 
-  const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib");
+  // "-v2": bumped from the original "gbs-pvsneslib" name on purpose. Anyone
+  // who hit the EACCES permission bug (fsCopy.js copyFile() not preserving
+  // the executable bit - fixed alongside this) already has a real, still-
+  // broken extraction sitting at the old path; the cache-reuse check below
+  // has no way to tell a bad extraction from a good one, so it would keep
+  // serving the stale copy forever even after upgrading to a build with the
+  // fix (confirmed - user-found, same error persisted after updating).
+  // Renaming the destination is the simplest way to invalidate every such
+  // cache in the wild at once, no validation logic needed.
+  const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib-v2");
+  // Written only after a copy fully completes - guards the cache-reuse
+  // check below against a partial/interrupted extraction (crashed mid-copy)
+  // looking like a valid one, the same class of problem the rename above
+  // fixes for the permission bug specifically.
+  const doneMarker = Path.join(dest, ".extracted-ok");
 
   if (inAsar) {
     // A real extraction (tens of MB) is the one genuinely slow case here -
     // reuse a previous build's copy instead of redoing it every time.
-    if (await pathExists(dest)) {
+    if (await pathExists(doneMarker)) {
       return dest;
     }
     progress("Extracting the build toolchain (first SNES build only)");
+    await fs.remove(dest);
     await copy(vendored, dest, { overwrite: false });
+    await fs.writeFile(doneMarker, "");
     return dest;
   }
 

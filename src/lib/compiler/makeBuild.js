@@ -75,7 +75,19 @@ const makeBuild = ({
     }`;
 
     const tmpPath = getTmp();
-    const tmpBuildToolsPath = `${tmpPath}/_gbs`;
+    // "-v2": bumped from the plain "_gbs" name on purpose - anyone who hit
+    // the EACCES permission bug (fsCopy.js copyFile() not preserving the
+    // executable bit on Linux/macOS, fixed alongside this) already has a
+    // real, still-broken extraction sitting at the old path. The symlink
+    // branch just below is effectively unreachable in practice (see the
+    // long-form note in CLAUDE.md - fs.unlink() throws for both "doesn't
+    // exist yet" and "already a real directory", landing in the copy()
+    // catch either time), so once that directory exists it's never
+    // refreshed - not even by upgrading to a build with the fix (confirmed:
+    // user-found, "make: lcc: Permission non accordée" after updating).
+    // Renaming invalidates every such cache in the wild at once, same fix
+    // as resolvePvsHome() in buildSnesRom.js got for the identical bug.
+    const tmpBuildToolsPath = `${tmpPath}/_gbs-v2`;
 
     // Symlink build tools so that path doesn't contain any spaces
     // GBDKDIR doesn't work if path has spaces :-(
