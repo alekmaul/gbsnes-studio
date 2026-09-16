@@ -1128,3 +1128,58 @@ réellement** — "YOUR LOGO" (scène Logo) s'affiche, barre de statut du player
 pas d'erreur de rendu. `yarn jest snesWebPlayer buildProject` → 4/4 (dont le
 test toolchain-gated, exécuté pour de vrai avec le toolchain `win32-x64`
 vendoré) ; `yarn test` complet toujours 584/589 (mêmes 2 échecs préexistants).
+
+## 21. M12, partie 2 — branding + CI 3 plateformes (fait, 2026-09-16) — M12 terminé
+
+**Branding.** `git diff main -- src/assets/app/` et `git diff main -- README.md` sont vides —
+tout était déjà identique à l'état v1.1.4 de `main` (icônes, fond du DMG, gif du README).
+Seul un vrai écart : les items "Documentation"/"Learn More" du menu Help n'avaient pas le
+suffixe `(GB Studio)` que `main` a ajouté en v1.1.4 (ils ouvrent le site GB Studio d'origine,
+pas un site GBSNES dédié). Porté depuis `main` (`src/menu.js`).
+
+**CI — le vrai trou.** `.github/workflows/build.yml` était une copie conforme de celui de
+`main` depuis le M2, jamais adaptée : `branches: [main]` uniquement, donc **aucun push sur
+`v2` n'avait jamais déclenché la CI**, malgré tous les changements de packaging depuis
+(toolchain SNES re-vendoré, webpack, M12 partie 1...). Corrigé : `branches: [main, v2]`, et
+les commentaires corrigés pour refléter le vrai toolchain de `v2` (electron-forge 6-beta /
+Electron 8, pas 5 / Electron 4 — le contournement macOS x64-forcé reste valide, Electron 8
+n'a pas non plus de build arm64 natif, le support Apple Silicon n'arrivant qu'en Electron 11).
+
+**Fausse piste explorée et écartée (documentée pour ne pas la reproduire).** En creusant le
+packaging, `afterCopy: ["./after-copy"]` (chaîne de caractères, format historique de
+`main`) semblait résolu en `null` dans le log debug d'`electron-packager`
+(`"afterCopy":[null]`) — semblait indiquer que le hook ne s'exécutait jamais. Testé en
+remplaçant par `afterCopy: [require("./after-copy")]` : toujours `[null]` dans le même log.
+Conclusion : c'est un artefact de `JSON.stringify` (une fonction devient `null` en JSON), pas
+une preuve que le hook ne tourne pas — confirmé en ajoutant un `console.log` temporaire dans
+`after-copy.js` : le hook **s'exécute bien**, avec les deux formes (chaîne ou fonction
+directe). `forge.config.js` a été laissé inchangé (forme chaîne d'origine).
+
+**Vraie vérification du packaging Windows.** `buildTools/`+`appData/` n'apparaissaient pas
+comme dossiers "en clair" dans `out/GBSNES Studio-win32-x64/resources/` — inspection directe
+de `app.asar` (`asar.listPackage(...)`) : ils sont bien là, **empaquetés dans l'asar**
+(666 entrées `buildTools`/`appData`). C'est exactement l'architecture déjà éprouvée sur
+`main` (extraction runtime vers un vrai dossier temp par `resolvePvsHome()`/`makeBuild.js`,
+portée sur `v2` lors du portage précédent de cette session) — pas un bug, le comportement
+attendu. `yarn make:win` (mimant le job CI `build-windows`) produit un vrai installeur
+Squirrel + zip, correctement nommés/brandés.
+
+**Le vrai blocant trouvé en préparant ce test : le job `test` de la CI aurait toujours
+échoué.** `needs: test` bloque tous les jobs de build si `yarn test` échoue — et 2 tests
+échouaient depuis toujours (`entitiesState.test.ts`, hérités du tout premier import M1 de
+GB Studio 2.0.0-beta5, jamais liés au travail SNES de ce fork). Root cause trouvée par
+instrumentation (`console.log` temporaire) : `fixAllScenesWithModifiedBackgrounds` lisait les
+scènes via `localSceneSelectors.selectAll(state)` (sélecteur mémoïsé reselect) puis mutait
+directement les objets renvoyés — ces objets se sont avérés **détachés du vrai brouillon
+Immer** en cours de reducer (`scene === state.scenes.entities[scene.id]` → `false`, confirmé
+empiriquement). La mutation `scene.width = 32` ne se répercutait donc jamais sur l'état réel.
+Corrigé en lisant/mutant `state.scenes.entities`/`state.backgrounds.entities` directement,
+sans passer par les sélecteurs mémoïsés — comme le fait déjà tout le reste des reducers de ce
+fichier. Vrai bug de corruption silencieuse pour un cas d'usage réel (ouvrir un projet dont le
+fond a été supprimé/redimensionné en dehors de l'app : la scène gardait ses anciennes
+dimensions/collisions au lieu d'être corrigée). `yarn test` : 584/589 → **589/589** (3 skip
+Windows, attendus).
+
+**Reste pour M13** (pas du ressort de ce M12) : voir un vrai run CI macOS/Linux aller au bout
+sur `v2` une fois poussé — aucun environnement macOS/Linux disponible depuis ce poste Windows
+pour le vérifier localement plus avant.

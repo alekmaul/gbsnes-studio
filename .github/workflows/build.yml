@@ -2,14 +2,21 @@ name: Build
 
 on:
   push:
-    branches: [main]
+    # `v2` is the active rebuild-on-GB-Studio-2.0.0-beta5 branch (see
+    # MIGRATION_V2_AUDIT.md) - this workflow itself was copied over from
+    # `main` early on (M2) but never actually triggered on `v2` pushes until
+    # now (M12), so none of the packaging changes since had ever run through
+    # real CI. Both branches build the same way (Windows -> macOS -> Linux,
+    # same makers), just on different Electron/electron-forge versions.
+    branches: [main, v2]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
 
-# Older toolchain (electron-forge 5 / Electron 4). Node 16 matches what the
-# project builds with locally; CI installs with --ignore-engines like the old
-# CircleCI config did.
+# `main` is pinned to electron-forge 5 / Electron 4; `v2` to electron-forge 6
+# (beta) / Electron 8 - neither needs a newer Node than 16 to build, so one
+# pin covers both. Node 16 matches what the project builds with locally; CI
+# installs with --ignore-engines like the old CircleCI config did.
 env:
   NODE_VERSION: "16"
   # Belt-and-suspenders for the CLI --ignore-engines below: this is inherited by
@@ -62,11 +69,13 @@ jobs:
   build-macos:
     needs: build-windows
     # macos-15 is an arm64 runner (macos-13, the last Intel image, was retired
-    # by GitHub in 2025). Electron 4 has no darwin-arm64 build, and
-    # electron-prebuilt-compile's postinstall downloads Electron for the host
-    # arch - so we install an x64 Node (Rosetta 2 is on the arm64 runners) and
-    # force npm's target arch to x64. Every Electron download tool then fetches
-    # darwin-x64, and electron-packager --arch=x64 packages an Intel app.
+    # by GitHub in 2025). Neither branch's pinned Electron (4 on `main`, 8 on
+    # `v2` - Apple Silicon support landed in Electron 11) has a native
+    # darwin-arm64 build, and the Electron npm package's own postinstall
+    # downloads a binary for the host arch - so we install an x64 Node
+    # (Rosetta 2 is on the arm64 runners) and force npm's target arch to x64.
+    # Every Electron download then fetches darwin-x64, and electron-packager
+    # --arch=x64 packages an Intel app.
     runs-on: macos-15
     continue-on-error: true
     timeout-minutes: 120

@@ -55,9 +55,26 @@ as of 2026-09-13:
   larger canvas instead of opening at the Game Boy's smaller size. Verified against the real
   app: built the sample SNES project, opened Play, and watched the actual game run (not a
   black screen) at the correct window size.
+- **M12, part 2 (branding + CI, M12 complete)**: branding assets (icons, DMG background,
+  README) were already identical to `main`'s v1.1.4 state — only the Help menu's
+  "Documentation"/"Learn More" items needed the same "(GB Studio)" suffix `main` already has
+  (they open the upstream GB Studio site, not a GBSNES-specific one). The real gap was CI:
+  `.github/workflows/build.yml` had been copied from `main` back at M2 but never actually
+  triggered on `v2` pushes (`branches: [main]` only) — every packaging-related change since
+  had never run through real CI. Now triggers on both branches, with comments corrected for
+  `v2`'s actual toolchain (electron-forge 6-beta / Electron 8, not 5 / 4). Fixing this exposed
+  a real, unrelated blocker: two pre-existing test failures (since the M1 import from upstream
+  GB Studio 2.0.0-beta5) would have failed CI's `test` job on every run, gating all three
+  platform builds — a scene's width/height/collisions were supposed to reset when its
+  background was deleted or resized outside the app, but silently never did (a reducer bug,
+  fixed separately). `yarn test` is now 100% green (589/589, 3 Windows-skipped).
+- Windows packaging verified end-to-end locally (`yarn make:win`, mimicking the CI job): a
+  real Squirrel installer + zip build, `app.asar` contents inspected directly and confirmed
+  correct.
 
-Remaining: **M12** (branding polish, 3-platform CI) and **M13**
-(full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).
+Remaining: **M13** (full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).
+Real macOS/Linux CI runs (this workflow, now finally triggered on `v2`) haven't been watched
+end to end yet — no such environment available from this Windows dev machine.
 
 ## [1.1.4] - 2026-09-12
 
