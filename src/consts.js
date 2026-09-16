@@ -16,6 +16,7 @@ if (isDist) {
 const engineRoot = path.normalize(`${rootDir}/appData/src`);
 const buildToolsRoot = path.normalize(`${rootDir}/buildTools`);
 const emulatorRoot = path.normalize(`${rootDir}/appData/js-emulator`);
+const snesEmulatorRoot = path.normalize(`${rootDir}/appData/snes-js-emulator`);
 const projectTemplatesRoot = path.normalize(`${rootDir}/appData/templates`);
 const localesRoot = path.normalize(`${rootDir}/src/lang`);
 const eventsRoot = path.normalize(`${rootDir}/src/lib/events`);
@@ -99,6 +100,7 @@ export {
   engineRoot,
   buildToolsRoot,
   emulatorRoot,
+  snesEmulatorRoot,
   projectTemplatesRoot,
   localesRoot,
   eventsRoot,

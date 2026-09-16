@@ -49,8 +49,14 @@ as of 2026-09-13:
   genuinely arm64 — harmless on Apple Silicon, but would have failed outright on a real
   Intel Mac). The Linux glibc-baseline fix from `v1.1.5` wasn't needed here — `v2`'s own
   vendored Linux toolchain already has a low enough glibc requirement.
+- **M12, part 1**: the SNES web player/Play button now works. `buildProjectSnes()` never
+  supported a "web" build before (ROM only); it now shares the same `buildWebPlayer()` helper
+  the Game Boy path uses, and the "Play" window (`main.ts`) sizes itself for the SNES player's
+  larger canvas instead of opening at the Game Boy's smaller size. Verified against the real
+  app: built the sample SNES project, opened Play, and watched the actual game run (not a
+  black screen) at the correct window size.
 
-Remaining: **M12** (SNES web player/Play button, branding polish, 3-platform CI) and **M13**
+Remaining: **M12** (branding polish, 3-platform CI) and **M13**
 (full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).
 
 ## [1.1.4] - 2026-09-12

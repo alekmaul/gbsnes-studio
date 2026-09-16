@@ -1083,3 +1083,48 @@ indépendants de ce portage en rejouant le même test sur l'arbre non modifié v
 `git stash`). Pas de test macOS/Linux réel possible depuis ce poste Windows — la
 correction du mode d'exécution reproduit exactement la logique déjà validée en
 conditions réelles sur `main`/`v1.1.5`.
+
+## 20. M12, partie 1 — web player SNES / bouton Play (fait, 2026-09-16)
+
+`appData/snes-js-emulator/` était déjà présent sur `v2` (M2) et **strictement
+identique** à la version déjà entièrement peaufinée de `main` (`git diff main --
+appData/snes-js-emulator` vide : start-gate, pad tactile, persistance SRAM,
+CSS compatible vieux Chromium — tout y était déjà). Ce qui manquait, c'était le
+branchement : `buildProjectSnes()` (`buildProject.js`) ignorait purement et
+simplement `buildType` et ne savait produire qu'une ROM, jamais un export "web"
+— commentaire du code lui-même : "No web-player export yet on this branch (M10
+territory)".
+
+Porté depuis `main` (adapté, pas un copier-coller — `buildProjectSnes` d'ici a
+une signature et des détails différents, `profile`/`engineFields` notamment) :
+- `buildProject.js` — extrait la logique web (déjà dupliquée dans le chemin GB)
+  dans un helper partagé `buildWebPlayer()`, réutilisé par les deux chemins
+  GB et SNES ; `customControls` inclut maintenant `x`/`y`/`l`/`r` (ignorés par
+  le player GB, lus par le player SNES).
+- `consts.js` (+ mock) — nouvel export `snesEmulatorRoot`.
+- `buildGameMiddleware.ts` — calcule `target`/`romName` (`game.sfc` vs
+  `game.gb`) comme le faisait déjà `main`'s `buildGame.js`, et transmet
+  `target` au 2e argument de l'IPC `open-play` (avant : juste l'URL, aucune
+  information de plateforme).
+- `main.ts` `createPlay()` — devient target-aware : fenêtre `560×600` pour
+  SNES au lieu de la taille GB (`494×471`/`480×454`), avec `minWidth`/
+  `minHeight`. Sans ça, le bouton Play SNES aurait ouvert une fenêtre trop
+  petite pour le canevas 512×480 du player (bug déjà rencontré et corrigé sur
+  `main`, "the game just showed the black boot frame").
+- Nouveau test `test/data/compiler/snesWebPlayer.test.js` (porté tel quel
+  depuis `main`), y compris la partie gated par le toolchain (build web réel).
+
+**Vérifié en conditions réelles, pas seulement par les tests** — `yarn start`,
+sélection du template "Sample Project (SNES)" (screenshot : templates GB/SNES
+sur deux rangées distinctes, confirmant que le fix M11 du splash tient
+toujours), migration `1.2.0 → 2.0.0` acceptée, les 8 scènes de l'exemple
+s'affichent normalement (tailles SNES 256×224). Clic sur le bouton Play de la
+barre d'outils : log de build affiché en direct (`816-tcc`/`wla-65816`/
+`wlalink` réels, `Soundbank built`, `ROM ready (LoROM FastROM, 8 banks)`,
+`Build Time: 4160ms`), fenêtre Play ouverte à la taille SNES attendue avec
+l'overlay de démarrage ("▶ Play"), et après clic sur ce bouton **le jeu tourne
+réellement** — "YOUR LOGO" (scène Logo) s'affiche, barre de statut du player :
+`Loaded LoROM rom: "SANS TITRE"; Banks: 8; Sram size: $2000`. Pas d'écran noir,
+pas d'erreur de rendu. `yarn jest snesWebPlayer buildProject` → 4/4 (dont le
+test toolchain-gated, exécuté pour de vrai avec le toolchain `win32-x64`
+vendoré) ; `yarn test` complet toujours 584/589 (mêmes 2 échecs préexistants).

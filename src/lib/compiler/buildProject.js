@@ -6,7 +6,7 @@ import makeBuild from "./makeBuild";
 import buildSnesRom from "./buildSnesRom";
 import compileMusic from "./compileMusic";
 import compileSnesMusic from "./compileSnesMusic";
-import { emulatorRoot } from "../../consts";
+import { emulatorRoot, snesEmulatorRoot } from "../../consts";
 import copy from "../helpers/fsCopy";
 
 const MAX_BANKS = 512; // GBDK supports max of 512 banks
@@ -17,14 +17,60 @@ const MAX_BANKS = 512; // GBDK supports max of 512 banks
 const resolveTarget = (data) =>
   process.env.GBS_TARGET || (data.settings && data.settings.target) || "gb";
 
+// Copies a target's static JS-emulator template into build/web, drops the
+// built ROM in next to it, and fills in the placeholders both templates
+// share (___PROJECT_NAME___ / ___AUTHOR___ / ___PROJECT_HEAD___ /
+// ___CUSTOM_CONTROLS___). ___COLORS_HEAD___ is GB-only (custom palette CSS) -
+// replacing it when the template doesn't contain it (SNES) is a harmless
+// no-op. Shared between the GB and SNES paths below (M12: was GB-only inline
+// code; the SNES web player never had an equivalent, see buildProjectSnes).
+const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) => {
+  await copy(emulatorDir, `${outputRoot}/build/web`);
+  await copy(
+    `${outputRoot}/build/rom/${romFilename}`,
+    `${outputRoot}/build/web/rom/${romFilename}`
+  );
+  const sanitize = (s) => String(s || "").replace(/["<>]/g, "");
+  const projectName = sanitize(data.name);
+  const author = sanitize(data.author);
+  const colorsHead = data.settings.customColorsEnabled
+    ? `<style type="text/css"> body { background-color:#${data.settings.customColorsBlack}; }</style>`
+    : "";
+  const customHead = data.settings.customHead || "";
+  const customControls = JSON.stringify({
+    up: data.settings.customControlsUp,
+    down: data.settings.customControlsDown,
+    left: data.settings.customControlsLeft,
+    right: data.settings.customControlsRight,
+    a: data.settings.customControlsA,
+    b: data.settings.customControlsB,
+    start: data.settings.customControlsStart,
+    select: data.settings.customControlsSelect,
+    // SNES-only; the GB web player ignores these keys.
+    x: data.settings.customControlsX,
+    y: data.settings.customControlsY,
+    l: data.settings.customControlsL,
+    r: data.settings.customControlsR,
+  });
+  const html = (
+    await fs.readFile(`${outputRoot}/build/web/index.html`, "utf8")
+  )
+    .replace(/___PROJECT_NAME___/g, projectName)
+    .replace(/___AUTHOR___/g, author)
+    .replace(/___COLORS_HEAD___/g, colorsHead)
+    .replace(/___PROJECT_HEAD___/g, customHead)
+    .replace(/___CUSTOM_CONTROLS___/g, customControls);
+  await fs.writeFile(`${outputRoot}/build/web/index.html`, html);
+};
+
 // SNES path: eject the appData/src/snes engine, compile the project's scenes /
 // scripts / strings / backgrounds into src/assets.{c,h} + src/data/* (M7),
 // rebuild the snesmod soundbank from the project's .mod music (M8 phase 2),
-// then build the ROM (M8 phase 1). No web-player export yet on this branch
-// (M10 territory) - buildType is expected to be "rom".
+// then build the ROM (M8 phase 1). M12: also exports a "web" build the same
+// way the Game Boy path does, via the shared buildWebPlayer() above.
 const buildProjectSnes = async (
   data,
-  { projectRoot, outputRoot, progress, warnings }
+  { projectRoot, outputRoot, buildType, progress, warnings }
 ) => {
   await ejectBuild({
     projectType: "snes",
@@ -61,6 +107,14 @@ const buildProjectSnes = async (
     progress,
     warnings,
   });
+  if (buildType === "web") {
+    await buildWebPlayer({
+      outputRoot,
+      data,
+      emulatorDir: snesEmulatorRoot,
+      romFilename: "game.sfc",
+    });
+  }
 };
 
 const buildProject = async (
@@ -80,6 +134,7 @@ const buildProject = async (
     await buildProjectSnes(data, {
       projectRoot,
       outputRoot,
+      buildType,
       progress,
       warnings,
     });
@@ -138,38 +193,12 @@ const buildProject = async (
     warnings,
   });
   if (buildType === "web") {
-    await copy(emulatorRoot, `${outputRoot}/build/web`);
-    await copy(
-      `${outputRoot}/build/rom/game.gb`,
-      `${outputRoot}/build/web/rom/game.gb`
-    );
-    const sanitize = (s) => String(s || "").replace(/["<>]/g, "");
-    const projectName = sanitize(data.name);
-    const author = sanitize(data.author);
-    const colorsHead = data.settings.customColorsEnabled
-      ? `<style type="text/css"> body { background-color:#${data.settings.customColorsBlack}; }</style>`
-      : "";
-    const customHead = data.settings.customHead || "";
-    const customControls = JSON.stringify({
-      up: data.settings.customControlsUp,
-      down: data.settings.customControlsDown,
-      left: data.settings.customControlsLeft,
-      right: data.settings.customControlsRight,
-      a: data.settings.customControlsA,
-      b: data.settings.customControlsB,
-      start: data.settings.customControlsStart,
-      select: data.settings.customControlsSelect,
+    await buildWebPlayer({
+      outputRoot,
+      data,
+      emulatorDir: emulatorRoot,
+      romFilename: "game.gb",
     });
-    const html = (
-      await fs.readFile(`${outputRoot}/build/web/index.html`, "utf8")
-    )
-      .replace(/___PROJECT_NAME___/g, projectName)
-      .replace(/___AUTHOR___/g, author)
-      .replace(/___COLORS_HEAD___/g, colorsHead)
-      .replace(/___PROJECT_HEAD___/g, customHead)
-      .replace(/___CUSTOM_CONTROLS___/g, customControls);
-
-    await fs.writeFile(`${outputRoot}/build/web/index.html`, html);
   }
 };
 

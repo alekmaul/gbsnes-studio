@@ -41,6 +41,11 @@ const buildGameMiddleware: Middleware<{}, RootState> = (store) => (
       const project = denormalizeProject(state.project.present);
       const outputRoot = Path.normalize(`${getTmp()}/${buildUUID}`);
       const engineFields = state.engine.fields;
+      const target =
+        process.env.GBS_TARGET ||
+        (project.settings && project.settings.target) ||
+        "gb";
+      const romName = target === "snes" ? "game.sfc" : "game.gb";
 
       await rmdir(outputRoot);
 
@@ -83,7 +88,7 @@ const buildGameMiddleware: Middleware<{}, RootState> = (store) => (
                     `${projectRoot}/build/web/index.html`
                   )}`
                 : `ROM is ready at ${Path.normalize(
-                    `${projectRoot}/build/rom/game.gb`
+                    `${projectRoot}/build/rom/${romName}`
                   )}`
             }`
           )
@@ -99,7 +104,8 @@ const buildGameMiddleware: Middleware<{}, RootState> = (store) => (
 
         ipcRenderer.send(
           "open-play",
-          `file://${outputRoot}/build/web/index.html`
+          `file://${outputRoot}/build/web/index.html`,
+          target
         );
       }
 
