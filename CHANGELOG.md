@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.5] - 2026-09-16
+
+### Fixed
+- SNES: **a packaged Linux/macOS build's "Build ROM" could fail with "spawn .../smconv EACCES"**
+  — extracting the vendored toolchain out of `app.asar` lost every file's executable bit, since
+  neither the extraction step nor the file copy it used ever preserved (or forced) POSIX
+  permissions, and a stale extraction from before the fix could keep masking it even after an
+  update. Fixed at the root: extracted files no longer rely on trusting the source file's mode
+  reported from inside `app.asar` (this project's old `asar` packing format doesn't reliably
+  preserve it) — the executable bit is now forced explicitly, and the extraction cache path was
+  renamed so old, broken copies are never reused.
+- SNES: **the vendored macOS toolchain was mislabeled `darwin-x64` while actually being genuine
+  `arm64` binaries** — harmless on real Apple Silicon (Rosetta doesn't care), but would have
+  hard-failed on a real Intel Mac. Moved to a correctly-labeled `darwin-arm64` folder; a real
+  Intel Mac isn't supported yet (documented explicitly in the error message, rather than
+  silently pointing at the wrong architecture).
+- SNES: **"Build ROM" could fail on Linux with `libc.so.6: version 'GLIBC_2.38' not found`** —
+  the vendored Linux toolchain (`816-tcc`, `wla-65816`, `wlalink`, `816-opt`, `smconv`) was built
+  on a newer Ubuntu than most users actually run. Rebuilt natively on Ubuntu 22.04 instead, which
+  lowers the requirement to GLIBC_2.34 (backward-compatible with newer Ubuntu too).
+
 ## [1.1.4] - 2026-09-12
 
 ### Changed
