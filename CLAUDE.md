@@ -614,6 +614,20 @@ by target, `undefined` target still falls back to gb).
   x64 PVSnesLib binaries are vendored (not attempted here - no x64 macOS build environment
   available; GitHub no longer offers one either) - `resolvePvsHome()`'s "toolchain not found" error
   says so explicitly on darwin now, rather than silently pointing at the wrong architecture.
+  **The vendored Linux toolchain needed too new a glibc (user-found, real Ubuntu 22.04 VM: after
+  the EACCES/asar-extraction fixes above, `816-tcc` failed with `libc.so.6: version 'GLIBC_2.38'
+  not found`).** `bin/{816-tcc,wla-65816,wlalink}` and `tools/{816-opt,smconv}` had all been
+  vendored from PVSnesLib's own CI (`ubuntu-latest`, resolving to a far newer Ubuntu than most
+  users' actual install - the same class of issue as the macOS deployment-target one above,
+  just never pinned on Linux either). Fixed by rebuilding those 5 binaries natively on an actual
+  Ubuntu 22.04 machine (glibc 2.35) instead of trusting whatever `ubuntu-latest` resolves to -
+  no PVSnesLib source change, just an older build environment. Max requirement across all 5 is
+  now GLIBC_2.34 (glibc is backward-compatible, so these still run fine on newer Ubuntu too).
+  One build-system trap hit doing this: PVSnesLib's own `make release` zips its output with
+  `zip -m` ("move") - the source files are deleted the moment they're archived, so a naive
+  "build then cp the binaries" script finds nothing there; the zip has to be unpacked first.
+  Verified on the user's own 22.04 VM (the machine that reproduced the original bug): all 5
+  binaries load and print their usage/version output with no `GLIBC_2.3x` dynamic-linker error.
 - **`appData/src/snes/`** — the engine tree. Ported so far: `src/game.c` (M3 — Mode 1 BG,
   OAM player, d-pad, camera scroll; M5 — camera pan/lock/shake), `src/script_runner.c` +
   `src/script_cmds.c` (M4 — the bytecode VM), `src/scene.c` (M4b — scenes from `assets.c`
