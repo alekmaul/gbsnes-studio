@@ -503,13 +503,20 @@ const removeMusic: CaseReducer<
   }
 };
 
+// Reads and mutates state.scenes/state.backgrounds directly (not via
+// localSceneSelectors/localBackgroundSelectors) - those are memoized
+// (reselect-based) selectors, and calling them from inside a reducer that
+// mutates the very state they read returns entities detached from the live
+// Immer draft: the mutations below silently no-op against a stale snapshot
+// instead of the real state (confirmed empirically - scene.width = 32
+// inside this loop never reached the reducer's actual return value).
 const fixAllScenesWithModifiedBackgrounds = (state: EntitiesState) => {
-  const scenes = localSceneSelectors.selectAll(state);
-  for (const scene of scenes) {
-    const background = localBackgroundSelectors.selectById(
-      state,
-      scene.backgroundId
-    );
+  for (const id of state.scenes.ids) {
+    const scene = state.scenes.entities[id];
+    if (!scene) {
+      continue;
+    }
+    const background = state.backgrounds.entities[scene.backgroundId];
     if (
       !background ||
       scene.width !== background.width ||
