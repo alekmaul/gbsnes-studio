@@ -3,7 +3,7 @@ import os from "os";
 import Path from "path";
 import { parseMod, modToIt } from "../../../src/lib/compiler/mod2it";
 import buildProject from "../../../src/lib/compiler/buildProject";
-import { buildToolsRoot } from "../../../src/consts";
+import { pvsneslibVendorDir } from "../../../src/consts";
 
 const PROJECTS = Path.join(__dirname, "..", "..", "projects");
 const MOD = Path.join(
@@ -56,11 +56,7 @@ describe("mod2it", () => {
 });
 
 // ---- toolchain-gated: smconv soundbank + full project -> bootable .sfc --------
-const vendored = Path.join(
-  buildToolsRoot,
-  `${process.platform}-${process.arch}`,
-  "pvsneslib"
-);
+const vendored = pvsneslibVendorDir();
 const maybe = fs.existsSync(vendored) ? describe : describe.skip;
 
 const loadProject = (dir) => {

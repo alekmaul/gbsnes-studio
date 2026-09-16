@@ -1024,3 +1024,62 @@ de la fenêtre (2e rangée + description du template sélectionné) est purement
 par le bord de la fenêtre OS. Corrigé : `height: 400` → `560`. Vérifié :
 `electron-forge package` compile, `yarn jest` toujours 578/580, `yarn start` démarre
 sans erreur.
+
+## 19. Portage des correctifs d'exécution Linux/macOS depuis `main` (tag `v1.1.5`)
+
+Pendant une pause sur `v2`, trois bugs d'exécution SNES sur `main` (Linux/macOS) ont
+été trouvés et corrigés par l'utilisateur en conditions réelles, aboutissant à la
+release `v1.1.5` : (1) le toolchain PVSnesLib extrait de `app.asar` perdait son bit
+exécutable au runtime (`fsCopy.js` `copyFile()` n'appliquait jamais de `chmod`) —
+"spawn .../smconv EACCES" ; (2) le toolchain macOS vendoré sous
+`buildTools/darwin-x64/pvsneslib/` contenait en réalité des binaires **arm64**
+(compilés par la CI sur des runners macOS arm64-only), mal étiquetés — inoffensif sur
+Apple Silicon réel (Rosetta), mais aurait cassé net sur un vrai Mac Intel ; (3) le
+toolchain Linux vendoré exigeait une glibc trop récente (`GLIBC_2.38`, compilé sur le
+runner `ubuntu-latest` de PVSnesLib, plus récent que l'Ubuntu réel de l'utilisateur).
+
+Audit de `v2` : les bugs (1) et (2) étaient **identiques** ici — `fsCopy.js` et
+`resolvePvsHome()` (`buildSnesRom.js`) sur `v2` correspondaient à l'état de `main`
+*avant* ces correctifs (le port SNES de M2/M8 avait recopié la logique de l'époque,
+avant que `main` ne les corrige plus tard sur ses propres utilisateurs réels). Le bug
+(3) ne s'applique pas : le toolchain Linux vendoré sur `v2` a un plancher glibc déjà
+bas (`GLIBC_2.4`/`2.7`, vérifié en scannant les binaires) — aucune reconstruction
+nécessaire.
+
+Correctifs (1) et (2) portés tels quels (adaptés au contexte `v2`, pas un simple
+copier-coller de diff, le fichier `fsCopy.js` d'ici ayant divergé) :
+- `src/lib/helpers/fsCopy.js` — `copyFile()` force et vérifie désormais le mode du
+  fichier de destination (`fs.chmod` explicite après écriture, `mode` fourni gagne
+  toujours sur le mode de la source) ; corrige aussi une vraie race déjà présente
+  (la promesse se résolvait sur l'évènement `'end'` du flux d'entrée au lieu de
+  `'finish'` sur le flux de sortie). Nouveau test `test/helpers/fsCopy.test.js`
+  (aucune couverture n'existait ici avant), porté depuis `main`.
+- `src/consts.js` (+ `src/__mocks__/consts.js`) — nouvel helper
+  `pvsneslibVendorDir()` qui résout toujours vers `darwin-arm64` sur macOS, quel que
+  soit `process.arch` (qui rapporte toujours `"x64"` sous Rosetta).
+- `buildTools/darwin-x64/pvsneslib/` → `buildTools/darwin-arm64/pvsneslib/` (déplacé
+  par `git mv`, contenu inchangé) ; `gbdk`/`mod2gbt` restent sous `darwin-x64`,
+  réellement x64.
+- `src/lib/compiler/buildSnesRom.js` `resolvePvsHome()` — utilise
+  `pvsneslibVendorDir()`, force `mode: 0o755` sur l'extraction hors `app.asar`, et
+  ajoute un marqueur `.extracted-ok` (protège contre une extraction interrompue
+  laissant un cache à moitié copié).
+- `src/lib/compiler/makeBuild.js` — même `mode: 0o755` explicite sur sa propre copie
+  du toolchain GBDK (`ensureBuildTools.js`, ici, l'avait déjà — pas touché).
+- `after-copy.js` (hook `afterCopy` d'electron-packager) — copie désormais deux
+  dossiers `buildTools/` sur macOS (`darwin-x64` + `darwin-arm64`) au lieu d'un seul,
+  sinon le toolchain SNES packagé disparaîtrait purement et simplement une fois
+  déplacé hors de `darwin-x64`.
+- `appData/src/snes/tools/gen-sfx.js` (script développeur autonome, hors chemin de
+  build) — même correction de chemin `darwin-arm64`, portée depuis `main`.
+- `test/data/compiler/buildSnesRom.test.js` / `compileSnesMusic.test.js` —
+  reconstruisaient chacun le chemin `${platform}-${arch}/pvsneslib` en dur ; utilisent
+  maintenant `pvsneslibVendorDir()`.
+
+Vérifié : `yarn jest fsCopy buildSnesRom compileSnesMusic` → 10 passés, 3 skip
+(Windows, tests de bit exécutable POSIX). `yarn test` complet → 581/586 (mêmes 2
+échecs préexistants et sans rapport dans `entitiesState.test.ts`, confirmés
+indépendants de ce portage en rejouant le même test sur l'arbre non modifié via
+`git stash`). Pas de test macOS/Linux réel possible depuis ce poste Windows — la
+correction du mode d'exécution reproduit exactement la logique déjà validée en
+conditions réelles sur `main`/`v1.1.5`.

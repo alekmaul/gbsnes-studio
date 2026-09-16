@@ -21,9 +21,15 @@ const { execFileSync } = require("child_process");
 
 const RES = path.resolve(__dirname, "..", "res");
 const EXT = process.platform === "win32" ? ".exe" : "";
+// macOS: the vendored PVSnesLib toolchain is genuinely arm64-only (built on
+// GitHub's arm64-only macOS runners), so it lives under darwin-arm64
+// regardless of process.arch (see src/consts.js pvsneslibVendorDir for the
+// full story - duplicated here as this standalone maintainer script doesn't
+// import from src/).
+const TOOLCHAIN_ARCH = process.platform === "darwin" ? "arm64" : process.arch;
 const SNESBRR = path.resolve(
   __dirname,
-  `../../../../buildTools/${process.platform}-${process.arch}/pvsneslib/devkitsnes/tools/snesbrr${EXT}`
+  `../../../../buildTools/${process.platform}-${TOOLCHAIN_ARCH}/pvsneslib/devkitsnes/tools/snesbrr${EXT}`
 );
 
 // mono 16-bit PCM WAV. snesbrr ignores the sample rate (playback rate is set at

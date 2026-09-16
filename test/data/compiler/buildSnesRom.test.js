@@ -2,13 +2,9 @@ import fs from "fs-extra";
 import os from "os";
 import Path from "path";
 import buildSnesRom, { filterLog } from "../../../src/lib/compiler/buildSnesRom";
-import { engineRoot, buildToolsRoot } from "../../../src/consts";
+import { engineRoot, pvsneslibVendorDir } from "../../../src/consts";
 
-const vendored = Path.join(
-  buildToolsRoot,
-  `${process.platform}-${process.arch}`,
-  "pvsneslib"
-);
+const vendored = pvsneslibVendorDir();
 const hasToolchain = fs.existsSync(vendored);
 
 // Integration test: drives the real PVSnesLib toolchain, so it only runs on a

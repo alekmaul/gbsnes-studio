@@ -2,7 +2,7 @@ import childProcess from "child_process";
 import fs from "fs-extra";
 import os from "os";
 import Path from "path";
-import { buildToolsRoot } from "../../consts";
+import { pvsneslibVendorDir } from "../../consts";
 import copy, { pathExists } from "../helpers/fsCopy";
 
 /*
@@ -81,16 +81,16 @@ const spaceFreeTmp = () => {
 // (816-tcc, wla-65816, wlalink, 816-opt, smconv) would fail with ENOENT
 // otherwise.
 const resolvePvsHome = async ({ progress }) => {
-  const vendored = Path.join(
-    buildToolsRoot,
-    `${process.platform}-${process.arch}`,
-    "pvsneslib"
-  );
+  const vendored = pvsneslibVendorDir();
   if (!(await pathExists(vendored))) {
+    const intelMacNote =
+      process.platform === "darwin"
+        ? " macOS only ships an arm64 toolchain - a real Intel Mac isn't supported yet."
+        : "";
     throw new Error(
       `PVSnesLib toolchain not found for ${process.platform}-${process.arch} ` +
         `(expected at ${vendored}). Vendor it under buildTools/, or build the ` +
-        `Game Boy target instead.`
+        `Game Boy target instead.${intelMacNote}`
     );
   }
 
@@ -100,15 +100,31 @@ const resolvePvsHome = async ({ progress }) => {
   }
 
   const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib");
+  // Written only after a copy fully completes - guards the cache-reuse
+  // check below against a partial/interrupted extraction (crashed mid-copy)
+  // looking like a valid one.
+  const doneMarker = Path.join(dest, ".extracted-ok");
 
   if (inAsar) {
     // A real extraction (tens of MB) is the one genuinely slow case here -
     // reuse a previous build's copy instead of redoing it every time.
-    if (await pathExists(dest)) {
+    if (await pathExists(doneMarker)) {
       return dest;
     }
     progress("Extracting the build toolchain (first SNES build only)");
-    await copy(vendored, dest, { overwrite: false });
+    await fs.remove(dest);
+    // mode: 0o755, not left to fsCopy.js's own "preserve the source file's
+    // mode" default - `vendored` is a path *inside* app.asar, and trusting
+    // whatever mode the asar packer/Electron's own asar-transparent
+    // fs.lstat() reports for a file inside the archive isn't something to
+    // rely on blindly - forcing every extracted file executable sidesteps
+    // the question entirely (harmless on the handful of non-binary files in
+    // this tree - headers, .obj library objects - matching the same
+    // explicit override ensureBuildTools.js already uses). Ported from the
+    // identical fix on `main`, where the EACCES this avoids was user-found
+    // on a real packaged Linux build.
+    await copy(vendored, dest, { overwrite: false, mode: 0o755 });
+    await fs.writeFile(doneMarker, "");
     return dest;
   }
 

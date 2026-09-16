@@ -42,6 +42,13 @@ as of 2026-09-13:
   a 4th/5th template was added, and the splash window itself grew (400px → 560px tall) so
   that second row and the selected template's description aren't clipped off by the
   window edge — this window doesn't scroll or resize (both user-found the same day).
+- Ported three Linux/macOS execution fixes found on `main` (shipped there as `v1.1.5`):
+  the extracted PVSnesLib toolchain now keeps its executable bit (was silently losing it
+  on Linux/macOS, "spawn .../smconv EACCES"), and the vendored macOS toolchain folder is
+  correctly labeled `darwin-arm64` instead of `darwin-x64` (the binaries were always
+  genuinely arm64 — harmless on Apple Silicon, but would have failed outright on a real
+  Intel Mac). The Linux glibc-baseline fix from `v1.1.5` wasn't needed here — `v2`'s own
+  vendored Linux toolchain already has a low enough glibc requirement.
 
 Remaining: **M12** (SNES web player/Play button, branding polish, 3-platform CI) and **M13**
 (full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).

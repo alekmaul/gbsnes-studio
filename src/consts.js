@@ -21,6 +21,28 @@ const localesRoot = path.normalize(`${rootDir}/src/lang`);
 const eventsRoot = path.normalize(`${rootDir}/src/lib/events`);
 const assetsRoot = path.normalize(`${rootDir}/src/assets`);
 
+// Electron 4 (main branch's pinned version) never shipped a native
+// darwin-arm64 build, so on macOS the whole app was always packaged and run
+// as x64 - via Rosetta on Apple Silicon. The vendored PVSnesLib SNES
+// toolchain under buildTools/, though, is genuinely arm64-only: it's built
+// by this project's own CI on GitHub's arm64-only macOS runners (real Intel
+// macOS runners were retired in 2025), not a prebuilt upstream download
+// like GBDK's own (real x64) binaries are. A genuine arm64 binary runs fine
+// as a child process spawned from a Rosetta-translated x64 Electron
+// process, so on darwin this always resolves to buildTools/darwin-arm64
+// regardless of what process.arch reports (which - under Rosetta - always
+// says "x64", even on real Apple Silicon hardware). Ported from the
+// equivalent fix on `main` (found there the same way: `file` on every
+// vendored darwin binary showed genuine Mach-O arm64, not x64) - a real
+// Intel Mac isn't supported for the SNES target until genuine x64 binaries
+// are vendored alongside this.
+const pvsneslibVendorDir = (platform = process.platform, arch = process.arch) =>
+  path.join(
+    buildToolsRoot,
+    `${platform}-${platform === "darwin" ? "arm64" : arch}`,
+    "pvsneslib"
+  );
+
 // Per-scene entity limits — the Game Boy values (targets/gb.js). Whichever
 // target's own data compiler is running reads these from its own target
 // descriptor instead once it exists (see M6/M7 for SNES).
@@ -81,6 +103,7 @@ export {
   localesRoot,
   eventsRoot,
   assetsRoot,
+  pvsneslibVendorDir,
   MAX_ACTORS,
   MAX_ACTORS_SMALL,
   MAX_TRIGGERS,

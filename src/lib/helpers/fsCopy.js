@@ -28,16 +28,37 @@ const copyFile = async (src, dest, options = {}) => {
       // Didn't exist so copy it
     }
   }
+  // Preserve the source file's permissions (in particular the executable
+  // bit) unless the caller explicitly overrides them. createWriteStream's
+  // own `mode` option is applied through the process umask at file-creation
+  // time, so it isn't guaranteed to land exactly - chmod explicitly after
+  // writing to be sure. Without this, every file this helper copies (e.g. a
+  // vendored toolchain extracted from app.asar - resolvePvsHome() in
+  // buildSnesRom.js, or the GBDK toolchain in makeBuild.js) loses its
+  // executable bit on Linux/macOS: Node's write-stream default mode (0o666)
+  // has none, and spawning the copy then fails with EACCES (ported from the
+  // same fix on `main`, user-found there: "spawn .../smconv EACCES" building
+  // a SNES ROM's soundbank on a packaged Linux build).
+  const destMode = mode !== undefined ? mode : (await fs.lstat(src)).mode;
   await new Promise((resolve, reject) => {
     const inputStream = fs.createReadStream(src);
-    const outputStream = fs.createWriteStream(dest, { mode });
+    const outputStream = fs.createWriteStream(dest, { mode: destMode });
     inputStream.once('error', (err) => {
       outputStream.close();
       reject(new Error(`Could not write file ${dest}`));
     });
-    inputStream.once('end', () => { resolve(); });
+    outputStream.once('error', (err) => {
+      reject(new Error(`Could not write file ${dest}`));
+    });
+    // Wait for the *output* stream to actually finish (all data flushed,
+    // file descriptor ready), not the input stream's 'end' - that fires as
+    // soon as reading is done, which can race ahead of the write still in
+    // flight, so a chmod() right after could hit a file that doesn't fully
+    // exist yet (a real ENOENT hit verifying this fix on `main`).
+    outputStream.once('finish', () => { resolve(); });
     inputStream.pipe(outputStream);
   });
+  await fs.chmod(dest, destMode);
 };
 
 const copy = async (src, dest, options) => {

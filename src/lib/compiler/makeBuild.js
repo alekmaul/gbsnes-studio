@@ -81,8 +81,15 @@ const makeBuild = async ({
     await fs.unlink(tmpBuildToolsPath);
     await fs.ensureSymlink(buildToolsPath, tmpBuildToolsPath);
   } catch (e) {
+    // mode: 0o755, not left to fsCopy.js's own "preserve the source file's
+    // mode" default - buildToolsPath can be a path *inside* app.asar in a
+    // packaged build, and trusting whatever mode is reported for a file
+    // inside the archive isn't something to rely on blindly. Ported from
+    // the equivalent fix on `main` (matches what ensureBuildTools.js in
+    // this tree already does for the same reason).
     await copy(buildToolsPath, tmpBuildToolsPath, {
       overwrite: firstBuild,
+      mode: 0o755,
     });
   }
 
