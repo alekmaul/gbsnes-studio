@@ -1183,3 +1183,11 @@ Windows, attendus).
 **Reste pour M13** (pas du ressort de ce M12) : voir un vrai run CI macOS/Linux aller au bout
 sur `v2` une fois poussé — aucun environnement macOS/Linux disponible depuis ce poste Windows
 pour le vérifier localement plus avant.
+
+**Confirmé après push (2026-09-16, run [35143576843](https://github.com/alekmaul/gbsnes-studio/actions/runs/35143576843)) — M12 entièrement bouclé.**
+Premier run CI complet sur `v2` depuis le début du travail M2-M12 : `test`,
+`build-windows`, `build-macos` et `build-linux` tous verts (`release` skip, normal,
+pas de tag `v*` poussé). Confirme en conditions réelles ce qui n'avait pu être vérifié
+que localement (Windows) jusqu'ici : le packaging macOS (toolchain SNES `darwin-arm64`,
+contournement x64 pour l'absence de build Electron 8 natif arm64) et Linux fonctionnent
+bel et bien sous la stack webpack / electron-forge 6 de `v2`.
