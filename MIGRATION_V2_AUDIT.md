@@ -1191,3 +1191,91 @@ pas de tag `v*` poussé). Confirme en conditions réelles ce qui n'avait pu êtr
 que localement (Windows) jusqu'ici : le packaging macOS (toolchain SNES `darwin-arm64`,
 contournement x64 pour l'absence de build Electron 8 natif arm64) et Linux fonctionnent
 bel et bien sous la stack webpack / electron-forge 6 de `v2`.
+
+## 22. M13 — checklist de parité, premier vrai bug trouvé : le joueur ne pouvait marcher que vers la droite (2026-09-17)
+
+**Contexte.** Premier point de la checklist M13 ("mouvement/collision") : jouer réellement
+au jeu d'exemple SNES plutôt que se fier aux builds/boots déjà vérifiés. Nouveauté de
+méthode par rapport à M5a (qui avait conclu qu'aucune simulation d'input réel n'était
+possible dans Mesen) : le **web player** (fenêtre Play, `appData/snes-js-emulator`)
+tourne dans une vraie fenêtre Electron qui reçoit de vraies touches clavier système
+(`keybd_event` Win32) — contrairement à Mesen/Lua, ça permet un test interactif réel,
+indiscernable d'un utilisateur humain. `SendKeys` .NET s'est avéré peu fiable pour ça
+(les touches Entrée/A passaient, mais pas les flèches/WASD de façon cohérente) —
+`keybd_event` bas niveau a été nécessaire.
+
+**Symptôme.** Dans le jeu d'exemple ("Sample Project (SNES)"), une fois en jeu (scène
+Outside), le joueur ne répondait à AUCUNE direction — sauf, dans un premier test, la
+droite. Un PNJ à déplacement aléatoire continuait de bouger, ce qui a d'abord fait
+suspecter un blocage global (script bloqué / `UIIsClosed()`), piste écartée par
+instrumentation (teinte de couleur temporaire sur BG1 encodant `script_ptr`/`UIIsClosed`
+frame par frame — technique de debug visuel réutilisable, cf. section suivante).
+
+**Fausse piste initiale, longue (leçon de méthode).** Un long chemin d'investigation a
+d'abord conclu, à tort, que même la droite ne marchait plus après le premier correctif,
+et a fait suspecter `can_step()`/le moteur C lui-même. La vraie explication, trouvée en
+traçant `tile_x`/`tile_y` en continu (encodage couleur RGB direct, 5 bits par axe, décodé
+depuis le screenshot via `pngjs`) : le script de test automatisé (plusieurs `Tap` `Z`/
+`Up` enchaînés pour gérer un dialogue "Continue"/"No Save Data" qui n'apparaissait pas
+toujours) envoyait parfois des touches qui **atterrissaient en jeu** au lieu du menu,
+déplaçant réellement le joueur *avant* le test de collision — invalidant les coordonnées
+supposées. Un second facteur : le sprite statique près de l'étang (immobile sur tous les
+tests) a été pris à tort pour "le joueur", alors que c'est un PNJ fixe — le vrai joueur
+(acteur 0) est la fillette blonde, dont les déplacements avaient été mal interprétés
+comme de l'IA aléatoire. Un test propre, pas à pas, avec capture après *chaque* touche et
+décodage numérique de `tile_x`/`tile_y` (pas juste visuel), a fini par lever toute
+ambiguïté.
+
+**Vrai bug, confirmé par lecture de code puis par les octets réels du ROM compilé.**
+`compileSnesData.js` compilait la bitmap de collision avec ce commentaire hérité de
+`main` : *"collision bitmap: ceil(w*h/8) bytes, from scene.collisions (already
+bit-packed)"* — vrai sur `main` (GB Studio 1.2.2 : `scene.collisions` est déjà 1 bit/tuile,
+confirmé en comparant avec le vrai `compileData.js` de `main`, qui divise aussi par 8),
+**faux sur `v2`** (GB Studio 2.0.0-beta5 a changé le format en 1 OCTET par tuile, avec les
+drapeaux `COLLISION_TOP/BOTTOM/LEFT/RIGHT` — confirmé en comparant avec `v2`'s propre
+`compileData.js`, qui n'a plus le `/8`). Le code SNES, porté tel quel au M7 sans remarquer
+le changement de format, se contentait de **tronquer** les `colLen` premiers octets bruts
+au lieu de les compacter en bits — la "bitmap" de collision compilée n'avait donc quasiment
+aucun rapport avec le vrai plan de collision de la scène, tuile par tuile.
+
+Vérifié à trois niveaux indépendants avant et après le correctif :
+1. **Le fichier projet** : `scene.collisions.length` pour une scène 32×32 vaut 128 octets
+   (`1.2.0`, ancien format bit-packed, jamais réécrit sur disque après la migration —
+   seul l'état Redux en mémoire est migré tant que le projet n'est pas explicitement
+   resauvegardé) — mais l'`_version` du fichier suffit à confirmer que le format en
+   mémoire, lui, est bien le nouveau (1024 octets), via `migrateFrom120To200Collisions`
+   (déjà correct, jamais le problème).
+2. **Le compilateur** : un `warnings()` temporaire dans `compileSnesData.js` a confirmé
+   en direct, dans le panneau de build de l'app, `rawCollisions.length=1024` pour la
+   scène Outside — la donnée d'entrée est saine.
+3. **Le ROM compilé** : les octets réels de `scene_0[]` dans `assets.c` généré, décodés à
+   la main (script Node), confirment qu'avant le correctif la "bitmap" ne correspond à
+   rien de cohérent ; après, `col_solid(tx,ty)` sur les tuiles voisines du joueur donne
+   exactement les valeurs attendues.
+
+**Correctif** (`src/lib/compiler/compileSnesData.js`) : remplace la troncature par un
+vrai compactage bit à bit — `collisions[i>>3] |= (rawCollisions[i] ? 1 : 0) << (i&7)`,
+une tuile solide dans n'importe quelle direction comptant comme pleinement solide (le
+moteur SNES n'a pas de notion de collision directionnelle, contrairement à GB 2.0).
+
+**Nouveau test permanent** (`test/data/compiler/compileSnesData.test.js`, describe
+"collision bitmap (v2 M13, real user-found bug)") : projet synthétique minimal, tableau
+`collisions` connu avec des tuiles solides à des index précis, vérifie bit à bit le
+résultat compilé. Confirmé qu'il échoue bien sans le correctif (`git stash` du fichier
+compilateur, retest, échec exact attendu) avant de le committer comme garde-fou — aucun
+test existant ne couvrait la compilation de collision d'une scène réelle non triviale,
+ce qui explique pourquoi ce bug a survécu tout le développement M5-M12 sans être détecté.
+
+**Vérifié en jeu réel, méthode "un pas, un screenshot, un décodage numérique"** : les 4
+directions (haut/bas/gauche/droite) déplacent maintenant le joueur tuile par tuile de
+façon cohérente, dans la scène Outside du jeu d'exemple, via le web player.
+
+`yarn test` : 586/589 → **587/590** (+1 test, tout vert, 3 skip Windows).
+
+**Nouvelle technique de debug ajoutée à la boîte à outils de cette session** : teinte
+CGRAM temporaire (16 couleurs, une palette entière) pour encoder un état/une petite
+valeur numérique (5 bits par canal RGB, décodable précisément depuis un screenshot via
+`pngjs`), lue chaque frame dans la boucle principale (`game.c`), retirée après usage.
+Beaucoup plus fiable que d'essayer de lire du texte ou de deviner depuis le rendu du jeu
+— utile pour toute future investigation nécessitant de connaître un état interne du
+moteur C sans debugger ni accès Mesen/Lua fiable pour l'input.

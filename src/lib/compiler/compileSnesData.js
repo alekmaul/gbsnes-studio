@@ -546,12 +546,34 @@ const compileSnesData = async (
       pushScript(compile(trigger.script, trigger, "trigger", i, sceneIndex, scene))
     );
 
-    // collision bitmap: ceil(w*h/8) bytes, from scene.collisions (already bit-packed)
+    // Collision bitmap the C engine reads: 1 bit per tile, packed LSB-first,
+    // ceil(w*h/8) bytes - col_solid() in scene.c does
+    // `scene_col[idx>>3] >> (idx&7) & 1`.
+    //
+    // v2 bug (M13, user-found: player could only ever walk right - can_step()
+    // treated most of the map as solid): this comment used to say
+    // "scene.collisions (already bit-packed)" and just truncated the raw
+    // array to colLen bytes - true on `main` (GB Studio 1.2.2: scene.collisions
+    // really is a plain solid/clear bitmap), but GB Studio 2.0.0-beta5
+    // (this branch's base) changed the format to one BYTE per tile, holding
+    // COLLISION_TOP/BOTTOM/LEFT/RIGHT direction flags (consts.js) - GB's own
+    // compileData.js reflects this (`collisionsLength = w*h`, no /8). Ported
+    // forward blindly at M7 without noticing the format had changed, so every
+    // SNES scene's collision data was a meaningless truncated prefix of the
+    // real per-tile bytes, not a real bitmap - never caught because nothing
+    // before now actually drove the player with real interactive input
+    // against a real authored scene's collisions (see MIGRATION_V2_AUDIT.md
+    // M13's investigation). This target has no directional-collision concept
+    // (col_solid is a single solid/clear bit), so any nonzero flag byte -
+    // a wall on any side - counts as a fully solid tile.
     const colLen = Math.ceil((w * h) / 8);
-    const collisions = []
-      .concat(scene.collisions || [], new Array(colLen).fill(0))
-      .slice(0, colLen)
-      .map((b) => b & 0xff);
+    const collisions = new Array(colLen).fill(0);
+    const rawCollisions = scene.collisions || [];
+    for (let i = 0; i < w * h; i++) {
+      if (rawCollisions[i]) {
+        collisions[i >> 3] |= 1 << (i & 7);
+      }
+    }
 
     const actorEntries = [];
     (scene.actors || []).forEach((actor, i) => {

@@ -3,6 +3,7 @@ import Path from "path";
 import compileSnesData, {
   resolvePlaceholders,
 } from "../../../src/lib/compiler/compileSnesData";
+import { COLLISION_ALL, COLLISION_TOP } from "../../../src/consts";
 
 const PROJECT_DIR = Path.join(__dirname, "..", "..", "projects", "Test_Math");
 const loadProject = () => {
@@ -86,6 +87,83 @@ describe("compileSnesData - Test_Math fixture", () => {
 
   test("no unresolved-placeholder warnings", () => {
     expect(warnings.filter((w) => /Unresolved placeholder/.test(w))).toEqual([]);
+  });
+});
+
+describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () => {
+  // GB Studio 1.2.2 (main branch) stored scene.collisions already bit-packed
+  // (1 bit/tile) - GB Studio 2.0.0-beta5 (this branch's base) changed it to
+  // one BYTE per tile (COLLISION_TOP/BOTTOM/LEFT/RIGHT flags, consts.js;
+  // GB's own compileData.js has no `/8` in its collisionsLength). The SNES
+  // compiler was ported from main without noticing the format changed, so it
+  // just truncated the first colLen raw per-tile bytes instead of packing
+  // them - every SNES scene's collision data was meaningless. User-found:
+  // the player could only ever walk in whichever direction happened to read
+  // a truncated-but-zero byte; every other direction reported blocked
+  // (`can_step`) regardless of the scene's real layout.
+  test("a scene's per-tile collision bytes are packed into a real 1-bit-per-tile bitmap", async () => {
+    // The background asset's real pixel size drives the scene's compiled
+    // w/h (20x18, Test_Math's own placeholder.png), regardless of what a
+    // scene JSON's own width/height say - so the collisions array below is
+    // sized for a real 20x18 = 360-tile scene, not an arbitrary small one.
+    const w = 20;
+    const h = 18;
+    const collisions = new Array(w * h).fill(0);
+    collisions[0] = COLLISION_ALL; // tile 0 -> bit 0 of byte 0
+    collisions[2] = COLLISION_ALL; // tile 2 -> bit 2 of byte 0
+    collisions[5] = COLLISION_TOP; // tile 5 -> bit 5 of byte 0 (any nonzero flag counts as solid)
+    const project = {
+      // compileSnesData.js runs migrateProject() on its input - without an
+      // explicit up-to-date version, migrateProject assumes "1.0.0" and runs
+      // the *entire* migration chain, including the older collision
+      // fixups, which would scramble this already-2.0.0-shaped synthetic
+      // fixture. Pin to the latest known version/release so migrateProject
+      // treats it as already migrated and leaves collisions untouched.
+      _version: "2.0.0",
+      _release: "6",
+      settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+      backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
+      variables: [],
+      scenes: [
+        {
+          id: "s0",
+          name: "collisionTest",
+          backgroundId: "bg",
+          width: w,
+          height: h,
+          actors: [],
+          triggers: [],
+          script: [],
+          collisions,
+        },
+      ],
+    };
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    // header(7) + sprite-slot table(24) + 0 actors + 0 triggers = 31 bytes
+    // before the ceil(w*h/8) = 45-byte collision bitmap.
+    const colLen = Math.ceil((w * h) / 8);
+    expect(blob.length).toBe(31 + colLen);
+    const colByte = blob[31];
+    // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
+    // (this target has no directional-collision concept).
+    expect(colByte & (1 << 0)).toBeTruthy(); // tile 0: COLLISION_ALL
+    expect(colByte & (1 << 1)).toBeFalsy(); // tile 1: clear
+    expect(colByte & (1 << 2)).toBeTruthy(); // tile 2: COLLISION_ALL
+    expect(colByte & (1 << 3)).toBeFalsy(); // tile 3: clear
+    expect(colByte & (1 << 4)).toBeFalsy(); // tile 4: clear
+    expect(colByte & (1 << 5)).toBeTruthy(); // tile 5: COLLISION_TOP (nonzero)
+    expect(colByte & (1 << 6)).toBeFalsy(); // tile 6: clear
+    expect(colByte & (1 << 7)).toBeFalsy(); // tile 7: clear
+    // Every other collision byte should be 0 - this is the crux of the bug:
+    // the old code truncated the raw per-tile array instead of packing it,
+    // so most of the "bitmap" ended up reading whatever raw per-tile bytes
+    // happened to land within the first colLen indices (mostly garbage
+    // relative to real tile positions), not real per-tile solidity.
+    expect(blob.slice(32, 31 + colLen)).toEqual(new Array(colLen - 1).fill(0));
   });
 });
 
