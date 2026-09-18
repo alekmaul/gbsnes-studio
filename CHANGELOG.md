@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased] - `v2` branch, in progress
 
-Rebuilding GBSNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
+Rebuilding SNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
 2.0.0-beta5** instead of 1.2.2 — webpack + TypeScript replacing `electron-compile`, Redux
 Toolkit, GBDK 2020, and the new genre-based GB engine (Top Down / Platformer / Shoot Em Up /
 Point and Click / Adventure). `main` stays untouched and frozen at `v1.1.4` while this runs.

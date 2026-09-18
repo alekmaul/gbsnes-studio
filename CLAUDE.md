@@ -4,14 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A fork of GB Studio 1.2.2, rebranded **GBSNES Studio** — a visual retro game maker. It is an
+A fork of GB Studio 1.2.2, rebranded **SNES Studio** — a visual retro game maker. It is an
 Electron desktop app (the editor, written in React/Redux) plus a C game engine compiled with
 GBDK. The working copy lives under a `gbsnes-studio` directory: this fork keeps the stock
 Game Boy (GBDK) target fully working **and** adds a second SNES (PVSnesLib) build target
 alongside it. The Game Boy path is the frozen reference — SNES work adds a parallel target,
 it does not edit GB behaviour in place.
 
-Branding: everything user-facing says **GBSNES Studio** — `productName`, `forge.config.js`
+Branding: everything user-facing says **SNES Studio** — `productName`, `forge.config.js`
 names, the splash/About windows, and every "GB Studio" string in `src/lang/*.json` (all
 locales). The npm `name`, `executableName`, Squirrel/Store names and CI artifact names
 are `gbsnes-studio` / `gbsnes_studio` / `gbsnesstudio`. Still `gbstudio`-flavoured (not renamed
@@ -24,16 +24,16 @@ project-from-a-newer-version dialog (`migrateWarning.js`) opens
 `https://portabledev.itch.io/gbsnes-studio`, not a GitHub releases page: GitHub is the version
 source of truth, itch.io is where a user actually gets the binary.
 Icons/artwork under `src/assets/app/` are GBSNES-branded: `icon/app_icon.{png,ico,icns}` (a
-GB/SNES hybrid handheld), `icon/gbsproj.{png,ico,icns}` (a "GBSNES Studio Project" cartridge,
+GB/SNES hybrid handheld), `icon/gbsproj.{png,ico,icns}` (a "SNES Studio Project" cartridge,
 the `.gbsproj` file-type icon) and `dmg/background.{png,tiff}` (the macOS installer window).
 The `.ico`/`.icns` are regenerated from the 1024×1024 `.png` with Pillow (`Image.save(…,
 format="ICO"|"ICNS")`) — no ImageMagick on this box; Python 3 + Pillow is at `C:\python3`.
 `forge.config.js` `icon: "…/app_icon"` lets electron-forge pick `.icns`/`.ico`/`.png` per OS.
 
-## GBSNES Studio v2 (separate branch, in progress)
+## SNES Studio v2 (separate branch, in progress)
 
 Everything else in this file describes `main` (GB Studio 1.2.2-based, `v1.1.4`, released).
-A second, larger effort lives on the **`v2` branch**: rebuild GBSNES Studio (GB engine +
+A second, larger effort lives on the **`v2` branch**: rebuild SNES Studio (GB engine +
 the SNES/PVSnesLib target) on top of **GB Studio 2.0.0-beta5** instead of 1.2.2 — webpack +
 TypeScript replacing `electron-compile`, Redux Toolkit replacing hand-written
 reducers/actions/middleware, GBDK 2020, a genre-based GB engine (Top Down / Platformer /

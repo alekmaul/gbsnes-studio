@@ -362,7 +362,7 @@ const buildMenu = async (plugins = []) => {
         {
           // Both intentionally still open the original GB Studio site (no
           // GBSNES-specific doc site) - the "(GB Studio)" suffix makes clear
-          // you're leaving GBSNES Studio's own app when you click them.
+          // you're leaving SNES Studio's own app when you click them.
           // Ported from main's identical v1.1.4 fix.
           label: `${l10n("MENU_DOCUMENTATION")} (GB Studio)`,
           click() {

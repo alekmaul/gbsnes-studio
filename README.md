@@ -1,6 +1,6 @@
-# GBSNES Studio
+# SNES Studio
 
-**GBSNES Studio** is a fork of **GB Studio 1.2.2** that adds a Super Nintendo
+**SNES Studio** is a fork of **GB Studio 1.2.2** that adds a Super Nintendo
 (PVSnesLib) build target alongside the original Game Boy one — a free and easy to
 use retro adventure game creator for Game Boy and Super Nintendo, for Mac, Linux
 and Windows.
@@ -10,9 +10,9 @@ released under the [MIT license](https://opensource.org/licenses/MIT).
 
 ----
 
-![GBSNES Studio](gbstudio.gif)
+![SNES Studio](gbstudio.gif)
 
-GBSNES Studio consists of an [Electron](https://electronjs.org/) game-builder
+SNES Studio consists of an [Electron](https://electronjs.org/) game-builder
 application and two C game engines:
 
 - **Game Boy** — [GBDK](http://gbdk.sourceforge.net/), music by

@@ -151,7 +151,7 @@ const AppToolbar: FC = () => {
   return (
     <Toolbar focus={windowFocus}>
       <Helmet>
-        <title>{`GBSNES Studio - ${(name || "Untitled")}${modified ? ` (${l10n("TOOLBAR_MODIFIED")})` : ''}`}</title>
+        <title>{`SNES Studio - ${(name || "Untitled")}${modified ? ` (${l10n("TOOLBAR_MODIFIED")})` : ''}`}</title>
       </Helmet>
       <DropdownButton
         label={

@@ -24,7 +24,7 @@ module.exports = {
     },
   ],
   packagerConfig: {
-    name: "GBSNES Studio",
+    name: "SNES Studio",
     executableName: "gbsnes-studio",
     packageManager: "yarn",
     icon: "src/assets/app/icon/app_icon",
