@@ -116,6 +116,22 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | --- | --- | --- |
 | Save Data, Load Data, Clear Data, If Data Saved | ✅ | Cartridge SRAM. Saves the same scope as GB: player position / facing + all `script_variables[]` (not other actors, the scene stack, or timers). |
 
+## Not yet implemented (M16 opcode audit, 2026-09-18)
+
+A full row-by-row re-check of `script_cmds.c` against `scriptCommands.js` (guarded by
+`snesScriptCmds.test.js`) found these opcodes still `Script_Noop_b` and missing from this
+doc — all deliberately deferred (each has its own comment in `script_cmds.c` explaining why),
+not silent holes; every one has a real table row, just no runtime behaviour yet.
+
+| Event | SNES | Notes |
+| --- | --- | --- |
+| Launch Projectile, Weapon: Attack | ➖ | No Projectiles subsystem on this engine (added in GB Studio 2.0.0-beta5, genre-transverse). |
+| Actor: Set Sprite Sheet (union-type variant) | ➖ | Per-actor sprite override introduced with the `On Update` scripted-movement rework; needs that port first. |
+| If Actor Relative to Actor, Actor: Stop Update Script, Actor: Set Animate | ➖ | All need the `On Update` per-actor movement-script port (see `appData/src/snes/README.md` — a real, separate architecture piece, not a mechanical opcode wire-up). |
+| Player: Bounce | ➖ | Platformer-genre physics opcode. |
+| Palette: Set Background / Set Actor / Set UI | ➖ | Runtime palette painting — the engine's `SceneUploadBgPalette` already supports up to 6 palette regions per background (see `compileSnesData.js`), but no opcode writes to it yet. |
+| Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist and are edited from Settings, but a script can't write one back at runtime yet. |
+
 ---
 
 ## Editor (not scripting — M9)
