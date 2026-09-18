@@ -8,7 +8,7 @@
             "id": "94c18861-b352-4f49-a64d-52f2e3415077",
             "name": "Sample Town",
             "backgroundId": "053f83aa-a4e3-413b-98af-1bb0d0818ddc",
-            "x": 800.25,
+            "x": 140,
             "y": 30,
             "width": 56,
             "height": 56,
@@ -7894,10 +7894,10 @@
             "id": "5e64882f-8ce6-423e-b582-70fdb2142ff6",
             "name": "Cave",
             "backgroundId": "6fad1892-bcb2-4924-bd1c-1e4d03dfeabb",
-            "x": 575,
-            "y": 275,
-            "width": 20,
-            "height": 18,
+            "x": 732,
+            "y": 782,
+            "width": 32,
+            "height": 28,
             "actors": [
                 {
                     "id": "5aa3ca8b-31c6-444a-9c94-9f25cdf41938",
@@ -8932,10 +8932,10 @@
             "id": "1b7f9ffd-2bbb-470b-9189-c2ac435d2a55",
             "name": "Top House",
             "backgroundId": "b340b9a2-2865-4e05-91c0-148846a693c8",
-            "x": 576,
-            "y": 75,
-            "width": 20,
-            "height": 18,
+            "x": 636,
+            "y": 518,
+            "width": 32,
+            "height": 28,
             "actors": [
                 {
                     "id": "566c8812-a204-45b5-b93a-c113c10c20de",
@@ -10016,10 +10016,10 @@
             "id": "382961a1-e615-4b92-92a7-f1a791b50b7a",
             "name": "Logo",
             "backgroundId": "f8b1c7ad-7bb2-44b2-8189-175ae8698f11",
-            "x": 141,
-            "y": 75,
-            "width": 20,
-            "height": 18,
+            "x": 140,
+            "y": 518,
+            "width": 32,
+            "height": 28,
             "actors": [],
             "triggers": [],
             "collisions": [
@@ -10441,8 +10441,8 @@
             "id": "4912bee2-387a-472f-ae4f-6679b6149517",
             "name": "Title Screen",
             "backgroundId": "f047ff0e-58ad-49fc-bd2b-ec84fc1f7ab3",
-            "x": 341,
-            "y": 76,
+            "x": 436,
+            "y": 518,
             "width": 20,
             "height": 18,
             "actors": [],
@@ -10938,8 +10938,8 @@
             "id": "3509d273-bf7e-4946-89ce-a489df5a449d",
             "name": "Underground",
             "backgroundId": "f3102db4-2273-411d-b33f-4d6f65959c60",
-            "x": 144,
-            "y": 924,
+            "x": 140,
+            "y": 1574,
             "width": 32,
             "height": 32,
             "actors": [
@@ -13523,9 +13523,9 @@
             "name": "Menu Page 1",
             "backgroundId": "93d8839f-c19c-4eb2-a386-b0bb77068521",
             "x": 140,
-            "y": 269,
-            "width": 20,
-            "height": 18,
+            "y": 782,
+            "width": 32,
+            "height": 28,
             "actors": [
                 {
                     "id": "d983c34a-9eba-4cb3-83cf-4e6ddb6d39ad",
@@ -13966,7 +13966,7 @@
             "name": "Space Battle",
             "backgroundId": "28a8b376-b6c5-4e6d-8d7d-2a409d73cd1b",
             "width": 255,
-            "height": 18,
+            "height": 28,
             "collisions": [
                 0,
                 0,
@@ -23152,8 +23152,8 @@
                 0
             ],
             "id": "6bcc8670-b44d-4892-a37a-77a35f5a7668",
-            "x": 144,
-            "y": 724,
+            "x": 140,
+            "y": 1310,
             "actors": [
                 {
                     "spriteSheetId": "735c26e5-eee4-43ad-a668-a2ab93f84bd8",
@@ -27056,8 +27056,8 @@
         {
             "name": "Player's House",
             "backgroundId": "0af9ba31-7864-4664-9603-b211dc0f3793",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "collisions": [],
             "tileColors": [
                 4,
@@ -27422,8 +27422,8 @@
                 4
             ],
             "id": "c22cad6f-1191-4623-911d-1ec9a7b52fe6",
-            "x": 148,
-            "y": 526,
+            "x": 140,
+            "y": 1046,
             "actors": [],
             "triggers": [
                 {
@@ -27802,8 +27802,8 @@
         {
             "name": "Menu Page 2",
             "backgroundId": "816231e1-2147-462c-99c6-3f73e8535d25",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "collisions": [],
             "tileColors": [
                 0,
@@ -28168,8 +28168,8 @@
                 0
             ],
             "id": "7ff8891e-d21c-4938-ba71-028a1964edf6",
-            "x": 343,
-            "y": 271,
+            "x": 436,
+            "y": 782,
             "actors": [
                 {
                     "id": "dbdbebfe-1c6d-4ebf-ab2f-b4b2dd45bc81",
@@ -28538,7 +28538,7 @@
             "name": "Path to Sample Town",
             "backgroundId": "b50cefc6-72dc-44c0-947d-f5d4d533a97a",
             "width": 161,
-            "height": 18,
+            "height": 28,
             "collisions": [
                 0,
                 0,
@@ -34340,8 +34340,8 @@
                 0
             ],
             "id": "f8f027ef-b818-4038-9eda-0ac477facb41",
-            "x": 345,
-            "y": 526,
+            "x": 436,
+            "y": 1046,
             "actors": [
                 {
                     "id": "e63a0fb5-2d9e-4a85-9ba0-e711e6de6cdc",
@@ -36969,8 +36969,8 @@
             ],
             "tileColors": [],
             "id": "51d42da5-b7ce-48b4-a435-1902368d6d5c",
-            "x": 722,
-            "y": 928,
+            "x": 1028,
+            "y": 1574,
             "actors": [
                 {
                     "spriteSheetId": "17219846-cda9-4e84-bdfa-c3ff105d42cc",
@@ -37253,8 +37253,8 @@
         {
             "name": "Launch Site",
             "backgroundId": "00e9b250-b602-4e5d-998c-fe0c8f23c91d",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "collisions": [
                 15,
                 15,
@@ -37980,7 +37980,7 @@
                 0
             ],
             "id": "6a82648b-e0fe-4a31-861e-0c4af5b83ba2",
-            "x": 1276,
+            "x": 628,
             "y": 30,
             "actors": [
                 {
@@ -38612,7 +38612,7 @@
             "name": "Deeper Underground",
             "backgroundId": "481e920a-10b8-4d5b-b6a2-dffa96b57bf0",
             "width": 32,
-            "height": 18,
+            "height": 28,
             "collisions": [
                 0,
                 15,
@@ -39770,8 +39770,8 @@
                 4
             ],
             "id": "a15eed10-615c-488a-b972-b4b37ccfc14e",
-            "x": 428.5,
-            "y": 926.5,
+            "x": 436,
+            "y": 1574,
             "actors": [
                 {
                     "spriteSheetId": "d4206af4-4d12-4cfd-a4a8-faa11d4aff34",
@@ -39994,8 +39994,8 @@
         {
             "name": "Dream",
             "backgroundId": "1da35172-aea4-40b4-8215-7992d9245b34",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "collisions": [
                 0,
                 0,
@@ -40721,8 +40721,8 @@
                 0
             ],
             "id": "a5f430d1-da9c-4313-934a-79da3c40bbdc",
-            "x": 1019,
-            "y": 931,
+            "x": 732,
+            "y": 1574,
             "actors": [],
             "triggers": [],
             "script": [
@@ -40786,8 +40786,8 @@
         {
             "id": "1da35172-aea4-40b4-8215-7992d9245b34",
             "name": "black",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "black.png",
@@ -40796,8 +40796,8 @@
         {
             "id": "6fad1892-bcb2-4924-bd1c-1e4d03dfeabb",
             "name": "cave",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "cave.png",
@@ -40807,7 +40807,7 @@
             "id": "481e920a-10b8-4d5b-b6a2-dffa96b57bf0",
             "name": "hidden_cave",
             "width": 32,
-            "height": 18,
+            "height": 28,
             "imageWidth": 256,
             "imageHeight": 144,
             "filename": "hidden_cave.png",
@@ -40817,7 +40817,7 @@
             "id": "5b192b93-3957-4b76-8c92-423eabbcd285",
             "name": "house-wide",
             "width": 32,
-            "height": 18,
+            "height": 28,
             "imageWidth": 256,
             "imageHeight": 144,
             "filename": "house-wide.png",
@@ -40826,8 +40826,8 @@
         {
             "id": "b340b9a2-2865-4e05-91c0-148846a693c8",
             "name": "house",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "house.png",
@@ -40836,8 +40836,8 @@
         {
             "id": "00e9b250-b602-4e5d-998c-fe0c8f23c91d",
             "name": "launch_site",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "launch_site.png",
@@ -40847,7 +40847,7 @@
             "id": "28a8b376-b6c5-4e6d-8d7d-2a409d73cd1b",
             "name": "leaving_earth",
             "width": 255,
-            "height": 18,
+            "height": 28,
             "imageWidth": 2040,
             "imageHeight": 144,
             "filename": "leaving_earth.png",
@@ -40856,8 +40856,8 @@
         {
             "id": "f8b1c7ad-7bb2-44b2-8189-175ae8698f11",
             "name": "logo",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "logo.png",
@@ -40866,8 +40866,8 @@
         {
             "id": "b49ea566-b022-478c-979d-ec3ee255fdc5",
             "name": "menu",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "menu.png",
@@ -40876,8 +40876,8 @@
         {
             "id": "93d8839f-c19c-4eb2-a386-b0bb77068521",
             "name": "menu_page1",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "menu_page1.png",
@@ -40886,8 +40886,8 @@
         {
             "id": "816231e1-2147-462c-99c6-3f73e8535d25",
             "name": "menu_page2",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "menu_page2.png",
@@ -40907,7 +40907,7 @@
             "id": "b50cefc6-72dc-44c0-947d-f5d4d533a97a",
             "name": "platform_path",
             "width": 161,
-            "height": 18,
+            "height": 28,
             "imageWidth": 1288,
             "imageHeight": 144,
             "filename": "platform_path.png",
@@ -40916,8 +40916,8 @@
         {
             "id": "0af9ba31-7864-4664-9603-b211dc0f3793",
             "name": "room",
-            "width": 20,
-            "height": 18,
+            "width": 32,
+            "height": 28,
             "imageWidth": 160,
             "imageHeight": 144,
             "filename": "room.png",
@@ -40947,7 +40947,7 @@
             "id": "33ae580b-d809-4804-a558-71c08a3ac495",
             "name": "stars_wide",
             "width": 255,
-            "height": 18,
+            "height": 28,
             "imageWidth": 2040,
             "imageHeight": 144,
             "filename": "stars_wide.png",
