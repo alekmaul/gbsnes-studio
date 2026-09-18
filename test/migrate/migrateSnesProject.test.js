@@ -48,7 +48,7 @@ describe("migrateProject - real v1.1.4 SNES project (sneshtml)", () => {
   test("migrates cleanly to the current 2.0.0 release", () => {
     const migrated = migrateProject(loadFixture());
     expect(migrated._version).toBe("2.0.0");
-    expect(migrated._release).toBe("6");
+    expect(migrated._release).toBe("7");
   });
 
   test("SNES-only settings (target/snesRegion/snesSramSize) survive the migration", () => {

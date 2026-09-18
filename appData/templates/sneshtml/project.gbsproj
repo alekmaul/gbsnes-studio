@@ -55,7 +55,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "e63a0fb5-2d9e-4a85-9ba0-e711e6de6cdc",
@@ -85,7 +86,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "d12d5092-2716-441d-bab0-0e15fe715f5e",
@@ -104,7 +106,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "c73c195d-5cc8-4417-bdb0-b0c55c4b6188",
@@ -395,7 +398,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "076a0612-024a-426a-85fc-3e1054b9f74e",
@@ -432,7 +436,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "a85c4ba5-9bc0-4daa-94bc-4ef68a690659",
@@ -507,7 +512,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "5cf6eb6c-be62-4efc-9cbb-14a8efac21a8",
@@ -554,7 +560,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 }
             ],
             "triggers": [
@@ -581,7 +588,8 @@
                             "id": "e5484326-9a98-4da4-8c1c-39c679483b41",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "x": 24,
@@ -606,7 +614,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "4916f378-602b-4df7-a453-baeaaad59c3c"
+                    "id": "4916f378-602b-4df7-a453-baeaaad59c3c",
+                    "symbol": "trigger_0"
                 },
                 {
                     "x": 10,
@@ -631,7 +640,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "fc139bcd-a16b-4151-a9de-7b7e88e437d6"
+                    "id": "fc139bcd-a16b-4151-a9de-7b7e88e437d6",
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -1668,7 +1678,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_outside"
         },
         {
             "id": "5e64882f-8ce6-423e-b582-70fdb2142ff6",
@@ -1694,7 +1705,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "025c7320-2eb1-4209-bf74-c1eef183ecc8",
@@ -1713,7 +1725,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "15d7cf30-df3a-427b-883a-996b605edb40",
@@ -1764,7 +1777,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "e807b22f-7477-471b-b3b3-53b699df82ab",
@@ -1781,7 +1795,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "ee80f72c-ec7c-46d1-9653-23b16fcce2d9",
@@ -1800,7 +1815,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "b5594786-5675-48cf-b382-18b6341b855c",
@@ -1874,7 +1890,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 }
             ],
             "triggers": [
@@ -1901,7 +1918,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "ec1bdb23-06f3-4053-9295-cc79ba27985b"
+                    "id": "ec1bdb23-06f3-4053-9295-cc79ba27985b",
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -2810,7 +2828,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_cave"
         },
         {
             "id": "1b7f9ffd-2bbb-470b-9189-c2ac435d2a55",
@@ -2898,7 +2917,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "9603b702-aa07-4ad7-8906-16112f308854",
@@ -2970,7 +2990,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_radio"
                 },
                 {
                     "id": "26bced35-c28a-4394-907e-d657789afdb5",
@@ -3000,7 +3021,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "4e43d51b-f316-480c-818d-1ad4016f27ef",
@@ -3030,7 +3052,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "dc9e5886-f39c-4480-a543-c0436b79bb67",
@@ -3067,7 +3090,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 }
             ],
             "triggers": [
@@ -3094,7 +3118,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "d8200245-5aa1-4e8b-aa30-1a13bd2a9e1a"
+                    "id": "d8200245-5aa1-4e8b-aa30-1a13bd2a9e1a",
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -4003,7 +4028,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_house"
         },
         {
             "id": "8a52b387-2a88-4741-8d4e-ca56acea4672",
@@ -4095,7 +4121,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 }
             ],
             "triggers": [],
@@ -5133,7 +5160,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_stars"
         },
         {
             "id": "382961a1-e615-4b92-92a7-f1a791b50b7a",
@@ -6094,7 +6122,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_logo"
         },
         {
             "id": "4912bee2-387a-472f-ae4f-6679b6149517",
@@ -6272,7 +6301,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_title_screen"
         },
         {
             "id": "3509d273-bf7e-4946-89ce-a489df5a449d",
@@ -6333,7 +6363,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "27de6d44-f7c0-48df-a952-2c87471bbfd4",
@@ -6435,7 +6466,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_ice_block"
                 },
                 {
                     "id": "7c2b0a86-4cc1-46f4-9b4a-6ea987300848",
@@ -6466,7 +6498,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock_3"
                 },
                 {
                     "id": "f7bb6ed5-39b2-4f30-a66b-c2a62619d29c",
@@ -6497,7 +6530,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock_2"
                 },
                 {
                     "id": "417dfd42-2e13-4850-92e8-c52efe866116",
@@ -6528,7 +6562,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock_1"
                 }
             ],
             "triggers": [
@@ -6555,7 +6590,8 @@
                             "id": "e5484326-9a98-4da4-8c1c-39c679483b41",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -7644,7 +7680,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_underground"
         },
         {
             "id": "fd223a5f-7148-4705-98a7-b0ef56cb5c74",
@@ -7676,7 +7713,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest1"
                 },
                 {
                     "id": "044598b7-a634-427d-9c88-e998fabe8d9a",
@@ -7699,7 +7737,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest2"
                 },
                 {
                     "id": "6d80f0f6-047d-4494-811d-5f526e58959e",
@@ -7722,7 +7761,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest3"
                 },
                 {
                     "id": "51558c54-c7e2-46d1-9015-f7b83a6a4ff4",
@@ -7745,7 +7785,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest4"
                 },
                 {
                     "id": "62ecd9f0-005a-402f-8ad0-8ec8c3b514f3",
@@ -7768,7 +7809,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest5"
                 },
                 {
                     "id": "4c9409a4-0872-486e-a1a1-5b74caaa6960",
@@ -7791,7 +7833,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest6"
                 }
             ],
             "triggers": [],
@@ -8054,7 +8097,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_menu"
         }
     ],
     "_version": "2.0.0",
@@ -8063,55 +8107,68 @@
     "variables": [
         {
             "id": "0",
-            "name": "Seen Cat"
+            "name": "Seen Cat",
+            "symbol": "var_seen_cat"
         },
         {
             "id": "1",
-            "name": "Seen duck"
+            "name": "Seen duck",
+            "symbol": "var_seen_duck"
         },
         {
             "id": "2",
-            "name": "Used Radio"
+            "name": "Used Radio",
+            "symbol": "var_used_radio"
         },
         {
             "id": "3",
-            "name": "Spoke To Space Dog"
+            "name": "Spoke To Space Dog",
+            "symbol": "var_spoke_to_space_dog"
         },
         {
             "id": "4",
-            "name": "Quest1"
+            "name": "Quest1",
+            "symbol": "var_quest1"
         },
         {
             "id": "5",
-            "name": "Quest2"
+            "name": "Quest2",
+            "symbol": "var_quest2"
         },
         {
             "id": "6",
-            "name": "Quest3"
+            "name": "Quest3",
+            "symbol": "var_quest3"
         },
         {
             "id": "7",
-            "name": "Quest4"
+            "name": "Quest4",
+            "symbol": "var_quest4"
         },
         {
             "id": "8",
-            "name": "Quest5"
+            "name": "Quest5",
+            "symbol": "var_quest5"
         },
         {
             "id": "9",
-            "name": "Quest6"
+            "name": "Quest6",
+            "symbol": "var_quest6"
         },
         {
             "id": "10",
-            "name": "NewGame"
+            "name": "NewGame",
+            "symbol": "var_newgame"
         },
         {
             "id": "11",
-            "name": "SaveGame"
+            "name": "SaveGame",
+            "symbol": "var_savegame"
         },
         {
             "id": "12",
-            "name": "PushedIceBlock"
+            "name": "PushedIceBlock",
+            "symbol": "var_pushediceblock"
         }
     ],
     "backgrounds": [
@@ -8341,5 +8398,5 @@
             "value": 0
         }
     ],
-    "_release": "6"
+    "_release": "7"
 }

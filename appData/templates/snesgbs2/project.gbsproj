@@ -2,7 +2,7 @@
     "name": "___PROJECT_NAME___",
     "author": "___AUTHOR___",
     "_version": "2.0.0",
-    "_release": "6",
+    "_release": "7",
     "scenes": [
         {
             "id": "94c18861-b352-4f49-a64d-52f2e3415077",
@@ -42,7 +42,8 @@
                     "hit3Script": [],
                     "name": "Rock",
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock"
                 },
                 {
                     "id": "d12d5092-2716-441d-bab0-0e15fe715f5e",
@@ -62,7 +63,8 @@
                     "hit3Script": [],
                     "name": "Duck",
                     "moveSpeed": 1,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_duck"
                 },
                 {
                     "id": "c73c195d-5cc8-4417-bdb0-b0c55c4b6188",
@@ -356,7 +358,8 @@
                     "name": "Pet Owner",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_pet_owner"
                 },
                 {
                     "id": "076a0612-024a-426a-85fc-3e1054b9f74e",
@@ -394,7 +397,8 @@
                     "name": "Cat",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_cat"
                 },
                 {
                     "id": "a85c4ba5-9bc0-4daa-94bc-4ef68a690659",
@@ -470,7 +474,8 @@
                     "name": "Angry Guy",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_angry_guy"
                 },
                 {
                     "id": "5cf6eb6c-be62-4efc-9cbb-14a8efac21a8",
@@ -518,7 +523,8 @@
                     "name": "Oblivious Guy",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_oblivious_guy"
                 },
                 {
                     "spriteSheetId": "30b8266a-0533-4f90-bd33-e97dc1d498ea",
@@ -551,7 +557,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "name": "Sign Post",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post"
                 },
                 {
                     "spriteSheetId": "46a3db76-878e-4896-892b-d1afa7d5e2f0",
@@ -598,7 +605,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "name": "Hider",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_hider"
                 },
                 {
                     "spriteSheetId": "2b18f935-85a3-4f38-9f52-e5c4ea20776a",
@@ -627,7 +635,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_florist"
                 }
             ],
             "triggers": [
@@ -654,7 +663,8 @@
                             "id": "e5484326-9a98-4da4-8c1c-39c679483b41",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "x": 24,
@@ -679,7 +689,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "4916f378-602b-4df7-a453-baeaaad59c3c"
+                    "id": "4916f378-602b-4df7-a453-baeaaad59c3c",
+                    "symbol": "trigger_0"
                 },
                 {
                     "x": 10,
@@ -704,7 +715,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "fc139bcd-a16b-4151-a9de-7b7e88e437d6"
+                    "id": "fc139bcd-a16b-4151-a9de-7b7e88e437d6",
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -729,7 +741,8 @@
                             "id": "49726c29-6fcb-49d0-8780-a22943ccc83e",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -768,7 +781,8 @@
                             "id": "da0aea62-de12-4aa0-804b-e6aaa3f711c3",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -807,7 +821,8 @@
                             "id": "0c65d6f4-a90c-4e68-a7cf-ee579ec69bfe",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -840,7 +855,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "e0e606be-2e1c-4a3d-bff8-96d4c9ca6903"
+                    "id": "e0e606be-2e1c-4a3d-bff8-96d4c9ca6903",
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -873,7 +889,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "b8145b02-efce-4214-8be1-3a9f6850a8a1"
+                    "id": "b8145b02-efce-4214-8be1-3a9f6850a8a1",
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -898,7 +915,8 @@
                             "id": "a9cceb3d-82ed-4789-a2a1-6d97583692df",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -1013,7 +1031,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "name": ""
+                    "name": "",
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -1145,7 +1164,8 @@
                             "id": "bb29d726-0ba6-40ac-8b46-2a65e8ea120c",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -1277,7 +1297,8 @@
                             "id": "ca7df87f-cbc6-40c1-998a-3db016efcb7b",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -1392,7 +1413,8 @@
                             "id": "97e2fe82-8c12-4a12-b25b-4dfbe5f17fca",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -1534,7 +1556,8 @@
                             "id": "a2d606d1-8a23-4e85-a1b3-593b47ce8d1d",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -7888,7 +7911,8 @@
                 null,
                 null,
                 "2ebac764-bebb-4707-920b-2a975675b2cb"
-            ]
+            ],
+            "symbol": "scene_sample_town"
         },
         {
             "id": "5e64882f-8ce6-423e-b582-70fdb2142ff6",
@@ -7914,7 +7938,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "025c7320-2eb1-4209-bf74-c1eef183ecc8",
@@ -7935,7 +7960,8 @@
                     "hit3Script": [],
                     "name": "Fire",
                     "paletteId": "0cae84a7-ed50-4b05-b39a-66be5af7ffd2",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_fire"
                 },
                 {
                     "id": "15d7cf30-df3a-427b-883a-996b605edb40",
@@ -7988,7 +8014,8 @@
                     "paletteId": "",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sage"
                 },
                 {
                     "id": "e807b22f-7477-471b-b3b3-53b699df82ab",
@@ -8005,7 +8032,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "id": "ee80f72c-ec7c-46d1-9653-23b16fcce2d9",
@@ -8026,7 +8054,8 @@
                     "hit3Script": [],
                     "name": "Fire",
                     "paletteId": "0cae84a7-ed50-4b05-b39a-66be5af7ffd2",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_fire"
                 },
                 {
                     "id": "b5594786-5675-48cf-b382-18b6341b855c",
@@ -8101,7 +8130,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "name": "Save Point",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_save_point"
                 }
             ],
             "triggers": [
@@ -8128,7 +8158,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "ec1bdb23-06f3-4053-9295-cc79ba27985b"
+                    "id": "ec1bdb23-06f3-4053-9295-cc79ba27985b",
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -8926,7 +8957,8 @@
             ],
             "paletteIds": [
                 "444c886c-6214-48d7-8e3c-4dca4f65dec7"
-            ]
+            ],
+            "symbol": "scene_cave"
         },
         {
             "id": "1b7f9ffd-2bbb-470b-9189-c2ac435d2a55",
@@ -9015,7 +9047,8 @@
                     "name": "Radio Guy",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_radio_guy"
                 },
                 {
                     "id": "9603b702-aa07-4ad7-8906-16112f308854",
@@ -9088,7 +9121,8 @@
                     "paletteId": "78b1f1eb-13ad-4822-b109-8a693bae141c",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_radio"
                 },
                 {
                     "id": "26bced35-c28a-4394-907e-d657789afdb5",
@@ -9119,7 +9153,8 @@
                     "name": "Sign Post 3",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post_3"
                 },
                 {
                     "id": "4e43d51b-f316-480c-818d-1ad4016f27ef",
@@ -9150,7 +9185,8 @@
                     "name": "Sign Post 2",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post_2"
                 },
                 {
                     "id": "dc9e5886-f39c-4480-a543-c0436b79bb67",
@@ -9188,7 +9224,8 @@
                     "name": "Sign Post 1",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post_1"
                 }
             ],
             "triggers": [
@@ -9215,7 +9252,8 @@
                             "command": "EVENT_END"
                         }
                     ],
-                    "id": "d8200245-5aa1-4e8b-aa30-1a13bd2a9e1a"
+                    "id": "d8200245-5aa1-4e8b-aa30-1a13bd2a9e1a",
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -10010,7 +10048,8 @@
                 0,
                 0,
                 0
-            ]
+            ],
+            "symbol": "scene_top_house"
         },
         {
             "id": "382961a1-e615-4b92-92a7-f1a791b50b7a",
@@ -10435,7 +10474,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_logo"
         },
         {
             "id": "4912bee2-387a-472f-ae4f-6679b6149517",
@@ -10932,7 +10972,8 @@
                 0,
                 0,
                 0
-            ]
+            ],
+            "symbol": "scene_title_screen"
         },
         {
             "id": "3509d273-bf7e-4946-89ce-a489df5a449d",
@@ -10994,7 +11035,8 @@
                     "name": "Sign Post",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post"
                 },
                 {
                     "id": "27de6d44-f7c0-48df-a952-2c87471bbfd4",
@@ -11110,7 +11152,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_ice_block"
                 },
                 {
                     "id": "7c2b0a86-4cc1-46f4-9b4a-6ea987300848",
@@ -11141,7 +11184,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock_3"
                 },
                 {
                     "id": "f7bb6ed5-39b2-4f30-a66b-c2a62619d29c",
@@ -11172,7 +11216,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock_2"
                 },
                 {
                     "id": "417dfd42-2e13-4850-92e8-c52efe866116",
@@ -11203,7 +11248,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_rock_1"
                 },
                 {
                     "spriteSheetId": "81b14fe6-2235-480e-bc3b-a5899aa66afe",
@@ -11261,7 +11307,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_hidden_stairs"
                 }
             ],
             "triggers": [
@@ -11288,7 +11335,8 @@
                             "id": "e5484326-9a98-4da4-8c1c-39c679483b41",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -11336,7 +11384,8 @@
                             "id": "693ba9e6-e3c8-4489-812b-049832378c97",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "collisions": [
@@ -13516,7 +13565,8 @@
             ],
             "paletteIds": [
                 "444c886c-6214-48d7-8e3c-4dca4f65dec7"
-            ]
+            ],
+            "symbol": "scene_underground"
         },
         {
             "id": "fd223a5f-7148-4705-98a7-b0ef56cb5c74",
@@ -13588,7 +13638,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest1"
                 },
                 {
                     "id": "044598b7-a634-427d-9c88-e998fabe8d9a",
@@ -13651,7 +13702,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest2"
                 },
                 {
                     "id": "6d80f0f6-047d-4494-811d-5f526e58959e",
@@ -13714,7 +13766,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest3"
                 },
                 {
                     "id": "51558c54-c7e2-46d1-9015-f7b83a6a4ff4",
@@ -13777,7 +13830,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest4"
                 },
                 {
                     "id": "62ecd9f0-005a-402f-8ad0-8ec8c3b514f3",
@@ -13840,7 +13894,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest5"
                 },
                 {
                     "id": "4c9409a4-0872-486e-a1a1-5b74caaa6960",
@@ -13903,7 +13958,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest6"
                 }
             ],
             "triggers": [],
@@ -13960,7 +14016,8 @@
             "tileColors": [],
             "paletteIds": [
                 "default-ui"
-            ]
+            ],
+            "symbol": "scene_menu_page_1"
         },
         {
             "name": "Space Battle",
@@ -23170,7 +23227,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -23412,7 +23470,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -23654,7 +23713,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -23896,7 +23956,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -24138,7 +24199,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -24380,7 +24442,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -24622,7 +24685,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "954ffda3-81b7-40ea-a338-3b11ad4b75fb",
@@ -24864,7 +24928,8 @@
                         }
                     ],
                     "startScript": [],
-                    "hit2Script": []
+                    "hit2Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -25115,7 +25180,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -25366,7 +25432,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -25617,7 +25684,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -25868,7 +25936,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -26119,7 +26188,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -26370,7 +26440,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -26621,7 +26692,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 },
                 {
                     "spriteSheetId": "b4845aec-11e3-475b-8a9a-0a01b920c710",
@@ -26872,7 +26944,8 @@
                     ],
                     "startScript": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_0"
                 }
             ],
             "triggers": [
@@ -26899,7 +26972,8 @@
                             "id": "bc4dc274-a77a-4bbc-993d-cfbc75fe1636",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "type": "3",
@@ -27051,7 +27125,8 @@
             "paletteIds": [
                 "d73adccf-4071-4012-b0a6-9c3973a2dc0e",
                 "325f5712-ff6c-40e7-b105-c6d795846783"
-            ]
+            ],
+            "symbol": "scene_space_battle"
         },
         {
             "name": "Player's House",
@@ -27450,7 +27525,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27475,7 +27551,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27498,7 +27575,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27531,7 +27609,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27554,7 +27633,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27580,7 +27660,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27605,7 +27686,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27631,7 +27713,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27657,7 +27740,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27683,7 +27767,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -27709,7 +27794,8 @@
                             "command": "EVENT_END",
                             "args": {}
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "script": [
@@ -27797,7 +27883,8 @@
             "playerHit1Script": [],
             "playerHit2Script": [],
             "playerHit3Script": [],
-            "__type": "scene"
+            "__type": "scene",
+            "symbol": "scene_player_s_house"
         },
         {
             "name": "Menu Page 2",
@@ -28233,7 +28320,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest7"
                 },
                 {
                     "id": "f36d8030-2596-419e-aabb-9e8b7476c991",
@@ -28297,7 +28385,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest8"
                 },
                 {
                     "id": "88cae680-56d7-4452-9695-a1905fbe15a4",
@@ -28361,7 +28450,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest9"
                 },
                 {
                     "id": "a32b4864-cec9-4351-9afa-caf02345a043",
@@ -28425,7 +28515,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest10"
                 },
                 {
                     "id": "c60f0deb-d700-470a-bbe6-ceb06befee1e",
@@ -28489,7 +28580,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_quest11"
                 }
             ],
             "triggers": [],
@@ -28532,7 +28624,8 @@
             "playerHit3Script": [],
             "paletteIds": [
                 "default-ui"
-            ]
+            ],
+            "symbol": "scene_menu_page_2"
         },
         {
             "name": "Path to Sample Town",
@@ -34372,7 +34465,8 @@
                     "name": "Sign Post",
                     "moveSpeed": 1,
                     "animSpeed": 3,
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post"
                 },
                 {
                     "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e",
@@ -34658,7 +34752,8 @@
                     ],
                     "hit1Script": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_turnip_1"
                 },
                 {
                     "spriteSheetId": "c475c713-9fd8-455a-b9bc-8c62b2b8fd5e",
@@ -34812,7 +34907,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_gardener"
                 },
                 {
                     "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e",
@@ -35098,7 +35194,8 @@
                     ],
                     "hit1Script": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_turnip_2"
                 },
                 {
                     "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e",
@@ -35384,7 +35481,8 @@
                     ],
                     "hit1Script": [],
                     "hit2Script": [],
-                    "hit3Script": []
+                    "hit3Script": [],
+                    "symbol": "actor_turnip_3"
                 },
                 {
                     "spriteSheetId": "30b8266a-0533-4f90-bd33-e97dc1d498ea",
@@ -35417,7 +35515,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "name": "Sign Post",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_sign_post"
                 },
                 {
                     "spriteSheetId": "000a6dde-cb60-436e-b357-30a529daa139",
@@ -35492,7 +35591,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "name": "Save Point",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_save_point"
                 }
             ],
             "triggers": [
@@ -35530,7 +35630,8 @@
                             "id": "84e29287-3310-4a50-83a1-b57ad6076dd9",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -35603,7 +35704,8 @@
                             "id": "dacfb9c9-ffc6-4fbb-bef7-cbcef6fbf662",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -35639,7 +35741,8 @@
                             "id": "3be58c9d-6d75-4950-a1d4-457d716755b0",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -35681,7 +35784,8 @@
                             "id": "33949415-b9e2-4600-8c7b-842d9787def6",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -35748,7 +35852,8 @@
                             "id": "c1e0b86f-38c2-4db2-ad06-b80385dc308b",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "type": "1",
@@ -35934,7 +36039,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_path_to_sample_town"
         },
         {
             "name": "Deep Space",
@@ -37039,7 +37145,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_space_dog"
                 },
                 {
                     "spriteSheetId": "94eb6557-0cfc-453e-8e1f-ddb191ac8536",
@@ -37074,7 +37181,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_portal"
                 },
                 {
                     "spriteSheetId": "000a6dde-cb60-436e-b357-30a529daa139",
@@ -37149,7 +37257,8 @@
                     "hit2Script": [],
                     "hit3Script": [],
                     "name": "Save Point",
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_save_point"
                 }
             ],
             "triggers": [
@@ -37176,7 +37285,8 @@
                             "id": "b948b1f8-1d7b-4ad5-bd13-1b4c1476cecf",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "script": [
@@ -37248,7 +37358,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_deep_space"
         },
         {
             "name": "Launch Site",
@@ -38011,7 +38122,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_pod_door"
                 },
                 {
                     "spriteSheetId": "7a27b229-5f3d-4eaa-b20c-07997673324d",
@@ -38198,7 +38310,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_scientist"
                 },
                 {
                     "spriteSheetId": "8cb9c002-1abc-458c-9588-9b55af8efb08",
@@ -38230,7 +38343,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_machine"
                 },
                 {
                     "spriteSheetId": "8cb9c002-1abc-458c-9588-9b55af8efb08",
@@ -38262,7 +38376,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_machine"
                 },
                 {
                     "spriteSheetId": "8cb9c002-1abc-458c-9588-9b55af8efb08",
@@ -38294,7 +38409,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_machine"
                 },
                 {
                     "spriteSheetId": "8cb9c002-1abc-458c-9588-9b55af8efb08",
@@ -38326,7 +38442,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_machine"
                 }
             ],
             "triggers": [
@@ -38353,7 +38470,8 @@
                             "id": "3fdc21e1-fac9-441d-bba5-5cc0fcb5fd0f",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 },
                 {
                     "trigger": "walk",
@@ -38531,7 +38649,8 @@
                             "id": "ab1fb590-ac54-4570-9f2b-aad5d6f4f90b",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "script": [
@@ -38606,7 +38725,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_launch_site"
         },
         {
             "name": "Deeper Underground",
@@ -39889,7 +40009,8 @@
                     "hit1Script": [],
                     "hit2Script": [],
                     "hit3Script": [],
-                    "collisionGroup": ""
+                    "collisionGroup": "",
+                    "symbol": "actor_chest"
                 }
             ],
             "triggers": [
@@ -39916,7 +40037,8 @@
                             "id": "43ab4da7-0922-4c2b-87e6-bc7f09a8d8ba",
                             "command": "EVENT_END"
                         }
-                    ]
+                    ],
+                    "symbol": "trigger_0"
                 }
             ],
             "type": "1",
@@ -39989,7 +40111,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_deeper_underground"
         },
         {
             "name": "Dream",
@@ -40779,7 +40902,8 @@
             ],
             "playerHit1Script": [],
             "playerHit2Script": [],
-            "playerHit3Script": []
+            "playerHit3Script": [],
+            "symbol": "scene_dream"
         }
     ],
     "backgrounds": [
@@ -41579,7 +41703,8 @@
                     "id": "ce6a6855-bbff-4e39-820d-11d0e51282aa",
                     "command": "EVENT_END"
                 }
-            ]
+            ],
+            "symbol": "script_init_menu"
         },
         {
             "id": "a02c8ee7-1478-4317-80d7-1c3fc9704e8d",
@@ -41629,7 +41754,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Attach bullets to A button for Shooter scenes"
+            "description": "Attach bullets to A button for Shooter scenes",
+            "symbol": "script_init_weapons"
         },
         {
             "id": "275fa6d7-1cb5-49ec-8e45-a5164f25ff7a",
@@ -41697,7 +41823,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Hide Turnip if already defeated"
+            "description": "Hide Turnip if already defeated",
+            "symbol": "script_turnip_init"
         },
         {
             "id": "44d1efc4-28a2-423f-8571-5911c45c8c0b",
@@ -41768,7 +41895,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Move Turnip towards player"
+            "description": "Move Turnip towards player",
+            "symbol": "script_turnip_movement"
         },
         {
             "id": "44fff45e-a915-4eb9-915b-647ee134d64e",
@@ -41898,7 +42026,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Handle player jumping on turnips or being hurt"
+            "description": "Handle player jumping on turnips or being hurt",
+            "symbol": "script_turnip_collisions"
         },
         {
             "id": "2fe3aa9b-1ada-4d85-91f0-b1f4f9dcc910",
@@ -41971,7 +42100,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Play enemy explosion animation and play sound effect"
+            "description": "Play enemy explosion animation and play sound effect",
+            "symbol": "script_enemy_ship_destroy"
         },
         {
             "id": "e9f494a1-aabf-421b-a7b2-40211e77d9de",
@@ -42002,7 +42132,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Shake screen and play sound effect"
+            "description": "Shake screen and play sound effect",
+            "symbol": "script_enemy_ship_hit_playe"
         },
         {
             "id": "d6bb5d0f-9c04-44a8-9f5d-b7f62db8805a",
@@ -42081,7 +42212,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Move up and down shooting in middle of movement"
+            "description": "Move up and down shooting in middle of movement",
+            "symbol": "script_enemy_ship_movement_"
         },
         {
             "id": "8ea9be15-dd40-4465-8143-cf29ea7fe4a0",
@@ -42160,7 +42292,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Move diagonally backwards and forwards shooting in middle of movement"
+            "description": "Move diagonally backwards and forwards shooting in middle of movement",
+            "symbol": "script_enemy_ship_movement_"
         },
         {
             "id": "1038d571-8b9e-4691-a857-bbb73a1a2ea2",
@@ -42239,7 +42372,8 @@
                     "command": "EVENT_END"
                 }
             ],
-            "description": "Move from top of screen to bottom of screen shooting in the middle"
+            "description": "Move from top of screen to bottom of screen shooting in the middle",
+            "symbol": "script_enemy_ship_movement_"
         },
         {
             "id": "abf2430e-0451-42b4-a415-22987dbb18af",
@@ -42318,7 +42452,8 @@
                 }
             ],
             "name": "Enemy Ship Movement Diagonal Bottom To Top",
-            "description": "Move from bottom of screen to top of screen shooting in the middle"
+            "description": "Move from bottom of screen to top of screen shooting in the middle",
+            "symbol": "script_enemy_ship_movement_"
         }
     ],
     "music": [
@@ -42403,95 +42538,118 @@
     "variables": [
         {
             "id": "0",
-            "name": "Quest1"
+            "name": "Quest1",
+            "symbol": "var_quest1"
         },
         {
             "id": "1",
-            "name": "Quest2"
+            "name": "Quest2",
+            "symbol": "var_quest2"
         },
         {
             "id": "2",
-            "name": "Quest3"
+            "name": "Quest3",
+            "symbol": "var_quest3"
         },
         {
             "id": "3",
-            "name": "Quest4"
+            "name": "Quest4",
+            "symbol": "var_quest4"
         },
         {
             "id": "4",
-            "name": "Quest5"
+            "name": "Quest5",
+            "symbol": "var_quest5"
         },
         {
             "id": "5",
-            "name": "Quest6"
+            "name": "Quest6",
+            "symbol": "var_quest6"
         },
         {
             "id": "6",
-            "name": "Quest7"
+            "name": "Quest7",
+            "symbol": "var_quest7"
         },
         {
             "id": "7",
-            "name": "Quest8"
+            "name": "Quest8",
+            "symbol": "var_quest8"
         },
         {
             "id": "8",
-            "name": "Quest9"
+            "name": "Quest9",
+            "symbol": "var_quest9"
         },
         {
             "id": "9",
-            "name": "Quest10"
+            "name": "Quest10",
+            "symbol": "var_quest10"
         },
         {
             "id": "10",
-            "name": "Quest11"
+            "name": "Quest11",
+            "symbol": "var_quest11"
         },
         {
             "id": "11",
-            "name": "Quest12"
+            "name": "Quest12",
+            "symbol": "var_quest12"
         },
         {
             "id": "12",
-            "name": "Turnip Counter"
+            "name": "Turnip Counter",
+            "symbol": "var_turnip_counter"
         },
         {
             "id": "13",
-            "name": "Seen Cat"
+            "name": "Seen Cat",
+            "symbol": "var_seen_cat"
         },
         {
             "id": "14",
-            "name": "Used Radio"
+            "name": "Used Radio",
+            "symbol": "var_used_radio"
         },
         {
             "id": "15",
-            "name": "Seen Duck"
+            "name": "Seen Duck",
+            "symbol": "var_seen_duck"
         },
         {
             "id": "16",
-            "name": "Pushed Ice Block"
+            "name": "Pushed Ice Block",
+            "symbol": "var_pushed_ice_block"
         },
         {
             "id": "871ea302-1cc1-463c-b9d7-530aac38fe81__L0",
-            "name": "Spoken to gardener"
+            "name": "Spoken to gardener",
+            "symbol": "var_spoken_to_gardener"
         },
         {
             "id": "dee20f46-fcaa-4473-94b1-9817dbd99fd8__L0",
-            "name": "Save Choice"
+            "name": "Save Choice",
+            "symbol": "var_save_choice"
         },
         {
             "id": "4159e95b-34e4-42e8-bf25-67f2078e804f__L0",
-            "name": "Defeated"
+            "name": "Defeated",
+            "symbol": "var_defeated"
         },
         {
             "id": "2f01ca47-9361-4271-b1f2-75d55e85bf1f__L0",
-            "name": "Defeated"
+            "name": "Defeated",
+            "symbol": "var_defeated"
         },
         {
             "id": "98159e3a-0bfe-44ec-8312-9dcef04c253f__L0",
-            "name": "Defeated"
+            "name": "Defeated",
+            "symbol": "var_defeated"
         },
         {
             "id": "4912bee2-387a-472f-ae4f-6679b6149517__L0",
-            "name": "Menu Choice"
+            "name": "Menu Choice",
+            "symbol": "var_menu_choice"
         }
     ],
     "settings": {

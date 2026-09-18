@@ -37,13 +37,14 @@ test("should migrate conditional events from 1.0.0 to 2.0.0", () => {
   const newProject = JSON.parse(JSON.stringify(migrateProject(oldProject)));
   expect(newProject).toEqual({
     _version: "2.0.0",
-    _release: "6",
+    _release: "7",
     settings: {
       startMoveSpeed: 1,
       startAnimSpeed: 3,
     },
     scenes: [
       {
+        symbol: "scene_1",
         width: 32,
         height: 32,
         actors: [],
@@ -70,7 +71,7 @@ test("should migrate conditional events from 1.0.0 to 2.0.0", () => {
                 }
               ]
             },
-   
+
           }
         ],
         playerHit1Script: [],
@@ -80,6 +81,7 @@ test("should migrate conditional events from 1.0.0 to 2.0.0", () => {
     ],
     backgrounds: [],
     customEvents: [],
+    variables: [],
     engineFieldValues: [{
       id: "fade_style",
       value: 0
@@ -120,7 +122,7 @@ test("should carry SNES-only settings through the 1.2.0 -> 2.0.0 migration uncha
     customControlsR: "p",
   });
   expect(newProject._version).toBe("2.0.0");
-  expect(newProject._release).toBe("6");
+  expect(newProject._release).toBe("7");
 });
 
 test("should migrate conditional events from 1.2.0 to 2.0.0", () => {
@@ -162,15 +164,16 @@ test("should migrate conditional events from 1.2.0 to 2.0.0", () => {
   const newProject = JSON.parse(JSON.stringify(migrateProject(oldProject)));
   expect(newProject).toEqual({
     _version: "2.0.0",
-    _release: "6",
+    _release: "7",
     settings: {
       startMoveSpeed: 1,
       startAnimSpeed: 3,
     },
     scenes: [
       {
+        symbol: "scene_1",
         width: 32,
-        height: 32,        
+        height: 32,
         actors: [],
         triggers: [],
         collisions: [],
@@ -199,14 +202,15 @@ test("should migrate conditional events from 1.2.0 to 2.0.0", () => {
         ],
         playerHit1Script: [],
         playerHit2Script: [],
-        playerHit3Script: []        
+        playerHit3Script: []
       }
     ],
     backgrounds: [],
     customEvents: [],
+    variables: [],
     engineFieldValues: [{
       id: "fade_style",
       value: 0
-    }],      
+    }],
   });
 });

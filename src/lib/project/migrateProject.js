@@ -3,6 +3,7 @@ import { indexBy } from "../helpers/array";
 import { mapScenesEvents, mapEvents } from "../helpers/eventSystem";
 import generateRandomWalkScript from "../movement/generateRandomWalkScript";
 import generateRandomLookScript from "../movement/generateRandomLookScript";
+import { toValidSymbol } from "../helpers/symbols";
 import { COLLISION_ALL } from "../../consts";
 
 const indexById = indexBy("id");
@@ -58,7 +59,11 @@ const migrateProject = project => {
     }
     if (release === "5") {
       data = migrateFrom200r5To200r6Actors(data);
-      release = "6";      
+      release = "6";
+    }
+    if (release === "6") {
+      data = migrateFrom200r6To200r7Symbols(data);
+      release = "7";
     }
   }
 
@@ -873,6 +878,49 @@ const migrateFrom200r5To200r6Actors = data => {
         })
       };
     })
+  };
+};
+
+/*
+ * Version 2.0.0 r7 backfills a stable `symbol` (a valid C identifier,
+ * independent of the editable `name`) onto every named entity - ported from
+ * GB Studio 3.x's own migrateFrom300r2To300r3. Not yet read by the SNES
+ * compiler (which still derives its own asm labels ad hoc per compile) -
+ * this only makes the field available for whenever something needs it.
+ */
+const migrateFrom200r6To200r7Symbols = data => {
+  return {
+    ...data,
+    scenes: data.scenes.map((scene, sceneIndex) => {
+      return {
+        ...scene,
+        symbol: toValidSymbol(`scene_${scene.name || sceneIndex + 1}`),
+        actors: scene.actors.map(actor => {
+          return {
+            ...actor,
+            symbol: toValidSymbol(`actor_${actor.name || 0}`),
+          };
+        }),
+        triggers: scene.triggers.map(trigger => {
+          return {
+            ...trigger,
+            symbol: toValidSymbol(`trigger_${trigger.name || 0}`),
+          };
+        }),
+      };
+    }),
+    customEvents: (data.customEvents || []).map((customEvent, customEventIndex) => {
+      return {
+        ...customEvent,
+        symbol: toValidSymbol(`script_${customEvent.name || customEventIndex + 1}`),
+      };
+    }),
+    variables: (data.variables || []).map((variable, variableIndex) => {
+      return {
+        ...variable,
+        symbol: toValidSymbol(`var_${variable.name || variableIndex + 1}`),
+      };
+    }),
   };
 };
 

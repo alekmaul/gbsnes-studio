@@ -14,6 +14,7 @@ export type ScriptEvent = {
 export type Actor = {
   id: string;
   name: string;
+  symbol?: string;
   notes?: string;
   x: number;
   y: number;
@@ -37,6 +38,7 @@ export type Actor = {
 export type Trigger = {
   id: string;
   name: string;
+  symbol?: string;
   notes?: string;
   x: number;
   y: number;
@@ -75,6 +77,7 @@ export type Music = {
 export type Variable = {
   id: string;
   name: string;
+  symbol?: string;
 };
 
 export type CustomEventVariable = {
@@ -91,6 +94,7 @@ export type CustomEventActor = {
 export type CustomEvent = {
   id: string;
   name: string;
+  symbol?: string;
   description: string;
   variables: Dictionary<CustomEventVariable>;
   actors: Dictionary<CustomEventActor>;
@@ -117,6 +121,7 @@ export type Scene = {
   id: string;
   type: string;
   name: string;
+  symbol?: string;
   notes?: string;
   labelColor?: string;
   x: number;
