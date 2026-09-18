@@ -9,7 +9,13 @@ import * as eventHelpers from "./helpers";
 import * as gbStudioHelpers from "../helpers/gbstudio";
 import * as eventSystemHelpers from "../helpers/eventSystem";
 import * as compileEntityEvents from "../compiler/compileEntityEvents";
-import trimLines from "../helpers/trimlines";
+// Namespace import (not the default export) so the mock below keeps a
+// `.default` key - eventTextDialogue.js/eventMenu.js/eventTextChoice.js all
+// do `require("../helpers/trimlines").default`, matching every other mock
+// here. A plain default import would hand the sandbox the already-unwrapped
+// function with no `.default` on it, breaking that call with
+// "trimlines is not a function" the moment any of those fields run.
+import * as trimLinesModule from "../helpers/trimlines";
 import * as compilerTargets from "../compiler/targets";
 
 const VM2 = __non_webpack_require__("vm2");
@@ -27,7 +33,7 @@ const vm = new NodeVM({
       "../helpers/gbstudio": gbStudioHelpers,
       "../helpers/eventSystem": eventSystemHelpers,
       "../compiler/compileEntityEvents": compileEntityEvents,
-      "../helpers/trimlines": trimLines,
+      "../helpers/trimlines": trimLinesModule,
       "../compiler/targets": compilerTargets
     }
   }
