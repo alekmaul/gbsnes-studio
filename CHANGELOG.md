@@ -5,16 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] - `v2` branch, in progress
+## [2.0.0] - 2026-09-18 - `v2` branch
 
-Rebuilding SNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
+Rebuilt SNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
 2.0.0-beta5** instead of 1.2.2 — webpack + TypeScript replacing `electron-compile`, Redux
 Toolkit, GBDK 2020, and the new genre-based GB engine (Top Down / Platformer / Shoot Em Up /
-Point and Click / Adventure). `main` stays untouched and frozen at `v1.1.4` while this runs.
-`package.json` on `v2` deliberately stays `1.1.4` until this ships — no `2.0.0` tag/release yet,
-so no version-numbered entry here either. Tracked as 14 milestones; the roadmap artifact and
-`MIGRATION_V2_AUDIT.md` (repo root, `v2` branch) are the detailed decision log. 12 of 14 done
-as of 2026-09-13:
+Point and Click / Adventure). `main` stays untouched and frozen at `v1.1.4`.
+Tracked as 14 milestones; the roadmap artifact and `MIGRATION_V2_AUDIT.md` (repo root, `v2`
+branch) are the detailed decision log. **14 of 14 done as of 2026-09-18** — `v2` is
+feature-complete:
 
 - **M0-M1**: audit of the 1.2.2→2.0.0-beta5 diff; the bare GB target builds, packages, and
   boots a real project's ROM on the new base (no SNES yet).
@@ -71,10 +70,40 @@ as of 2026-09-13:
 - Windows packaging verified end-to-end locally (`yarn make:win`, mimicking the CI job): a
   real Squirrel installer + zip build, `app.asar` contents inspected directly and confirmed
   correct.
+- **M13 (functional-parity checklist against `v1.1.4`, complete)**: every item verified in
+  real interactive play (offscreen Electron + real keyboard dispatch + WRAM reads, a much
+  faster and more reliable technique than driving the packaged app's own window) — dialogue/
+  menus, emotes (`ACTOR_EMOTE`), overlay show/move/hide as their own explicit action (not just
+  the Logo intro curtain), music layered with sound effects (a distinct DSP voice per effect,
+  confirmed via SPC700 register interception), a full SRAM save → new session → reload →
+  confirm-loaded cycle (not just save-then-immediately-load), X/Y/L/R input, and per-scene
+  sprite-sheet/OBJ-palette limits. Two real, pre-existing SNES compiler crashes found and fixed
+  along the way (`EVENT_LAUNCH_PROJECTILE`/`EVENT_ACTOR_SET_SPRITE` reading a GB-only field the
+  SNES compiler never populates; `ACTOR_SET_SPRITE` pushing a GB Studio 1.2.2 field name that
+  no longer exists on the v2 project schema) — both opcodes stay documented `Script_Noop_b`
+  placeholders on the SNES engine, only the compiler no longer crashes on them.
+- **All 5 scene genres verified in real gameplay** (Top Down, Platformer, Point and Click,
+  Shoot Em Up, Adventure) — the last 4 had never been exercised with real input before this
+  milestone. Added `appData/templates/snesgbs2` (a copy of `gbs2`, the real GB Studio 2.0
+  sample with scenes in all 5 genres — `sneshtml` is derived from the older, Top-Down-only
+  `gbhtml`), now a selectable "Sample Project (SNES, all genres)" template; a new Settings >
+  Target Platform "ROM Size" field (256KB-2MB) since `gbs2`'s much larger asset set overflows
+  the previous hardcoded 8-bank default. Adventure's free-pixel diagonal movement + per-axis
+  collision (tested via `sneshtml`'s Outside scene, since `snesgbs2` has no Adventure scene)
+  is the first real interactive verification that code path has ever had — its own comment
+  noted it "isn't Mesen-verifiable" when it was written.
+- Rebranded **"GBSNES Studio" → "SNES Studio"**, in two passes: first brought `v2`'s window
+  titles and every `src/lang/*.json` string up to the "GBSNES Studio" branding `main` already
+  had (missed when `v2` was first imported from upstream GB Studio 2.0.0-beta5 — only
+  `package.json`/`forge.config.js` had it), then renamed that to "SNES Studio" project-wide,
+  including the lowercase technical identifiers (npm name, `executableName`, the Squirrel
+  installer name/exe, CI artifact names) — but not the actual `github.com/alekmaul/gbsnes-studio`
+  repository URLs, which aren't changing. Also fixed a real bug found along the way: the macOS
+  notarize hook's own build-output path was already stale (`GB Studio-darwin-x64/...`,
+  should have tracked `productName`), which would have made a real macOS release build fail to
+  notarize.
 
-Remaining: **M13** (full functional-parity checklist against `v1.1.4` + the `v2.0.0` tag itself).
-Real macOS/Linux CI runs (this workflow, now finally triggered on `v2`) haven't been watched
-end to end yet — no such environment available from this Windows dev machine.
+`v2` is now feature-complete against `v1.1.4`.
 
 ## [1.1.4] - 2026-09-12
 
