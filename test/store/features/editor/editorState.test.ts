@@ -55,16 +55,6 @@ test("Should be able to set brush", () => {
   expect(newState.selectedBrush).toBe("fill");
 });
 
-test("Should be able to set selected palette", () => {
-  const state: EditorState = {
-    ...initialState,
-    selectedPalette: 0,
-  };
-  const action = actions.setSelectedPalette({ paletteIndex: 2 });
-  const newState = reducer(state, action);
-  expect(newState.selectedPalette).toBe(2);
-});
-
 test("Should be able to set selected tile type", () => {
   const state: EditorState = {
     ...initialState,

@@ -12,33 +12,19 @@ import {
   SceneShape,
   EventShape,
   BackgroundShape,
-  PaletteShape,
 } from "../../store/stateShape";
 import { assetFilename } from "../../lib/helpers/gbstudio";
 import SceneCursor from "./SceneCursor";
-import ColorizedImage from "./ColorizedImage";
 import {
-  TOOL_COLORS,
   TOOL_COLLISIONS,
   TOOL_ERASER,
-  DMG_PALETTE,
 } from "../../consts";
-import { getCachedObject } from "../../lib/helpers/cache";
 import SceneInfo from "./SceneInfo";
-import { sceneSelectors, actorSelectors, triggerSelectors, backgroundSelectors, paletteSelectors } from "../../store/features/entities/entitiesState";
+import { sceneSelectors, actorSelectors, triggerSelectors, backgroundSelectors } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
 import entitiesActions from "../../store/features/entities/entitiesActions";
 
 const TILE_SIZE = 8;
-
-const dmgPalettes = [
-  DMG_PALETTE,
-  DMG_PALETTE,
-  DMG_PALETTE,
-  DMG_PALETTE,
-  DMG_PALETTE,
-  DMG_PALETTE,
-];
 
 class Scene extends Component {
   constructor() {
@@ -130,7 +116,6 @@ class Scene extends Component {
       projectRoot,
       selected,
       hovered,
-      palettes,
       sceneFiltered,
       showEntities,
       showCollisions,
@@ -144,7 +129,6 @@ class Scene extends Component {
       triggers = [],
       collisions = [],
       actors = [],
-      tileColors,
       labelColor
     } = scene;
 
@@ -195,7 +179,7 @@ class Scene extends Component {
           }}
         >
           {image && (
-            <ColorizedImage
+            <img
               className="Scene__Background"
               alt=""
               width={width * TILE_SIZE}
@@ -205,8 +189,6 @@ class Scene extends Component {
                 "backgrounds",
                 image
               )}?_v=${image._v}`}
-              tiles={tileColors}
-              palettes={palettes}
             />
           )}
           {showCollisions && (
@@ -266,7 +248,6 @@ Scene.propTypes = {
   height: PropTypes.number.isRequired,
   selected: PropTypes.bool.isRequired,
   hovered: PropTypes.bool.isRequired,
-  palettes: PropTypes.arrayOf(PaletteShape).isRequired,
   showEntities: PropTypes.bool.isRequired,
   showCollisions: PropTypes.bool.isRequired,
   zoomRatio: PropTypes.number.isRequired,
@@ -349,41 +330,10 @@ function mapStateToProps(state, props) {
       scene.id !== searchTerm) ||
     false;
 
-  const gbcEnabled = settings.customColorsEnabled;
-
   const showEntities =
-    (tool !== TOOL_COLORS &&
-      tool !== TOOL_COLLISIONS &&
-      tool !== TOOL_ERASER) ||
-    showLayers;
+    (tool !== TOOL_COLLISIONS && tool !== TOOL_ERASER) || showLayers;
   const showCollisions =
-    (tool !== TOOL_COLORS || showLayers) &&
-    (settings.showCollisions || tool === TOOL_COLLISIONS);
-
-  const palettesLookup = paletteSelectors.selectEntities(state);
-  const defaultBackgroundPaletteIds =
-    settings.defaultBackgroundPaletteIds || [];
-  const sceneBackgroundPaletteIds = scene.paletteIds || [];
-
-  const getPalette = (paletteIndex) => {
-    if(sceneBackgroundPaletteIds[paletteIndex] === "dmg") {
-      return DMG_PALETTE;
-    }
-    return palettesLookup[sceneBackgroundPaletteIds[paletteIndex]]
-      || palettesLookup[defaultBackgroundPaletteIds[paletteIndex]]
-      || DMG_PALETTE;
-  }
-
-  const palettes = gbcEnabled
-    ? getCachedObject([
-        getPalette(0),
-        getPalette(1),
-        getPalette(2),
-        getPalette(3),
-        getPalette(4),
-        getPalette(5),
-      ])
-    : dmgPalettes;
+    settings.showCollisions || tool === TOOL_COLLISIONS;
 
   return {
     scene,
@@ -400,7 +350,6 @@ function mapStateToProps(state, props) {
     hovered,
     sceneName,
     sceneFiltered,
-    palettes,
     showEntities,
     showCollisions,
     labelOffsetLeft,

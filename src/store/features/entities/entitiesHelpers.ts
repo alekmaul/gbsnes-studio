@@ -25,7 +25,6 @@ const sceneSchema = new schema.Entity("scenes", {
   // script: [eventSchema],
 });
 const customEventsSchema = new schema.Entity("customEvents");
-const palettesSchema = new schema.Entity("palettes");
 const engineFieldValuesSchema = new schema.Entity("engineFieldValues");
 
 const projectSchema = {
@@ -35,7 +34,6 @@ const projectSchema = {
   spriteSheets: [spriteSheetsSchema],
   variables: [variablesSchema],
   customEvents: [customEventsSchema],
-  palettes: [palettesSchema],
   engineFieldValues: [engineFieldValuesSchema]
 };
 
@@ -52,7 +50,6 @@ export const denormalizeEntities = (
     scenes: state.scenes.ids,
     backgrounds: state.backgrounds.ids,
     spriteSheets: state.spriteSheets.ids,
-    palettes: state.palettes.ids,
     customEvents: state.customEvents.ids,
     music: state.music.ids,
     variables: state.variables.ids,
@@ -64,7 +61,6 @@ export const denormalizeEntities = (
     scenes: state.scenes.entities,
     backgrounds: state.backgrounds.entities,
     spriteSheets: state.spriteSheets.entities,
-    palettes: state.palettes.entities,
     customEvents: state.customEvents.entities,
     music: state.music.entities,
     variables: state.variables.entities,

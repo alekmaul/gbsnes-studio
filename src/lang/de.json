@@ -14,7 +14,6 @@
   "NAV_BACKGROUNDS": "Hintergründe",
   "NAV_UI_ELEMENTS": "UI Elemente",
   "NAV_MUSIC": "Musik",
-  "NAV_PALETTES": "Palettes",
   "NAV_DIALOGUE_REVIEW": "Dialog Übersicht",
   "NAV_BUILD_AND_RUN": "Bauen & Starten",
   "NAV_SETTINGS": "Einstellungen",
@@ -39,10 +38,8 @@
   "TOOL_ADD_SCENE_LABEL": "Szene hinzufügen",
   "TOOL_ERASER_LABEL": "Radierer",
   "TOOL_COLLISIONS_LABEL": "Kollisionen",
-  "TOOL_COLORS_LABEL": "Einfärben",
   "TOOL_BRUSH": "Pinsel {size}",
   "TOOL_FILL": "Füllen",
-  "TOOL_PALETTE_N": "Palette {number}",
   "TOOL_SHOW_LAYERS": "Alle Ebenen anzeigen",
   "TOOL_HIDE_LAYERS": "Ebenen ausblenden",
 
@@ -206,9 +203,6 @@
   "FIELD_LOCAL": "Lokal",
   "FIELD_GLOBAL": "Global",
   "FIELD_LOADING": "Laden...",
-  "FIELD_PALETTE": "Palette",
-  "FIELD_PALETTES": "Paletten",
-  "FIELD_PLAYER_PALETTE": "Spieler-Palette",
   "FIELD_HEX_COLOR": "Hex Farbe",
   "FIELD_CLOSEST_MATCH": "Nächste Übereinstimmung finden",
   "FIELD_HUE": "Farbton",
@@ -216,9 +210,6 @@
   "FIELD_BRIGHTNESS": "Helligkeit",
   "FIELD_COLOR_LIGHTEST": "Am hellsten",
   "FIELD_COLOR_DARKEST": "Am dunkelsten",
-  "FIELD_EXPORT_IN_COLOR": "Farbmodus aktivieren",
-  "FIELD_GLOBAL_DEFAULT": "Globale Vorgabe",
-  "FIELD_EDIT_PALETTES": "Paletten bearbeiten",
   "FIELD_WAIT_UNTIL_FINISHED": "Warten bis zum Ende",
   "FIELD_ACTOR_TYPE": "Sprite-Typ",
   "FIELD_OFFSET_X": "Offset X",
@@ -365,8 +356,6 @@
   "EVENT_ACTOR_SET_SPRITE": "Darsteller: Sprite-Blatt festlegen",
   "EVENT_PLAYER_BOUNCE": "Darsteller: Spieler-Abprall",
   "EVENT_WEAPON_ATTACK": "Gegenstand: Angriff",
-  "EVENT_PALETTE_SET_BACKGROUND": "Palette: Hintergrundpalette festlegen",
-  "EVENT_PALETTE_SET_UI": "Palette: UI-Palette festlegen",
   "EVENT_ACTOR_STOP_UPDATE": "Darsteller: Stoppt \"Zur Aktualisierung\" Skript",
   "EVENT_ACTOR_SET_ANIMATE": "Darsteller: Animieren im stillstand einstellen",
   
@@ -391,7 +380,6 @@
   "MENU_BACKGROUNDS": "Hintergründe",
   "MENU_UI_ELEMENTS": "UI Elemente",
   "MENU_MUSIC": "Musik",
-  "MENU_PALETTES": "Paletten",
   "MENU_DIALOGUE_REVIEW": "Dialog Übersicht",
   "MENU_BUILD_AND_RUN": "Bauen && Ausführen",
   "MENU_SETTINGS": "Einstellungen",
@@ -554,7 +542,6 @@
 
   "// 17 ": "Palettes ---------------------------------------------------",
 
-  "PALETTES_EDITOR": "Paletten-Editor",
 
   "// 18 ": "Error ------------------------------------------------------",
 

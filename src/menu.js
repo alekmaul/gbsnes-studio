@@ -187,29 +187,22 @@ const buildMenu = async (plugins = []) => {
           }
         },
         {
-          label: l10n("MENU_PALETTES"),
-          accelerator: "CommandOrControl+6",
-          click: () => {
-            notifyListeners("section", "palettes");
-          }
-        },
-        {
           label: l10n("MENU_DIALOGUE_REVIEW"),
-          accelerator: "CommandOrControl+7",
+          accelerator: "CommandOrControl+6",
           click: () => {
             notifyListeners("section", "dialogue");
           }
         },
         {
           label: l10n("MENU_BUILD_AND_RUN"),
-          accelerator: "CommandOrControl+8",
+          accelerator: "CommandOrControl+7",
           click: () => {
             notifyListeners("section", "build");
           }
         },
         {
           label: l10n("MENU_SETTINGS"),
-          accelerator: "CommandOrControl+9",
+          accelerator: "CommandOrControl+8",
           click: () => {
             notifyListeners("section", "settings");
           }

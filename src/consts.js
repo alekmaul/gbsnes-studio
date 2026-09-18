@@ -47,7 +47,6 @@ const MIDDLE_MOUSE = 2;
 export const TOOL_SELECT = "select";
 export const TOOL_ACTORS = "actors";
 export const TOOL_COLLISIONS = "collisions";
-export const TOOL_COLORS = "colors";
 export const TOOL_SCENE = "scene";
 export const TOOL_TRIGGERS = "triggers";
 export const TOOL_ERASER = "eraser";
@@ -73,12 +72,6 @@ export const DRAG_PLAYER = "DRAG_PLAYER";
 export const DRAG_DESTINATION = "DRAG_DESTINATION";
 export const DRAG_ACTOR = "DRAG_ACTOR";
 export const DRAG_TRIGGER = "DRAG_TRIGGER";
-
-export const DMG_PALETTE = {
-  id: "dmg",
-  name: "DMG (GB Default)",
-  colors: [ "E8F8E0", "B0F088", "509878", "202850" ]
-};
 
 export const TMP_VAR_1 = "T0";
 export const TMP_VAR_2 = "T1";

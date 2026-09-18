@@ -3,14 +3,8 @@ import { useSelector } from "react-redux";
 import styled, { css } from "styled-components";
 import l10n from "../../lib/helpers/l10n";
 import { RootState } from "../../store/configureStore";
-import {
-  paletteSelectors,
-  spriteSheetSelectors,
-} from "../../store/features/entities/entitiesState";
-import {
-  Palette,
-  SpriteSheet,
-} from "../../store/features/entities/entitiesTypes";
+import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
+import { SpriteSheet } from "../../store/features/entities/entitiesTypes";
 import { SelectMenu, selectMenuStyleProps } from "../ui/form/Select";
 import { RelativePortal } from "../ui/layout/RelativePortal";
 import SpriteSheetCanvas from "../world/SpriteSheetCanvas";
@@ -22,7 +16,6 @@ interface SpriteSheetSelectProps {
   direction?: string;
   includeInfo?: boolean;
   frame?: number;
-  paletteId?: string;
   onChange?: (newId: string) => void;
   optional?: boolean;
   optionalLabel?: string;
@@ -151,7 +144,6 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   value,
   direction,
   frame,
-  paletteId,
   onChange,
   includeInfo,
   optional,
@@ -164,9 +156,6 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spriteSheet = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, value || "")
-  );
-  const palette = useSelector((state: RootState) =>
-    paletteSelectors.selectById(state, paletteId || "")
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [buttonFocus, setButtonFocus] = useState<boolean>(false);
@@ -253,7 +242,6 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
                 spriteSheetId={value}
                 direction={direction}
                 frame={frame}
-                palette={palette}
               />
             </PreviewWrapper>
           ) : (
@@ -287,7 +275,6 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
                 value={value}
                 frame={frame}
                 direction={direction}
-                paletteId={paletteId}
                 onChange={onSelectChange}
                 onBlur={closeMenu}
                 optional={optional}

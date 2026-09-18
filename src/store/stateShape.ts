@@ -63,11 +63,6 @@ export const CustomEventShape = PropTypes.shape({
   name: PropTypes.string
 });
 
-export const PaletteShape = PropTypes.shape({
-  id: PropTypes.string.isRequired,
-  colors: PropTypes.arrayOf(PropTypes.string).isRequired
-});
-
 export const ProjectShape = PropTypes.shape({
   name: PropTypes.string,
   author: PropTypes.string,
@@ -75,8 +70,7 @@ export const ProjectShape = PropTypes.shape({
   scenes: PropTypes.arrayOf(PropTypes.string),
   variables: PropTypes.arrayOf(PropTypes.string),
   backgrounds: PropTypes.arrayOf(PropTypes.string),
-  customEvents: PropTypes.arrayOf(PropTypes.string),
-  palettes: PropTypes.arrayOf(PropTypes.string)
+  customEvents: PropTypes.arrayOf(PropTypes.string)
 });
 
 export const ProjectMetadataShape = PropTypes.shape({

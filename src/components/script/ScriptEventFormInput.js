@@ -11,7 +11,6 @@ import FadeSpeedSelect from "../forms/FadeSpeedSelect";
 import CameraSpeedSelect from "../forms/CameraSpeedSelect";
 import { AnimationSpeedSelect } from "../forms/AnimationSpeedSelect";
 import { MovementSpeedSelect } from "../forms/MovementSpeedSelect";
-import PaletteSelect from "../forms/PaletteSelectOld";
 import ActorSelect from "../forms/ActorSelect";
 import EmoteSelect from "../forms/EmoteSelect";
 import OverlayColorSelect from "../forms/OverlayColorSelect";
@@ -90,7 +89,7 @@ class ScriptEventFormInput extends Component {
   }  
 
   render() {
-    const { type, id, value, defaultValue, args, field, entityId, allowRename, scope, defaultBackgroundPaletteIds, defaultUIPaletteId } = this.props;
+    const { type, id, value, defaultValue, args, field, entityId, allowRename, scope } = this.props;
 
     if (type === "textarea") {
       return (
@@ -182,48 +181,6 @@ class ScriptEventFormInput extends Component {
     if (type === "background") {
       return (
         <BackgroundSelect id={id} value={value} onChange={this.onChange} />
-      );
-    }
-    if (type === "palette") {
-      if (field.paletteType === "background") {
-        return (
-          <PaletteSelect
-            id={id}
-            value={value}
-            onChange={this.onChange}
-            prefix={`${field.paletteIndex + 1}: `}
-            optional
-            optionalLabel={l10n("FIELD_GLOBAL_DEFAULT")}
-            optionalDefaultPaletteId={
-              defaultBackgroundPaletteIds[field.paletteIndex] || ""
-            }
-            canKeep
-            keepLabel={l10n("FIELD_DONT_MODIFY")}
-          />
-        );
-      }
-      if (field.paletteType === "ui") {
-        return (
-          <PaletteSelect
-            id={id}
-            value={value}
-            onChange={this.onChange}
-            optional
-            optionalLabel={l10n("FIELD_GLOBAL_DEFAULT")}
-            optionalDefaultPaletteId={
-              defaultUIPaletteId || ""
-            }
-          />
-        );
-      }      
-      return (
-        <PaletteSelect
-          id={id}
-          value={value}
-          onChange={this.onChange}
-          optional
-          optionalLabel={l10n("FIELD_GLOBAL_DEFAULT")}
-        />
       );
     }
     if (type === "sprite") {
@@ -392,8 +349,6 @@ ScriptEventFormInput.propTypes = {
   allowRename: PropTypes.bool,
   onChange: PropTypes.func.isRequired,
   scope: PropTypes.string.isRequired,
-  defaultBackgroundPaletteIds: PropTypes.arrayOf(PropTypes.string).isRequired,
-  defaultUIPaletteId: PropTypes.string.isRequired,
 };
 
 ScriptEventFormInput.defaultProps = {
@@ -410,14 +365,8 @@ function mapStateToProps(state) {
   const scope = state.editor.type === "customEvent"
     ? "customEvent"
     : "global";
-  const settings = state.project.present.settings;
-  const defaultBackgroundPaletteIds =
-    settings.defaultBackgroundPaletteIds || [];
-  const defaultUIPaletteId = settings.defaultUIPaletteId || "";
   return {
     scope,
-    defaultBackgroundPaletteIds,
-    defaultUIPaletteId,
   };
 }
 

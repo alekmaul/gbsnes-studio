@@ -90,9 +90,6 @@ import {
   IF_ACTOR_RELATIVE_TO_ACTOR,
   PLAYER_BOUNCE,
   WEAPON_ATTACK,
-  PALETTE_SET_BACKGROUND,
-  PALETTE_SET_ACTOR,
-  PALETTE_SET_UI,
   ACTOR_STOP_UPDATE,
   ACTOR_SET_ANIMATE,
   IF_COLOR_SUPPORTED,
@@ -121,7 +118,6 @@ import {
   moveSpeedDec,
   animSpeedDec,
   collisionMaskDec,
-  paletteMaskDec,
   collisionGroupDec,
   actorRelativeDec,
   moveTypeDec,
@@ -359,36 +355,6 @@ class ScriptBuilder {
     output.push(moveSpeedDec(speed));
     output.push(((collisionMaskDec(collisionMask)) << 4) + collisionGroupDec(collisionGroup));
   }
-
-  // Palette
-
-  paletteSetBackground = (eventId, mask) => {
-    const output = this.output;
-    const { eventPaletteIndexes } = this.options;
-    const paletteIndex = eventPaletteIndexes[eventId] || 0;
-    output.push(cmd(PALETTE_SET_BACKGROUND));
-    output.push(paletteMaskDec(mask));
-    output.push(hi(paletteIndex));
-    output.push(lo(paletteIndex));
-  }
-
-  paletteSetActor = (eventId) => {
-    const output = this.output;
-    const { eventPaletteIndexes } = this.options;
-    const paletteIndex = eventPaletteIndexes[eventId] || 0;
-    output.push(cmd(PALETTE_SET_ACTOR));
-    output.push(hi(paletteIndex));
-    output.push(lo(paletteIndex));
-  }
-
-  paletteSetUI = (eventId) => {
-    const output = this.output;
-    const { eventPaletteIndexes } = this.options;
-    const paletteIndex = eventPaletteIndexes[eventId] || 0;
-    output.push(cmd(PALETTE_SET_UI));
-    output.push(hi(paletteIndex));
-    output.push(lo(paletteIndex));
-  }  
 
   // Text
 

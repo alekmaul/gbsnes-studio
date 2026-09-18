@@ -1,27 +1,6 @@
 import { directionToFrame } from "../../lib/helpers/gbstudio";
-import { hex2GBCrgb } from "../../lib/helpers/color";
 
 const workerCtx: Worker = self as any;
-
-const DMGPalette = [
-    [233, 242, 228],
-    [181, 214, 156],
-    [91, 144, 116],
-    [36, 50, 66],
-];
-
-const indexColour = (g: number) => {
-    if (g < 65) {
-        return 3;
-    }
-    if (g < 130) {
-        return 3;
-    }
-    if (g < 205) {
-        return 1;
-    }
-    return 0;
-};
 
 interface CacheRecord {
     canvas: OffscreenCanvas;
@@ -40,16 +19,10 @@ workerCtx.onmessage = async (evt) => {
     const numFrames = evt.data.numFrames;
     const type = evt.data.type;
     const frame = evt.data.frame;
-    const palette = evt.data.palette;
-    const paletteRGB = palette.map(hex2GBCrgb);
 
     let canvas: OffscreenCanvas;
     let ctx: OffscreenCanvasRenderingContext2D;
     let img: ImageBitmap;
-
-    const tileWidth = Math.floor(width / 8);
-    const tileHeight = Math.floor(width / 8);
-    const tilesLength = tileWidth * tileHeight;
 
     if (cache[src]) {
         // Using Cached Data
@@ -89,30 +62,15 @@ workerCtx.onmessage = async (evt) => {
     ctx.drawImage(img, spriteOffset * -width, 0);
     ctx.restore();
 
-    // Colorize
+    // Sprite sheets use a green background as a chroma-key marker (real
+    // alpha channels aren't guaranteed) - strip it to transparent, same
+    // check the old per-tile recolour pass used. No recolouring: SNES
+    // sprites use their own real PNG colours.
     const imageData = ctx.getImageData(0, 0, width, height);
     const data = imageData.data;
-
-    for (let t = 0; t < tilesLength; t++) {
-        const tX = t % tileWidth;
-        const tY = Math.floor(t / tileWidth);
-        const p1X = tX * 8;
-        const p2X = p1X + 8;
-        const p1Y = tY * 8;
-        const p2Y = p1Y + 8;
-        for (let pX = p1X; pX < p2X; pX++) {
-            for (let pY = p1Y; pY < p2Y; pY++) {
-                const index = (pX + pY * width) * 4;
-                const colorIndex = indexColour(data[index + 1]);
-                const color = paletteRGB[colorIndex];
-                if (data[index + 1] === 255) {
-                    // Set transparent background on pure green
-                    data[index + 3] = 0;
-                }
-                data[index] = color.r;
-                data[index + 1] = color.g;
-                data[index + 2] = color.b;
-            }
+    for (let i = 0; i < data.length; i += 4) {
+        if (data[i + 1] === 255) {
+            data[i + 3] = 0;
         }
     }
 

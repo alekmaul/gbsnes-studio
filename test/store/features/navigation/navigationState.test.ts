@@ -3,7 +3,6 @@ import reducer, {
   NavigationState,
 } from "../../../../src/store/features/navigation/navigationState";
 import actions from "../../../../src/store/features/navigation/navigationActions";
-import entityActions from "../../../../src/store/features/entities/entitiesActions";
 import consoleActions from "../../../../src/store/features/console/consoleActions";
 
 test("Should be able to set section", () => {
@@ -11,11 +10,11 @@ test("Should be able to set section", () => {
     ...initialState,
     section: "ui",
   };
-  const action = actions.setSection("palettes");
+  const action = actions.setSection("music");
   expect(state.section).toBe("ui");
 
   const newState = reducer(state, action);
-  expect(newState.section).toBe("palettes");
+  expect(newState.section).toBe("music");
 });
 
 test("Should be able to set navigation id", () => {
@@ -28,18 +27,6 @@ test("Should be able to set navigation id", () => {
 
   const newState = reducer(state, action);
   expect(newState.id).toBe("2");
-});
-
-test("Should set navigation id to newly created palette", () => {
-  const state: NavigationState = {
-    ...initialState,
-    id: "1",
-  };
-  const action = entityActions.addPalette();
-  const newPaletteId = action.payload.paletteId;
-
-  const newState = reducer(state, action);
-  expect(newState.id).toBe(newPaletteId);
 });
 
 test("Should switch to build page on any console errors", () => {

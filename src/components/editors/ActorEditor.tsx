@@ -32,9 +32,7 @@ import { LockIcon, LockOpenIcon, PinIcon } from "../ui/icons/Icons";
 import castEventValue from "../../lib/helpers/castEventValue";
 import { CheckboxField } from "../ui/form/CheckboxField";
 import DirectionPicker from "../forms/DirectionPicker";
-import { PaletteSelectButton } from "../forms/PaletteSelectButton";
 import {
-  DMG_PALETTE,
   SPRITE_TYPE_ACTOR,
   SPRITE_TYPE_ACTOR_ANIMATED,
   SPRITE_TYPE_ANIMATED,
@@ -134,13 +132,6 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
 
   const scene = useSelector((state: RootState) =>
     sceneSelectors.selectById(state, sceneId)
-  );
-  const defaultSpritePaletteId = useSelector(
-    (state: RootState) =>
-      state.project.present.settings.defaultSpritePaletteId || DMG_PALETTE.id
-  );
-  const colorsEnabled = useSelector(
-    (state: RootState) => state.project.present.settings.customColorsEnabled
   );
   const lockScriptEditor = useSelector(
     (state: RootState) => state.editor.lockScriptEditor
@@ -437,29 +428,10 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
                   frame={
                     actor.spriteType === SPRITE_TYPE_STATIC ? actor.frame : 0
                   }
-                  paletteId={
-                    colorsEnabled
-                      ? actor.paletteId || defaultSpritePaletteId
-                      : undefined
-                  }
                   onChange={onChangeField("spriteSheetId")}
                   includeInfo
                 />
               </FormField>
-
-              {colorsEnabled && (
-                <div style={{ marginTop: 18 }}>
-                  <PaletteSelectButton
-                    name="actorPalette"
-                    type="sprite"
-                    value={actor.paletteId}
-                    onChange={onChangeField("paletteId")}
-                    optional
-                    optionalLabel={l10n("FIELD_GLOBAL_DEFAULT")}
-                    optionalDefaultPaletteId={defaultSpritePaletteId}
-                  />
-                </div>
-              )}
             </FormRow>
             <FormRow>
               {showDirectionInput && (

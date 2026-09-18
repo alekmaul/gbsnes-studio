@@ -18,7 +18,6 @@ export type Tool =
   | "triggers"
   | "actors"
   | "collisions"
-  | "colors"
   | "scene"
   | "eraser"
   | "select";
@@ -68,7 +67,6 @@ export interface EditorState {
   worldScrollY: number;
   worldViewWidth: number;
   worldViewHeight: number;
-  selectedPalette: number;
   selectedTileType: number;
   selectedBrush: Brush;
   showLayers: boolean;
@@ -113,7 +111,6 @@ export const initialState: EditorState = {
   worldScrollY: 0,
   worldViewWidth: 0,
   worldViewHeight: 0,
-  selectedPalette: 0,
   selectedTileType: COLLISION_ALL,
   selectedBrush: BRUSH_8PX,
   showLayers: true,
@@ -143,13 +140,6 @@ const editorSlice = createSlice({
 
     setBrush: (state, action: PayloadAction<{ brush: Brush }>) => {
       state.selectedBrush = action.payload.brush;
-    },
-
-    setSelectedPalette: (
-      state,
-      action: PayloadAction<{ paletteIndex: number }>
-    ) => {
-      state.selectedPalette = action.payload.paletteIndex;
     },
 
     setSelectedTileType: (
@@ -540,11 +530,10 @@ const editorSlice = createSlice({
           state.uiVersion = state.uiVersion + 1;
         }
       )
-      // When painting collisions or tiles select scene being drawn on
+      // When painting collisions select scene being drawn on
       .addMatcher(
         (action): action is PayloadAction<{ sceneId: string }> =>
-          entitiesActions.paintCollision.match(action) ||
-          entitiesActions.paintColor.match(action),
+          entitiesActions.paintCollision.match(action),
         (state, action) => {
           state.type = "scene";
           state.scene = action.payload.sceneId;

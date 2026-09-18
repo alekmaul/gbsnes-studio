@@ -3,7 +3,6 @@ import settings from "electron-settings";
 import uniq from "lodash/uniq";
 import Path from "path";
 import confirmDeleteCustomEvent from "../../../lib/electron/dialog/confirmDeleteCustomEvent";
-import confirmEnableColorDialog from "../../../lib/electron/dialog/confirmEnableColorDialog";
 import {
   walkEvents,
   walkSceneSpecificEvents,
@@ -13,7 +12,6 @@ import {
 import { EVENT_CALL_CUSTOM_EVENT } from "../../../lib/compiler/eventTypes";
 import l10n from "../../../lib/helpers/l10n";
 import editorActions from "../editor/editorActions";
-import { getSettings } from "../settings/settingsState";
 import settingsActions from "../settings/settingsActions";
 import { Middleware } from "@reduxjs/toolkit";
 import { RootState } from "../../configureStore";
@@ -60,23 +58,6 @@ const electronMiddleware: Middleware<{}, RootState> = (store) => (next) => (
     settings.set("filesSidebarWidth", action.payload);
   } else if (editorActions.resizeNavigatorSidebar.match(action)) {
     settings.set("navigatorSidebarWidth", action.payload);
-  } else if (
-    editorActions.setTool.match(action) &&
-    action.payload.tool === "colors"
-  ) {
-    const state = store.getState();
-    const projectSettings = getSettings(state);
-    if (!projectSettings.customColorsEnabled) {
-      const cancel = confirmEnableColorDialog();
-      if (cancel) {
-        return;
-      }
-      store.dispatch(
-        settingsActions.editSettings({
-          customColorsEnabled: true,
-        })
-      );
-    }
   } else if (projectActions.loadProject.fulfilled.match(action)) {
     ipcRenderer.send("project-loaded", action.payload.data.settings);
   } else if (settingsActions.setShowNavigator.match(action)) {

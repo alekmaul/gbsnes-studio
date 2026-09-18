@@ -14,7 +14,6 @@
   "NAV_BACKGROUNDS": "Padrões de Fundo",
   "NAV_UI_ELEMENTS": "Elementos UI",
   "NAV_MUSIC": "Música",
-  "NAV_PALETTES": "Palettes",
   "NAV_DIALOGUE_REVIEW": "Revisão de Diálogo",
   "NAV_BUILD_AND_RUN": "Compilar e Executar",
   "NAV_SETTINGS": "Configurações",
@@ -39,10 +38,8 @@
   "TOOL_ADD_SCENE_LABEL": "Adicionar Mapa",
   "TOOL_ERASER_LABEL": "Apagar",
   "TOOL_COLLISIONS_LABEL": "Colisões",
-  "TOOL_COLORS_LABEL": "Colorir",
   "TOOL_BRUSH": "Pincel {size}",
   "TOOL_FILL": "Preencher",
-  "TOOL_PALETTE_N": "Palette {number}",
   "TOOL_SHOW_LAYERS": "Mostrar Camadas",
   "TOOL_HIDE_LAYERS": "Esconder Camadas",
 
@@ -207,9 +204,6 @@
   "FIELD_LOCAL": "Local",
   "FIELD_GLOBAL": "Global",
   "FIELD_LOADING": "Carregando...",
-  "FIELD_PALETTE": "Palette",
-  "FIELD_PALETTES": "Palettes",
-  "FIELD_PLAYER_PALETTE": "Palette de Jogador",
   "FIELD_HEX_COLOR": "Cor Hex",
   "FIELD_CLOSEST_MATCH": "Procurar melhor correspondência",
   "FIELD_HUE": "Tom",
@@ -217,9 +211,6 @@
   "FIELD_BRIGHTNESS": "Luminosidade",
   "FIELD_COLOR_LIGHTEST": "Mais Claro",
   "FIELD_COLOR_DARKEST": "Mais Escuro",
-  "FIELD_EXPORT_IN_COLOR": "Activar modo Color",
-  "FIELD_GLOBAL_DEFAULT": "Predefinição Global",
-  "FIELD_EDIT_PALETTES": "Editar Palettes",
   "FIELD_WAIT_UNTIL_FINISHED": "Aguardar até terminado",
   "FIELD_ACTOR_TYPE": "Tipo de Sprite",
   "FIELD_OFFSET_X": "Deslocamento X",
@@ -366,8 +357,6 @@
   "EVENT_ACTOR_SET_SPRITE": "Actor: Definir Sprites",
   "EVENT_PLAYER_BOUNCE": "Actor: Ajustar salto de Jogador",
   "EVENT_WEAPON_ATTACK": "Item: Atacar",
-  "EVENT_PALETTE_SET_BACKGROUND": "Palette: Definir Palette de Fundo",
-  "EVENT_PALETTE_SET_UI": "Palette: Definir Palette de UI",
   "EVENT_ACTOR_STOP_UPDATE": "Actor: Terminar \"On Update\" Script",
   "EVENT_ACTOR_SET_ANIMATE": "Actor: Definir para Animar enquanto estático",
 
@@ -393,7 +382,6 @@
   "MENU_BACKGROUNDS": "Padrões de Fundo",
   "MENU_UI_ELEMENTS": "Elementos UI",
   "MENU_MUSIC": "Música",
-  "MENU_PALETTES": "Palettes",
   "MENU_DIALOGUE_REVIEW": "Revisão de Diálogo",
   "MENU_BUILD_AND_RUN": "Compilar e Executar",
   "MENU_SETTINGS": "Configurações",
@@ -556,7 +544,6 @@
 
   "// 17 ": "Palettes ---------------------------------------------------",
 
-  "PALETTES_EDITOR": "Editor de Palettes",
 
   "// 18 ": "Error ------------------------------------------------------",
 

@@ -129,8 +129,15 @@ not silent holes; every one has a real table row, just no runtime behaviour yet.
 | Actor: Set Sprite Sheet (union-type variant) | ➖ | Per-actor sprite override introduced with the `On Update` scripted-movement rework; needs that port first. |
 | If Actor Relative to Actor, Actor: Stop Update Script, Actor: Set Animate | ➖ | All need the `On Update` per-actor movement-script port (see `appData/src/snes/README.md` — a real, separate architecture piece, not a mechanical opcode wire-up). |
 | Player: Bounce | ➖ | Platformer-genre physics opcode. |
-| Palette: Set Background / Set Actor / Set UI | ➖ | Runtime palette painting — the engine's `SceneUploadBgPalette` already supports up to 6 palette regions per background (see `compileSnesData.js`), but no opcode writes to it yet. |
 | Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist and are edited from Settings, but a script can't write one back at runtime yet. |
+
+`Palette: Set Background` / `Set Actor` / `Set UI` used to be listed here as ➖ (dispatchable but
+inert). The GB-heritage custom-palette editor these events edited was removed entirely - it had
+no purpose on SNES, since `snesgfx.js` already extracts each background/sprite's real palette
+straight from its PNG with no user-editable overlay. `EVENT_PALETTE_SET_BACKGROUND` /
+`_ACTOR` / `_UI` no longer appear in the event picker at all; the corresponding opcodes
+(`PALETTE_SET_BACKGROUND` / `_ACTOR` / `_UI`) stay reserved, still-Noop entries in
+`script_cmds.c` so opcode numbering downstream of them doesn't shift.
 
 ---
 
@@ -144,9 +151,9 @@ The editor is data-driven and already renders SNES projects correctly.
 | Settings: Controls | ✅ | For a SNES project the key-binding list grows an X / Y / L / R column and the pad diagram is the SNES pad (L/R shoulders, X/Y/A/B diamond) instead of the Game Boy one. New settings keys `customControlsX/Y/L/R`; the bundled web player binds them and falls back to `i`/`u`/`o`/`p`. |
 | World editor: `Camera: Move To` viewport rectangle | ✅ | Sizes to the target's real screen (32×28 vs 20×18). |
 | World / scene canvas geometry | ✅ | Data-driven — the scene canvas is sized from the background's tile dimensions (a 32×28 SNES background renders at 32×28 tiles). Scenes are still capped at 32×32 tiles for both targets. |
-| Colour rendering (scene / background / sprite previews) | ✅ | GB Studio 1.2.2's editor already shows the raw full-colour PNGs (no DMG-green filter anywhere) — the 4-shade conversion is compiler-only. So SNES art shows in its real colours with no change needed. |
+| Colour rendering (scene / background / sprite previews) | ✅ | The World editor's scene/sprite previews used to run every image through a GB-green-channel quantization heuristic (`ColorizedImage`/`SpriteSheetCanvas.worker`, GB Studio 2.0 heritage) before display. Removed along with the custom-palette editor - previews now show each PNG's real colours directly, matching what the compiler already builds into the ROM. |
 | Backgrounds page: size warnings | ✅ | "Too small / too large" now use the target's screen (256×224 on SNES) and scene-map size, not the fixed GB 160×144 / 256×256. |
 | Scene info bar: sprite budget | ✅ | GB shows a per-scene sprite-*frame* budget (`F: n/25`); SNES shows distinct actor sprite *sheets* (`S: n/8`, the real `SPRITE_SLOTS` limit — project-wide, enforced by a compiler warning). |
 | Sprite editor: dimensions, frame counts | ✅ | 16×16 frames, 1/3/6-frame types — the same shape the SNES engine uses. |
 | Input events: X / Y / L / R options | ✅ | `InputPicker` shows a third button row (X / Y / L / R) for SNES projects; the engine reads them (see *Timers & input* above). Their keyboard/pad bindings are set on the Settings > Controls page (row above). |
-| Palette editor | — | Intentionally not built: `snesgfx.js` extracts the palette from each PNG automatically, nothing to edit by hand. |
+| Palette editor | — | Removed entirely (menu, page, per-scene/actor palette pickers, the "Colorize" paint tool): `snesgfx.js` already extracts each background/sprite's palette from its PNG automatically, nothing to edit by hand. |

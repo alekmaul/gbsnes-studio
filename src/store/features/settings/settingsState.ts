@@ -26,12 +26,7 @@ export type SettingsState = {
   worldScrollX: number;
   worldScrollY: number;
   zoom: number;
-  customColorsEnabled: boolean;
   customHead: string;
-  defaultBackgroundPaletteIds: [string, string, string, string, string, string];
-  defaultSpritePaletteId: string;
-  defaultUIPaletteId: string;
-  playerPaletteId: string;
   navigatorSplitSizes: number[];
   showNavigator: boolean;
 };
@@ -49,19 +44,7 @@ export const initialState: SettingsState = {
   worldScrollX: 0,
   worldScrollY: 0,
   zoom: 100,
-  customColorsEnabled: false,
   customHead: "",
-  defaultBackgroundPaletteIds: [
-    "default-bg-1",
-    "default-bg-2",
-    "default-bg-3",
-    "default-bg-4",
-    "default-bg-5",
-    "default-bg-6",
-  ],
-  defaultSpritePaletteId: "default-sprite",
-  defaultUIPaletteId: "default-ui",
-  playerPaletteId: "",
   navigatorSplitSizes: [300, 100, 100],
   showNavigator: true,
 };

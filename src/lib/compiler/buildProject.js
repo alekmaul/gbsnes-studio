@@ -9,8 +9,7 @@ import copy from "../helpers/fsCopy";
 // Copies the JS-emulator template into build/web, drops the built ROM in
 // next to it, and fills in the placeholders the template contains
 // (___PROJECT_NAME___ / ___AUTHOR___ / ___PROJECT_HEAD___ /
-// ___CUSTOM_CONTROLS___). ___COLORS_HEAD___ is a GB Color leftover the
-// template doesn't contain any more - replacing it is a harmless no-op.
+// ___CUSTOM_CONTROLS___).
 const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) => {
   await copy(emulatorDir, `${outputRoot}/build/web`);
   await copy(
@@ -20,9 +19,6 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
   const sanitize = (s) => String(s || "").replace(/["<>]/g, "");
   const projectName = sanitize(data.name);
   const author = sanitize(data.author);
-  const colorsHead = data.settings.customColorsEnabled
-    ? `<style type="text/css"> body { background-color:#${data.settings.customColorsBlack}; }</style>`
-    : "";
   const customHead = data.settings.customHead || "";
   const customControls = JSON.stringify({
     up: data.settings.customControlsUp,
@@ -43,7 +39,6 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
   )
     .replace(/___PROJECT_NAME___/g, projectName)
     .replace(/___AUTHOR___/g, author)
-    .replace(/___COLORS_HEAD___/g, colorsHead)
     .replace(/___PROJECT_HEAD___/g, customHead)
     .replace(/___CUSTOM_CONTROLS___/g, customControls);
   await fs.writeFile(`${outputRoot}/build/web/index.html`, html);

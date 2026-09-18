@@ -3,12 +3,10 @@ import PropTypes from "prop-types";
 import cx from "classnames";
 import { connect } from "react-redux";
 import SpriteSheetCanvas from "./SpriteSheetCanvas";
-import { ActorShape, PaletteShape } from "../../store/stateShape";
-import { getCachedObject } from "../../lib/helpers/cache";
-import { DMG_PALETTE, SPRITE_TYPE_STATIC } from "../../consts";
-import { actorSelectors, paletteSelectors } from "../../store/features/entities/entitiesState";
+import { ActorShape } from "../../store/stateShape";
+import { SPRITE_TYPE_STATIC } from "../../consts";
+import { actorSelectors } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
-import { getSettings } from "../../store/features/settings/settingsState";
 
 class Actor extends Component {
   onMouseDown = (e) => {
@@ -25,7 +23,7 @@ class Actor extends Component {
   };
 
   render() {
-    const { actor, selected, showSprite, palette } = this.props;
+    const { actor, selected, showSprite } = this.props;
     const { x, y, spriteSheetId, direction, spriteType, frame } = actor;
     return (
       <>
@@ -43,7 +41,6 @@ class Actor extends Component {
               spriteSheetId={spriteSheetId}
               direction={direction}
               frame={spriteType === SPRITE_TYPE_STATIC ? frame : 0}
-              palette={palette}
             />
           )}
         </div>
@@ -55,7 +52,6 @@ class Actor extends Component {
 Actor.propTypes = {
   actor: ActorShape,
   sceneId: PropTypes.string.isRequired,
-  palette: PaletteShape,
   selected: PropTypes.bool,
   showSprite: PropTypes.bool.isRequired,
   dragActorStart: PropTypes.func.isRequired,
@@ -65,7 +61,6 @@ Actor.propTypes = {
 
 Actor.defaultProps = {
   actor: {},
-  palette: undefined,
   selected: false,
 };
 
@@ -79,21 +74,11 @@ function mapStateToProps(state, props) {
     sceneId === props.sceneId &&
     entityId === props.id;
   const showSprite = state.editor.zoom > 80;
-  const settings = getSettings(state);
-  const palettesLookup = paletteSelectors.selectEntities(state);
-  const gbcEnabled = settings.customColorsEnabled;
-  const palette = gbcEnabled
-    ? getCachedObject(
-        palettesLookup[actor.paletteId] ||
-          palettesLookup[settings.defaultSpritePaletteId]
-      )
-    : DMG_PALETTE;
 
   return {
     actor,
     selected,
     showSprite,
-    palette,
   };
 }
 

@@ -33,7 +33,6 @@ import { DropdownButton } from "../ui/buttons/DropdownButton";
 import { NoteField } from "../ui/form/NoteField";
 import { SceneTypeSelect } from "../forms/SceneTypeSelect";
 import { BackgroundSelectButton } from "../forms/BackgroundSelectButton";
-import { PaletteSelectButton } from "../forms/PaletteSelectButton";
 import { LabelButton, LabelColor } from "../ui/buttons/LabelButton";
 import { CoordinateInput } from "../ui/form/CoordinateInput";
 import DirectionPicker from "../forms/DirectionPicker";
@@ -84,9 +83,6 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
   );
   const [clipboardData, setClipboardData] = useState<any>(null);
   const [notesOpen, setNotesOpen] = useState<boolean>(!!scene?.notes);
-  const colorsEnabled = useSelector(
-    (state: RootState) => state.project.present.settings.customColorsEnabled
-  );
   const startSceneId = useSelector(
     (state: RootState) => state.project.present.settings.startSceneId
   );
@@ -98,10 +94,6 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
   );
   const startDirection = useSelector(
     (state: RootState) => state.project.present.settings.startDirection
-  );
-  const defaultBackgroundPaletteIds = useSelector(
-    (state: RootState) =>
-      state.project.present.settings.defaultBackgroundPaletteIds || []
   );
   const tabs = Object.keys(defaultTabs);
   const secondaryTabs = Object.keys(hitTabs);
@@ -233,12 +225,6 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
 
   const onEditPlayerHit3Script = onChangeField("playerHit3Script");
 
-  const onEditPaletteId = (index: number) => (paletteId: string) => {
-    const paletteIds = scene.paletteIds ? [...scene.paletteIds] : [];
-    paletteIds[index] = paletteId;
-    onChangeField("paletteIds")(paletteIds);
-  };
-
   const scripts = {
     start: {
       value: scene.script,
@@ -363,34 +349,6 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
                   includeInfo
                 />
               </FormField>
-              {colorsEnabled && (
-                <div
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "1fr 1fr 1fr",
-                    gridTemplateRows: "1fr 1fr",
-                    gap: 5,
-                    marginTop: 18,
-                    flexShrink: 0,
-                  }}
-                >
-                  {[0, 1, 2, 3, 4, 5].map((index) => (
-                    <PaletteSelectButton
-                      key={index}
-                      name={`scenePalette${index}`}
-                      value={
-                        (scene.paletteIds && scene.paletteIds[index]) || ""
-                      }
-                      onChange={onEditPaletteId(index)}
-                      optional
-                      optionalDefaultPaletteId={
-                        defaultBackgroundPaletteIds[index] || ""
-                      }
-                      optionalLabel={l10n("FIELD_GLOBAL_DEFAULT")}
-                    />
-                  ))}
-                </div>
-              )}
             </FormRow>
 
             <FormRow>

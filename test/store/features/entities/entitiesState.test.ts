@@ -19,10 +19,8 @@ import {
   dummyMusic,
   dummyActor,
   dummyTrigger,
-  dummyPalette,
   dummyCustomEvent,
 } from "../../../dummydata";
-import { DMG_PALETTE } from "../../../../src/consts";
 
 test("Should fix scene widths if backgrounds has been removed since save", () => {
   const state: EntitiesState = {
@@ -518,7 +516,7 @@ test("Should be able to move a scene", () => {
   expect(newState.scenes.entities["scene1"]?.y).toBe(520);
 });
 
-test("Should use collisions and colors from other scene if switched to use same background", () => {
+test("Should use collisions from other scene if switched to use same background", () => {
   const state: EntitiesState = {
     ...initialState,
     scenes: {
@@ -530,7 +528,6 @@ test("Should use collisions and colors from other scene if switched to use same 
           actors: [],
           triggers: [],
           collisions: [1, 2, 3],
-          tileColors: [4, 5, 6],
         },
         scene2: {
           ...dummyScene,
@@ -539,7 +536,6 @@ test("Should use collisions and colors from other scene if switched to use same 
           actors: [],
           triggers: [],
           collisions: [],
-          tileColors: [],
         },
       },
       ids: ["scene1", "scene2"],
@@ -567,10 +563,8 @@ test("Should use collisions and colors from other scene if switched to use same 
   });
 
   expect(state.scenes.entities["scene2"]?.collisions).toEqual([]);
-  expect(state.scenes.entities["scene2"]?.tileColors).toEqual([]);
   const newState = reducer(state, action);
   expect(newState.scenes.entities["scene2"]?.collisions).toEqual([1, 2, 3]);
-  expect(newState.scenes.entities["scene2"]?.tileColors).toEqual([4, 5, 6]);
 });
 
 test("Should update scene dimensions to match new background", () => {
@@ -587,7 +581,6 @@ test("Should update scene dimensions to match new background", () => {
           actors: [],
           triggers: [],
           collisions: [1, 2, 3],
-          tileColors: [4, 5, 6],
         },
       },
       ids: ["scene1"],
@@ -623,7 +616,7 @@ test("Should update scene dimensions to match new background", () => {
   expect(newState.scenes.entities["scene1"]?.height).toEqual(28);
 });
 
-test("Should keep collisions but discard colors if switched to use different background of same width", () => {
+test("Should keep collisions if switched to use different background of same width", () => {
   const state: EntitiesState = {
     ...initialState,
     scenes: {
@@ -635,7 +628,6 @@ test("Should keep collisions but discard colors if switched to use different bac
           actors: [],
           triggers: [],
           collisions: [1, 2, 3],
-          tileColors: [4, 5, 6],
         },
       },
       ids: ["scene1"],
@@ -666,10 +658,9 @@ test("Should keep collisions but discard colors if switched to use different bac
 
   const newState = reducer(state, action);
   expect(newState.scenes.entities["scene1"]?.collisions).toEqual([1, 2, 3]);
-  expect(newState.scenes.entities["scene1"]?.tileColors).toEqual([]);
 });
 
-test("Should discard collisions and colors if switched to use different background of different width", () => {
+test("Should discard collisions if switched to use different background of different width", () => {
   const state: EntitiesState = {
     ...initialState,
     scenes: {
@@ -681,7 +672,6 @@ test("Should discard collisions and colors if switched to use different backgrou
           actors: [],
           triggers: [],
           collisions: [1, 2, 3],
-          tileColors: [4, 5, 6],
         },
       },
       ids: ["scene1"],
@@ -722,7 +712,6 @@ test("Should discard collisions and colors if switched to use different backgrou
     0,
     0,
   ]);
-  expect(newState.scenes.entities["scene1"]?.tileColors).toEqual([]);
 });
 
 test("Should be able to remove a scene", () => {
@@ -1542,77 +1531,6 @@ test("Should not remove trigger outside of delete location", () => {
     state.triggers.entities.trigger1
   );
   expect(newState.scenes.entities["scene1"]?.triggers?.length).toBe(1);
-});
-
-test("Should be able to add a palette", () => {
-  const state: EntitiesState = {
-    ...initialState,
-  };
-
-  const action = actions.addPalette();
-
-  expect(state.palettes.ids.length).toBe(0);
-  const newState = reducer(state, action);
-  expect(newState.palettes.ids.length).toBe(1);
-  expect(newState.palettes.entities[action.payload.paletteId]?.id).toBe(
-    action.payload.paletteId
-  );
-  expect(newState.palettes.entities[action.payload.paletteId]?.colors).toEqual(
-    DMG_PALETTE.colors
-  );
-});
-
-test("Should be able to edit a palette", () => {
-  const state: EntitiesState = {
-    ...initialState,
-    palettes: {
-      entities: {
-        palette1: {
-          ...dummyPalette,
-          id: "palette1",
-        },
-      },
-      ids: ["palette1"],
-    },
-  };
-
-  const action = actions.editPalette({
-    paletteId: "palette1",
-    changes: {
-      colors: ["ff0000", "00ff00", "0000ff", "ffffff"],
-    },
-  });
-
-  const newState = reducer(state, action);
-  expect(newState.palettes.entities[action.payload.paletteId]?.colors).toEqual([
-    "ff0000",
-    "00ff00",
-    "0000ff",
-    "ffffff",
-  ]);
-});
-
-test("Should be able to remove a palette", () => {
-  const state: EntitiesState = {
-    ...initialState,
-    palettes: {
-      entities: {
-        palette1: {
-          ...dummyPalette,
-          id: "palette1",
-        },
-      },
-      ids: ["palette1"],
-    },
-  };
-
-  const action = actions.removePalette({
-    paletteId: "palette1",
-  });
-
-  expect(state.palettes.ids.length).toBe(1);
-  const newState = reducer(state, action);
-  expect(newState.palettes.ids.length).toBe(0);
 });
 
 test("Should be able to add custom event", () => {

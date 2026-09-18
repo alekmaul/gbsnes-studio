@@ -14,7 +14,6 @@
   "NAV_BACKGROUNDS": "Imagens de Fundo",
   "NAV_UI_ELEMENTS": "Elementos de UI",
   "NAV_MUSIC": "Música",
-  "NAV_PALETTES": "Paletas",
   "NAV_DIALOGUE_REVIEW": "Revisar Diálogos",
   "NAV_BUILD_AND_RUN": "Compilar e Jogar",
   "NAV_SETTINGS": "Configurações",
@@ -39,10 +38,8 @@
   "TOOL_ADD_SCENE_LABEL": "Adicionar Mapa",
   "TOOL_ERASER_LABEL": "Borracha",
   "TOOL_COLLISIONS_LABEL": "Colisões",
-  "TOOL_COLORS_LABEL": "Colorir",
   "TOOL_BRUSH": "Pincel {size}",
   "TOOL_FILL": "Preencher",
-  "TOOL_PALETTE_N": "Paleta {number}",
   "TOOL_SHOW_LAYERS": "Mostrar Todas As Camadas",
   "TOOL_HIDE_LAYERS": "Ocultar Camadas",  
 
@@ -207,9 +204,6 @@
   "FIELD_LOCAL": "Local",
   "FIELD_GLOBAL": "Global",
   "FIELD_LOADING": "Carregando...",
-  "FIELD_PALETTE": "Paleta",
-  "FIELD_PALETTES": "Paletas",
-  "FIELD_PLAYER_PALETTE": "Paleta do Personagem",
   "FIELD_HEX_COLOR": "Cor Hexadecimal",
   "FIELD_CLOSEST_MATCH": "Encontre A Correspondência Mais Próxima",
   "FIELD_HUE": "Matiz",
@@ -217,9 +211,6 @@
   "FIELD_BRIGHTNESS": "Brilho",
   "FIELD_COLOR_LIGHTEST": "Mais Leve",
   "FIELD_COLOR_DARKEST": "Mais Escuro",
-  "FIELD_EXPORT_IN_COLOR": "Ativar O Modo De Cor",
-  "FIELD_GLOBAL_DEFAULT": "Padrão Global",
-  "FIELD_EDIT_PALETTES": "Editar Paleta",
   "FIELD_WAIT_UNTIL_FINISHED": "Espere até terminar",
   "FIELD_ACTOR_TYPE": "Tipo De Sprite",
   "FIELD_OFFSET_X": "Deslocamento X",
@@ -368,8 +359,6 @@
   "EVENT_ACTOR_SET_SPRITE": "Personagem: Definir Sprite Sheet",
   "EVENT_PLAYER_BOUNCE": "Personagem: Pelo Do Personagem",
   "EVENT_WEAPON_ATTACK": "Item: Ataque",
-  "EVENT_PALETTE_SET_BACKGROUND": "Paleta: Definir Paleta de Fundo",
-  "EVENT_PALETTE_SET_UI": "Paleta: Definir Paleta Da UI",
   "EVENT_ACTOR_STOP_UPDATE": "Personagem: Parar \"On Update\" Script",
   "EVENT_ACTOR_SET_ANIMATE": "Personagem: Definir Animação Enquanto Estiver Parado",
   "EVENT_IF_COLOR_SUPPORTED": "Se O Dispositivo Suportar Cores",
@@ -396,7 +385,6 @@
   "MENU_BACKGROUNDS": "Imagens de Fundo",
   "MENU_UI_ELEMENTS": "Elementos de UI",
   "MENU_MUSIC": "Música",
-  "MENU_PALETTES": "Paletas", 
   "MENU_DIALOGUE_REVIEW": "Revisar Diálogos",
   "MENU_BUILD_AND_RUN": "Compilar e Jogar",
   "MENU_SETTINGS": "Configurações",
@@ -563,7 +551,6 @@
 
   "// 17 ": "Palettes ---------------------------------------------------",
 
-  "PALETTES_EDITOR": "Editor De Paletas",
   
   "// 18 ": "Error ------------------------------------------------------",
 

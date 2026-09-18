@@ -6,7 +6,7 @@ import throttle from "lodash/throttle";
 import Scene from "./Scene";
 import WorldHelp from "./WorldHelp";
 import Connections from "./Connections";
-import { MIDDLE_MOUSE, TOOL_COLORS, TOOL_COLLISIONS, TOOL_ERASER } from "../../consts";
+import { MIDDLE_MOUSE, TOOL_COLLISIONS, TOOL_ERASER } from "../../consts";
 import { SceneShape, VariableShape } from "../../store/stateShape";
 import { sceneSelectors, getMaxSceneRight, getMaxSceneBottom } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
@@ -391,7 +391,7 @@ function mapStateToProps(state) {
     sceneDefaults,
     clipboardVariables,
     zoomRatio: (state.editor.zoom || 100) / 100,
-    showConnections: (!!showConnections) && (showLayers || (tool !== TOOL_COLORS && tool !== TOOL_COLLISIONS && tool !== TOOL_ERASER)),
+    showConnections: (!!showConnections) && (showLayers || (tool !== TOOL_COLLISIONS && tool !== TOOL_ERASER)),
     sidebarWidth,
     loaded,
     focus,

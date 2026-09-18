@@ -19,7 +19,6 @@ export type Actor = {
   y: number;
   spriteSheetId: string;
   spriteType: ActorSpriteType;
-  paletteId: string;
   frame: number;
   moveSpeed: number;
   animSpeed: number | null;
@@ -71,14 +70,6 @@ export type Music = {
   settings: MusicSettings;
   inode: string;
   _v: number;
-};
-
-export type Palette = {
-  id: string;
-  name: string;
-  colors: [string, string, string, string];
-  defaultName?: string;
-  defaultColors?: [string, string, string, string];
 };
 
 export type Variable = {
@@ -133,9 +124,7 @@ export type Scene = {
   width: number;
   height: number;
   backgroundId: string;
-  paletteIds: string[];
   collisions: number[];
-  tileColors: number[];
   actors: string[];
   triggers: string[];
   script: ScriptEvent[];
@@ -153,7 +142,6 @@ export type ProjectEntitiesData = {
   scenes: SceneData[];
   backgrounds: Background[];
   spriteSheets: SpriteSheet[];
-  palettes: Palette[];
   customEvents: CustomEvent[];
   music: Music[];
   variables: Variable[];
@@ -165,7 +153,6 @@ export interface EntitiesState {
   scenes: EntityState<Scene>;
   backgrounds: EntityState<Background>;
   spriteSheets: EntityState<SpriteSheet>;
-  palettes: EntityState<Palette>;
   customEvents: EntityState<CustomEvent>;
   music: EntityState<Music>;
   variables: EntityState<Variable>;

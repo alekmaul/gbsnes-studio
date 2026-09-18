@@ -5,7 +5,6 @@ import {
   Music,
   Actor,
   Trigger,
-  Palette,
   CustomEvent,
 } from "../src/store/features/entities/entitiesTypes";
 import { ProjectData } from "../src/store/features/project/projectActions";
@@ -31,9 +30,7 @@ export const dummyScene: SceneData = {
   width: 20,
   height: 18,
   type: "0",
-  paletteIds: [],
   collisions: [0],
-  tileColors: [0],
   actors: [],
   triggers: [],
   script: [],
@@ -52,7 +49,6 @@ export const dummyActor: Actor = {
   frame: 0,
   direction: "down",
   animate: false,
-  paletteId: "",
   animSpeed: 3,
   moveSpeed: 1,
   isPinned: false,
@@ -73,12 +69,6 @@ export const dummyTrigger: Trigger = {
   width: 0,
   height: 0,
   script: [],
-};
-
-export const dummyPalette: Palette = {
-  id: "",
-  name: "",
-  colors: ["", "", "", ""],
 };
 
 export const dummyBackground: Background = {
@@ -130,7 +120,6 @@ export const dummyProjectData: ProjectData = {
   scenes: [],
   backgrounds: [],
   spriteSheets: [],
-  palettes: [],
   customEvents: [],
   variables: [],
   music: [],
@@ -142,16 +131,11 @@ export const dummyProjectData: ProjectData = {
     startMoveSpeed: 1,
     startAnimSpeed: 3,
     startDirection: "down",
-    playerPaletteId: "",
     showCollisions: true,
     showConnections: true,
     worldScrollX: 0,
     worldScrollY: 0,
     zoom: 100,
-    customColorsEnabled: false,
-    defaultBackgroundPaletteIds: ["", "", "", "", "", ""],
-    defaultSpritePaletteId: "",
-    defaultUIPaletteId: "",
     customHead: "",
     navigatorSplitSizes: [300, 100, 100],
     showNavigator: true,

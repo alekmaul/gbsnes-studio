@@ -2,14 +2,14 @@ import React, { Component } from "react";
 import PropTypes from "prop-types";
 import cx from "classnames";
 import { connect } from "react-redux";
-import { PlusIcon, ResizeIcon, CloseIcon, BrickIcon, PaintIcon } from "../library/Icons";
+import { PlusIcon, ResizeIcon, CloseIcon, BrickIcon } from "../library/Icons";
 import { sceneSelectors } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
 import settingsActions from "../../store/features/settings/settingsActions";
 import entitiesActions from "../../store/features/entities/entitiesActions";
 
 import { SceneShape, VariableShape } from "../../store/stateShape";
-import { TOOL_COLORS, TOOL_COLLISIONS, TOOL_ERASER, TOOL_TRIGGERS, TOOL_ACTORS, BRUSH_FILL, BRUSH_16PX, TOOL_SELECT, COLLISION_ALL, TILE_PROPS } from "../../consts";
+import { TOOL_COLLISIONS, TOOL_ERASER, TOOL_TRIGGERS, TOOL_ACTORS, BRUSH_FILL, BRUSH_16PX, TOOL_SELECT, COLLISION_ALL, TILE_PROPS } from "../../consts";
 
 class SceneCursor extends Component {
   constructor() {
@@ -68,7 +68,6 @@ class SceneCursor extends Component {
       y,
       tool,
       setTool,
-      selectedPalette,
       selectedTileType,
       selectedBrush,
       addActor,
@@ -82,13 +81,10 @@ class SceneCursor extends Component {
       showCollisions,
       showLayers,
       paintCollision,
-      paintColor,
       removeActorAt,
       removeTriggerAt,
       sceneFiltered,
       editSearchTerm,
-      hoverPalette,
-      setSelectedPalette,
     } = this.props;
 
     this.lockX = undefined;
@@ -151,27 +147,6 @@ class SceneCursor extends Component {
         }
         window.addEventListener("mousemove", this.onCollisionsMove);
         window.addEventListener("mouseup", this.onCollisionsStop);
-      }
-    } else if (tool === "colors") {
-      if (e.altKey) {
-        setSelectedPalette({paletteIndex: hoverPalette});
-        return;
-      }
-
-      if(selectedBrush === BRUSH_FILL) {
-        paintColor({ brush: selectedBrush, sceneId, x, y, paletteIndex: selectedPalette });
-      } else {
-        if(this.drawLine && this.startX !== undefined && this.startY !== undefined) {
-          paintColor({ brush: selectedBrush, sceneId, x: this.startX, y: this.startY, endX: x, endY: y, paletteIndex: selectedPalette, drawLine: true });
-          this.startX = x;
-          this.startY = y;
-        } else {
-          this.startX = x;
-          this.startY = y;          
-          paintColor({ brush: selectedBrush, sceneId, x, y, paletteIndex: selectedPalette });
-        }
-        window.addEventListener("mousemove", this.onColorsMove);
-        window.addEventListener("mouseup", this.onColorsStop);
       }
     } else if (tool === "eraser") {
       if (showCollisions) {
@@ -279,59 +254,6 @@ class SceneCursor extends Component {
     window.removeEventListener("mouseup", this.onCollisionsStop);
   };
 
-  onColorsMove = e => {
-    const {
-      x,
-      y,
-      enabled,
-      sceneId,
-      selectedPalette,
-      selectedBrush,
-      paintColor
-    } = this.props;
-    if (enabled && (this.currentX !== x || this.currentY !== y)) {
-      if(this.drawLine) {
-        if(this.startX === undefined || this.startY === undefined) {
-          this.startX = x;
-          this.startY = y;
-        }        
-        let x1 = x;
-        let y1 = y;
-        if(this.lockX) {
-          x1 = this.startX;
-        } else if(this.lockY) {
-          y1 = this.startY;
-        } else if (x !== this.startX) {
-          this.lockY = true;
-          y1 = this.startY;
-        } else if (y !== this.startY) {
-          this.lockX = true;
-          x1 = this.startX;
-        }
-        paintColor({ brush: selectedBrush, sceneId, x: this.startX, y: this.startY, endX: x1, endY: y1, paletteIndex: selectedPalette, drawLine: true });          
-        this.startX = x1;
-        this.startY = y1;
-      } else {
-        if(this.startX === undefined || this.startY === undefined) {
-          this.startX = x;
-          this.startY = y;
-        }
-        const x1 = x;
-        const y1 = y;
-        paintColor({ brush: selectedBrush, sceneId, x: this.startX, y: this.startY, endX: x1, endY: y1, paletteIndex: selectedPalette, drawLine: true });
-        this.startX = x1;
-        this.startY = y1;
-      }
-      this.currentX = x;
-      this.currentY = y;
-    }
-  };
-
-  onColorsStop = e => {
-    window.removeEventListener("mousemove", this.onColorsMove);
-    window.removeEventListener("mouseup", this.onColorsStop);
-  };
-
   render() {
     const { x, y, tool, enabled, selectedBrush } = this.props;
     const { resize } = this.state;
@@ -345,8 +267,7 @@ class SceneCursor extends Component {
           "SceneCursor--AddTrigger": tool === TOOL_TRIGGERS,
           "SceneCursor--Eraser": tool === TOOL_ERASER,
           "SceneCursor--Collisions": tool === TOOL_COLLISIONS,
-          "SceneCursor--Colors": tool === TOOL_COLORS,
-          "SceneCursor--Size16px": (tool === TOOL_COLORS || tool === TOOL_COLLISIONS || tool === TOOL_ERASER) && selectedBrush === BRUSH_16PX
+          "SceneCursor--Size16px": (tool === TOOL_COLLISIONS || tool === TOOL_ERASER) && selectedBrush === BRUSH_16PX
         })}
         onMouseDown={this.onMouseDown}
         style={{
@@ -357,14 +278,12 @@ class SceneCursor extends Component {
         {(tool === TOOL_ACTORS ||
           tool === TOOL_TRIGGERS ||
           tool === TOOL_ERASER ||
-          tool === TOOL_COLORS ||
           tool === TOOL_COLLISIONS) && (
           <div className="SceneCursor__AddBubble">
             {tool === TOOL_ACTORS && <PlusIcon />}
             {tool === TOOL_TRIGGERS && (resize ? <ResizeIcon /> : <PlusIcon />)}
             {tool === TOOL_ERASER && <CloseIcon />}
             {tool === TOOL_COLLISIONS && <BrickIcon />}
-            {tool === TOOL_COLORS && <PaintIcon />}
           </div>
         )}
       </div>
@@ -380,7 +299,6 @@ SceneCursor.propTypes = {
   triggerDefaults: PropTypes.shape(),
   clipboardVariables: PropTypes.arrayOf(VariableShape).isRequired,
   sceneId: PropTypes.string.isRequired,
-  hoverPalette: PropTypes.number.isRequired,
   scene: SceneShape.isRequired,
   showCollisions: PropTypes.bool.isRequired,
   showLayers: PropTypes.bool.isRequired,
@@ -396,9 +314,7 @@ SceneCursor.propTypes = {
   removeActorAt: PropTypes.func.isRequired,
   removeTriggerAt: PropTypes.func.isRequired,
   paintCollision: PropTypes.func.isRequired,
-  paintColor: PropTypes.func.isRequired,
   selectedBrush: PropTypes.string.isRequired,
-  selectedPalette: PropTypes.number.isRequired
 };
 
 SceneCursor.defaultProps = {
@@ -410,24 +326,15 @@ SceneCursor.defaultProps = {
 function mapStateToProps(state, props) {
   const { tool } = state.editor;
   const { x, y } = state.editor.hover;
-  const { entityId, selectedPalette, selectedTileType, selectedBrush, showLayers, actorDefaults, triggerDefaults, clipboardVariables } = state.editor;
+  const { entityId, selectedTileType, selectedBrush, showLayers, actorDefaults, triggerDefaults, clipboardVariables } = state.editor;
   const showCollisions = state.project.present.settings.showCollisions;
   const scenesLookup = sceneSelectors.selectEntities(state);
   const scene = scenesLookup[props.sceneId];
-
-  let hoverPalette = -1;
-  const hoverScene = sceneSelectors.selectById(state, state.editor.hover.sceneId);
-  if (hoverScene) {
-    hoverPalette = Array.isArray(scene.tileColors)
-      ? scene.tileColors[x + y * scene.width]
-      : 0;
-  }
 
   return {
     x: x || 0,
     y: y || 0,
     tool,
-    selectedPalette,
     selectedTileType,
     selectedBrush,
     actorDefaults,
@@ -437,7 +344,6 @@ function mapStateToProps(state, props) {
     showCollisions,
     scene,
     showLayers,
-    hoverPalette
   };
 }
 
@@ -445,7 +351,6 @@ const mapDispatchToProps = {
   addActor: entitiesActions.addActor,
   removeActorAt: entitiesActions.removeActorAt,
   paintCollision: entitiesActions.paintCollision,
-  paintColor: entitiesActions.paintColor,
   addTrigger: entitiesActions.addTrigger,
   removeTriggerAt: entitiesActions.removeTriggerAt,
   resizeTrigger: entitiesActions.resizeTrigger,
@@ -455,7 +360,6 @@ const mapDispatchToProps = {
   editPlayerStartAt: settingsActions.editPlayerStartAt,
   editDestinationPosition: entitiesActions.editDestinationPosition,
   editSearchTerm: editorActions.editSearchTerm,
-  setSelectedPalette: editorActions.setSelectedPalette,
 };
 
 export default connect(

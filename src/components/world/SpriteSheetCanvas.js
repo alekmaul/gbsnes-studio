@@ -5,8 +5,6 @@ import debounce from "lodash/debounce";
 import { assetFilename } from "../../lib/helpers/gbstudio";
 // eslint-disable-next-line import/no-unresolved
 import SpriteSheetCanasWorker from "./SpriteSheetCanvas.worker";
-import { DMG_PALETTE } from "../../consts";
-import { PaletteShape } from "../../store/stateShape";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 
 const workerPool = [];
@@ -37,30 +35,27 @@ class SpriteSheetCanvas extends Component {
   }
 
   shouldComponentUpdate(nextProps) {
-    const { direction, frame, spriteSheet, palette } = this.props;
+    const { direction, frame, spriteSheet } = this.props;
     return (
       nextProps.direction !== direction ||
       nextProps.frame !== frame ||
-      spriteSheet !== nextProps.spriteSheet || 
-      palette !== nextProps.palette
+      spriteSheet !== nextProps.spriteSheet
     );
   }
 
   componentDidUpdate(prevProps) {
-    const { direction, frame, palette } = prevProps;
+    const { direction, frame } = prevProps;
     const {
       projectRoot,
       spriteSheet,
       direction: nextDirection,
       frame: nextFrame,
-      palette: nextPalette
     } = this.props;
     const newSrc = this.imageSrc(projectRoot, spriteSheet);
     if (
       newSrc !== this.src ||
       direction !== nextDirection ||
-      frame !== nextFrame ||
-      palette !== nextPalette
+      frame !== nextFrame
     ) {
       this.debouncedDraw();
     }
@@ -71,7 +66,7 @@ class SpriteSheetCanvas extends Component {
   }
 
   draw = () => {
-    const { projectRoot, spriteSheet = {}, direction = "down", frame, palette } = this.props;
+    const { projectRoot, spriteSheet = {}, direction = "down", frame } = this.props;
     if (this.canvas && this.canvas.current && spriteSheet) {
       this.worker.postMessage({
         src: this.imageSrc(projectRoot, spriteSheet),
@@ -82,7 +77,6 @@ class SpriteSheetCanvas extends Component {
         type: spriteSheet.type,
         direction,
         frame,
-        palette: palette.colors
       });
     }
   };
@@ -122,14 +116,12 @@ class SpriteSheetCanvas extends Component {
 //     type: PropTypes.string.isRequired,
 //     _v: PropTypes.number
 //   }),
-//   palette: PaletteShape
 // };
 
 SpriteSheetCanvas.defaultProps = {
   direction: "down",
   frame: 0,
   spriteSheet: null,
-  palette: DMG_PALETTE
 };
 
 function mapStateToProps(state, props) {

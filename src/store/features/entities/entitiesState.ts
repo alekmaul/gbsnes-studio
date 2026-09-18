@@ -14,7 +14,6 @@ import { normalize, denormalize, schema } from "normalizr";
 import {
   SPRITE_TYPE_STATIC,
   SPRITE_TYPE_ACTOR,
-  DMG_PALETTE,
   COLLISION_ALL,
   TILE_PROPS,
   DRAG_PLAYER,
@@ -53,7 +52,6 @@ import {
   Scene,
   Background,
   SpriteSheet,
-  Palette,
   Music,
   Variable,
   CustomEvent,
@@ -97,7 +95,6 @@ const backgroundsAdapter = createEntityAdapter<Background>({
 const spriteSheetsAdapter = createEntityAdapter<SpriteSheet>({
   sortComparer: sortByFilename,
 });
-const palettesAdapter = createEntityAdapter<Palette>();
 const customEventsAdapter = createEntityAdapter<CustomEvent>();
 const musicAdapter = createEntityAdapter<Music>({
   sortComparer: sortByFilename,
@@ -111,7 +108,6 @@ export const initialState: EntitiesState = {
   scenes: scenesAdapter.getInitialState(),
   backgrounds: backgroundsAdapter.getInitialState(),
   spriteSheets: spriteSheetsAdapter.getInitialState(),
-  palettes: palettesAdapter.getInitialState(),
   customEvents: customEventsAdapter.getInitialState(),
   music: musicAdapter.getInitialState(),
   variables: variablesAdapter.getInitialState(),
@@ -350,15 +346,12 @@ const loadProject: CaseReducer<
     data: ProjectEntitiesData;
   }>
 > = (state, action) => {
-  const data = normalizeEntities(action.payload.data);
-  const fixedData = fixDefaultPalettes(data);
-  const entities = fixedData.entities;
+  const entities = normalizeEntities(action.payload.data).entities;
   actorsAdapter.setAll(state.actors, entities.actors || {});
   triggersAdapter.setAll(state.triggers, entities.triggers || {});
   scenesAdapter.setAll(state.scenes, entities.scenes || {});
   backgroundsAdapter.setAll(state.backgrounds, entities.backgrounds || {});
   spriteSheetsAdapter.setAll(state.spriteSheets, entities.spriteSheets || {});
-  palettesAdapter.setAll(state.palettes, entities.palettes || {});
   musicAdapter.setAll(state.music, entities.music || {});
   customEventsAdapter.setAll(state.customEvents, entities.customEvents || {});
   variablesAdapter.setAll(state.variables, entities.variables || {});
@@ -525,25 +518,8 @@ const fixAllScenesWithModifiedBackgrounds = (state: EntitiesState) => {
       scene.width = background ? background.width : 32;
       scene.height = background ? background.height : 32;
       scene.collisions = [];
-      scene.tileColors = [];
     }
   }
-};
-
-const fixDefaultPalettes = (state: any) => {
-  return {
-    ...state,
-    result: {
-      ...state.result,
-      settings: {
-        ...state.result.settings,
-        defaultBackgroundPaletteIds: state.result.settings
-          .defaultBackgroundPaletteIds
-          ? state.result.settings.defaultBackgroundPaletteIds.slice(-6)
-          : [],
-      },
-    },
-  };
 };
 
 /**************************************************************************
@@ -571,9 +547,7 @@ const addScene: CaseReducer<
       width: Math.max(MIN_SCENE_WIDTH, background?.width || 0),
       height: Math.max(MIN_SCENE_HEIGHT, background?.height || 0),
       type: "0",
-      paletteIds: [],
       collisions: [],
-      tileColors: [],
       script: [],
       playerHit1Script: [],
       playerHit2Script: [],
@@ -686,7 +660,6 @@ const editScene: CaseReducer<
     if (background) {
       if (otherScene) {
         patch.collisions = otherScene.collisions;
-        patch.tileColors = otherScene.tileColors;
       } else if (
         oldBackground &&
         background &&
@@ -694,11 +667,9 @@ const editScene: CaseReducer<
       ) {
         const collisionsSize = Math.ceil(background.width * background.height);
         patch.collisions = scene.collisions.slice(0, collisionsSize);
-        patch.tileColors = [];
       } else if (background) {
         const collisionsSize = Math.ceil(background.width * background.height);
         patch.collisions = [];
-        patch.tileColors = [];
         for (let i = 0; i < collisionsSize; i++) {
           patch.collisions[i] = 0;
         }
@@ -850,7 +821,6 @@ const addActor: CaseReducer<
       direction: "down",
       moveSpeed: 1,
       animSpeed: 3,
-      paletteId: "",
       isPinned: false,
       collisionGroup: "",
       script: [],
@@ -1475,97 +1445,6 @@ const paintCollision: CaseReducer<
   });
 };
 
-const paintColor: CaseReducer<
-  EntitiesState,
-  PayloadAction<
-    {
-      sceneId: string;
-      x: number;
-      y: number;
-      paletteIndex: number;
-      brush: Brush;
-    } & ({ drawLine: false } | { drawLine: true; endX: number; endY: number })
-  >
-> = (state, action) => {
-  const scene = localSceneSelectors.selectById(state, action.payload.sceneId);
-  if (!scene) {
-    return;
-  }
-  const background = localBackgroundSelectors.selectById(
-    state,
-    scene.backgroundId
-  );
-  if (!background) {
-    return;
-  }
-
-  const brush = action.payload.brush;
-  const drawSize = brush === "16px" ? 2 : 1;
-  const tileColorsSize = Math.ceil(background.width * background.height);
-  const tileColors = (scene.tileColors || []).slice(0, tileColorsSize);
-
-  if (tileColors.length < tileColorsSize) {
-    for (let i = tileColors.length; i < tileColorsSize; i++) {
-      tileColors[i] = 0;
-    }
-  }
-
-  const getValue = (x: number, y: number) => {
-    const tileColorIndex = background.width * y + x;
-    return tileColors[tileColorIndex];
-  };
-
-  const setValue = (x: number, y: number, value: number) => {
-    const tileColorIndex = background.width * y + x;
-    tileColors[tileColorIndex] = value;
-  };
-
-  const isInBounds = (x: number, y: number) => {
-    return x >= 0 && x < background.width && y >= 0 && y < background.height;
-  };
-
-  const equal = (a: number, b: number) => a === b;
-
-  if (brush === "fill") {
-    floodFill(
-      action.payload.x,
-      action.payload.y,
-      action.payload.paletteIndex,
-      getValue,
-      setValue,
-      isInBounds,
-      equal
-    );
-  } else if (action.payload.drawLine) {
-    paintLine(
-      action.payload.x,
-      action.payload.y,
-      action.payload.endX,
-      action.payload.endY,
-      drawSize,
-      action.payload.paletteIndex,
-      setValue,
-      isInBounds
-    );
-  } else {
-    paint(
-      action.payload.x,
-      action.payload.y,
-      drawSize,
-      action.payload.paletteIndex,
-      setValue,
-      isInBounds
-    );
-  }
-
-  scenesAdapter.updateOne(state.scenes, {
-    id: action.payload.sceneId,
-    changes: {
-      tileColors,
-    },
-  });
-};
-
 /**************************************************************************
  * Variables
  */
@@ -1582,46 +1461,6 @@ const renameVariable: CaseReducer<
   } else {
     variablesAdapter.removeOne(state.variables, action.payload.variableId);
   }
-};
-
-/**************************************************************************
- * Palettes
- */
-
-const addPalette: CaseReducer<
-  EntitiesState,
-  PayloadAction<{ paletteId: string }>
-> = (state, action) => {
-  const newPalette: Palette = {
-    id: action.payload.paletteId,
-    name: `Palette ${localPaletteSelectors.selectTotal(state) + 1}`,
-    colors: [
-      DMG_PALETTE.colors[0],
-      DMG_PALETTE.colors[1],
-      DMG_PALETTE.colors[2],
-      DMG_PALETTE.colors[3],
-    ],
-  };
-  palettesAdapter.addOne(state.palettes, newPalette);
-};
-
-const editPalette: CaseReducer<
-  EntitiesState,
-  PayloadAction<{ paletteId: string; changes: Partial<Palette> }>
-> = (state, action) => {
-  let patch = { ...action.payload.changes };
-
-  palettesAdapter.updateOne(state.palettes, {
-    id: action.payload.paletteId,
-    changes: patch,
-  });
-};
-
-const removePalette: CaseReducer<
-  EntitiesState,
-  PayloadAction<{ paletteId: string }>
-> = (state, action) => {
-  palettesAdapter.removeOne(state.palettes, action.payload.paletteId);
 };
 
 /**************************************************************************
@@ -1930,7 +1769,6 @@ const entitiesSlice = createSlice({
     moveScene,
     editSceneEventDestinationPosition,
     paintCollision,
-    paintColor,
 
     /**************************************************************************
      * Actors
@@ -1996,23 +1834,6 @@ const entitiesSlice = createSlice({
      */
 
     renameVariable,
-
-    /**************************************************************************
-     * Palettes
-     */
-
-    addPalette: {
-      reducer: addPalette,
-      prepare: () => {
-        return {
-          payload: {
-            paletteId: uuid(),
-          },
-        };
-      },
-    },
-    editPalette,
-    removePalette,
 
     /**************************************************************************
      * Custom Events
@@ -2086,9 +1907,6 @@ const localSpriteSheetSelectors = spriteSheetsAdapter.getSelectors(
 const localBackgroundSelectors = backgroundsAdapter.getSelectors(
   (state: EntitiesState) => state.backgrounds
 );
-const localPaletteSelectors = palettesAdapter.getSelectors(
-  (state: EntitiesState) => state.palettes
-);
 const localMusicSelectors = musicAdapter.getSelectors(
   (state: EntitiesState) => state.music
 );
@@ -2111,9 +1929,6 @@ export const spriteSheetSelectors = spriteSheetsAdapter.getSelectors(
 );
 export const backgroundSelectors = backgroundsAdapter.getSelectors(
   (state: RootState) => state.project.present.entities.backgrounds
-);
-export const paletteSelectors = palettesAdapter.getSelectors(
-  (state: RootState) => state.project.present.entities.palettes
 );
 export const customEventSelectors = customEventsAdapter.getSelectors(
   (state: RootState) => state.project.present.entities.customEvents

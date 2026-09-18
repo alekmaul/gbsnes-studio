@@ -31,16 +31,16 @@
  * (states.c) does the rest.
  *
  * v2 M6 multi-palette-per-scene: the engine (SceneUploadBgPalette, scene.c)
- * can now accept up to 6 concatenated 32-byte BG palette regions per
- * background. This compiler still only ever emits ONE region per background
- * (matching snesgfx.js's current single-palette-per-image extraction) -
- * wiring the real 6-region "palette painting" data GB Studio 2.0 now
- * captures per scene (precompilePalettes in compileData.js: scene.paletteIds,
- * up to 6 palette ids per scene) into snesgfx.js's converter is real,
- * separate follow-up work, not done here. A project using only the
- * background's own natural colours (no custom palette painting) builds and
- * plays correctly either way - the engine's multi-region support is simply
- * unused until a compiler emits more than one region.
+ * can accept up to 6 concatenated 32-byte BG palette regions per background,
+ * but this compiler only ever emits ONE region per background, matching
+ * snesgfx.js's single-palette-per-image extraction straight from the PNG's
+ * own real colours. There is no per-scene "palette painting" data left to
+ * feed a multi-region upload with (the GB-heritage custom-palette editor
+ * feature - and the scene.paletteIds/background.paletteId fields it wrote -
+ * was removed entirely as pointless on a target that already gets its real
+ * colours straight from each PNG); the engine's multi-region support simply
+ * goes unused unless some future authoring scheme (e.g. multiple indexed-PNG
+ * regions per background) is built to drive it.
  *
  * v2: `actor.spriteType` (a real, explicit per-actor field in GB Studio 2.0 -
  * "static"/"actor"/"actor_animated"/"animated", independent of movementType)

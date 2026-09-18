@@ -860,10 +860,23 @@ controls + saved-game persistence). `appData/src/snes/EVENTS.md` is the authorit
 per-event support matrix (kept in sync with the opcode table by convention — update it
 whenever an opcode's runtime behaviour changes) and its own "Not yet implemented" section
 lists the real remaining gaps (a Projectiles subsystem, per-actor `On Update` scripts, runtime
-palette painting, runtime Engine Field writes — each already has its own explanatory comment
-in `script_cmds.c`). `appData/src/snes/PERF.md` has the ROM/RAM/CPU budget profile. Detailed
-build-up history (M0–M13 on `v2`, M14–M18 on `v3`) lives in the roadmap artifact and Claude's
-memory (`gbsnes-v2-migration`), not duplicated here.
+Engine Field writes — each already has its own explanatory comment in `script_cmds.c`).
+`appData/src/snes/PERF.md` has the ROM/RAM/CPU budget profile. Detailed build-up history
+(M0–M13 on `v2`, M14–M18 on `v3`) lives in the roadmap artifact and Claude's memory
+(`gbsnes-v2-migration`), not duplicated here.
+
+**Custom-palette editor removed (user-driven).** The GB-heritage "Custom Palettes" feature
+(menu entry, page, per-scene/actor palette pickers, the "Colorize" paint tool, the
+`palettes`/`paletteIds`/`paletteId`/`tileColors` project fields, `customColorsEnabled` and
+the four `default*PaletteId(s)` settings) had no purpose on this target — `snesgfx.js` already
+extracts each background/sprite's real palette straight from its PNG, with no user-editable
+overlay involved anywhere in the SNES compile path. Removed wholesale, along with the World
+editor's scene/sprite preview quantization (`ColorizedImage`, `SpriteSheetCanvas.worker`'s
+GB-green-channel recolour pass) that ran every preview through a 4-shade GB heuristic before
+display — previews now show each PNG's real colours directly. The two runtime palette-swap
+script events (`Palette: Set Background` / `Set UI`) are gone from the picker too; their
+opcodes stay reserved, still-Noop rows in `script_cmds.c` so nothing downstream renumbers.
+See `appData/src/snes/EVENTS.md` for the updated matrix rows.
 
 ## Tests
 

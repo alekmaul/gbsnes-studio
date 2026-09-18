@@ -266,12 +266,3 @@ export const heightDec = (type) => {
 export const textSpeedDec = (speed) => TEXT_SPEED_LOOKUP[speed] !== undefined
   ? TEXT_SPEED_LOOKUP[speed]
   : 0x1;
-
-export const paletteMaskDec = (mask) => {
-  return mask.reduce((memo, value, index) => {
-    if (!value) {
-      return memo;
-    }
-    return memo + Math.pow(2, index);
-  }, 0);
-}

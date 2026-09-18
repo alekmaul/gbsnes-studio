@@ -1,5 +1,4 @@
 import { createSlice, PayloadAction } from "@reduxjs/toolkit";
-import entitiesActions from "../entities/entitiesActions";
 import consoleActions from "../console/consoleActions";
 
 export type NavigationSection =
@@ -8,7 +7,6 @@ export type NavigationSection =
   | "backgrounds"
   | "ui"
   | "music"
-  | "palettes"
   | "dialogue"
   | "build"
   | "settings";
@@ -36,10 +34,6 @@ const navigationSlice = createSlice({
   },
   extraReducers: (builder) =>
     builder
-      // Select newly created palette in sidebar
-      .addCase(entitiesActions.addPalette, (state, action) => {
-        state.id = action.payload.paletteId;
-      })
       // Switch to build screen on any errors
       .addCase(consoleActions.stdErr, (state, action) => {
         state.section = "build";

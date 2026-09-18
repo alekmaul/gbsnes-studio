@@ -3,7 +3,6 @@ import {
   Scene,
   Background,
   SpriteSheet,
-  Palette,
   Music,
   Variable,
   Actor,
@@ -34,7 +33,6 @@ export type ProjectData = {
   scenes: SceneData[];
   backgrounds: Background[];
   spriteSheets: SpriteSheet[];
-  palettes: Palette[];
   customEvents: CustomEvent[];
   music: Music[];
   variables: Variable[];
