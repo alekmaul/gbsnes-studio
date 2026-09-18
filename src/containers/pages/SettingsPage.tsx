@@ -139,7 +139,7 @@ const SettingsPage: FC = () => {
     });
   };
 
-  const onChangeRegion = (snesRegion: string) => {
+  const onChangeRegion = (snesRegion: "ntsc" | "pal") => {
     editSettings({ snesRegion });
   };
 
@@ -216,7 +216,7 @@ const SettingsPage: FC = () => {
                 value={currentRegionValue}
                 options={regionOptions}
                 onChange={(newValue: { value: string }) => {
-                  onChangeRegion(newValue.value);
+                  onChangeRegion(newValue.value as "ntsc" | "pal");
                 }}
               />
             </SettingRowInput>

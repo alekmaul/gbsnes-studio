@@ -24,7 +24,6 @@ const compile = async (projectFile: string, buildType: string = "rom") => {
         projectRoot,
         buildType,
         outputRoot,
-        tmpPath: os.tmpdir(),
         progress: (message: string) => {
             console.log(message);
         },
