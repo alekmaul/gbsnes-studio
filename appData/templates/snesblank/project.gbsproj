@@ -12,10 +12,12 @@
         "startY": 9,
         "startDirection": "down",
         "startSceneId": "",
-        "playerSpriteSheetId": "11b5452b-187c-43a3-afb1-a1f4f74ffda2"
+        "playerSpriteSheetId": "11b5452b-187c-43a3-afb1-a1f4f74ffda2",
+        "startMoveSpeed": 1,
+        "startAnimSpeed": 3
     },
     "scenes": [],
-    "_version": "1.2.0",
+    "_version": "2.0.0",
     "author": "___AUTHOR___",
     "name": "___PROJECT_NAME___",
     "variables": [],
@@ -64,5 +66,13 @@
             "filename": "template.mod",
             "_v": 1561399228201
         }
-    ]
+    ],
+    "customEvents": [],
+    "engineFieldValues": [
+        {
+            "id": "fade_style",
+            "value": 0
+        }
+    ],
+    "_release": "6"
 }

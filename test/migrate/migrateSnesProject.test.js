@@ -5,14 +5,27 @@ import compileSnesData from "../../src/lib/compiler/compileSnesData";
 
 /*
  * M10 - roadmap step 3: "a real v1.1.4 SNES .gbsproj, committed, migrated
- * and recompiled in the new suite". appData/templates/sneshtml already IS
- * exactly that fixture - the SNES sample project, still at its original
- * v1.1.4-era "1.2.0"/no _release shape (never run through migrateProject,
- * since createProject.js copies templates raw and only loadProjectData.js
- * migrates, on open) - so it's used directly rather than committing a
- * second copy of the same data.
+ * and recompiled in the new suite". This used to read appData/templates/
+ * sneshtml directly, back when that template shipped un-migrated at its
+ * original v1.1.4-era "1.2.0"/no _release shape (createProject.js copies
+ * templates raw and only loadProjectData.js migrates, on open) - reusing it
+ * avoided committing a second copy of the same data.
+ *
+ * That coupling turned the template's own staleness into a "feature" this
+ * test quietly depended on - which was actually a real user-facing bug
+ * (every new sneshtml/snesblank project opened straight into a spurious
+ * "Project Requires Migrating" dialog, user-found). Now that the templates
+ * are pre-migrated to the current version/release (so a fresh project opens
+ * clean), this test owns a frozen, dedicated copy of the real pre-migration
+ * content instead - still the genuine v1.1.4-era sample project, just no
+ * longer required to also serve as the live template.
  */
-const FIXTURE_DIR = Path.join(
+const FIXTURE_PATH = Path.join(
+  __dirname,
+  "fixtures",
+  "sneshtml_v1.2.0.gbsproj"
+);
+const RECOMPILE_PROJECT_ROOT = Path.join(
   __dirname,
   "..",
   "..",
@@ -22,9 +35,7 @@ const FIXTURE_DIR = Path.join(
 );
 
 const loadFixture = () =>
-  JSON.parse(
-    fs.readFileSync(Path.join(FIXTURE_DIR, "project.gbsproj"), "utf8")
-  );
+  JSON.parse(fs.readFileSync(FIXTURE_PATH, "utf8"));
 
 describe("migrateProject - real v1.1.4 SNES project (sneshtml)", () => {
   test("fixture precondition: still at the pre-2.0.0 shape it shipped with", () => {
@@ -69,8 +80,10 @@ describe("migrateProject - real v1.1.4 SNES project (sneshtml)", () => {
   test("recompiles through compileSnesData with no warnings, all 8 scenes present", async () => {
     const migrated = migrateProject(loadFixture());
     const warnings = [];
+    // Assets (backgrounds, sprites, UI PNGs) still live under the real
+    // template dir - the fixture above only froze the project.gbsproj JSON.
     const out = await compileSnesData(migrated, {
-      projectRoot: FIXTURE_DIR,
+      projectRoot: RECOMPILE_PROJECT_ROOT,
       warnings: (m) => warnings.push(m),
     });
     expect(out.stats.sceneBlobs.length).toBe(8);
