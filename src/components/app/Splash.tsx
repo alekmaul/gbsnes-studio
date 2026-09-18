@@ -32,7 +32,7 @@ import createProject, {
 } from "../../lib/project/createProject";
 import GlobalStyle from "../ui/globalStyle";
 import ThemeProvider from "../ui/theme/ThemeProvider";
-import logoFile from "../ui/icons/GBStudioLogo.png";
+import logoFile from "../ui/icons/SNESStudioLogo.png";
 import { FormField, FormRow } from "../ui/form/FormLayout";
 import { TextField } from "../ui/form/TextField";
 import { CloseIcon, DotsIcon } from "../ui/icons/Icons";
