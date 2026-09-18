@@ -6,6 +6,7 @@ test("Should be able to conditionally execute if data has been saved", () => {
   const falsePath = [{ command: "EVENT_END", id: "def" }];
   compile(
     {
+      saveSlot: 1,
       true: truePath,
       false: falsePath
     },
@@ -13,5 +14,5 @@ test("Should be able to conditionally execute if data has been saved", () => {
       ifDataSaved: mockIfDataSaved
     }
   );
-  expect(mockIfDataSaved).toBeCalledWith(truePath, falsePath);
+  expect(mockIfDataSaved).toBeCalledWith(1, truePath, falsePath);
 });

@@ -7,6 +7,17 @@ const fields = [
     label: l10n("FIELD_IF_SAVED_DATA")
   },
   {
+    key: "saveSlot",
+    label: l10n("FIELD_SAVE_SLOT"),
+    type: "select",
+    options: [
+      [0, "FIELD_SAVE_SLOT_1"],
+      [1, "FIELD_SAVE_SLOT_2"],
+      [2, "FIELD_SAVE_SLOT_3"]
+    ],
+    defaultValue: 0
+  },
+  {
     key: "true",
     type: "events"
   },
@@ -42,7 +53,7 @@ const compile = (input, helpers) => {
   const { ifDataSaved } = helpers;
   const truePath = input.true;
   const falsePath = input.__disableElse ? [] : input.false;
-  ifDataSaved(truePath, falsePath);
+  ifDataSaved(input.saveSlot, truePath, falsePath);
 };
 
 module.exports = {

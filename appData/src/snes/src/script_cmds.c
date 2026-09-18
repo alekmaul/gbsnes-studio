@@ -225,29 +225,30 @@ void Script_LoadScene_b(void)
     script_continue = 0;
 }
 
-// SAVE_DATA. No args. Writes the save header + script_variables[] to SRAM
-// (save.c) - see save.h for exactly what GB (and this) does and doesn't save.
+// SAVE_DATA. args: save slot (0..NUM_SAVE_SLOTS-1). Writes the save header +
+// script_variables[] to that slot's SRAM region (save.c) - see save.h for
+// exactly what GB (and this) does and doesn't save.
 void Script_SaveData_b(void)
 {
-    SaveGameData();
+    SaveGameData(script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
 
-// CLEAR_DATA. No args.
+// CLEAR_DATA. args: save slot.
 void Script_ClearData_b(void)
 {
-    ClearGameData();
+    ClearGameData(script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
 
-// LOAD_DATA. No args. Like SWITCH_SCENE, no ADVANCE() on the switching path -
-// LoadGameData() -> SceneRequestSwitch already zeroes script_ptr, so the
-// script ends here once the switch is requested.
+// LOAD_DATA. args: save slot. Like SWITCH_SCENE, no ADVANCE() on the
+// switching path - LoadGameData() -> SceneRequestSwitch already zeroes
+// script_ptr, so the script ends here once the switch is requested.
 void Script_LoadData_b(void)
 {
-    if (LoadGameData())
+    if (LoadGameData(script_cmd_args[0]))
     {
         scene_fade_pending = 1;
         scene_fade_speed = 2;
@@ -264,12 +265,13 @@ void Script_LoadData_b(void)
     }
 }
 
-// IF_SAVED_DATA. args: hi(offset), lo(offset) - jump target if a save exists.
+// IF_SAVED_DATA. args: save slot, hi(offset), lo(offset) - jump target if a
+// save exists in that slot.
 void Script_IfSavedData_b(void)
 {
-    if (SaveDataExists())
+    if (SaveDataExists(script_cmd_args[0]))
     {
-        script_ptr = script_start_ptr + ARG16(0, 1);
+        script_ptr = script_start_ptr + ARG16(1, 2);
     }
     else
     {
@@ -934,10 +936,10 @@ void Script_IfColorSupported_b(void)
     X(Script_Choice_b, 5) /* 0x27 CHOICE */ \
     X(Script_ActorPush_b, 1) /* 0x28 ACTOR_PUSH */ \
     X(Script_IfActorPos_b, 4) /* 0x29 IF_ACTOR_AT_POSITION */ \
-    X(Script_LoadData_b, 0) /* 0x2A LOAD_DATA */ \
-    X(Script_SaveData_b, 0) /* 0x2B SAVE_DATA */ \
-    X(Script_ClearData_b, 0) /* 0x2C CLEAR_DATA */ \
-    X(Script_IfSavedData_b, 2) /* 0x2D IF_SAVED_DATA */ \
+    X(Script_LoadData_b, 1) /* 0x2A LOAD_DATA */ \
+    X(Script_SaveData_b, 1) /* 0x2B SAVE_DATA */ \
+    X(Script_ClearData_b, 1) /* 0x2C CLEAR_DATA */ \
+    X(Script_IfSavedData_b, 3) /* 0x2D IF_SAVED_DATA */ \
     X(Script_IfActorDirection_b, 3) /* 0x2E IF_ACTOR_DIRECTION */ \
     X(Script_SetFlagRandomValue_b, 4) /* 0x2F SET_RANDOM_VALUE */ \
     X(Script_ActorGetPos_b, 0) /* 0x30 ACTOR_GET_POSITION */ \

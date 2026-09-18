@@ -3,13 +3,13 @@ import PropTypes from "prop-types";
 import cx from "classnames";
 import { connect } from "react-redux";
 import { PlusIcon, ResizeIcon, CloseIcon, BrickIcon } from "../library/Icons";
-import { sceneSelectors } from "../../store/features/entities/entitiesState";
+import { sceneSelectors, backgroundSelectors } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
 import settingsActions from "../../store/features/settings/settingsActions";
 import entitiesActions from "../../store/features/entities/entitiesActions";
 
 import { SceneShape, VariableShape } from "../../store/stateShape";
-import { TOOL_COLLISIONS, TOOL_ERASER, TOOL_TRIGGERS, TOOL_ACTORS, BRUSH_FILL, BRUSH_16PX, TOOL_SELECT, COLLISION_ALL, TILE_PROPS } from "../../consts";
+import { TOOL_COLLISIONS, TOOL_ERASER, TOOL_TRIGGERS, TOOL_ACTORS, BRUSH_FILL, BRUSH_16PX, BRUSH_MAGIC, TOOL_SELECT, COLLISION_ALL, TILE_PROPS } from "../../consts";
 
 class SceneCursor extends Component {
   constructor() {
@@ -70,6 +70,7 @@ class SceneCursor extends Component {
       setTool,
       selectedTileType,
       selectedBrush,
+      tileLookup,
       addActor,
       addTrigger,
       sceneId,
@@ -135,6 +136,10 @@ class SceneCursor extends Component {
       }
       if(selectedBrush === BRUSH_FILL) {
         paintCollision({ brush: selectedBrush, sceneId, x, y, value: this.drawTile, isTileProp: this.isTileProp });
+      } else if (selectedBrush === BRUSH_MAGIC) {
+        if (tileLookup) {
+          paintCollision({ brush: BRUSH_MAGIC, sceneId, tileLookup, x, y, value: this.drawTile, isTileProp: this.isTileProp });
+        }
       } else {
         if(this.drawLine && this.startX !== undefined && this.startY !== undefined) {
           paintCollision({ brush: selectedBrush, sceneId, x: this.startX, y: this.startY, endX: x, endY: y, value: this.drawTile, isTileProp: this.isTileProp, drawLine: true });
@@ -142,7 +147,7 @@ class SceneCursor extends Component {
           this.startY = y;
         } else {
           this.startX = x;
-          this.startY = y;          
+          this.startY = y;
           paintCollision({ brush: selectedBrush, sceneId, x, y, value: this.drawTile, isTileProp: this.isTileProp });
         }
         window.addEventListener("mousemove", this.onCollisionsMove);
@@ -315,12 +320,14 @@ SceneCursor.propTypes = {
   removeTriggerAt: PropTypes.func.isRequired,
   paintCollision: PropTypes.func.isRequired,
   selectedBrush: PropTypes.string.isRequired,
+  tileLookup: PropTypes.instanceOf(Uint8Array),
 };
 
 SceneCursor.defaultProps = {
   entityId: null,
   actorDefaults: {},
-  triggerDefaults: {}
+  triggerDefaults: {},
+  tileLookup: undefined,
 };
 
 function mapStateToProps(state, props) {
@@ -330,6 +337,12 @@ function mapStateToProps(state, props) {
   const showCollisions = state.project.present.settings.showCollisions;
   const scenesLookup = sceneSelectors.selectEntities(state);
   const scene = scenesLookup[props.sceneId];
+  const backgroundsLookup = backgroundSelectors.selectEntities(state);
+  const background = scene && backgroundsLookup[scene.backgroundId];
+  const tileLookup =
+    selectedBrush === BRUSH_MAGIC && background
+      ? state.warnings.backgrounds[background.id]?.lookup
+      : undefined;
 
   return {
     x: x || 0,
@@ -337,6 +350,7 @@ function mapStateToProps(state, props) {
     tool,
     selectedTileType,
     selectedBrush,
+    tileLookup,
     actorDefaults,
     triggerDefaults,
     clipboardVariables,

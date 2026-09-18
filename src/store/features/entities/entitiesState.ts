@@ -41,7 +41,7 @@ import {
   replaceInvalidCustomEventProperties,
 } from "../../../lib/compiler/helpers";
 import { EVENT_CALL_CUSTOM_EVENT } from "../../../lib/compiler/eventTypes";
-import { paint, paintLine, floodFill } from "../../../lib/helpers/paint";
+import { paint, paintLine, paintMagic, floodFill } from "../../../lib/helpers/paint";
 import { Brush, EditorSelectionType } from "../editor/editorState";
 import projectActions from "../project/projectActions";
 import {
@@ -1353,6 +1353,7 @@ const paintCollision: CaseReducer<
       value: number;
       brush: Brush;
       isTileProp: boolean;
+      tileLookup?: Uint8Array;
     } & ({ drawLine: false } | { drawLine: true; endX: number; endY: number })
   >
 > = (state, action) => {
@@ -1414,6 +1415,16 @@ const paintCollision: CaseReducer<
       setValue,
       isInBounds,
       equal
+    );
+  } else if (brush === "magic" && action.payload.tileLookup) {
+    paintMagic(
+      background.width,
+      action.payload.tileLookup,
+      action.payload.x,
+      action.payload.y,
+      action.payload.value,
+      setValue,
+      isInBounds
     );
   } else if (action.payload.drawLine) {
     paintLine(

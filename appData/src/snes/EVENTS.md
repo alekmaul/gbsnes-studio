@@ -114,7 +114,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Save Data, Load Data, Clear Data, If Data Saved | ✅ | Cartridge SRAM. Saves the same scope as GB: player position / facing + all `script_variables[]` (not other actors, the scene stack, or timers). |
+| Save Data, Load Data, Clear Data, If Data Saved | ✅ | Cartridge SRAM, **3 independent save slots** (`FIELD_SAVE_SLOT`), each its own fixed-size region. Saves the same scope as GB: player position / facing + all `script_variables[]` (not other actors, the scene stack, or timers). |
 
 ## Not yet implemented (M16 opcode audit, 2026-09-18)
 

@@ -4,6 +4,7 @@ interface CachedWarnings {
   id: string;
   warnings: string[];
   numTiles: number;
+  lookup?: Uint8Array;
   timestamp: number;
 }
 
@@ -30,6 +31,7 @@ const warningsSlice = createSlice({
         id: string;
         warnings: string[];
         numTiles: number;
+        lookup?: Uint8Array;
       }>
     ) => {
       state.backgroundsLoading = false;
@@ -37,6 +39,7 @@ const warningsSlice = createSlice({
         id: action.payload.id,
         warnings: action.payload.warnings,
         numTiles: action.payload.numTiles,
+        lookup: action.payload.lookup,
         timestamp: Date.now(),
       };
     },

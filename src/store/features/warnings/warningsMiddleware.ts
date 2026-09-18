@@ -22,6 +22,7 @@ const warningsMiddleware: Middleware<{}, RootState> = (store) => (next) => (
               id: action.payload,
               warnings: info.warnings,
               numTiles: info.numTiles,
+              lookup: info.lookup,
             })
           );
         });

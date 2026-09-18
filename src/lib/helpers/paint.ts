@@ -44,8 +44,29 @@ const paintLine = <T>(startX: number, startY: number, endX: number, endY: number
   }
 }
 
+const paintMagic = <T>(
+  bgWidth: number,
+  tileLookup: Uint8Array,
+  x: number,
+  y: number,
+  value: T,
+  setValue: SetValueFn<T>,
+  isInBounds: InBoundsFn
+) => {
+  const tileIndex = bgWidth * y + x;
+  const targetTileID = tileLookup[tileIndex];
+  tileLookup.forEach((tileID, index) => {
+    if (tileID === targetTileID) {
+      const x1 = index % bgWidth;
+      const y1 = (index / bgWidth) >> 0;
+      paint(x1, y1, 1, value, setValue, isInBounds);
+    }
+  });
+}
+
 export {
   paint,
   paintLine,
+  paintMagic,
   floodFill
 }

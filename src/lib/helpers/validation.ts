@@ -14,6 +14,7 @@ const MAX_TILESET_TILES = target.maxTilesetTiles;
 interface BackgroundInfo {
   numTiles: number;
   warnings: string[];
+  lookup?: Uint8Array;
 }
 
 export const getBackgroundInfo = async (
@@ -24,10 +25,16 @@ export const getBackgroundInfo = async (
   const warnings: string[] = [];
 
   let tilesetLength = precalculatedTilesetLength;
+  let lookup: Uint8Array | undefined;
   if (!tilesetLength) {
     const filename = assetFilename(projectPath, "backgrounds", background);
     const conv = await snesgfx.imageToBGData(filename);
     tilesetLength = conv.tileCount;
+    // Tile index only (mask off the palette/priority/flip bits packed into
+    // the rest of each tilemap entry) - used by the magic brush to find
+    // every position sharing the same underlying 8x8 art, regardless of
+    // flip orientation (already deduped by imageToBGData itself).
+    lookup = Uint8Array.from(conv.tilemap.map((entry: number) => entry & 0x3ff));
   }
 
   if (
@@ -69,5 +76,6 @@ export const getBackgroundInfo = async (
   return {
     warnings,
     numTiles: tilesetLength,
+    lookup,
   };
 };

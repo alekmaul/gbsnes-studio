@@ -17,11 +17,22 @@ typedef struct
 } SAVE_HEADER;
 
 #define SAVE_VARS_OFFSET ((u16)sizeof(SAVE_HEADER))
+#define SAVE_SLOT_SIZE ((u16)(SAVE_VARS_OFFSET + NUM_VARIABLES + 1))
 
-u8 SaveDataExists(void)
+static u16 SaveSlotOffset(u8 slot)
 {
+    if (slot >= NUM_SAVE_SLOTS)
+    {
+        slot = 0;
+    }
+    return (u16)slot * SAVE_SLOT_SIZE;
+}
+
+u8 SaveDataExists(u8 slot)
+{
+    u16 offset = SaveSlotOffset(slot);
     u8 exists = 0;
-    consoleLoadSramWithOffset(&exists, 1, 0);
+    consoleLoadSramWithOffset(&exists, 1, offset);
     // Exact equality, not truthiness: a never-written cartridge's SRAM reads
     // back as random garbage (confirmed via Mesen - a freshly created save
     // file is NOT zero-filled), so "nonzero" would read as "save exists" on
@@ -31,8 +42,9 @@ u8 SaveDataExists(void)
     return exists == 1;
 }
 
-void SaveGameData(void)
+void SaveGameData(u8 slot)
 {
+    u16 offset = SaveSlotOffset(slot);
     SAVE_HEADER header;
     header.exists = 1;
     header.scene_index = scene_index;
@@ -41,27 +53,29 @@ void SaveGameData(void)
     header.dir_x = actors[0].dir_x;
     header.dir_y = actors[0].dir_y;
 
-    consoleCopySramWithOffset((u8 *)&header, sizeof(header), 0);
-    consoleCopySramWithOffset(script_variables, NUM_VARIABLES + 1, SAVE_VARS_OFFSET);
+    consoleCopySramWithOffset((u8 *)&header, sizeof(header), offset);
+    consoleCopySramWithOffset(script_variables, NUM_VARIABLES + 1, offset + SAVE_VARS_OFFSET);
 }
 
-void ClearGameData(void)
+void ClearGameData(u8 slot)
 {
+    u16 offset = SaveSlotOffset(slot);
     u8 notExists = 0;
-    consoleCopySramWithOffset(&notExists, 1, 0);
+    consoleCopySramWithOffset(&notExists, 1, offset);
 }
 
-u8 LoadGameData(void)
+u8 LoadGameData(u8 slot)
 {
+    u16 offset = SaveSlotOffset(slot);
     SAVE_HEADER header;
 
-    if (!SaveDataExists())
+    if (!SaveDataExists(slot))
     {
         return 0;
     }
 
-    consoleLoadSramWithOffset((u8 *)&header, sizeof(header), 0);
-    consoleLoadSramWithOffset(script_variables, NUM_VARIABLES + 1, SAVE_VARS_OFFSET);
+    consoleLoadSramWithOffset((u8 *)&header, sizeof(header), offset);
+    consoleLoadSramWithOffset(script_variables, NUM_VARIABLES + 1, offset + SAVE_VARS_OFFSET);
 
     /* dir code 1 (down) is a placeholder - SceneRequestSwitch's dir_to_vec
      * result is overwritten right after with the actual saved facing, same

@@ -902,8 +902,8 @@ test("Should be able to conditionally execute if data is saved", () => {
       output.push(99);
     }
   });
-  sb.ifDataSaved([], []);
-  expect(output).toEqual([cmd(IF_SAVED_DATA), 0, 7, 99, cmd(JUMP), 0, 8, 99]);
+  sb.ifDataSaved(0, [], []);
+  expect(output).toEqual([cmd(IF_SAVED_DATA), 0, 0, 8, 99, cmd(JUMP), 0, 9, 99]);
 });
 
 test("Should be able to define a label", () => {
@@ -1193,21 +1193,42 @@ test("Should be able to load data", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.dataLoad();
-  expect(output).toEqual([cmd(LOAD_DATA)]);
+  expect(output).toEqual([cmd(LOAD_DATA), 0]);
+});
+
+test("Should be able to load data from a specific save slot", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.dataLoad(2);
+  expect(output).toEqual([cmd(LOAD_DATA), 2]);
 });
 
 test("Should be able to save data", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.dataSave();
-  expect(output).toEqual([cmd(SAVE_DATA)]);
+  expect(output).toEqual([cmd(SAVE_DATA), 0]);
+});
+
+test("Should be able to save data to a specific save slot", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.dataSave(1);
+  expect(output).toEqual([cmd(SAVE_DATA), 1]);
 });
 
 test("Should be able to clear saved data", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.dataClear();
-  expect(output).toEqual([cmd(CLEAR_DATA)]);
+  expect(output).toEqual([cmd(CLEAR_DATA), 0]);
+});
+
+test("Should be able to clear saved data in a specific save slot", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.dataClear(1);
+  expect(output).toEqual([cmd(CLEAR_DATA), 1]);
 });
 
 test("Should be able to wait for the next frame", () => {

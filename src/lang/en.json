@@ -40,6 +40,7 @@
   "TOOL_COLLISIONS_LABEL": "Collisions",
   "TOOL_BRUSH": "Brush {size}",
   "TOOL_FILL": "Fill",
+  "TOOL_MAGIC": "Magic Brush (Repaint Matching Tiles)",
   "TOOL_SHOW_LAYERS": "Show All Layers",
   "TOOL_HIDE_LAYERS": "Hide Layers",
 
@@ -122,6 +123,10 @@
   "FIELD_SAVE_DATA": "Save current game data to memory. Requires cartridge type with BATTERY.",
   "FIELD_CLEAR_DATA": "Clear all saved game data from memory.",
   "FIELD_IF_SAVED_DATA": "Run if player has saved a game.",
+  "FIELD_SAVE_SLOT": "Save Slot",
+  "FIELD_SAVE_SLOT_1": "Slot 1",
+  "FIELD_SAVE_SLOT_2": "Slot 2",
+  "FIELD_SAVE_SLOT_3": "Slot 3",
   "FIELD_MOVEMENT_STATIC": "Static",
   "FIELD_MOVEMENT_FACE_INTERACTION": "Face Interaction",
   "FIELD_MOVEMENT_RANDOM_ROTATION": "Random Rotation",

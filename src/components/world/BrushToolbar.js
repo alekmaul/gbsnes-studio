@@ -5,6 +5,7 @@ import { connect } from "react-redux";
 import l10n from "../../lib/helpers/l10n";
 import {
   PaintBucketIcon,
+  WandIcon,
   SquareIcon,
   SquareIconSmall,
   EyeOpenIcon,
@@ -16,6 +17,7 @@ import {
   BRUSH_8PX,
   BRUSH_16PX,
   BRUSH_FILL,
+  BRUSH_MAGIC,
   COLLISION_TOP,
   COLLISION_BOTTOM,
   COLLISION_LEFT,
@@ -161,6 +163,15 @@ class BrushToolbar extends Component {
         >
           <PaintBucketIcon />
         </div>
+        <div
+          onClick={this.setBrush(BRUSH_MAGIC)}
+          className={cx("BrushToolbar__Item", {
+            "BrushToolbar__Item--Selected": selectedBrush === BRUSH_MAGIC,
+          })}
+          title={l10n("TOOL_MAGIC")}
+        >
+          <WandIcon />
+        </div>
         <div className="BrushToolbar__Divider" />
         {showTileTypes &&
           <>
@@ -216,7 +227,7 @@ class BrushToolbar extends Component {
 
 BrushToolbar.propTypes = {
   visible: PropTypes.bool.isRequired,
-  selectedBrush: PropTypes.oneOf([BRUSH_8PX, BRUSH_16PX, BRUSH_FILL])
+  selectedBrush: PropTypes.oneOf([BRUSH_8PX, BRUSH_16PX, BRUSH_FILL, BRUSH_MAGIC])
     .isRequired,
   showLayers: PropTypes.bool.isRequired,
   showTileTypes: PropTypes.bool.isRequired,

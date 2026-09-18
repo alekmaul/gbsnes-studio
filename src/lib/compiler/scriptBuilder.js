@@ -1020,9 +1020,10 @@ class ScriptBuilder {
     }); 
   }
 
-  ifDataSaved = (truePath = [], falsePath = []) => {
+  ifDataSaved = (saveSlot = 0, truePath = [], falsePath = []) => {
     const output = this.output;
     output.push(cmd(IF_SAVED_DATA));
+    output.push(saveSlot);
     compileConditional(truePath, falsePath, {
       ...this.options,
       output,
@@ -1210,19 +1211,22 @@ class ScriptBuilder {
 
   // Data
 
-  dataLoad = () => {
+  dataLoad = (saveSlot = 0) => {
     const output = this.output;
     output.push(cmd(LOAD_DATA));
+    output.push(saveSlot);
   };
 
-  dataSave = () => {
+  dataSave = (saveSlot = 0) => {
     const output = this.output;
     output.push(cmd(SAVE_DATA));
+    output.push(saveSlot);
   };
 
-  dataClear = () => {
+  dataClear = (saveSlot = 0) => {
     const output = this.output;
     output.push(cmd(CLEAR_DATA));
+    output.push(saveSlot);
   };
 
   // Timing
