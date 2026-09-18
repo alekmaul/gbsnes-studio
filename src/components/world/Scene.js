@@ -233,7 +233,7 @@ class Scene extends Component {
             ))}
           {event && (
             <div className="Scene__EventHelper">
-              <EventHelper event={event} scene={scene} target={target} />
+              <EventHelper event={event} scene={scene} />
             </div>
           )}
         </div>
@@ -260,7 +260,6 @@ Scene.propTypes = {
   event: EventShape,
   id: PropTypes.string.isRequired,
   visible: PropTypes.bool.isRequired,
-  target: PropTypes.string,
   image: BackgroundShape,
   prefab: PropTypes.shape({}),
   width: PropTypes.number.isRequired,
@@ -285,7 +284,6 @@ Scene.defaultProps = {
   image: null,
   event: null,
   prefab: null,
-  target: undefined,
 };
 
 function mapStateToProps(state, props) {
@@ -390,7 +388,6 @@ function mapStateToProps(state, props) {
   return {
     scene,
     visible,
-    target: settings.target,
     projectRoot: state.document && state.document.root,
     prefab: undefined,
     event,

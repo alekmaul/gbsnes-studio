@@ -1,7 +1,6 @@
 /*
- * SNES (PVSnesLib) compile target.
- *
- * Same shape as targets/gb.js. Values are carried forward from the v1.1.4
+ * SNES (PVSnesLib) compile target - the only compile target this app
+ * builds for (see ./index.js). Values are carried forward from the v1.1.4
  * SNES port's own target descriptor (see the M0 cadrage decisions D1-D5,
  * still accurate - the appData/src/snes/ engine and compileSnesData.js
  * haven't been rebuilt yet on this v2 branch, so nothing about the SNES
@@ -15,9 +14,7 @@
  *   D5  explicit palettes; the tileset limit is really a VRAM budget
  *
  * Consumed by compileSnesData.js (M7) and scriptBuilder.js's SNES-aware
- * paths (input mask width, overlay row scaling, camera clamp). This file
- * existed since M3, before any of that code did, so work had a target
- * descriptor to plug into from the start, matching how targets/gb.js works.
+ * paths (input mask width, overlay row scaling, camera clamp).
  *
  * A few fields are left as the *old* v1.1.4 values on purpose, flagged
  * below: M5 (all 5 genres) landed without changing the scene/actor blob's
@@ -54,10 +51,7 @@ const snesTarget = {
   screenTileHeight: 28,
 
   // --- Editor asset guidance ---
-  // compileSnesData.js (v1.1.4) caps a scene background at 32x32 tiles;
-  // unrelated to GB Studio 2.0's own much larger 2040px/maxBackgroundPixels
-  // limits (targets/gb.js) - those are a GB-only validation.ts concept with
-  // no SNES equivalent yet.
+  // compileSnesData.js (v1.1.4) caps a scene background at 32x32 tiles.
   maxBackgroundWidth: 256,
   maxBackgroundHeight: 256,
   maxBackgroundPixels: null,
@@ -69,14 +63,12 @@ const snesTarget = {
 
   // --- Per-scene entity limits ---
   // PROVISIONAL - carried forward unrevised from v1.1.4 (which itself never
-  // revisited GB Studio 1.2.2's old 9/9 cap). GB Studio 2.0.0-beta5 raised
-  // the Game Boy figure to 30 (see targets/gb.js) but that's driven by the
-  // new genre-based engine's own scene/actor data layout, which the SNES
-  // engine hasn't been rebuilt to match yet (M5). Revisit then.
+  // revisited GB Studio 1.2.2's old 9/9 cap) - driven by the SNES engine's
+  // own scene/actor data layout (gbs_types.h), which hasn't been rebuilt to
+  // raise this yet (M5). Revisit then.
   maxActors: 9,
   maxTriggers: 9,
-  // No small/large-scene actor cap distinction exists on the SNES engine
-  // (v1.1.4 or planned) - GB Studio 2.0.0-beta5-only concept so far.
+  // No small/large-scene actor cap distinction exists on the SNES engine.
   maxActorsSmall: null,
   // No per-scene sprite-frame budget (fixed 256-tile OBJ sheet); the real
   // limit is the number of distinct actor sprite sheets loaded at once
@@ -93,9 +85,7 @@ const snesTarget = {
   maxScriptSize: 32768,
 
   // The SNES pad adds X / Y / L / R, so the input opcodes carry a 2-byte
-  // mask (KEY_BITS bits 8..11, v1.1.4 compiler/helpers.js). The Game Boy
-  // side (targets/gb.js inputMaskBytes: 1) is unchanged in 2.0.0-beta5, so
-  // this is still a clean +1 byte, target-only difference.
+  // mask (KEY_BITS bits 8..11, v1.1.4 compiler/helpers.js).
   inputMaskBytes: 2,
 
   // Dialogue box text wrap width, in characters. Mirrors

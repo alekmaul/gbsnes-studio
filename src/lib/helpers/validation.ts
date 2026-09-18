@@ -1,13 +1,15 @@
 import l10n from "./l10n";
 import { divisibleBy8 } from "./8bit";
 import { assetFilename } from "./gbstudio";
-import ggbgfx from "../compiler/ggbgfx";
+import snesgfx from "../compiler/snesgfx";
+import target from "../compiler/targets";
 import { Background } from "../../store/features/entities/entitiesTypes";
 
-const MAX_IMAGE_WIDTH = 2040;
-const MAX_IMAGE_HEIGHT = 2040;
-const MAX_PIXELS = 16380 * 64;
-const MAX_TILESET_TILES = 16 * 12;
+const MIN_IMAGE_WIDTH = target.screenTileWidth * 8;
+const MIN_IMAGE_HEIGHT = target.screenTileHeight * 8;
+const MAX_IMAGE_WIDTH = target.maxBackgroundWidth;
+const MAX_IMAGE_HEIGHT = target.maxBackgroundHeight;
+const MAX_TILESET_TILES = target.maxTilesetTiles;
 
 interface BackgroundInfo {
   numTiles: number;
@@ -24,11 +26,14 @@ export const getBackgroundInfo = async (
   let tilesetLength = precalculatedTilesetLength;
   if (!tilesetLength) {
     const filename = assetFilename(projectPath, "backgrounds", background);
-    const tilesetLookup = await ggbgfx.imageToTilesetLookup(filename);
-    tilesetLength = Object.keys(tilesetLookup).length;
+    const conv = await snesgfx.imageToBGData(filename);
+    tilesetLength = conv.tileCount;
   }
 
-  if (background.imageWidth < 160 || background.imageHeight < 144) {
+  if (
+    background.imageWidth < MIN_IMAGE_WIDTH ||
+    background.imageHeight < MIN_IMAGE_HEIGHT
+  ) {
     warnings.push(l10n("WARNING_BACKGROUND_TOO_SMALL"));
   }
   if (background.imageWidth > MAX_IMAGE_WIDTH) {
@@ -44,16 +49,6 @@ export const getBackgroundInfo = async (
       l10n("WARNING_BACKGROUND_TOO_TALL", {
         height: background.imageHeight,
         maxHeight: MAX_IMAGE_HEIGHT,
-      })
-    );
-  }
-  if (background.imageWidth * background.imageHeight > MAX_PIXELS) {
-    warnings.push(
-      l10n("WARNING_BACKGROUND_TOO_MANY_PIXELS", {
-        width: background.imageWidth,
-        height: background.imageHeight,
-        numPixels: background.imageWidth * background.imageHeight,
-        maxPixels: MAX_PIXELS,
       })
     );
   }

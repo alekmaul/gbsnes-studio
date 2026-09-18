@@ -20,7 +20,7 @@ const readEngineVersionLegacy = async (path) => {
 }
 
 const ejectBuild = async ({
-  projectType = "gb",
+  projectType = "snes",
   outputRoot = "/tmp",
   projectRoot = "/tmp",
   compiledData,

@@ -25,7 +25,7 @@ const engineMiddleware: Middleware<{}, RootState> = (store) => (next) => async (
   action
 ) => {
   if (actions.scanEngine.match(action)) {
-    const defaultEngineJsonPath = Path.join(engineRoot, "gb", "engine.json");
+    const defaultEngineJsonPath = Path.join(engineRoot, "snes", "engine.json");
     const localEngineJsonPath = Path.join(
       Path.dirname(action.payload),
       "assets",

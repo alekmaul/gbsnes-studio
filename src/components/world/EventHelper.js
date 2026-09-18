@@ -8,7 +8,7 @@ import {
   EVENT_OVERLAY_MOVE_TO,
   EVENT_IF_ACTOR_AT_POSITION
 } from "../../lib/compiler/eventTypes";
-import { getTarget } from "../../lib/compiler/targets";
+import compilerTarget from "../../lib/compiler/targets";
 
 const TILE_SIZE = 8;
 
@@ -27,13 +27,12 @@ class EventHelper extends Component {
     const { event } = this.props;
 
     if (event.command === EVENT_CAMERA_MOVE_TO) {
-      const { target } = this.props;
       const x = argValue(event.args.x);
       const y = argValue(event.args.y);
       if(x === undefined && y === undefined) {
         return <div />
       }
-      const { screenTileWidth, screenTileHeight } = getTarget(target);
+      const { screenTileWidth, screenTileHeight } = compilerTarget;
       return (
         <div className="EventHelper">
           <div
@@ -104,13 +103,11 @@ EventHelper.propTypes = {
   event: PropTypes.shape({
     command: PropTypes.string,
     args: PropTypes.shape({})
-  }),
-  target: PropTypes.string
+  })
 };
 
 EventHelper.defaultProps = {
-  event: {},
-  target: undefined
+  event: {}
 };
 
 export default EventHelper;

@@ -32,7 +32,7 @@ import { SliderField } from "../ui/form/SliderField";
 import { CheckboxField } from "../ui/form/CheckboxField";
 import { Input } from "../ui/form/Input";
 import { Select } from "../ui/form/Select";
-import { getTarget } from "../../lib/compiler/targets";
+import compilerTarget from "../../lib/compiler/targets";
 
 const argValue = (arg) => {
   if(arg && arg.value !== undefined) {
@@ -93,7 +93,6 @@ class ScriptEventFormInput extends Component {
     const { type, id, value, defaultValue, args, field, entityId, allowRename, scope, defaultBackgroundPaletteIds, defaultUIPaletteId, target } = this.props;
 
     if (type === "textarea") {
-      const textTarget = getTarget(target);
       return (
         <ScriptEventFormTextArea
           id={id}
@@ -101,8 +100,8 @@ class ScriptEventFormInput extends Component {
           rows={field.rows}
           maxlength={
             args.avatarId
-              ? textTarget.maxTextTotalCharsWithAvatar
-              : textTarget.maxTextTotalChars
+              ? compilerTarget.maxTextTotalCharsWithAvatar
+              : compilerTarget.maxTextTotalChars
           }
           placeholder={field.placeholder}
           onChange={this.onChange}

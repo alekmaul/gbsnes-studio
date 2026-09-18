@@ -1,29 +1,16 @@
 import fs from "fs-extra";
-import compile from "./compileData";
 import compileSnesData from "./compileSnesData";
 import ejectBuild from "./ejectBuild";
-import makeBuild from "./makeBuild";
 import buildSnesRom from "./buildSnesRom";
-import compileMusic from "./compileMusic";
 import compileSnesMusic from "./compileSnesMusic";
-import { emulatorRoot, snesEmulatorRoot } from "../../consts";
+import { snesEmulatorRoot } from "../../consts";
 import copy from "../helpers/fsCopy";
 
-const MAX_BANKS = 512; // GBDK supports max of 512 banks
-
-// Which backend to compile for. "gb"/"gbs2" (GBDK/Game Boy) is the default
-// and the stock behaviour; "snes" (PVSnesLib) is the second target being
-// brought back up on this base (M7/M8).
-const resolveTarget = (data) =>
-  process.env.GBS_TARGET || (data.settings && data.settings.target) || "gb";
-
-// Copies a target's static JS-emulator template into build/web, drops the
-// built ROM in next to it, and fills in the placeholders both templates
-// share (___PROJECT_NAME___ / ___AUTHOR___ / ___PROJECT_HEAD___ /
-// ___CUSTOM_CONTROLS___). ___COLORS_HEAD___ is GB-only (custom palette CSS) -
-// replacing it when the template doesn't contain it (SNES) is a harmless
-// no-op. Shared between the GB and SNES paths below (M12: was GB-only inline
-// code; the SNES web player never had an equivalent, see buildProjectSnes).
+// Copies the JS-emulator template into build/web, drops the built ROM in
+// next to it, and fills in the placeholders the template contains
+// (___PROJECT_NAME___ / ___AUTHOR___ / ___PROJECT_HEAD___ /
+// ___CUSTOM_CONTROLS___). ___COLORS_HEAD___ is a GB Color leftover the
+// template doesn't contain any more - replacing it is a harmless no-op.
 const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) => {
   await copy(emulatorDir, `${outputRoot}/build/web`);
   await copy(
@@ -46,7 +33,6 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
     b: data.settings.customControlsB,
     start: data.settings.customControlsStart,
     select: data.settings.customControlsSelect,
-    // SNES-only; the GB web player ignores these keys.
     x: data.settings.customControlsX,
     y: data.settings.customControlsY,
     l: data.settings.customControlsL,
@@ -63,14 +49,19 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
   await fs.writeFile(`${outputRoot}/build/web/index.html`, html);
 };
 
-// SNES path: eject the appData/src/snes engine, compile the project's scenes /
-// scripts / strings / backgrounds into src/assets.{c,h} + src/data/* (M7),
-// rebuild the snesmod soundbank from the project's .mod music (M8 phase 2),
-// then build the ROM (M8 phase 1). M12: also exports a "web" build the same
-// way the Game Boy path does, via the shared buildWebPlayer() above.
-const buildProjectSnes = async (
+// Eject the appData/src/snes engine, compile the project's scenes / scripts /
+// strings / backgrounds into src/assets.{c,h} + src/data/* (M7), rebuild the
+// snesmod soundbank from the project's .mod music (M8 phase 2), then build
+// the ROM (M8 phase 1). M12: also exports a "web" build via buildWebPlayer().
+const buildProject = async (
   data,
-  { projectRoot, outputRoot, buildType, progress, warnings }
+  {
+    buildType = "rom",
+    projectRoot = "/tmp",
+    outputRoot = "/tmp/testing",
+    progress = (_msg) => {},
+    warnings = (_msg) => {},
+  } = {}
 ) => {
   await ejectBuild({
     projectType: "snes",
@@ -113,91 +104,6 @@ const buildProjectSnes = async (
       data,
       emulatorDir: snesEmulatorRoot,
       romFilename: "game.sfc",
-    });
-  }
-};
-
-const buildProject = async (
-  data,
-  {
-    buildType = "rom",
-    projectRoot = "/tmp",
-    tmpPath = "/tmp",
-    profile = false,
-    engineFields = [],
-    outputRoot = "/tmp/testing",
-    progress = (_msg) => {},
-    warnings = (_msg) => {},
-  } = {}
-) => {
-  if (resolveTarget(data) === "snes") {
-    await buildProjectSnes(data, {
-      projectRoot,
-      outputRoot,
-      buildType,
-      progress,
-      warnings,
-    });
-    return;
-  }
-
-  const compiledData = await compile(data, {
-    projectRoot,
-    engineFields,
-    tmpPath,
-    progress,
-    warnings,
-  });
-  await ejectBuild({
-    projectRoot,
-    outputRoot,
-    compiledData,
-    progress,
-    warnings,
-  });
-  await compileMusic({
-    music: compiledData.music,
-    musicBanks: compiledData.musicBanks,
-    projectRoot,
-    buildRoot: outputRoot,
-    progress,
-    warnings,
-  });
-
-  const musicBanks = compiledData.music.map((m) => m.bank);
-  const maxMusicBank = Math.max(...musicBanks);
-
-  console.log("The last bank with music data is " + maxMusicBank); // for cartSize, 0 if no music...
-
-  const banksRequired = Math.max(compiledData.maxDataBank, maxMusicBank) + 1;
-
-  // Determine next power of 2 for cart size based on number of banks required
-  const cartSize = Math.pow(
-    2,
-    Math.ceil(Math.log(banksRequired) / Math.log(2))
-  );
-
-  if (cartSize > MAX_BANKS) {
-    throw new Error(
-      `Game content is over the maximum of ${MAX_BANKS} banks available. Content requires ${banksRequired} banks.`
-    );
-  }
-
-  await makeBuild({
-    buildRoot: outputRoot,
-    buildType,
-    cartSize,
-    data,
-    profile,
-    progress,
-    warnings,
-  });
-  if (buildType === "web") {
-    await buildWebPlayer({
-      outputRoot,
-      data,
-      emulatorDir: emulatorRoot,
-      romFilename: "game.gb",
     });
   }
 };

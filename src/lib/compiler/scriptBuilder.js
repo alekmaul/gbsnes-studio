@@ -135,7 +135,7 @@ import trimlines from "../helpers/trimlines";
 import { SPRITE_TYPE_ACTOR } from "../../consts";
 import { is16BitCType } from "../helpers/engineFields";
 import { nextVariable } from "../helpers/variables";
-import { getTarget } from "./targets";
+import target from "./targets";
 
 class ScriptBuilder {
   constructor(output, options) {
@@ -845,18 +845,15 @@ class ScriptBuilder {
 
   // Overlays
 
-  // Overlay Y is a row on GB's 18-tall screen (0 = full-screen, 18 = just
-  // off the bottom = hidden). The overlay always spans from row Y to the
-  // bottom of the screen, so on a taller target the same authored row has
-  // to be scaled by the screen height or "hide" (18) stops short and
-  // leaves a strip visible. target undefined -> "gb", ratio 18/18 = 1, so
-  // GB output is byte-for-byte unchanged.
+  // The event field authors an overlay Y row on an 18-row scale (0 =
+  // full-screen, 18 = just off the bottom = hidden, see eventOverlay{Show,
+  // MoveTo}.js) - the overlay always spans from row Y to the bottom of the
+  // screen, so on the SNES's taller 28-row screen the authored row has to
+  // be scaled up or "hide" (18) stops short and leaves a strip visible.
   scaleOverlayRow = (y) => {
-    const { target } = this.options || {};
-    const gbRows = getTarget("gb").screenTileHeight;
-    const rows = getTarget(target).screenTileHeight;
-    if (rows === gbRows) return y;
-    return Math.round((y * rows) / gbRows);
+    const authoredRows = 18;
+    const { screenTileHeight } = target;
+    return Math.round((y * screenTileHeight) / authoredRows);
   };
 
   overlayShow = (color = "white", x = 0, y = 0) => {
@@ -1099,21 +1096,13 @@ class ScriptBuilder {
 
   // Input
 
-  // Splits the input bitmask into 1 byte (GB) or 2 bytes little-endian
-  // (SNES, carrying X/Y/L/R in the extra byte - KEY_BITS bits 8..11 in
-  // ./helpers.js) depending on target. target undefined -> "gb" -> 1 byte,
-  // so Game Boy's own compiled output is byte-for-byte unchanged; the
-  // target descriptor's inputMaskBytes is the single source of truth.
+  // 2 bytes little-endian, carrying X/Y/L/R in the extra byte (KEY_BITS
+  // bits 8..11 in ./helpers.js).
   inputMask = (input) => {
     const output = this.output;
-    const { target } = this.options || {};
     const mask = inputDec(input);
-    if (getTarget(target).inputMaskBytes === 2) {
-      output.push(mask & 0xff);
-      output.push((mask >> 8) & 0xff);
-    } else {
-      output.push(mask & 0xff);
-    }
+    output.push(mask & 0xff);
+    output.push((mask >> 8) & 0xff);
   };
 
   inputAwait = (input) => {
@@ -1154,12 +1143,11 @@ class ScriptBuilder {
 
   cameraMoveTo = (x = 0, y = 0, speed = 0) => {
     const output = this.output;
-    const { scene, target } = this.options;
+    const { scene } = this.options;
     output.push(cmd(CAMERA_MOVE_TO));
-    // Limit camera move to be within scene bounds. Margins are the target's
-    // screen size in tiles (target undefined -> "gb", so GB behaviour here
-    // is unchanged: 20x18, same literals as before this became target-aware).
-    const { screenTileWidth, screenTileHeight } = getTarget(target);
+    // Limit camera move to be within scene bounds. Margins are the
+    // screen size in tiles.
+    const { screenTileWidth, screenTileHeight } = target;
     const camX = Math.min(x, scene.width - screenTileWidth);
     const camY = Math.min(y, scene.height - screenTileHeight);
     output.push(camX);

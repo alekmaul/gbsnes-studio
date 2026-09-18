@@ -514,7 +514,6 @@ const compileSnesData = async (
       banked,
       output: out,
       warnings,
-      target: "snes",
     });
     return out;
   };

@@ -599,14 +599,15 @@ test("Should be able to show a white overlay", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.overlayShow("white", 2, 3);
-  expect(output).toEqual([cmd(OVERLAY_SHOW), 1, 2, 3]);
+  // Authored row 3 (of 18) scales to the SNES's real 28-row screen.
+  expect(output).toEqual([cmd(OVERLAY_SHOW), 1, 2, 5]);
 });
 
 test("Should be able to show a black overlay", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.overlayShow("black", 2, 3);
-  expect(output).toEqual([cmd(OVERLAY_SHOW), 0, 2, 3]);
+  expect(output).toEqual([cmd(OVERLAY_SHOW), 0, 2, 5]);
 });
 
 test("Should default to white overlay covering screen", () => {
@@ -627,14 +628,16 @@ test("Should be able to move the overlay", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.overlayMoveTo(4, 9, 1);
-  expect(output).toEqual([cmd(OVERLAY_MOVE_TO), 4, 9, 1]);
+  // Authored row 9 (of 18) scales to the SNES's real 28-row screen.
+  expect(output).toEqual([cmd(OVERLAY_MOVE_TO), 4, 14, 1]);
 });
 
 test("Should default to moving the overlay instantly offscreen", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.overlayMoveTo();
-  expect(output).toEqual([cmd(OVERLAY_MOVE_TO), 0, 18, 0]);
+  // Authored row 18 (fully hidden) scales to row 28, the real screen bottom.
+  expect(output).toEqual([cmd(OVERLAY_MOVE_TO), 0, 28, 0]);
 });
 
 test("Should be able to switch scene", () => {
@@ -708,8 +711,8 @@ test("Should be able to move camera to position", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {
     scene: {
-      width: 32,
-      height: 28
+      width: 64,
+      height: 56
     }
   });
   sb.cameraMoveTo(5, 6, 0);
@@ -720,20 +723,22 @@ test("Should limit camera position to screen bounds", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {
     scene: {
-      width: 32,
-      height: 28
+      width: 64,
+      height: 56
     }
   });
-  sb.cameraMoveTo(40, 20, 0);
-  expect(output).toEqual([cmd(CAMERA_MOVE_TO), 12, 10, 0]);
+  // Screen is 32x28 tiles (targets/snes.js), so the clamp caps at
+  // scene size - screen size on each axis.
+  sb.cameraMoveTo(90, 90, 0);
+  expect(output).toEqual([cmd(CAMERA_MOVE_TO), 32, 28, 0]);
 });
 
 test("Should set camera move speed flag", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {
     scene: {
-      width: 32,
-      height: 28
+      width: 64,
+      height: 56
     }
   });
   sb.cameraMoveTo(5, 6, 2);
@@ -835,13 +840,14 @@ test("Should be able to conditionally execute if input is pressed", () => {
   sb.ifInput(["a", "b"], [], []);
   expect(output).toEqual([
     cmd(IF_INPUT),
-    inputDec(["a", "b"]),
+    inputDec(["a", "b"]) & 0xff,
+    (inputDec(["a", "b"]) >> 8) & 0xff,
     0,
-    8,
+    9,
     99,
     cmd(JUMP),
     0,
-    9,
+    10,
     99
   ]);
 });
@@ -954,7 +960,11 @@ test("Should be able to await input", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.inputAwait(["b"]);
-  expect(output).toEqual([cmd(AWAIT_INPUT), inputDec(["b"])]);
+  expect(output).toEqual([
+    cmd(AWAIT_INPUT),
+    inputDec(["b"]) & 0xff,
+    (inputDec(["b"]) >> 8) & 0xff
+  ]);
 });
 
 test("Should be able to add input script", () => {
@@ -973,7 +983,15 @@ test("Should be able to add input script", () => {
     }
   });
   sb.inputScriptSet("b", []);
-  expect(output).toEqual([cmd(SET_INPUT_SCRIPT), inputDec(["b"]), 1, 99, 0, 200]);
+  expect(output).toEqual([
+    cmd(SET_INPUT_SCRIPT),
+    inputDec(["b"]) & 0xff,
+    (inputDec(["b"]) >> 8) & 0xff,
+    1,
+    99,
+    0,
+    200
+  ]);
 });
 
 test("Should be able to add input script as function", () => {
@@ -994,14 +1012,26 @@ test("Should be able to add input script as function", () => {
   sb.inputScriptSet("b", () => {
     sb.spritesHide();
   });
-  expect(output).toEqual([cmd(SET_INPUT_SCRIPT), inputDec(["b"]), 1, 99, 0, 200]);
+  expect(output).toEqual([
+    cmd(SET_INPUT_SCRIPT),
+    inputDec(["b"]) & 0xff,
+    (inputDec(["b"]) >> 8) & 0xff,
+    1,
+    99,
+    0,
+    200
+  ]);
 });
 
 test("Should be able to remove input script", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.inputScriptRemove(["b"]);
-  expect(output).toEqual([cmd(REMOVE_INPUT_SCRIPT), inputDec(["b"])]);
+  expect(output).toEqual([
+    cmd(REMOVE_INPUT_SCRIPT),
+    inputDec(["b"]) & 0xff,
+    (inputDec(["b"]) >> 8) & 0xff
+  ]);
 });
 
 test("Should be able to add timer script", () => {

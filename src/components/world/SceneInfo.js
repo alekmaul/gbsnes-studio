@@ -4,7 +4,7 @@ import PropTypes from "prop-types";
 import { connect } from "react-redux";
 import cx from "classnames";
 import debounce from "lodash/debounce";
-import { getTarget } from "../../lib/compiler/targets";
+import compilerTarget from "../../lib/compiler/targets";
 import {
   SceneShape,
   ActorShape,
@@ -71,13 +71,12 @@ class SceneInfo extends Component {
       actorsLookup,
       triggersLookup,
       spriteSheetsLookup,
-      target,
     } = this.props;
     const {
       maxOnscreenActors,
       screenTileWidth,
       screenTileHeight,
-    } = getTarget(target);
+    } = compilerTarget;
 
     const warnings = [];
 
@@ -189,13 +188,12 @@ class SceneInfo extends Component {
     });
   };
 
-  // A scene no bigger than one screen gets a lower actor cap on Game Boy
-  // (maxActorsSmall) - the SNES target has no such distinction yet
-  // (targets/snes.js maxActorsSmall: null), so always use the flat cap then.
+  // maxActorsSmall (targets/snes.js) is null - no smaller-scene distinction
+  // on this target - so always use the flat cap.
   getMaxActors = () => {
-    const { scene, target } = this.props;
+    const { scene } = this.props;
     const { maxActors, maxActorsSmall, screenTileWidth, screenTileHeight } =
-      getTarget(target);
+      compilerTarget;
     if (
       maxActorsSmall != null &&
       scene.width <= screenTileWidth &&
@@ -239,23 +237,20 @@ class SceneInfo extends Component {
 
   render() {
     const { loaded, actorCount, frameCount, sheetCount, triggerCount, warnings, tooltipType, tooltipX, tooltipY } = this.state;
-    const { target: targetId } = this.props;
 
     if (!loaded) {
       return null;
     }
 
-    const target = getTarget(targetId);
     const maxActors = this.getMaxActors();
-    const maxTriggers = target.maxTriggers;
-    // Game Boy has a per-scene VRAM frame budget; SNES instead has a fixed
-    // number of loadable OBJ sheets per scene (maxSpriteFrames is null
-    // there) - show whichever budget applies to this target.
-    const showSheetBudget = target.maxSpriteFrames == null;
+    const maxTriggers = compilerTarget.maxTriggers;
+    // A fixed number of loadable OBJ sheets per scene (maxSpriteFrames is
+    // null) - show the sheet budget rather than a frame-count budget.
+    const showSheetBudget = compilerTarget.maxSpriteFrames == null;
     const spriteBudgetCount = showSheetBudget ? sheetCount : frameCount;
     const spriteBudgetMax = showSheetBudget
-      ? target.maxSpriteSheets
-      : target.maxSpriteFrames;
+      ? compilerTarget.maxSpriteSheets
+      : compilerTarget.maxSpriteFrames;
 
     const actorWarning = warnings.length > 0;
     const actorError = actorCount > maxActors;
@@ -381,11 +376,6 @@ SceneInfo.propTypes = {
   actorsLookup: PropTypes.objectOf(ActorShape).isRequired,
   triggersLookup: PropTypes.objectOf(TriggerShape).isRequired,
   spriteSheetsLookup: PropTypes.objectOf(SpriteShape).isRequired,
-  target: PropTypes.string,
-};
-
-SceneInfo.defaultProps = {
-  target: undefined,
 };
 
 function mapStateToProps(state, props) {
@@ -393,10 +383,8 @@ function mapStateToProps(state, props) {
   const triggersLookup = triggerSelectors.selectEntities(state);
   const spriteSheetsLookup = spriteSheetSelectors.selectEntities(state);
   const scene = sceneSelectors.selectById(state, props.id);
-  const target = state.project.present.settings.target;
 
   return {
-    target,
     scene,
     actorsLookup,
     triggersLookup,

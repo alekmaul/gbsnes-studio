@@ -4,7 +4,7 @@ import { assetFilename } from "../../lib/helpers/gbstudio";
 import { dummyText, textNumLines } from "../../lib/helpers/trimlines";
 import { RootState } from "../../store/configureStore";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
-import { getTarget } from "../../lib/compiler/targets";
+import compilerTarget from "../../lib/compiler/targets";
 
 interface DialoguePreviewProps {
   text: string;
@@ -80,7 +80,6 @@ export const DialoguePreview: FC<DialoguePreviewProps> = ({
 }) => {
   const projectRoot = useSelector((state: RootState) => state.document.root);
   const uiVersion = useSelector((state: RootState) => state.editor.uiVersion);
-  const target = useSelector((state: RootState) => state.project.present.settings.target);
   const avatarAsset = useSelector((state: RootState) => avatarId ? spriteSheetSelectors.selectById(state, avatarId) : undefined)
   const [frameImage, setFrameImage] = useState<HTMLImageElement>();
   const [asciiImage, setAsciiImage] = useState<HTMLImageElement>();
@@ -184,7 +183,7 @@ export const DialoguePreview: FC<DialoguePreviewProps> = ({
       const ctx = canvas.getContext("2d");
       canvas.width = canvas.width;
       if (ctx) {
-        const tileWidth = getTarget(target).screenTileWidth;
+        const tileWidth = compilerTarget.screenTileWidth;
         const tileHeight = textNumLines(text) + 2;
         canvas.width = tileWidth * 8;
         canvas.height = tileHeight * 8;
@@ -199,7 +198,7 @@ export const DialoguePreview: FC<DialoguePreviewProps> = ({
         }
       }
     }
-  }, [ref, text, avatarId, frameImage, asciiImage, avatarImage, target]);
+  }, [ref, text, avatarId, frameImage, asciiImage, avatarImage]);
 
   return (
     <canvas

@@ -68,7 +68,7 @@ test("Should be able to scan ejected engine for new fields", async () => {
   });
 });
 
-test("Should be get default fields when engine not ejected", async () => {
+test("Should get default fields when engine not ejected", async () => {
   const dispatch = jest.fn();
   const store = ({
     getState: () => ({
@@ -102,6 +102,8 @@ test("Should be get default fields when engine not ejected", async () => {
   expect(next).toHaveBeenCalledWith(action);
   expect(dispatch).toHaveBeenCalled();
   expect(dispatch.mock.calls[0][0].type).toBe("engine/setEngineFields");
-  expect(Array.isArray(dispatch.mock.calls[0][0].payload)).toBe(true);
-  expect(dispatch.mock.calls[0][0].payload.length).toBeGreaterThan(0);
+  // appData/src/snes/engine.json defines no EngineFields yet (unlike the
+  // old Game Boy engine's genre-tuning fields) - an empty default is the
+  // real, current behaviour, not a regression.
+  expect(dispatch.mock.calls[0][0].payload).toEqual([]);
 });
