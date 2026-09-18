@@ -4,8 +4,8 @@ module.exports = {
     {
       name: "@electron-forge/maker-squirrel",
       config: {
-        name: "gbsnes_studio",
-        exe: "gbsnes-studio.exe",
+        name: "snes_studio",
+        exe: "snes-studio.exe",
         loadingGif: "src/assets/app/install.gif",
         setupIcon: "src/assets/app/icon/app_icon.ico",
       },
@@ -25,7 +25,7 @@ module.exports = {
   ],
   packagerConfig: {
     name: "SNES Studio",
-    executableName: "gbsnes-studio",
+    executableName: "snes-studio",
     packageManager: "yarn",
     icon: "src/assets/app/icon/app_icon",
     darwinDarkModeSupport: true,

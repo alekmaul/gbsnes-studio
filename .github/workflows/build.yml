@@ -61,7 +61,7 @@ jobs:
           CI: "true" # forge.config.js skips osxSign when set
       - uses: actions/upload-artifact@v4
         with:
-          name: gbsnes-studio-windows-x64
+          name: snes-studio-windows-x64
           path: out/make/**
           if-no-files-found: error
           retention-days: 14
@@ -96,7 +96,7 @@ jobs:
           CI: "true"
       - uses: actions/upload-artifact@v4
         with:
-          name: gbsnes-studio-macos-x64
+          name: snes-studio-macos-x64
           path: out/make/**
           if-no-files-found: error
           retention-days: 14
@@ -124,7 +124,7 @@ jobs:
           CI: "true"
       - uses: actions/upload-artifact@v4
         with:
-          name: gbsnes-studio-linux-x64
+          name: snes-studio-linux-x64
           path: out/make/**
           if-no-files-found: error
           retention-days: 14

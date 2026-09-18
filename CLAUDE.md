@@ -14,7 +14,7 @@ it does not edit GB behaviour in place.
 Branding: everything user-facing says **SNES Studio** — `productName`, `forge.config.js`
 names, the splash/About windows, and every "GB Studio" string in `src/lang/*.json` (all
 locales). The npm `name`, `executableName`, Squirrel/Store names and CI artifact names
-are `gbsnes-studio` / `gbsnes_studio` / `gbsnesstudio`. Still `gbstudio`-flavoured (not renamed
+are `snes-studio` / `snes_studio` / `snesstudio`. Still `gbstudio`-flavoured (not renamed
 on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
 `src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
 upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
