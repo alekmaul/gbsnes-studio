@@ -4,12 +4,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-A fork of GB Studio 1.2.2, rebranded **SNES Studio** — a visual retro game maker. It is an
-Electron desktop app (the editor, written in React/Redux) plus a C game engine compiled with
-GBDK. The working copy lives under a `gbsnes-studio` directory: this fork keeps the stock
-Game Boy (GBDK) target fully working **and** adds a second SNES (PVSnesLib) build target
-alongside it. The Game Boy path is the frozen reference — SNES work adds a parallel target,
-it does not edit GB behaviour in place.
+**SNES Studio** — a visual retro game maker for the Super Nintendo, built with PVSnesLib. It
+is an Electron desktop app (the editor: React/Redux Toolkit, webpack + TypeScript) plus a C
+game engine (`appData/src/snes/`) cross-compiled with the PVSnesLib toolchain (816-tcc/
+wla-65816/wlalink). The working copy lives under a `gbsnes-studio` directory (see *History*
+below for why). SNES is the only compile target this app builds for — there is no Game Boy
+engine, toolchain, or target-selection concept left anywhere in the tree.
 
 Branding: everything user-facing says **SNES Studio** — `productName`, `forge.config.js`
 names, the splash/About windows, and every "GB Studio" string in `src/lang/*.json` (all
@@ -30,31 +30,27 @@ The `.ico`/`.icns` are regenerated from the 1024×1024 `.png` with Pillow (`Imag
 format="ICO"|"ICNS")`) — no ImageMagick on this box; Python 3 + Pillow is at `C:\python3`.
 `forge.config.js` `icon: "…/app_icon"` lets electron-forge pick `.icns`/`.ico`/`.png` per OS.
 
-## SNES Studio v2 (separate branch, in progress)
+## History
 
-Everything else in this file describes `main` (GB Studio 1.2.2-based, `v1.1.4`, released).
-A second, larger effort lives on the **`v2` branch**: rebuild SNES Studio (GB engine +
-the SNES/PVSnesLib target) on top of **GB Studio 2.0.0-beta5** instead of 1.2.2 — webpack +
-TypeScript replacing `electron-compile`, Redux Toolkit replacing hand-written
-reducers/actions/middleware, GBDK 2020, a genre-based GB engine (Top Down / Platformer /
-Shoot Em Up / Point and Click / Adventure) replacing the old monolithic one. `main` stays
-untouched and frozen at `v1.1.4` while this runs. Strategy: **rebuild** the SNES target
-feature-by-feature on the new base using the current `v1.1.4` SNES implementation as a
-*behavioural reference*, not code to copy verbatim — not a git merge/rebase of the two
-years of upstream divergence.
+Three generations, each on its own branch:
 
-Tracked as 14 milestones (M0 audit → M13 `v2.0.0` tag) in a roadmap artifact (not this
-file) — ask to have it re-shared if the link is lost, or check Claude's memory
-(`gbsnes-v2-migration`) for the URL and full narrative. `MIGRATION_V2_AUDIT.md` (repo root,
-`v2` branch) has the detailed 1.2.2→2.0.0-beta5 file/architecture diff from M0.
+- **`main` (v1, `v1.1.x`)** — a fork of GB Studio 1.2.2. Dual-target: kept the stock Game Boy
+  (GBDK) engine fully working and added a second SNES (PVSnesLib) build target alongside it,
+  never editing GB behaviour in place. Frozen since `v2` started.
+- **`v2` (`v2.0.0`)** — rebuilt on **GB Studio 2.0.0-beta5** instead of 1.2.2 (webpack + TS
+  replacing `electron-compile`, Redux Toolkit replacing hand-written reducers/actions/
+  middleware, GBDK 2020, a genre-based GB engine). Still dual-target, same GB-frozen-reference
+  strategy as v1: the current `v1.1.4` SNES implementation was used as a *behavioural
+  reference* to rebuild the SNES target feature-by-feature on the new base, not code copied
+  verbatim, and not a git merge/rebase of the upstream divergence. Tagged and released.
+- **`v3` (this branch)** — the Game Boy engine, toolchain, and every target-selection
+  abstraction were removed entirely, leaving the SNES-only product this file now describes.
 
-**Status as of 2026-09-13:** M0 (audit) and M1 (bare GB 2.0.0-beta5 target builds, packages,
-and boots a real project to a ROM in Mesen — no SNES yet) are done. M2 (re-vendor the
-PVSnesLib toolchain under the new webpack build) is next, not yet started. `package.json`
-on `v2` is deliberately still `1.1.4` (not bumped to `2.0.0` until M13) — so `CHANGELOG.md`
-has no `v2` entries yet on purpose; the roadmap artifact and Claude's memory are the
-authoritative status/decision log for this effort until it ships, at which point it gets a
-normal `CHANGELOG.md [2.0.0]` entry like any other release.
+Both rebuilds are tracked as milestones (v2: M0 audit → M13 tag; v3: M14 GB removal → M18
+tag) in a roadmap artifact (not this file) — ask to have it re-shared if the link is lost, or
+check Claude's memory (`gbsnes-v2-migration`) for the URL and full narrative.
+`MIGRATION_V2_AUDIT.md` (repo root) has the detailed 1.2.2→2.0.0-beta5 file/architecture diff
+from `v2`'s M0.
 
 ## Commands
 
@@ -70,8 +66,10 @@ yarn make:win | make:mac | make:linux   # package distributable
 node src/lang/list_missing.js           # report missing translation keys
 ```
 
-There is no build step for `src/` in dev — `electron-compile` transpiles on the fly via
-`.compilerc` / `.babelrc`. Tests transpile through `babel-jest` with `.babelrc`.
+`npm start` runs the app through webpack (`ts-loader`, `webpack.rules.js`) via
+`@electron-forge/plugin-webpack` — separate configs for main (`webpack.main.config.js`),
+renderer (`webpack.renderer.config.js`) and the CLI (`webpack.cli.config.js`). Tests instead
+transpile through `babel-jest` with `.babelrc` (Jest doesn't run through webpack).
 
 **CI** is GitHub Actions (`.github/workflows/build.yml`) — replaced the inherited-from-upstream
 CircleCI config (deleted; wrong branch names, Wine-based Windows builds). `test` runs
@@ -98,51 +96,55 @@ that one never saw the CLI flag) and a repo-root `.yarnrc` (`ignore-engines true
 
 ## Two processes, one repo
 
-- **Main process**: `src/index.js` (window lifecycle, `ipcMain`), `src/menu.js`,
-  `src/lib/electron/**`, `src/windows/**` (`splash`, `project`, `help` HTML entry points).
-- **Renderer**: `src/windows/projectRoot.js` mounts the React app. State is Redux
-  (`src/store/configureStore.js`, `src/reducers/**`) with thunks in `src/actions/` and
-  side-effecting middleware in `src/middleware/` (`buildGame`, `music`, `soundfx`, `electron`,
-  `logger`). Long-running work (compiling a ROM, watching the project folder) happens in
-  middleware, not components.
+- **Main process**: `src/main.ts` (window lifecycle, `ipcMain`), `src/menu.js`,
+  `src/lib/electron/**`, `src/splash.html`/`src/project.html`/`src/preferences.html` entry
+  points.
+- **Renderer**: `src/ProjectRoot.js` mounts the React app. State is Redux Toolkit
+  (`src/store/configureStore.ts`, `src/store/features/<domain>/<domain>State.ts` slices) with
+  side-effecting middleware alongside each slice (`src/store/features/buildGame/
+  buildGameMiddleware.ts`, `music`, `soundfx`, `engine`, …). Long-running work (compiling a
+  ROM, watching the project folder) happens in middleware, not components.
 
 Project files (`*.gbsproj`, JSON) are loaded/normalized by `src/lib/project/**`
 (`loadProjectData`, `migrateProject`, `watchProject`, `saveProjectData`). The Redux store
-holds a **normalized** entity graph (`src/reducers/entitiesReducer.js`); `denormalizeProject`
-rebuilds the plain project object that the compiler consumes.
+holds a **normalized** entity graph (`src/store/features/entities/entitiesState.ts`);
+`denormalizeProject` rebuilds the plain project object that the compiler consumes.
 
 ## The compile pipeline (most important architecture)
 
-Triggered by a `BUILD_GAME` action → `src/middleware/buildGame.js` →
-`src/lib/compiler/buildProject.js`. Stages:
+Triggered by the `buildGame/build` action → `buildGameMiddleware.ts` (`src/store/features/
+buildGame/`) → `src/lib/compiler/buildProject.js`, the single entry point (no target
+selection — SNES is the only path). Stages:
 
-1. **`compileData.js`** — `precompile()` collects only the *used* assets (backgrounds, sprites,
-   avatars, music, strings, variables) by walking every scene's event tree
-   (`src/lib/helpers/eventSystem.js`). Then it lays all binary data into ROM banks via
-   **`bankedData.js`** (`BankedData`, 16 KB banks, MBC1/MBC5 rules, `BANK_PTR {bank, offset}`
-   where offset is a GB `0x4000`-window address). Emits C source: `bank_*.c`, `banks.h`,
-   `data_ptrs.c/.h` (the pointer tables + `START_*` `#define`s the engine reads).
-2. **Script compilation** — per entity, `compileEntityEvents.js` runs each event's `compile()`
-   through a `ScriptBuilder` (`scriptBuilder.js`) that pushes **numeric opcodes + args** into a
-   byte array. Opcode numbers come from `src/lib/events/scriptCommands.js` (`commandIndex()`);
-   they must stay in sync with the dispatch table `script_cmds[]` in
-   `appData/src/gb/src/ScriptRunner.c`. Placeholders like `__REPLACE:STRING_HI:<n>` and
-   `goto: <label>` are patched after all data is banked (`banked.mutate(...)` in `compileData.js`,
-   label resolution in `scriptBuilder.js`).
-3. **`compileImages.js` + `ggbgfx.js`** — PNG → GB 2bpp tiles. Colour is a green-channel
-   heuristic (`indexColour`); backgrounds share/merge tilesets to fit `16*12` tiles.
-4. **`ejectBuild.js`** — wipes the output dir and copies the engine core from
-   `appData/src/<projectType>` (`projectType` is hardcoded `"gb"`), then writes the generated
-   C files into `src/data/` and `include/`.
-5. **`compileMusic.js`** — runs `mod2gbt` (from `buildTools/`) on `.mod` files, re-parses the C
-   it produces into raw pattern/order data, re-banks it, and rewrites `data_ptrs.c`'s
-   `music_banks[]` / `music_tracks[]`.
-6. **`makeBuild.js`** — symlinks `buildTools/<platform>-<arch>/gbdk` into a space-free tmp path
-   (GBDK breaks on spaces), generates `make.bat` (`buildMakeBat.js`) or uses the `Makefile`,
-   runs `lcc`, then patches the GB ROM header (title, checksums, optional CGB custom palette
-   from settings) in `build/rom/game.gb`.
-7. Web builds additionally copy `appData/js-emulator` (a JS Game Boy emulator) and template
-   the `index.html`.
+1. **`ejectBuild.js`** — wipes the output dir and copies the engine core from
+   `appData/src/snes`, then writes the generated C files into `src/data/` and `include/`.
+2. **`compileSnesData.js`** — a denormalized project → `appData/src/snes/src/assets.{c,h}` +
+   `src/data/*` in the engine's format: scene blobs, `event_ptrs[]` (script bytecode, see
+   below), `string_ptrs[]`, `bg_*_ptrs[]` (via `snesgfx.js`), `START_*` defines. Per entity,
+   `compileEntityEvents.js` runs each event's `compile()` through a `ScriptBuilder`
+   (`scriptBuilder.js`) that pushes **numeric opcodes + args** into a byte array — opcode
+   numbers come from `src/lib/events/scriptCommands.js` (`commandIndex()`) and must stay in
+   sync with the dispatch table `script_cmds[]` in `appData/src/snes/src/script_cmds.c`
+   (enforced by `test/data/compiler/snesScriptCmds.test.js`). Placeholders like
+   `__REPLACE:STRING_HI:<n>` and `goto: <label>` are patched after banking
+   (`banked.mutate(...)`, label resolution in `scriptBuilder.js`). `snesgfx.js` converts PNGs
+   to real extracted-palette 4bpp planar tiles (not a green-channel heuristic — SNES has no
+   2bpp/monochrome mode). Graphic assets are emitted as 65816 source (`src/data/*_data.as`),
+   not C, so a project isn't capped at one 32 KB `.rodata` section — see the file's own header
+   comment for the full scheme.
+3. **`compileSnesMusic.js`** — converts each project `.mod` to Impulse Tracker (`mod2it.js`)
+   and runs `smconv` to rebuild the snesmod soundbank (`res/soundbank.{bnk,h}`).
+4. **`buildSnesRom.js`** — pure JS orchestration (no `make`/shell): generates `hdr.asm`, runs
+   `816-tcc → 816-opt → wla-65816` per `.c` and `wla-65816` per `.asm`, links with `wlalink` →
+   `build/rom/game.sfc`. LoROM + FastROM, SRAM 8 KB, auto header (no JS header patching).
+5. Web builds additionally copy `appData/snes-js-emulator` (a JS SNES emulator, `SnesJs`) and
+   template the `index.html`.
+
+A user's own "Eject Build" compiles with plain `make` (no Node/Electron) via
+`appData/src/snes/Makefile` + the vendored `devkitsnes/snes_rules` — a genuinely separate code
+path from `buildSnesRom.js` (different file-discovery rules), so a file the JS build finds
+anywhere can still be invisible to real `make`; keep new source files under `src/`'s first two
+levels.
 
 ### Events are the extension point
 
@@ -150,48 +152,28 @@ Each file `src/lib/events/event*.js` exports `id`, `fields` (drives the auto-gen
 form) and `compile(args, helpers)` (emits bytecode via the injected `ScriptBuilder` methods).
 `src/lib/events/index.js` auto-loads them by glob and merges plugin events
 (`src/lib/plugins/plugins.js`). Adding a scripting command means: new `event*.js`, new entry in
-`scriptCommands.js`, new `Script_*_b` handler + `script_cmds[]` row in the engine, and (if it
-carries data) handling in `scriptBuilder.js`.
+`scriptCommands.js`, new `Script_*_b` handler + `script_cmds[]` row in `script_cmds.c`, and (if
+it carries data) handling in `scriptBuilder.js`.
 
-## The SNES (PVSnesLib) target — work in progress
+## The engine (`appData/src/snes/`)
 
-A second compile target is being brought up alongside Game Boy. It is selected by
-`process.env.GBS_TARGET` or `project.settings.target` (`"gb"` default → stock behaviour);
-`buildProject.js` `resolveTarget()` routes `"snes"` to `buildProjectSnes()` — eject the
-`appData/src/snes` engine → `compileSnesData` writes `src/assets.{c,h}` → `compileSnesMusic`
-rebuilds the soundbank from the project's `.mod` songs → `buildSnesRom`.
-`settings.target` is editable from the app itself: Settings page → "Target Platform" (M9,
-`src/containers/pages/SettingsPage.js`) — GB/SNES-color-only sections (GBC options, cartridge
-type) hide when SNES is selected and a warning box lists current SNES gaps. No env var needed
-for normal use; `GBS_TARGET` still overrides it for CLI/test convenience. A "SNES Options"
-section (shown only when the target is SNES) now also exposes `settings.snesRegion`
-(NTSC/PAL → header `COUNTRY`) and `settings.snesSramSize` (header `SRAMSIZE`, `1024 << N`
-bytes) — `buildSnesRom.js` was already reading both with sane defaults, just no UI existed yet.
-The World editor's camera-viewport rectangle (`src/components/world/EventHelper.js`, shown
-over the scene background while editing a `Camera: Move To` event) is now target-aware too:
-it was hardcoded to the GB screen size (160×144px / 20×18 tiles, in `EventHelper.css`) and now
-reads `screenTileWidth`/`screenTileHeight` from `src/lib/compiler/targets/{gb,snes}.getTarget()`
-via a `target` prop threaded down from `Scene.js`'s `settings.target` (Redux). This was the
-*only* screen-size-hardcoded spot that actually draws a precise viewport rectangle — a sibling
-CSS rule (`.EventHelper__OverlayPos`, for `OVERLAY_SHOW`/`MOVE_TO`) turned out to be dead/unused
-(never referenced by any JSX `className`); the box that IS rendered for those events
-(`.EventHelper__OverlayPos__Overlay`) is a fixed 256×256px oversized mask, not a precise bounds
-indicator, so it was left as-is (already generously covers both screen sizes).
-Following the user hitting it directly (an SNES scene's `Camera: Move To` X/Y fields still
-capped at 12/14, GB's own 32-tile-scene approximation), found and fixed the actual M2-audit
-item this was standing in for: `scriptBuilder.js`'s `cameraMoveTo` clamped the compiled X/Y to
-`scene.width - 20` / `scene.height - 18` **unconditionally**, regardless of target, so even
-disregarding the editor field, a compiled SNES ROM would still get its camera silently
-clamped to GB-sized margins. Fixed by reading `getTarget(this.options.target).screenTileWidth/
-screenTileHeight` instead of the literals (`target` undefined → `"gb"` → 20/18, so GB's compiled
-bytes are provably unchanged - verified with a scoped test); `compileSnesData.js` now passes
-`target: "snes"` in the `compileEntityEvents` options it builds. The editor's field bounds
-(`src/lib/events/eventCameraMoveTo.js`) were separately widened from the hardcoded 12/14 to the
-byte-arg ceiling (255) rather than made target-aware, since **no event field definition in this
-codebase has access to project/scene context at definition time** (fields are static arrays,
-`field.min`/`field.max` render straight into the number input) - real correctness now lives
-in the compiler-side clamp above, which already accounts for the actual scene size.
-A real `.gbsproj` (`test/projects/Test_Math`) now compiles to a bootable `.sfc` this way.
+The only engine and only compile target — `buildProject.js` always ejects `appData/src/snes`,
+runs `compileSnesData`/`compileSnesMusic`/`buildSnesRom` (see *The compile pipeline* above).
+Settings page → "SNES Options" (`src/containers/pages/SettingsPage.tsx`) exposes
+`settings.snesRegion` (NTSC/PAL → header `COUNTRY`), `settings.snesSramSize` (header
+`SRAMSIZE`, `1024 << N` bytes) and `settings.snesRomBanks` (LoROM bank count). The World
+editor's camera-viewport rectangle (`src/components/world/EventHelper.js`, shown over the
+scene background while editing a `Camera: Move To` event) reads `screenTileWidth`/
+`screenTileHeight` straight from `src/lib/compiler/targets` (the single SNES descriptor).
+
+*Historical note:* through `v2`, this engine was one of two build targets (Game Boy being the
+other), selected by `project.settings.target`/`GBS_TARGET` and read via a
+`getTarget(id)`/`{gb, snes}` lookup with an implicit `"gb"` fallback. `v3` (M14) removed the
+Game Boy target entirely and collapsed that lookup into the single descriptor referenced
+above — the narrative below predates that collapse, so `target`/`getTarget(...)`/
+`settings.target` mentions describe what the code *was* at the time of that specific fix, not
+what exists today; the underlying engine behaviour they document is still accurate.
+
 **Overlay row scaling (same class of bug, found later by the user).** `Overlay: Show` /
 `Overlay: Move To` take a Y **tile row** (0 = full-screen overlay, 18 = just off the bottom
 of the GB screen = hidden); the SNES BG3 overlay fills from that row to the bottom of the
@@ -870,147 +852,26 @@ by target, `undefined` target still falls back to gb).
   so tile dedup / collision are byte-unchanged — the mapping lived in a throwaway script, not
   committed). Still 4 colours per image; the art is simple but no longer reads as Game Boy.
 
-### SNES port — state & what's left (as of 2026-09-12, `package.json` 1.1.4)
+### SNES engine — current state and known gaps
 
-The port is **functional end to end**: create an SNES project in the app → script it (dialogue,
+The engine is **functional end to end**: create a project in the app → script it (dialogue,
 menus, actors, camera, SRAM save, music) → Build ROM → Play (bundled JS emulator, with touch
-controls + saved-game persistence). GB non-regression suite stays green. Milestones M0–M8 done;
-M9 done (the editor is data-driven — full-colour previews, target-aware scene geometry / asset
-warnings / sprite budget; X/Y/L/R input events built; Settings > Controls has the X/Y/L/R
-bindings + a SNES pad preview); M10 done; M11 code-side done.
-**M12 (playing the sample game for real, user-driven):**
-the stock 8-scene sample now plays start-to-finish on SNES — UI graphics from the project's
-own `assets/ui` PNGs, per-scene sprite sheets (16-sheet projects), N-frame `animated` sprites,
-GB-matching collision + sprite Y offset, off-screen overlay no longer freezing the player, and
-all 8 sample backgrounds now SNES-sized (5 room scenes redrawn at 256×224, 3 scrolling scenes
-recoloured off the DMG greens).
-**M13 (release-prep polish, still user-driven):** CI that builds Windows/macOS/Linux and cuts
-a GitHub Release on a `v*` tag (was CircleCI cruft); graphic assets emitted as multi-bank
-65816 source so a large project isn't capped at one 32 KB `.rodata` section; and a run of
-playthrough-found engine fixes — the content-sized dialogue box, no box-flashes-at-top slide,
-no camera-scroll shear, talk/push from all four sides, no bare-scene flash before the curtain;
-Settings > Controls gained the X/Y/L/R key bindings + a SNES-shaped pad preview (+ a
-`DEFAULT_KEYS` fallback so an un-customised SNES web build has a working keyboard); and the
-app icon, `.gbsproj` file icon and `.dmg` installer background were redrawn GBSNES-branded
-(`.ico`/`.icns` regenerated); a stray anti-aliased pixel could evict the dialogue font's real
-ink colour from its 3-colour BG3 palette; a scene with 7+ distinct sprite sheets had the 7th's
-colours clobber the palette it shared with another sprite instead of merging into it (could
-make the player render in another actor's colours); a sprite sheet over the 16-colour budget
-now warns like backgrounds already did; the vendored PVSnesLib toolchain is trimmed to the
-handful of tools actually used to build a ROM (~18 MB off across the 3 platform copies); and
-the Sample Project's own scenes no longer overlap each other in the World editor. `package.json`
-was **1.1.0**; the `v1.0.0` tag predates all of M13 and never shipped a release (CI couldn't
-build macOS then) — cut `v1.1.0` to publish binaries.
-**1.1.1 (user-driven, post-release polish):** the dialogue text box's editor pre-wrap is now
-target-aware (SNES 27/23 chars/line instead of the GB's 18/16); a real O(N²) CPU spike in the
-movement/collision path on scenes with several simultaneously-moving actors is fixed (GB-matching
-AI striping); the `Overlay: Move To` curtain slide (the sample's Logo intro) no longer rewrites
-the whole BG3 tilemap + forces a full VRAM DMA on every 8px step, just the row(s) that actually
-changed; the emote bubble palette is fixed (a double bug: an 8-bit/5-bit colour-scaling mistake,
-*and* `emotes.png` was never actually read as a project asset at all - both fixed, matching how
-the font/frame/cursor already worked); and the "Download" button in the update dialogs now opens
-the itch.io page (`https://portabledev.itch.io/gbsnes-studio`) instead of a GitHub releases page
-(the update *check* itself still queries GitHub for the version number). `package.json` is
-**1.1.1**.
-**1.1.2 (user-driven, critical packaging fix):** a *packaged, installed* build's "Build ROM" for
-SNES failed outright with "PVSnesLib toolchain not found" - the `v1.1.0` Windows release, as
-downloaded and run by the user, could not build an SNES ROM at all, despite the toolchain
-genuinely shipping inside `app.asar`. See the `fs.pathExists`/asar bullet further down
-(`buildSnesRom.js`) for the root cause and fix - `package.json` is **1.1.2**.
-**1.1.3 (same day, user-driven follow-up):** `1.1.2` fixed the *existence check*, but the first
-real tool invocation (`smconv`, building the soundbank) still failed - "spawn ...\smconv.exe
-ENOENT" - because nothing inside `app.asar` is a real file a process can be spawned from.
-`resolvePvsHome()` now extracts the toolchain to a real temp folder before any tool runs, reused
-across builds. See the same `buildSnesRom.js` bullet (now extended) for the full writeup -
-including an initial worry that the Game Boy target had the same bug, raised while investigating
-this and then retracted once the user confirmed a real packaged GB build actually works (the
-code path that looked suspicious turns out to never really run - see the bullet for why).
-`package.json` is **1.1.3**.
-**1.1.4 (same day, user-driven polish):** Help menu's "Documentation"/"Learn More" items now
-read "... (GB Studio)" - both intentionally still open the original `gbstudio.dev` site (no
-GBSNES-specific doc site exists), and the suffix makes clear the user is leaving the app when
-they click them. Plus a round of refreshed branding artwork: the app icon, the `.gbsproj`
-project-file icon (`.ico`/`.icns` regenerated from the new 1024×1024 PNGs with Pillow, same
-method as before), the macOS DMG installer background (`background.tiff` regenerated from the
-new `background.png` - `tiffutil` isn't available on this Windows box, so a plain LZW-compressed
-TIFF stands in for it; `electron-installer-dmg` only needs a plain image), the Windows installer
-loading GIF, and the README preview GIF. `package.json` is **1.1.4**.
-
-Real remaining **code** gaps, most impactful first:
-1. **≤8 sprite sheets per scene** — sheets are loaded per-scene now (not project-wide), so
-   this only bites a single scene with 9+ distinct actor sheets; the extras fall back to
-   slot 0 (the player's sheet). The related **≤6 distinct OBJ palettes** limit (emote+avatar
-   hold 2 of the 8 OBJ palettes) no longer silently corrupts anything when exceeded - a 7th/8th
-   sheet now *merges* its colours into the palette it's forced to share instead of overwriting
-   it (see the "Per-sprite OBJ palettes" bullet above); only once the combined colour count of
-   everyone sharing a register tops 16 does anything snap to a nearest colour, with a warning.
-2. **No full save-state in the web player** — SRAM (saved games) persists across reloads now,
-   but a mid-play emulator snapshot would need SnesJs machine-state serialization it doesn't have.
-3. **Only two built-in sound effects** (a beep + a noise burst) — GB Studio 1.2.2 has no
-   per-project SFX assets, so there's nothing to convert; a richer set would just be more
-   committed BRR samples.
-4. **CPU ceiling on many simultaneously-moving actors** (`816-tcc` codegen, see `PERF.md`) —
-   the worst-case O(N²) spike (every mover's `npc_blocking()` scan landing on the same frame)
-   is fixed (2026-09-11: destination-tile reuse + inlined tile lookups + GB-matching odd/even
-   AI striping - see the "Perf profile" bullet above), and the `Overlay: Move To` curtain slide's
-   own per-tick full-tilemap-rewrite cost is fixed the same way (narrow row-range writes/DMA
-   instead of all 32 rows every tick), but the underlying "`816-tcc` emits slow code" ceiling is
-   unchanged and hand-asm optimisation of the render/actor hot path is still deliberately
-   deferred. Not yet re-profiled with fps numbers.
-
-Done since (M12, playing the sample end to end): **UI graphics from the project's `assets/ui`
-PNGs** (font + 9-slice frame + menu cursor, was a hardcoded font + plain fill). **Per-scene
-sprite sheets** (`buildSceneSprites`; a 16-sheet project no longer
-shows the player sprite for the overflow). **N-frame `animated` sprites** (2/4/5-frame ducks
-and torches cycle). **`can_step` collision** now matches GB (was a 2×2 footprint blocking the
-player a tile early). **Actor sprite Y offset** `-8`→`-16` (feet on the tile, matching GB).
-**Off-screen overlay no longer blocks d-pad movement** + overlay row scaled GB→SNES + **no
-stray dark line at the screen bottom** from the parked overlay's fill tiles + **no bare-scene
-flash before the opening curtain** (screen held force-blanked one extra frame at scene load).
-**In-app
-Play black screen** (old-Chromium CSS + window size). **All 8 sample backgrounds SNES-sized**
-(5 room scenes redrawn at 256×224 + scenes resized/collision re-strided; 3 scrolling scenes
-recoloured off the DMG greens, 1:1 LUT so collision is unchanged). **X / Y / L / R input**
-(SNES-only 2-byte button mask on the 4 input opcodes; GB output byte-identical — see the M9
-section above). **Camera scroll no longer shears the screen while walking** (user-found:
-horizontal glitch lines near the bottom, moving frame-to-frame). `CameraUpdate()` wrote
-`bgSetScroll(0, …)` at the *end* of the main loop — mid-render, so every camera step during
-movement tore the lower scanlines at whatever line the beam had reached. Now `CameraUpdate`
-only computes `scroll_x/y`; `game.c`'s loop writes the BG1 scroll registers at the *top*, in
-vblank, right after `WaitForVBlank()` (one frame of latency; also puts BG1 and the OAM sprite
-positions, which `SceneRenderActors` reads from the same `scroll_x/y`, back in lockstep).
-Verified in Mesen: `$210D/$210E` writes while walking were 584/872 mid-render (clustered ~y170
-and ~y210) before, 0/864 after.
-**Talk / push from all four sides** (`SceneTryInteract` computed the facing tile a tile short
-when facing right/down — the player sprite is 2 tiles wide). **Content-sized dialogue/menu box**
-+ **redraw-based slide** (was a fixed 8-row slab; the scroll-based slide wrapped a tall box to
-the top of the screen). **Graphic assets → `src/data/*.as` + `data.asm`** (multi-bank; a
-single C `.rodata` section can't cross a 32 KB bank).
-Before M12: **Sound effects layered over music**, **M9 editor asset feedback**, **M10
-web-player polish**, **Per-sprite OBJ palettes**, **Project music (M8 phase 2)**.
-
-Not code: `v1.1.0` through `v1.1.4` are all tagged and released; a full demo game (art/music/level
-design), and the roadmap's "GB→SNES asset conversion assistant" (dubious value now — assets are
-data-driven; it would reduce to a compile-time warning if a background exceeds 15 colours per
-palette region).
-
-## The engine (`appData/src/gb/`)
-
-Plain C for GBDK. `game.c` is the main loop (`SceneInit`/`SceneUpdate`, fade, stage switch).
-`ScriptRunner.c` is the bytecode VM. `*_b.c` files are the banked halves of a module
-(`Scene_b.c`, `UI_b.c`, `ScriptRunner_b.c`) reached through `BankManager.c` /
-`PUSH_BANK`/`POP_BANK`. `MusicManager.c` + `gbt_player.s` play tracks. `include/game.h` holds
-screen/actor constants and the palette macros that `makeBuild.js` string-replaces.
-This whole tree is what a PVSnesLib port replaces (parallel `appData/src/snes/`), keeping the
-opcode numbers and the `data_ptrs` contract stable so the JS compiler barely changes.
+controls + saved-game persistence). `appData/src/snes/EVENTS.md` is the authoritative,
+per-event support matrix (kept in sync with the opcode table by convention — update it
+whenever an opcode's runtime behaviour changes) and its own "Not yet implemented" section
+lists the real remaining gaps (a Projectiles subsystem, per-actor `On Update` scripts, runtime
+palette painting, runtime Engine Field writes — each already has its own explanatory comment
+in `script_cmds.c`). `appData/src/snes/PERF.md` has the ROM/RAM/CPU budget profile. Detailed
+build-up history (M0–M13 on `v2`, M14–M18 on `v3`) lives in the roadmap artifact and Claude's
+memory (`gbsnes-v2-migration`), not duplicated here.
 
 ## Tests
 
-Jest under `test/`, mirroring `src/lib` (`test/events/*` one per event, `test/data/compiler/*`,
-`test/helpers/*`, `test/migrate/*`, `test/reducers/*`). Fixture projects in `test/projects/`.
-Event tests assert the exact opcode byte sequence a `compile()` produces, so changing an
-opcode or arg order is a breaking change caught here. `test/compile.test.js` and
-`test/sum.test.js` are empty stubs.
+Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
+`test/data/compiler/*`, `test/helpers/*`, `test/migrate/*`, `test/store/features/*`,
+`test/components/*`). Fixture projects in `test/projects/`. Event tests assert the exact
+opcode byte sequence a `compile()` produces, so changing an opcode or arg order is a breaking
+change caught here. `test/compile.test.js` and `test/sum.test.js` are empty stubs.
 
 ## Conventions
 

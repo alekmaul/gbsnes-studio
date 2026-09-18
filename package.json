@@ -63,8 +63,6 @@
     "electron-window-state": "^5.0.3",
     "focus-visible": "^5.2.0",
     "fs-extra": "^7.0.1",
-    "gbdkjs": "^2.1.4",
-    "ggbgfx": "^1.0.0",
     "glob": "^7.1.4",
     "image-size": "^0.7.1",
     "json-loader": "^0.5.7",
