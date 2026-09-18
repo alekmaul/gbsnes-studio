@@ -74,11 +74,19 @@ jobs:
     # macos-15 is an arm64 runner (macos-13, the last Intel image, was retired
     # by GitHub in 2025). Neither branch's pinned Electron (4 on `main`, 8 on
     # `v2` - Apple Silicon support landed in Electron 11) has a native
-    # darwin-arm64 build, and the Electron npm package's own postinstall
-    # downloads a binary for the host arch - so we install an x64 Node
-    # (Rosetta 2 is on the arm64 runners) and force npm's target arch to x64.
-    # Every Electron download then fetches darwin-x64, and electron-packager
-    # --arch=x64 packages an Intel app.
+    # darwin-arm64 build, so we still need the x64 Electron/electron-packager
+    # artifacts - but that's a `npm_config_arch`/`npm_config_target_arch: x64`
+    # concern for the packages being fetched/built, not for the Node process
+    # doing the fetching: `electron`'s own install.js already reads
+    # `process.env.npm_config_arch || process.arch`, so it downloads darwin-x64
+    # regardless of what Node itself runs as. Node used to be forced to x64
+    # too (`architecture: x64` below, running under Rosetta 2) "just in case" -
+    # actually harmful: Rosetta-translated Node 16 crashes hard partway through
+    # `yarn install` (`Assertion 'IsSafeJsInt(args[2])' failed` in
+    # node_file.cc's fs.Read, a known Node-under-Rosetta fragility), not a
+    # flaky/transient failure as first assumed from the CI run alone - so the
+    # actual runner's native arm64 Node is used now, only the two npm_config_*
+    # vars still steer what gets fetched/built for x64.
     runs-on: macos-15
     continue-on-error: true
     timeout-minutes: 120
@@ -90,7 +98,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          architecture: x64
           cache: yarn
       - run: yarn install --ignore-engines --network-timeout 600000
       - name: Package + make (macos-x64)
