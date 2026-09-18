@@ -246,26 +246,16 @@ const openHelp = async (helpPage: string) => {
   }
 };
 
-const createPlay = async (url: string, platform?: string) => {
+const createPlay = async (url: string) => {
   if (!playWindow) {
-    // The SNES player's canvas is 512x480 (vs the Game Boy's 160x144 scaled
-    // up), so it needs a bigger window - too small a window pushes the start
-    // overlay's Play button out of view and the game looks stuck on black.
-    const isSnes = platform === "snes";
-    const isWin = process.platform === "win32";
-    let playWidth = isWin ? 494 : 480;
-    let playHeight = isWin ? 471 : 454;
-    if (isSnes) {
-      playWidth = 560;
-      playHeight = 600;
-    }
-
-    // Create the browser window.
+    // The SNES player's canvas is 512x480, too small a window pushes the
+    // start overlay's Play button out of view and the game looks stuck on
+    // black.
     playWindow = new BrowserWindow({
-      width: playWidth,
-      height: playHeight,
-      minWidth: isSnes ? 360 : undefined,
-      minHeight: isSnes ? 380 : undefined,
+      width: 560,
+      height: 600,
+      minWidth: 360,
+      minHeight: 380,
       fullscreenable: false,
       autoHideMenuBar: true,
       webPreferences: {
@@ -367,8 +357,8 @@ ipcMain.on("open-help", async (event, helpPage) => {
   openHelp(helpPage);
 });
 
-ipcMain.on("open-play", async (event, url, platform) => {
-  createPlay(url, platform);
+ipcMain.on("open-play", async (event, url) => {
+  createPlay(url);
 });
 
 ipcMain.on("document-modified", () => {

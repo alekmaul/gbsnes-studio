@@ -39,9 +39,6 @@ import { CloseIcon, DotsIcon } from "../ui/icons/Icons";
 import { Button } from "../ui/buttons/Button";
 import l10n from "../../lib/helpers/l10n";
 import contributors from "../../../contributors.json";
-import gbs2Preview from "../../assets/templatePreview/gbs2.mp4";
-import gbhtmlPreview from "../../assets/templatePreview/gbhtml.mp4";
-import blankPreview from "../../assets/templatePreview/blank.png";
 import sneshtmlPreview from "../../assets/templatePreview/sneshtml.png";
 import snesblankPreview from "../../assets/templatePreview/snesblank.png";
 import snesgbs2Preview from "../../assets/templatePreview/snesgbs2.png";
@@ -63,7 +60,6 @@ type TemplateInfo = {
   preview: string;
   videoPreview: boolean;
   description: string;
-  group?: string;
 };
 
 const splashTabs = ["new", "recent"] as const;
@@ -71,52 +67,25 @@ type SplashTab = typeof splashTabs[number];
 
 const templates: TemplateInfo[] = [
   {
-    id: "gbs2",
-    name: l10n("SPLASH_SAMPLE_PROJECT"),
-    preview: gbs2Preview,
-    videoPreview: true,
-    description: l10n("SPLASH_SAMPLE_PROJECT_DESCRIPTION"),
-    group: "Game Boy",
-  },
-  {
-    id: "gbhtml",
-    name: `${l10n("SPLASH_SAMPLE_PROJECT")} (GBS 1.0)`,
-    preview: gbhtmlPreview,
-    videoPreview: true,
-    description: l10n("SPLASH_SAMPLE_PROJECT_ORIGINAL_DESCRIPTION"),
-    group: "Game Boy",
-  },
-  {
-    id: "blank",
-    name: l10n("SPLASH_BLANK_PROJECT"),
-    preview: blankPreview,
-    videoPreview: false,
-    description: l10n("SPLASH_BLANK_PROJECT_DESCRIPTION"),
-    group: "Game Boy",
-  },
-  {
     id: "sneshtml",
-    name: `${l10n("SPLASH_SAMPLE_PROJECT")} (SNES)`,
+    name: l10n("SPLASH_SAMPLE_PROJECT"),
     preview: sneshtmlPreview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_SAMPLE_PROJECT_DESCRIPTION"),
-    group: "Super Nintendo",
   },
   {
     id: "snesgbs2",
-    name: `${l10n("SPLASH_SAMPLE_PROJECT")} (SNES, all genres)`,
+    name: `${l10n("SPLASH_SAMPLE_PROJECT")} (all genres)`,
     preview: snesgbs2Preview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_GBS2_DESCRIPTION"),
-    group: "Super Nintendo",
   },
   {
     id: "snesblank",
-    name: `${l10n("SPLASH_BLANK_PROJECT")} (SNES)`,
+    name: l10n("SPLASH_BLANK_PROJECT"),
     preview: snesblankPreview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_BLANK_PROJECT_DESCRIPTION"),
-    group: "Super Nintendo",
   },
 ];
 
@@ -152,7 +121,7 @@ export default () => {
   const forceTab = urlParams.get("tab");
   const initialTab = toSplashTab(forceTab || getLastUsedTab());
 
-  const [templateId, setTemplateId] = useState("gbs2");
+  const [templateId, setTemplateId] = useState("sneshtml");
   const [section, setSection] = useState<SplashTab>(initialTab);
   const [openCredits, setOpenCredits] = useState(false);
   const [recentProjects, setRecentProjects] = useState<ProjectInfo[]>([]);

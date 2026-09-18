@@ -6,8 +6,7 @@ import l10n from "../../lib/helpers/l10n";
 
 class InputPicker extends Component {
   render() {
-    const { id, value, onChange, target } = this.props;
-    const showExtra = target === "snes";
+    const { id, value, onChange } = this.props;
     const inputs = [
       {
         key: "left",
@@ -87,18 +86,16 @@ class InputPicker extends Component {
     ];
 
     return (
-      <div id={id} className={cx("InputPicker", { "InputPicker--WithExtra": showExtra })}>
+      <div id={id} className="InputPicker InputPicker--WithExtra">
         <div className="InputPicker__Row">
           {inputs.slice(0, 4).map(renderButton(id, value, onChange))}
         </div>
         <div className="InputPicker__Row">
           {inputs.slice(4, 8).map(renderButton(id, value, onChange))}
         </div>
-        {showExtra && (
-          <div className="InputPicker__Row">
-            {inputs.slice(8, 12).map(renderButton(id, value, onChange))}
-          </div>
-        )}
+        <div className="InputPicker__Row">
+          {inputs.slice(8, 12).map(renderButton(id, value, onChange))}
+        </div>
         {Array.isArray(value) &&
           <div className="InputPicker__Selection">
             {inputs
@@ -159,13 +156,11 @@ InputPicker.propTypes = {
     PropTypes.arrayOf(PropTypes.string)
   ]),
   onChange: PropTypes.func.isRequired,
-  target: PropTypes.string
 };
 
 InputPicker.defaultProps = {
   id: undefined,
   value: "",
-  target: undefined
 };
 
 export default InputPicker;

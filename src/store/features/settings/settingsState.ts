@@ -6,14 +6,14 @@ import projectActions from "../project/projectActions";
 type ShowConnectionsSetting = "all" | "selected" | true | false;
 
 export type SettingsState = {
-  // Compile target ("gb" default / "snes") - read here only so target-aware
-  // editor code (DialoguePreview, ScriptEditorEvent/ScriptEventFormInput,
-  // InputPicker - M9) can type-check; not yet a full Redux-managed setting
-  // (no Settings page selector, no migrateProject.js handling of it or the
-  // other SNES-only settings alongside it - that's M10/M11). Until then this
-  // is populated only by loadProject's extraReducers spread below, from
-  // whatever a hand-authored/legacy .gbsproj's settings.target already says.
-  target?: string;
+  // SNES is the only compile target this app builds for (see
+  // src/lib/compiler/targets/) - these three have no default in the type
+  // itself, TargetPicker.js's former per-field `|| "ntsc"`/`|| "03"`/`|| 8`
+  // fallbacks (now in SettingsPage.tsx) cover an older .gbsproj that
+  // predates one of them.
+  snesRegion?: "ntsc" | "pal";
+  snesSramSize?: string;
+  snesRomBanks?: number;
   startSceneId: string;
   playerSpriteSheetId: string;
   startX: number;

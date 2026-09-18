@@ -41,8 +41,7 @@ const buttons = [
   },
 ];
 
-// SNES-only extra buttons (compiler/helpers.js KEY_BITS) - only shown when
-// the project targets SNES (M11).
+// X / Y / L / R (compiler/helpers.js KEY_BITS).
 const snesButtons = [
   { key: "x", label: "X" },
   { key: "y", label: "Y" },
@@ -144,7 +143,6 @@ class CustomControlsPicker extends Component {
 
   render() {
     const { settings, searchTerm } = this.props;
-    const isSnes = settings.target === "snes";
     return (
       <>
         {directions.map((direction) => (
@@ -192,29 +190,28 @@ class CustomControlsPicker extends Component {
             </SettingRowInput>
           </SearchableSettingRow>
         ))}
-        {isSnes &&
-          snesButtons.map((button) => (
-            <SearchableSettingRow
-              key={button.key}
-              searchTerm={searchTerm}
-              searchMatches={[button.label]}
-            >
-              <SettingRowLabel>{button.label}</SettingRowLabel>
-              <SettingRowInput>
-                <Input
-                  id="buttonUp"
-                  value={(
-                    settings[keyMap[button.key]] ||
-                    defaultValues[keyMap[button.key]] ||
-                    []
-                  ).join(", ")}
-                  onChange={this.noop}
-                  placeholder=""
-                  onKeyDown={this.onKeyDown(button.key)}
-                />
-              </SettingRowInput>
-            </SearchableSettingRow>
-          ))}
+        {snesButtons.map((button) => (
+          <SearchableSettingRow
+            key={button.key}
+            searchTerm={searchTerm}
+            searchMatches={[button.label]}
+          >
+            <SettingRowLabel>{button.label}</SettingRowLabel>
+            <SettingRowInput>
+              <Input
+                id="buttonUp"
+                value={(
+                  settings[keyMap[button.key]] ||
+                  defaultValues[keyMap[button.key]] ||
+                  []
+                ).join(", ")}
+                onChange={this.noop}
+                placeholder=""
+                onKeyDown={this.onKeyDown(button.key)}
+              />
+            </SettingRowInput>
+          </SearchableSettingRow>
+        ))}
         <CardButtons>
           <Button onClick={this.onRestoreDefault}>
             {l10n("FIELD_RESTORE_DEFAULT")}
@@ -229,7 +226,6 @@ const CustomControlPropType = PropTypes.arrayOf(PropTypes.string);
 
 CustomControlsPicker.propTypes = {
   settings: PropTypes.shape({
-    target: PropTypes.string,
     customControlsUp: CustomControlPropType,
     customControlsDown: CustomControlPropType,
     customControlsLeft: CustomControlPropType,

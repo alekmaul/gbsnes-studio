@@ -46,7 +46,7 @@ const argValue = (arg) => {
 
 class ScriptEventFormInput extends Component {
   onChange = e => {
-    const { onChange, field, value, index, args, type, target } = this.props;
+    const { onChange, field, value, index, args, type } = this.props;
     const { updateFn } = field;
     let newValue = e && e.currentTarget ? castEventValue(e) : e;
     if (type === "direction" && newValue === value) {
@@ -57,7 +57,7 @@ class ScriptEventFormInput extends Component {
       newValue = newValue.value;
     }
     if (updateFn) {
-      newValue = updateFn(newValue, field, args, target);
+      newValue = updateFn(newValue, field, args);
     }
     onChange(newValue, index);
   };
@@ -90,7 +90,7 @@ class ScriptEventFormInput extends Component {
   }  
 
   render() {
-    const { type, id, value, defaultValue, args, field, entityId, allowRename, scope, defaultBackgroundPaletteIds, defaultUIPaletteId, target } = this.props;
+    const { type, id, value, defaultValue, args, field, entityId, allowRename, scope, defaultBackgroundPaletteIds, defaultUIPaletteId } = this.props;
 
     if (type === "textarea") {
       return (
@@ -261,7 +261,6 @@ class ScriptEventFormInput extends Component {
           id={id}
           value={value}
           onChange={this.onChange}
-          target={target}
         />
       );
     }
@@ -360,7 +359,6 @@ class ScriptEventFormInput extends Component {
               args={args}
               onChange={this.onChangeUnionValue}
               scope={scope}
-              target={target}
             />
           </div>
           <DropdownButton
@@ -396,7 +394,6 @@ ScriptEventFormInput.propTypes = {
   scope: PropTypes.string.isRequired,
   defaultBackgroundPaletteIds: PropTypes.arrayOf(PropTypes.string).isRequired,
   defaultUIPaletteId: PropTypes.string.isRequired,
-  target: PropTypes.string
 };
 
 ScriptEventFormInput.defaultProps = {
@@ -407,7 +404,6 @@ ScriptEventFormInput.defaultProps = {
   args: {},
   type: "",
   allowRename: true,
-  target: undefined
 };
 
 function mapStateToProps(state) {
@@ -418,12 +414,10 @@ function mapStateToProps(state) {
   const defaultBackgroundPaletteIds =
     settings.defaultBackgroundPaletteIds || [];
   const defaultUIPaletteId = settings.defaultUIPaletteId || "";
-  const target = settings.target;
   return {
     scope,
     defaultBackgroundPaletteIds,
     defaultUIPaletteId,
-    target
   };
 }
 

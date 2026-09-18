@@ -1,23 +1,16 @@
 import React, { FC, useCallback, useLayoutEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { FormField } from "../../components/library/Forms";
 import l10n from "../../lib/helpers/l10n";
 import castEventValue from "../../lib/helpers/castEventValue";
 import CustomControlsPicker from "../../components/forms/CustomControlsPicker";
-import CartPicker from "../../components/forms/CartPicker";
-import TargetPicker from "../../components/forms/TargetPicker";
-import PaletteSelect from "../../components/forms/PaletteSelectOld";
 import Alert, { AlertItem } from "../../components/library/Alert";
-import { Button } from "../../components/ui/buttons/Button";
+import { Select } from "../../components/ui/form/Select";
 import { SettingsState } from "../../store/features/settings/settingsState";
 import settingsActions from "../../store/features/settings/settingsActions";
-import navigationActions from "../../store/features/navigation/navigationActions";
 import EngineFieldsEditor from "../../components/settings/EngineFieldsEditor";
-import { Checkbox } from "../../components/ui/form/Checkbox";
 import { Input } from "../../components/ui/form/Input";
 import { RootState } from "../../store/configureStore";
 import { useGroupedEngineFields } from "../../components/settings/useGroupedEngineFields";
-import { NavigationSection } from "../../store/features/navigation/navigationState";
 import { Textarea } from "../../components/ui/form/Textarea";
 import useWindowSize from "../../components/ui/hooks/use-window-size";
 import {
@@ -27,17 +20,60 @@ import {
   SettingsPageWrapper,
   SettingsSearchWrapper,
 } from "../../components/settings/SettingsLayout";
-import {
-  CardAnchor,
-  CardButtons,
-  CardHeading,
-} from "../../components/ui/cards/Card";
+import { CardAnchor, CardHeading } from "../../components/ui/cards/Card";
 import { SearchableSettingRow } from "../../components/ui/form/SearchableSettingRow";
 import {
   SettingRowInput,
   SettingRowLabel,
 } from "../../components/ui/form/SettingRow";
 import { SearchableCard } from "../../components/ui/cards/SearchableCard";
+
+const regionOptions = [
+  {
+    value: "ntsc",
+    label: "NTSC",
+  },
+  {
+    value: "pal",
+    label: "PAL",
+  },
+];
+
+const sramOptions = [
+  {
+    value: "00",
+    label: "None",
+  },
+  {
+    value: "03",
+    label: "8KB (Battery)",
+  },
+];
+
+// Power-of-2 LoROM bank counts buildSnesRom.js's romSizing() already
+// understands (32 KB/bank) - a project with many backgrounds/sprites/music
+// tracks can overflow the 8-bank (256 KB) default at link time
+// ("INSERT_SECTIONS: No room for section... in ROM bank 0"), and there was
+// previously no way to raise it from the editor at all (settings.snesRomBanks
+// was compiler-only).
+const romBanksOptions = [
+  {
+    value: 8,
+    label: "256KB (8 banks, default)",
+  },
+  {
+    value: 16,
+    label: "512KB (16 banks)",
+  },
+  {
+    value: 32,
+    label: "1MB (32 banks)",
+  },
+  {
+    value: 64,
+    label: "2MB (64 banks)",
+  },
+];
 
 const SettingsPage: FC = () => {
   const dispatch = useDispatch();
@@ -50,12 +86,6 @@ const SettingsPage: FC = () => {
   const editSettings = useCallback(
     (patch: Partial<SettingsState>) => {
       dispatch(settingsActions.editSettings(patch));
-    },
-    [dispatch]
-  );
-  const setSection = useCallback(
-    (section: NavigationSection) => {
-      dispatch(navigationActions.setSection(section));
     },
     [dispatch]
   );
@@ -72,14 +102,22 @@ const SettingsPage: FC = () => {
   }, [scrollToId]);
 
   const {
-    customColorsEnabled,
     customHead,
-    defaultUIPaletteId,
-    defaultSpritePaletteId,
-    defaultBackgroundPaletteIds,
   } = settings;
 
-  const isSnes = settings.target === "snes";
+  const snesRegion = settings.snesRegion || "ntsc";
+  const snesSramSize = settings.snesSramSize || "03";
+  const snesRomBanks = settings.snesRomBanks || 8;
+
+  const currentRegionValue = regionOptions.find(
+    (option) => option.value === snesRegion
+  );
+  const currentSramValue = sramOptions.find(
+    (option) => option.value === snesSramSize
+  );
+  const currentRomBanksValue = romBanksOptions.find(
+    (option) => option.value === snesRomBanks
+  );
 
   const onSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
     setSearchTerm(e.currentTarget.value);
@@ -101,25 +139,17 @@ const SettingsPage: FC = () => {
     });
   };
 
-  const onEditPaletteId = useCallback(
-    (index: number, e: any) => {
-      const paletteIds = defaultBackgroundPaletteIds
-        ? [...defaultBackgroundPaletteIds]
-        : [];
-      paletteIds[index] = castEventValue(e);
-      editSettings({
-        defaultBackgroundPaletteIds: [
-          paletteIds[0],
-          paletteIds[1],
-          paletteIds[2],
-          paletteIds[3],
-          paletteIds[4],
-          paletteIds[5],
-        ],
-      });
-    },
-    [defaultBackgroundPaletteIds]
-  );
+  const onChangeRegion = (snesRegion: string) => {
+    editSettings({ snesRegion });
+  };
+
+  const onChangeSram = (snesSramSize: string) => {
+    editSettings({ snesSramSize });
+  };
+
+  const onChangeRomBanks = (snesRomBanks: number) => {
+    editSettings({ snesRomBanks });
+  };
 
   return (
     <SettingsPageWrapper>
@@ -135,19 +165,9 @@ const SettingsPage: FC = () => {
                 onChange={onSearch}
               />
             </SettingsSearchWrapper>
-            <SettingsMenuItem onClick={onMenuItem("settingsTargetPlatform")}>
-              {l10n("SETTINGS_TARGET_PLATFORM")}
+            <SettingsMenuItem onClick={onMenuItem("settingsSnesOptions")}>
+              {l10n("SETTINGS_SNES_OPTIONS")}
             </SettingsMenuItem>
-            {isSnes && (
-              <SettingsMenuItem onClick={onMenuItem("settingsSnesOptions")}>
-                {l10n("SETTINGS_SNES_OPTIONS")}
-              </SettingsMenuItem>
-            )}
-            {!isSnes && (
-              <SettingsMenuItem onClick={onMenuItem("settingsColor")}>
-                {l10n("SETTINGS_GBC")}
-              </SettingsMenuItem>
-            )}
             {groupedFields.map((group) => (
               <SettingsMenuItem
                 key={group.name}
@@ -159,11 +179,6 @@ const SettingsPage: FC = () => {
             <SettingsMenuItem onClick={onMenuItem("settingsControls")}>
               {l10n("SETTINGS_CONTROLS")}
             </SettingsMenuItem>
-            {!isSnes && (
-              <SettingsMenuItem onClick={onMenuItem("settingsCartType")}>
-                {l10n("SETTINGS_CART_TYPE")}
-              </SettingsMenuItem>
-            )}
             <SettingsMenuItem onClick={onMenuItem("settingsCustomHead")}>
               {l10n("SETTINGS_CUSTOM_HEADER")}
             </SettingsMenuItem>
@@ -173,141 +188,70 @@ const SettingsPage: FC = () => {
       <SettingsContentColumn>
         <SearchableCard
           searchTerm={searchTerm}
-          searchMatches={[l10n("SETTINGS_TARGET_PLATFORM")]}
-        >
-          <CardAnchor id="settingsTargetPlatform" />
-          <CardHeading>{l10n("SETTINGS_TARGET_PLATFORM")}</CardHeading>
-          <TargetPicker searchTerm={searchTerm} />
-        </SearchableCard>
-
-        {isSnes && (
-          <SearchableCard
-            searchTerm={searchTerm}
-            searchMatches={[l10n("SETTINGS_SNES_OPTIONS")]}
-          >
-            <CardAnchor id="settingsSnesOptions" />
-            <CardHeading>{l10n("SETTINGS_SNES_OPTIONS")}</CardHeading>
-            {!searchTerm && (
-              <Alert variant="warning">
-                <AlertItem>{l10n("WARNING_SNES_PALETTES")}</AlertItem>
-                <AlertItem>{l10n("WARNING_SNES_ENGINE_FIELDS")}</AlertItem>
-                <AlertItem>{l10n("WARNING_SNES_PROJECTILES")}</AlertItem>
-                <AlertItem>{l10n("WARNING_SNES_SPRITE_SHEETS")}</AlertItem>
-                <AlertItem>{l10n("WARNING_SNES_NO_WEB_PLAYER")}</AlertItem>
-              </Alert>
-            )}
-          </SearchableCard>
-        )}
-
-        {!isSnes && (
-        <SearchableCard
-          searchTerm={searchTerm}
           searchMatches={[
-            l10n("FIELD_EXPORT_IN_COLOR"),
-            "Default Background Palettes",
-            "Default Sprite Palette",
-            "Default UI Palette",
+            l10n("SETTINGS_SNES_OPTIONS"),
+            l10n("SETTINGS_SNES_REGION"),
+            l10n("SETTINGS_SNES_SRAM"),
+            l10n("SETTINGS_SNES_ROM_BANKS"),
           ]}
         >
-          <CardAnchor id="settingsColor" />
-          <CardHeading>{l10n("SETTINGS_GBC")}</CardHeading>
+          <CardAnchor id="settingsSnesOptions" />
+          <CardHeading>{l10n("SETTINGS_SNES_OPTIONS")}</CardHeading>
+          {!searchTerm && (
+            <Alert variant="warning">
+              <AlertItem>{l10n("WARNING_SNES_PALETTES")}</AlertItem>
+              <AlertItem>{l10n("WARNING_SNES_ENGINE_FIELDS")}</AlertItem>
+              <AlertItem>{l10n("WARNING_SNES_PROJECTILES")}</AlertItem>
+              <AlertItem>{l10n("WARNING_SNES_SPRITE_SHEETS")}</AlertItem>
+              <AlertItem>{l10n("WARNING_SNES_NO_WEB_PLAYER")}</AlertItem>
+            </Alert>
+          )}
           <SearchableSettingRow
             searchTerm={searchTerm}
-            searchMatches={[l10n("FIELD_EXPORT_IN_COLOR")]}
+            searchMatches={[l10n("SETTINGS_SNES_REGION")]}
           >
-            <SettingRowLabel>{l10n("FIELD_EXPORT_IN_COLOR")}</SettingRowLabel>
+            <SettingRowLabel>{l10n("SETTINGS_SNES_REGION")}</SettingRowLabel>
             <SettingRowInput>
-              <Checkbox
-                id="customColorsEnabled"
-                name="customColorsEnabled"
-                checked={customColorsEnabled}
-                onChange={onEditSetting("customColorsEnabled")}
+              <Select
+                value={currentRegionValue}
+                options={regionOptions}
+                onChange={(newValue: { value: string }) => {
+                  onChangeRegion(newValue.value);
+                }}
               />
             </SettingRowInput>
           </SearchableSettingRow>
-          {customColorsEnabled && (
-            <>
-              <SearchableSettingRow
-                searchTerm={searchTerm}
-                searchMatches={["Default Background Palettes"]}
-              >
-                <SettingRowLabel>Default Background Palettes</SettingRowLabel>
-                <SettingRowInput>
-                  <div key={JSON.stringify(defaultBackgroundPaletteIds)}>
-                    {[0, 1, 2, 3, 4, 5].map((index) => (
-                      <FormField
-                        key={index}
-                        style={{
-                          padding: 0,
-                          paddingBottom: index === 5 ? 0 : 3,
-                        }}
-                      >
-                        <PaletteSelect
-                          id="scenePalette"
-                          prefix={`${index + 1}: `}
-                          value={
-                            (defaultBackgroundPaletteIds &&
-                              defaultBackgroundPaletteIds[index]) ||
-                            ""
-                          }
-                          onChange={(e: string) => {
-                            onEditPaletteId(index, e);
-                          }}
-                        />
-                      </FormField>
-                    ))}
-                  </div>
-                </SettingRowInput>
-              </SearchableSettingRow>
-              <SearchableSettingRow
-                searchTerm={searchTerm}
-                searchMatches={["Default Sprite Palette"]}
-              >
-                <SettingRowLabel>Default Sprite Palette</SettingRowLabel>
-                <SettingRowInput>
-                  <FormField
-                    style={{
-                      padding: 0,
-                    }}
-                  >
-                    <PaletteSelect
-                      id="scenePalette"
-                      value={defaultSpritePaletteId || ""}
-                      onChange={onEditSetting("defaultSpritePaletteId")}
-                    />
-                  </FormField>
-                </SettingRowInput>
-              </SearchableSettingRow>
-              <SearchableSettingRow
-                searchTerm={searchTerm}
-                searchMatches={["Default UI Palette"]}
-              >
-                <SettingRowLabel>Default UI Palette</SettingRowLabel>
-                <SettingRowInput>
-                  <FormField
-                    style={{
-                      padding: 0,
-                    }}
-                  >
-                    <PaletteSelect
-                      id="scenePalette"
-                      value={defaultUIPaletteId || ""}
-                      onChange={onEditSetting("defaultUIPaletteId")}
-                    />
-                  </FormField>
-                </SettingRowInput>
-              </SearchableSettingRow>
-              {!searchTerm && (
-                <CardButtons>
-                  <Button onClick={() => setSection("palettes")}>
-                    {l10n("FIELD_EDIT_PALETTES")}
-                  </Button>
-                </CardButtons>
-              )}
-            </>
-          )}
+          <SearchableSettingRow
+            searchTerm={searchTerm}
+            searchMatches={[l10n("SETTINGS_SNES_SRAM")]}
+          >
+            <SettingRowLabel>{l10n("SETTINGS_SNES_SRAM")}</SettingRowLabel>
+            <SettingRowInput>
+              <Select
+                value={currentSramValue}
+                options={sramOptions}
+                onChange={(newValue: { value: string }) => {
+                  onChangeSram(newValue.value);
+                }}
+              />
+            </SettingRowInput>
+          </SearchableSettingRow>
+          <SearchableSettingRow
+            searchTerm={searchTerm}
+            searchMatches={[l10n("SETTINGS_SNES_ROM_BANKS")]}
+          >
+            <SettingRowLabel>{l10n("SETTINGS_SNES_ROM_BANKS")}</SettingRowLabel>
+            <SettingRowInput>
+              <Select
+                value={currentRomBanksValue}
+                options={romBanksOptions}
+                onChange={(newValue: { value: number }) => {
+                  onChangeRomBanks(newValue.value);
+                }}
+              />
+            </SettingRowInput>
+          </SearchableSettingRow>
         </SearchableCard>
-        )}
 
         <EngineFieldsEditor searchTerm={searchTerm} />
 
@@ -328,17 +272,6 @@ const SettingsPage: FC = () => {
           <CardHeading>{l10n("SETTINGS_CONTROLS")}</CardHeading>
           <CustomControlsPicker searchTerm={searchTerm} />
         </SearchableCard>
-
-        {!isSnes && (
-        <SearchableCard
-          searchTerm={searchTerm}
-          searchMatches={[l10n("SETTINGS_CART_TYPE")]}
-        >
-          <CardAnchor id="settingsCartType" />
-          <CardHeading>{l10n("SETTINGS_CART_TYPE")}</CardHeading>
-          <CartPicker searchTerm={searchTerm} />
-        </SearchableCard>
-        )}
 
         <SearchableCard
           searchTerm={searchTerm}
