@@ -5,7 +5,7 @@
   "bugs": {
     "url": "https://github.com/alekmaul/gbsnes-studio/issues"
   },
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Visual retro game maker",
   "main": ".webpack/main",
   "resolutions": {

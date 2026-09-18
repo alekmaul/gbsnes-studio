@@ -5,6 +5,61 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-09-18 - `v3` branch
+
+Removed the Game Boy engine, toolchain and every target-selection concept entirely — SNES
+Studio is now a **mono-target SNES product**. `v2` stays the last dual-target release,
+frozen at `v2.0.0`. Tracked as 5 milestones (M14-M18); the roadmap artifact has the full
+decision log. **5 of 5 done as of 2026-09-18**:
+
+- **M14**: removed `appData/src/gb/` (the GBDK engine), the `gbdk`/`mod2gbt` toolchain
+  (including the now-vestigial `darwin-x64` buildTools folder), `appData/js-emulator/`, and
+  every GB-only compiler file (`compileData.js`, `compileImages.js`, `ggbgfx.js`,
+  `compileMusic.js`, `bankedData.js`, `makeBuild.js`, `buildMakeScript.js`).
+  `src/lib/compiler/targets/` collapsed from a `{ gb, snes }` registry with a
+  `getTarget(id = "gb")` lookup — a real, repeated silent-fallback-to-GB-behaviour risk —
+  into a single exported SNES descriptor with no implicit fallback possible. Fixed three
+  pre-existing bugs this collapse exposed: `engineMiddleware.ts`'s engine.json path was
+  hardcoded to `"gb"` regardless of the open project; "Eject Engine" always ejected the GB
+  engine (its `projectType` was never actually threaded from the real target); and the
+  background-size validation (`validation.ts`) checked every project against hardcoded GB
+  pixel limits, with no SNES equivalent at all.
+- **M15**: removed every Game Boy trace from the editor UI — the `blank`/`gbhtml`/`gbs2`
+  templates, the Target Platform picker, the GBC colour card and cartridge-type card
+  (both confirmed compiler-inert for SNES), and the `isSnes`/`showExtra` conditionals
+  gating X/Y/L/R controls (now always shown). `settingsState.ts`'s stopgap
+  `target?: string` field is now real typed `snesRegion`/`snesSramSize`/`snesRomBanks`
+  fields. Found, and deliberately left for a separate design decision: the World editor's
+  scene-background preview still quantizes every image through a Game-Boy-shaped 4-shade
+  green heuristic (the toggle to disable it no longer has a Settings UI) — a pre-existing
+  `v2` gap, not something this milestone's changes caused, and not something the compiled
+  ROM is affected by. A follow-up commit fixed a real regression from this milestone: a
+  blank white screen on launch (`App.css` still importing two deleted files' CSS), plus
+  three real TypeScript errors surfaced by webpack's real diagnostics along the way
+  (excess properties passed to `buildProject()`, an over-loose parameter type).
+- **M16**: a full row-by-row opcode audit (`script_cmds.c`'s 112-entry table against
+  `scriptCommands.js`) confirmed no opcode is silently missing. 17 real `Script_Noop_b`
+  gaps found (3 more genuinely match inert Game Boy behaviour); only 3 of the 17 were
+  documented anywhere before this — the other 14 (`IF_ACTOR_RELATIVE_TO_ACTOR`,
+  `PLAYER_BOUNCE`, the 3 `PALETTE_SET_*` opcodes, `ACTOR_STOP_UPDATE`,
+  `ACTOR_SET_ANIMATE`, `SET_PROPERTY`, the 6 `ENGINE_FIELD_*` variants) are now
+  documented in `appData/src/snes/EVENTS.md`.
+- **M17**: `CLAUDE.md` rewritten around the SNES-only product this branch actually is —
+  it still described the old dual-target 1.2.2-based `main` framing and a 7-stage Game
+  Boy compile pipeline that no longer exists (deleted in M14). Also fixed, found along
+  the way: two sections still described the pre-`v2` `electron-compile`/`src/index.js`
+  architecture, never updated when `v2` switched to webpack + Redux Toolkit — a
+  staleness bug independent of the Game Boy removal itself. `README.md` lost its
+  dual-target tagline; `gbdkjs` and `ggbgfx` (both GBDK-toolchain-only, confirmed unused)
+  dropped from `package.json`.
+- **M18**: a real `electron-forge package` build confirmed the packaged app contains no
+  GBDK/Game Boy engine references anywhere in `app.asar`, only the SNES/PVSnesLib
+  toolchain. `yarn test` green throughout (124/124 suites). The compiler-level
+  correctness this milestone's own checklist calls out (camera clamp, dialogue wrap
+  width, sprite budget, now hardcoded rather than defaulted) was already proven
+  byte-exact by the existing test suite in M14, including real toolchain-gated
+  end-to-end `.sfc` builds against the vendored PVSnesLib toolchain.
+
 ## [2.0.0] - 2026-09-18 - `v2` branch
 
 Rebuilt SNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
