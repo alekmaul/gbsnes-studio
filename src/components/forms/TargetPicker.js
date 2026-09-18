@@ -40,6 +40,31 @@ const sramOptions = [
   },
 ];
 
+// Power-of-2 LoROM bank counts buildSnesRom.js's romSizing() already
+// understands (32 KB/bank) - a project with many backgrounds/sprites/music
+// tracks can overflow the 8-bank (256 KB) default at link time
+// ("INSERT_SECTIONS: No room for section... in ROM bank 0"), and there was
+// previously no way to raise it from the editor at all (settings.snesRomBanks
+// was compiler-only).
+const romBanksOptions = [
+  {
+    value: 8,
+    label: "256KB (8 banks, default)",
+  },
+  {
+    value: 16,
+    label: "512KB (16 banks)",
+  },
+  {
+    value: 32,
+    label: "1MB (32 banks)",
+  },
+  {
+    value: 64,
+    label: "2MB (64 banks)",
+  },
+];
+
 class TargetPicker extends Component {
   onChangeTarget = (target) => {
     const { editProjectSettings } = this.props;
@@ -56,6 +81,11 @@ class TargetPicker extends Component {
     editProjectSettings({ snesSramSize });
   };
 
+  onChangeRomBanks = (snesRomBanks) => {
+    const { editProjectSettings } = this.props;
+    editProjectSettings({ snesRomBanks });
+  };
+
   render() {
     const { settings, searchTerm } = this.props;
 
@@ -63,6 +93,7 @@ class TargetPicker extends Component {
     const isSnes = target === "snes";
     const snesRegion = settings.snesRegion || "ntsc";
     const snesSramSize = settings.snesSramSize || "03";
+    const snesRomBanks = settings.snesRomBanks || 8;
 
     const currentTargetValue = targetOptions.find(
       (option) => option.value === target
@@ -72,6 +103,9 @@ class TargetPicker extends Component {
     );
     const currentSramValue = sramOptions.find(
       (option) => option.value === snesSramSize
+    );
+    const currentRomBanksValue = romBanksOptions.find(
+      (option) => option.value === snesRomBanks
     );
 
     return (
@@ -123,6 +157,23 @@ class TargetPicker extends Component {
                 />
               </SettingRowInput>
             </SearchableSettingRow>
+            <SearchableSettingRow
+              searchTerm={searchTerm}
+              searchMatches={[l10n("SETTINGS_SNES_ROM_BANKS")]}
+            >
+              <SettingRowLabel>
+                {l10n("SETTINGS_SNES_ROM_BANKS")}
+              </SettingRowLabel>
+              <SettingRowInput>
+                <Select
+                  value={currentRomBanksValue}
+                  options={romBanksOptions}
+                  onChange={(newValue) => {
+                    this.onChangeRomBanks(newValue.value);
+                  }}
+                />
+              </SettingRowInput>
+            </SearchableSettingRow>
           </>
         )}
       </>
@@ -135,6 +186,7 @@ TargetPicker.propTypes = {
     target: PropTypes.string,
     snesRegion: PropTypes.string,
     snesSramSize: PropTypes.string,
+    snesRomBanks: PropTypes.number,
   }).isRequired,
   editProjectSettings: PropTypes.func.isRequired,
   searchTerm: PropTypes.string,

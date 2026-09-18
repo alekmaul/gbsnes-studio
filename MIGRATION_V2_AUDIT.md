@@ -1279,3 +1279,319 @@ valeur numérique (5 bits par canal RGB, décodable précisément depuis un scre
 Beaucoup plus fiable que d'essayer de lire du texte ou de deviner depuis le rendu du jeu
 — utile pour toute future investigation nécessitant de connaître un état interne du
 moteur C sans debugger ni accès Mesen/Lua fiable pour l'input.
+
+## 23. M13 — suite de la checklist de parité : dialogue/menus/emotes vérifiés en jeu réel (2026-09-17)
+
+Reprise de la checklist M13 après la pause suivant le correctif de collision (section 22).
+Nouveau run complet sur un projet frais depuis le template "Sample Project (SNES)" (web
+player, build réel via le bouton Play de l'éditeur).
+
+**Dialogue / menus (confirmés sans régression)** : boîte de dialogue (slide-in, effet
+machine à écrire, flèche de continuation, slide-out à la fermeture) et menu plein écran
+piloté par scène (le "QUEST LIST" du jeu d'exemple, déclenché par Start, retour propre
+via B) — les deux déjà couverts par les correctifs M5d/M5e, aucune régression.
+
+**Émotes (`EVENT_ACTOR_EMOTE`), premier test explicite du cycle de vie complet** : le
+PNJ de la quête "Ill Fitting Radio" (scène House) a un script conditionné par une
+variable (`IF_FALSE var2`) — la branche qui contient l'émote (`emoteId 3`) n'est
+atteinte qu'après avoir préalablement interagi avec l'objet "radio" (un autre acteur
+statique de la même scène, qui met `var2` à vrai en silence, sans texte). Une fois cette
+condition remplie, revenir parler au PNJ affiche "Yeah it doesn't fit does it?", puis
+déclenche l'émote, puis "But it's all I have right now...".
+
+Capturer la bulle d'émote à l'écran s'est révélé être le point délicat : sa durée de vie
+est fixée à 50 frames (`emote_time = 50` dans `SceneStartEmote`, `scene.c`) soit environ
+0,83 s à 60 fps — bien en dessous du délai d'un cycle clic-puis-screenshot via un script
+PowerShell séparé (démarrage de processus ~300-600 ms à lui seul). Résolu avec un script
+combiné clic-puis-rafale-de-captures (un seul processus PowerShell : un clic, puis 12-14
+captures à ~70 ms d'intervalle) — la bulle apparaît nettement dès la 2ᵉ capture
+(~140 ms) et disparaît proprement avant le dialogue suivant (~910 ms), confirmant que le
+minuteur de l'émote tourne indépendamment de la boîte de dialogue et ne bloque rien.
+
+**Confirmé fonctionnel de bout en bout** : position correcte de la bulle (au-dessus de
+la tête du PNJ), durée correcte, disparition automatique, aucune interférence avec
+l'enchaînement des `TEXT` suivants. Aucun bug trouvé — pas de changement de code.
+
+**Note méthodologique (calibration input)** : en tout début de ce segment, une série de
+tentatives de déplacement au clavier (flèches, via `keybd_event`) a semblé produire un
+déplacement horizontal quel que soit la touche envoyée. Diagnostic erroné dans un
+premier temps (soupçon de code de scan clavier incorrect, de touche bloquée, ou de PNJ
+mal identifié) — la cause réelle était le solide de collision de l'étang de la scène
+Outside : le joueur s'y trouvait collé, et le "glissement" le long du bord courbe de
+l'étang lors de tentatives de déplacement bloquées produisait des déplacements
+diagonaux trompeurs. Confirmé en éloignant délibérément le joueur de l'étang avant de
+retester chaque direction individuellement : le pavé tactile à l'écran (plus fiable que
+le clavier pour ce genre de calibration, cliquable précisément) a alors donné des
+déplacements parfaitement cohérents avec la direction pressée. Pas un bug moteur —
+juste un piège d'interprétation lors du test manuel, à garder en tête pour toute future
+session de test interactif près d'un obstacle à bord irrégulier.
+
+Reste sur la checklist M13 : overlay (test explicite dédié), musique/SFX, cycle complet
+sauvegarde SRAM → rechargement → confirmation, X/Y/L/R, limites sprite
+sheets/palettes OBJ par scène, et — le plus gros morceau restant — les 4 autres genres
+de scène (Platformer, Shoot Em Up, Point and Click, Adventure), jamais vérifiés en jeu
+réel à ce jour (seul Top Down l'a été).
+
+## 24. M13 — overlay testé explicitement, nouvelle méthode de vérification offscreen (2026-09-17)
+
+Le calibrage clavier/pavé tactile de la section 23 (fastidieux, plusieurs dizaines
+d'allers-retours à cause du focus fenêtre et des délais de démarrage de processus
+PowerShell) a motivé un changement de méthode pour la suite de la checklist M13 :
+plutôt que de piloter l'app installée via automation Win32 (clic/clavier simulés sur le
+bureau réel de l'utilisateur), les items suivants sont vérifiés via un **script Electron
+offscreen** qui charge directement le build web player dans une `BrowserWindow` cachée
+(`show: false`) et pilote/lit la page via `webContents.executeJavaScript()` — plus
+rapide, plus précis (lecture de pixels exacts via `canvas.getImageData()` plutôt
+qu'une estimation visuelle sur capture d'écran), et sans aucun risque d'interagir avec
+le bureau réel de l'utilisateur.
+
+**Piège technique rencontré** : `require("electron")` retournait `undefined` pour
+`app`/`BrowserWindow` en lançant `electron.exe monscript.js` depuis ce terminal — cause :
+la variable d'environnement `ELECTRON_RUN_AS_NODE=1` était déjà positionnée dans ce
+shell (héritée de l'environnement de dev), ce qui fait qu'Electron se comporte comme un
+Node.js nu et que `require("electron")` renvoie alors le chemin du binaire (une simple
+chaîne) au lieu de l'API. Fix : `env -u ELECTRON_RUN_AS_NODE electron.exe monscript.js`.
+À garder en tête pour toute future vérification offscreen dans cette session/ce projet.
+
+**Test** : projet de fixture `Test_ActorInvoke`, script de la scène de démarrage
+remplacé par une séquence explicite `OVERLAY_SHOW(black, y=18 [masqué])` → `WAIT 1s` →
+`OVERLAY_MOVE_TO(y=0, speed=2)` [glisse vers plein écran] → `WAIT 1.5s` →
+`OVERLAY_HIDE` → `WAIT 1s` → `END`, compilé en vrai `.sfc`/web player via
+`buildProject(..., { buildType: "web" })` (pipeline réel, pas de mock). Le script
+offscreen clique le bouton Play du start-gate puis échantillonne un pixel central du
+canvas (`getImageData`) et capture une image PNG complète à 7 instants (300 à 5200 ms).
+
+**Résultat, confirmé à la fois par les valeurs de pixel et visuellement (PNG)** :
+- t=300ms : noir (démarrage du ROM, avant que la scène ne soit prête — attendu)
+- t=900/1600ms : couleur de fond normale de la scène — overlay bien masqué (rangée 18→28,
+  hors écran) pendant le `WAIT` initial, comme attendu
+- t=2400/3200ms : panneau sombre couvrant l'écran (glissement terminé après
+  `OVERLAY_MOVE_TO`) — confirmé aussi visuellement sur la capture PNG (bandeau visible
+  descendant progressivement depuis le haut à t=2400ms)
+- t=4200/5200ms : retour à la couleur de fond normale — `OVERLAY_HIDE` a bien nettoyé
+  l'overlay instantanément, aucun artefact résiduel
+
+**Conclusion** : `OVERLAY_SHOW`/`OVERLAY_MOVE_TO`/`OVERLAY_HIDE` fonctionnent
+correctement comme actions de script indépendantes (pas seulement via le rideau
+d'intro du Logo ou la boîte de dialogue, déjà couverts). Aucun bug trouvé — pas de
+changement de code. Script et build de test jetables, supprimés après usage (rien
+committé sous ce nom).
+
+## 25. M13 — musique/SFX, sauvegarde SRAM, X/Y/L/R, sprite sheets/palettes OBJ (2026-09-17)
+
+Suite directe de la section 24, même méthode offscreen. Quatre items de la checklist
+M13 traités d'affilée.
+
+**Musique/SFX.** Projet de fixture `sneshtml`, scène de démarrage remplacée par
+`MUSIC_PLAY(loop)` → `WAIT 1s` → `SOUND_PLAY_EFFECT(beep)` → `WAIT 0.3s` →
+`SOUND_PLAY_EFFECT(crash)` → `WAIT 0.5s` → `MUSIC_STOP` → `WAIT 1.5s` → `END`.
+Vérification par interception du registre DSP KON (key-on, `$4C`) via un monkey-patch
+de `Dsp.write` injecté avant le clic sur Play — bien plus précis qu'un simple
+échantillonnage de gain à intervalle fixe (une première tentative par échantillonnage
+n'a rien détecté du tout, cf. piège méthodologique ci-dessous). Résultat : `MUSIC_PLAY`
+déclenche des KON répétés sur les canaux 1 et 2 (les voix du module) ; les deux
+`SOUND_PLAY_EFFECT` déclenchent chacun un KON distinct sur le **canal 7** (srcn=80, le
+sample SFX partagé), superposé à la musique sans l'interrompre, espacés d'environ
+600 ms (correspond exactement au timing du script) ; `MUSIC_STOP` déclenche un KOF
+(key-off) global et aucune note supplémentaire ne se déclenche ensuite. Confirmé
+fonctionnel de bout en bout. Aucun bug trouvé.
+
+**Piège méthodologique (important pour toute future vérification offscreen dans ce
+projet)** : le timing réel observé dans une `BrowserWindow` cachée est significativement
+plus lent que le temps réel (le jeu tourne apparemment à ~1,5-2x plus lent que
+l'horloge murale dans ce contexte spécifique), et ce indépendamment de
+`backgroundThrottling: false` (testé, aucun effet mesurable sur ce ralentissement -
+donc pas du throttling Chromium classique, plutôt un coût d'interprétation JS pur dans
+ce harnais). Un échantillonnage à intervalles fixes basé sur une estimation du timing
+réel peut donc manquer complètement des événements courts (un SFX de 0,3s). Deux
+parades : (a) élargir généreusement la fenêtre d'observation, (b) préférer
+l'interception d'événements (écriture de registre, changement d'état) à
+l'échantillonnage périodique quand c'est possible - un KON de 1 frame ne peut pas être
+"manqué" par un hook posé sur l'écriture elle-même.
+
+**Sauvegarde SRAM (cycle complet save → reload → confirmation).** Jusqu'ici seul un
+save-puis-charge-immédiat dans la même session avait été fait (ne teste pas la vraie
+frontière de persistance). Script de test : `IF_SAVED_DATA` → (vrai : `LOAD_DATA`) /
+(faux : `SET_VALUE` marqueur=42, `SAVE_DATA`). Méthode : **deux `BrowserWindow`
+indépendantes** dans le même process Electron (simule un vrai redémarrage de l'app,
+pas juste un re-run du même contexte JS) :
+1. Fenêtre 1 (session fraîche, aucune sauvegarde) : `IF_SAVED_DATA` évalue faux →
+   marqueur écrit à 42 en WRAM (`script_variables[0]`, lu directement via
+   `snes.ram[...]`, adresse extraite de `game.sym`) → `SAVE_DATA` → `flushSram()`
+   appelé explicitement (au lieu d'attendre le sondage à 5s) → valeur base64 lue dans
+   `localStorage`.
+2. Fenêtre 2 (toute nouvelle, jamais vu cette sauvegarde) : marqueur WRAM confirmé à 0
+   avant toute action (preuve d'un état réellement neuf, pas de fuite entre fenêtres) →
+   `localStorage` pré-rempli avec la valeur capturée + `restoreSram()` appelé →
+   `snes.cart.sram` contient bien l'en-tête de sauvegarde attendu (octet 0 = 1, flag
+   "existe") → clic Play → `IF_SAVED_DATA` évalue maintenant vrai → `LOAD_DATA` →
+   marqueur WRAM relu = **42**, confirmant le cycle complet.
+Piège rencontré : `win1.destroy()` a déclenché une fermeture silencieuse de toute
+l'app Electron (comportement par défaut de `window-all-closed` sur Windows quand plus
+aucune fenêtre n'existe, même momentanément) avant que la fenêtre 2 ne soit créée -
+fix : `app.on("window-all-closed", () => {})` en tout début de script. Aucun bug
+trouvé dans le moteur - la persistance SRAM fonctionne réellement à travers une vraie
+frontière de redémarrage.
+
+**X/Y/L/R.** Déjà vérifié une fois en Mesen (voir plus haut dans ce document) - gap
+restant : le confirmer via le web player. Script : quatre `SET_INPUT_SCRIPT` (un par
+bouton X/Y/L/R), chacun écrivant une valeur distincte dans une variable distincte.
+**Premier essai à vide** : script se terminait par un `WAIT` après avoir armé les
+handlers - `SceneHandleInput()` (`scene.c`) retourne immédiatement tant qu'un script
+est en cours d'exécution (`script_ptr != 0`), donc les scripts d'input armés n'étaient
+jamais interrogés pendant ce `WAIT`. Pas un bug moteur - défaut du script de test,
+corrigé en terminant le script (`EVENT_END`) juste après l'armement (les handlers
+`persist:false` restent actifs pour le reste de la scène de toute façon). **Deuxième
+piège** : un tap clavier synthétique keydown+keyup immédiat (0ms d'intervalle) ne
+laisse pas à la boucle de jeu le temps de lire l'état du bouton avant qu'il soit
+relâché - fix : maintenir la touche ~250ms avant de la relâcher. Une fois ces deux
+correctifs appliqués : X (touche `i`), Y (`u`), L (`o`), R (`p`) déclenchent chacun,
+dans l'ordre et une seule fois, exactement le bon sous-script avec la bonne valeur
+(vérifié par diff d'un dump WRAM avant/après chaque appui). Confirmé fonctionnel de
+bout en bout via le web player. Aucun bug trouvé.
+
+**Sprite sheets / palettes OBJ par scène.** Déjà vérifié en Mesen (voir plus haut,
+"Outside's 7th sheet"). Gap restant : confirmer via le web player. Le jeu d'exemple
+inchangé, juste re-pointé pour démarrer directement dans la scène "Outside" (7 acteurs
+sur 6 sprite sheets distincts + le joueur = 7 sheets au total, le cas exact du
+7ᵉ sheet qui doit partager une palette OBJ documenté plus haut dans ce fichier).
+Capture d'écran du web player : chat noir, PNJ aux cheveux bruns près du panneau,
+PNJ aux cheveux roux près de l'étang, PNJ en noir sous l'étang, canard jaune sur
+l'étang, joueuse blonde - toutes les couleurs sont distinctes et plausibles, aucun
+sprite noir/corrompu, aucune fuite de palette entre personnages. Confirmé fonctionnel.
+Aucun bug trouvé.
+
+## 26. M13 — nouveau template `snesgbs2` + vérification des genres Platformer/Point and Click/Shoot Em Up (2026-09-18)
+
+Demande explicite de l'utilisateur : recopier `appData/templates/gbs2` (le "Sample
+Project" GB Studio 2.0 par défaut, celui avec des scènes des 5 genres - PAS `gbhtml`,
+l'ancien échantillon 1.0 dont `sneshtml` est déjà dérivé) vers
+`appData/templates/snesgbs2`, `settings.target: "snes"` + région/SRAM par défaut (même
+recette que `gbhtml` → `sneshtml`). Objectif : disposer d'un exemple réel pour le
+dernier point de la checklist M13 (les 4 genres jamais testés). **Ce nouveau template
+n'est volontairement pas encore inscrit dans l'écran "Nouveau projet"
+(`Splash.tsx`)** - il sert pour l'instant de ressource de test/dev interne, pas
+un template officiel prêt à l'emploi (voir les limitations ci-dessous) ; décision à
+prendre séparément si on veut l'exposer un jour aux utilisateurs.
+
+**Deux vrais bugs de compilateur trouvés et corrigés** (gbs2 étant bien plus riche que
+gbhtml, il exerce des events jamais touchés par les fixtures de test existantes) :
+1. `getSpriteSceneIndex` / `getSpriteOffset` (`src/lib/events/helpers.js`) lisaient
+   `scene.sprites` (un champ calculé, GB-only, que l'ancien `compileData.js` attache à
+   l'objet scène) sans jamais vérifier son existence - `compileSnesData.js` ne peuple
+   jamais ce champ (le SNES gère les sprites par scène différemment, voir
+   `buildSceneSprites` plus haut dans ce document), donc `EVENT_LAUNCH_PROJECTILE`
+   (Shoot Em Up) et `EVENT_ACTOR_SET_SPRITE` plantaient tout le build SNES dès qu'un
+   projet les utilisait (`TypeError: Cannot read properties of undefined`). Ces deux
+   opcodes sont des `Script_Noop_b` documentés côté moteur SNES ("Projectiles
+   subsystem" / "per-actor sprite override, needs On Update port" - des gaps
+   pré-existants et déjà connus, pas des surprises) - implémenter le sous-système de
+   projectiles ou le changement de sprite à la volée est hors scope ici (ce serait un
+   vrai morceau de moteur, pas une vérification). Correctif appliqué : les deux
+   helpers retournent une valeur neutre (0) au lieu de planter quand `scene.sprites`
+   est absent - inerte à l'exécution (Noop), mais ne fait plus échouer tout le build.
+2. `actorSetSprite` (`src/lib/compiler/scriptBuilder.js`) poussait `sprite.frames` -
+   un nom de champ GB Studio 1.2.2 qui n'existe plus dans le schéma de projet v2 (le
+   champ s'appelle `numFrames` depuis GB Studio 2.0, confirmé en inspectant un
+   `spriteSheets[]` réel) - `undefined` littéral injecté dans le flux d'octets
+   compilés (bug latent partagé avec GB, probablement jamais détecté faute de test
+   touchant ce chemin précis). Corrigé : `sprite.numFrames` (avec un repli `1` si le
+   sprite lui-même n'est pas résolu).
+`yarn test` : 590/590 (3 skip Windows) après les deux correctifs, aucune régression.
+
+**Troisième problème, capacité ROM plutôt qu'un bug** : la première tentative de build
+complet (toolchain réel) échouait au link : `INSERT_SECTIONS: No room for section
+"rodata_bg10" (2924 bytes) in ROM bank 0` - gbs2 a beaucoup plus de fonds d'écran/
+sprites/pistes musicales (11 !) que `sneshtml`, et dépasse les 8 banques ROM (256 KB)
+par défaut. Le compilateur supportait déjà un `settings.snesRomBanks` configurable
+(`buildSnesRom.js`, jamais exposé dans l'éditeur), donc un utilisateur avec un projet
+de cette taille se serait heurté à cette erreur de linker sans aucun moyen de la
+corriger depuis l'app. **Ajouté à Settings > Target Platform (section SNES)** : un
+nouveau champ "ROM Size" (`TargetPicker.js`, `SETTINGS_SNES_ROM_BANKS`) avec les choix
+256 KB/512 KB/1 MB/2 MB (8/16/32/64 banques), même style que les champs Region/SRAM
+déjà présents. `snesgbs2` build maintenant avec `snesRomBanks: 32` (1 MB).
+
+**Vérification des genres (méthode offscreen, capture d'écran + dispatch clavier
+réel)** - 3 des 4 genres restants avaient une scène utilisable dans gbs2 :
+- **Platformer** ("Deeper Underground", 32×18, dans les limites) : scène rendue
+  correctement (joueur sur plateforme, échelles, grotte) ; 3× flèche droite (600ms
+  chacune) déplace visiblement le joueur vers la droite entre les captures
+  "après touches" et "stabilisé". Confirmé fonctionnel.
+- **Point and Click** ("Player's House", 20×18, dans les limites, 0 acteur - 11
+  triggers "walk", cohérent avec le curseur du genre qui active une zone en la
+  survolant) : scène (chambre avec meubles/TV/manette) rendue correctement, le
+  sprite du curseur se déplace légèrement entre les captures en réponse aux flèches.
+  Confirmé fonctionnel.
+- **Shoot Em Up** ("Space Battle", type 3) : scène (planète, vaisseaux ennemis,
+  étoiles) rendue correctement même si le fond fait 255×18 tuiles (bien au-delà de la
+  limite de 32 annoncée par l'avertissement du compilateur - voir plus bas). Le
+  vaisseau du joueur avance automatiquement vers la droite (défilement forcé, logique
+  `shmup_direction`/`actors[0].x += dir_x*move_speed` de `scene.c`) pendant que
+  haut/bas restent sous contrôle joueur - comportement de genre correct. Tir non
+  testable : `EVENT_LAUNCH_PROJECTILE` reste un Noop (voir plus haut).
+- **Adventure** : **aucune scène de ce genre dans gbs2** - impossible à tester avec ce
+  template. Resterait à faire : soit une scène synthétique dédiée (comme le fixture
+  minimal utilisé pour le test de collision M13), soit accepter ce gap comme
+  documenté et non vérifié.
+
+**Limitation pré-existante confirmée, pas nouvelle** : les fonds d'écran/scènes plus
+larges que 32×32 tuiles ("Sample Town" 56×56, "Space Battle"/"stars_wide" 255×18,
+"platform_path" 161×18) déclenchent l'avertissement "SNES scenes wider/taller than 32
+tiles are not supported yet" - le rendu du premier écran (32×18 visible) fonctionne
+comme on l'a vu pour Space Battle, mais un défilement horizontal au-delà de cette
+fenêtre n'est probablement pas correct (pas testé ici, hors scope - ce serait une
+vraie fonctionnalité de moteur à concevoir, pas un bug ponctuel).
+
+Reste sur la checklist M13 : la décision (séparée) d'inscrire ou non `snesgbs2` comme
+template officiel sélectionnable dans l'écran "Nouveau projet".
+
+## 27. M13 — genre Adventure testé dans sneshtml, mouvement diagonal réel confirmé (2026-09-18)
+
+`snesgbs2` n'a aucune scène Adventure ; demande explicite de l'utilisateur : tenter le
+test dans `sneshtml` à la place. Méthode : scène "Outside" (déjà bien connue de cette
+session) recompilée avec `type: "2"` (Adventure) au lieu de sa valeur normale (Top
+Down), sans toucher à son script ni ses assets - juste le genre. `scene_type` confirmé
+correct dans le blob compilé (octet 6 = 2) avant même de lancer le jeu.
+
+**Fausse alerte initiale** : les deux premiers essais (captures d'écran + un puis
+plusieurs appuis directionnels séparés) semblaient montrer un joueur qui ne bouge
+jamais du tout, quelle que soit la touche. Plutôt que de conclure à un bug sur la seule
+foi de captures d'écran (la position du joueur ne bouge parfois que de quelques
+pixels d'une image à l'autre - difficile à juger visuellement), vérification directe
+en lisant `actors[0].x/y/dir_x/dir_y/moving` ainsi que `joy`/`prev_joy`/`scene_type`
+en WRAM (adresses tirées de `game.sym`) à chaque frame échantillonnée - beaucoup plus
+fiable qu'une comparaison de pixels, dans la lignée de la technique de lecture WRAM
+déjà utilisée pour SRAM/X-Y-L-R.
+
+**Résultat réel, sans ambiguïté** : en poussant Haut seul depuis le point de spawn, le
+joueur avance bien de 168→153→145 (en pixels, deux pas) puis s'arrête net - `joy`
+reste à 2048 (Haut toujours détecté comme pressé) tout le temps, mais `moving` retombe
+à 0 dès qu'un mur/obstacle est heurté (comportement correct : `dir_y` est remis à 0 par
+`col_solid()`, puis restauré via `backup_dy` pour garder le "visage" tourné vers
+l'obstacle sans avancer - exactement le comportement documenté dans le code). Ce
+n'était pas un bug, juste un mur.
+
+En rejouant Droite+Bas ensemble depuis le même point de spawn (vers le champ ouvert
+en bas à droite de l'étang, visible sur les captures précédentes) : **x et y
+augmentent simultanément et en continu** (136,168 → 143,175 → 152,184 sur les 500
+premières ms) - la première preuve concrète que le mouvement diagonal en pixel libre
+(par opposition au mouvement à axe unique tuile par tuile de Top Down) fonctionne
+réellement dans ce moteur. Puis, arrivé au bord de l'étang : `dir_y` repasse à 0 (bloqué
+verticalement par l'eau) pendant que `dir_x` reste actif - le joueur continue de
+glisser horizontalement le long de la rive (x 159→174→189→204 sur 750ms, y figé à 184)
+avant de se re-bloquer complètement sur un autre obstacle. Confirme que le test de
+collision est bien indépendant par axe (`col_solid` testé séparément pour `dir_x` et
+`dir_y`), pas une résolution en bloc qui aurait, par exemple, refusé tout mouvement dès
+qu'un seul axe est bloqué.
+
+**Confirmé fonctionnel de bout en bout.** Remarque notable : ce chemin de code
+(`Update_Adventure`, `scene.c`) portait dans son propre commentaire la mention de
+n'avoir jamais été vérifié interactivement par l'auteur original ("isn't
+Mesen-verifiable this session... - the input-simulation gap") - c'est donc la toute
+première vérification en jeu réel de ce genre depuis son portage initial (M5c).
+Aucun bug trouvé, aucun changement de code. Scripts de scratch supprimés après usage.
+
+**M13 est maintenant complet sur les 5 genres de scène** (Top Down, Platformer, Point
+and Click, Shoot Em Up, Adventure) - tous vérifiés en jeu réel au moins une fois. Reste
+uniquement la décision séparée sur le statut de `snesgbs2` (template officiel ou
+ressource de dev interne).

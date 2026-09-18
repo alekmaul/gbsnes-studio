@@ -44,6 +44,7 @@ import gbhtmlPreview from "../../assets/templatePreview/gbhtml.mp4";
 import blankPreview from "../../assets/templatePreview/blank.png";
 import sneshtmlPreview from "../../assets/templatePreview/sneshtml.png";
 import snesblankPreview from "../../assets/templatePreview/snesblank.png";
+import snesgbs2Preview from "../../assets/templatePreview/snesgbs2.png";
 import useWindowFocus from "../ui/hooks/use-window-focus";
 
 const { dialog, shell } = remote;
@@ -99,6 +100,14 @@ const templates: TemplateInfo[] = [
     preview: sneshtmlPreview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_SAMPLE_PROJECT_DESCRIPTION"),
+    group: "Super Nintendo",
+  },
+  {
+    id: "snesgbs2",
+    name: `${l10n("SPLASH_SAMPLE_PROJECT")} (SNES, all genres)`,
+    preview: snesgbs2Preview,
+    videoPreview: false,
+    description: l10n("SPLASH_SNES_GBS2_DESCRIPTION"),
     group: "Super Nintendo",
   },
   {

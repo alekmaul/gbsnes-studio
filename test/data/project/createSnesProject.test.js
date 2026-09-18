@@ -16,7 +16,7 @@ import compileSnesData from "../../../src/lib/compiler/compileSnesData";
  * ->compileSnesData() path those entries now drive, the same path
  * createProject.test.js-equivalent GB coverage would use if it existed.
  */
-describe.each(["sneshtml", "snesblank"])(
+describe.each(["sneshtml", "snesblank", "snesgbs2"])(
   "createProject - %s (SNES) template",
   (templateId) => {
     test("scaffolds, loads/migrates, and is a real SNES project", async () => {
@@ -35,14 +35,23 @@ describe.each(["sneshtml", "snesblank"])(
         expect(data.settings.target).toBe("snes");
         expect(data._version).toBe("2.0.0");
 
-        if (templateId === "sneshtml") {
-          // The sample game: should compile cleanly, real scenes present.
+        if (templateId === "sneshtml" || templateId === "snesgbs2") {
+          // The sample games: should compile cleanly, real scenes present.
           const warnings = [];
           const out = await compileSnesData(data, {
             projectRoot,
             warnings: (m) => warnings.push(m),
           });
           expect(out.stats.sceneBlobs.length).toBeGreaterThan(0);
+        }
+
+        if (templateId === "snesgbs2") {
+          // gbs2 is the richer GB Studio 2.0 sample (all 5 genres, many more
+          // events than sneshtml/gbhtml exercise) - a real SNES project
+          // built from it, not just a scaffold that compiles. The template
+          // ships its own snesRomBanks: 32 (the 8-bank/256KB default is too
+          // small - see MIGRATION_V2_AUDIT.md section 26).
+          expect(data.settings.snesRomBanks).toBe(32);
         }
       } finally {
         await fs.remove(tmpRoot);

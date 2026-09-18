@@ -300,7 +300,7 @@ class ScriptBuilder {
     const sprite = getSprite(spriteSheetId, sprites);
     output.push(cmd(ACTOR_SET_SPRITE));
     output.push(spriteOffset);
-    output.push(sprite.frames);
+    output.push(sprite ? sprite.numFrames : 1);
   };
 
   // Player
