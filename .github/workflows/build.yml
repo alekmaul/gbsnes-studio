@@ -2,13 +2,16 @@ name: Build
 
 on:
   push:
-    # `v2` is the active rebuild-on-GB-Studio-2.0.0-beta5 branch (see
-    # MIGRATION_V2_AUDIT.md) - this workflow itself was copied over from
-    # `main` early on (M2) but never actually triggered on `v2` pushes until
-    # now (M12), so none of the packaging changes since had ever run through
-    # real CI. Both branches build the same way (Windows -> macOS -> Linux,
-    # same makers), just on different Electron/electron-forge versions.
-    branches: [main, v2]
+    # `v2` is the last dual-target release (frozen at v2.0.0); `v3` is the
+    # active GB-removal branch (see the roadmap artifact, M14-M18) - this
+    # workflow itself was copied over from `main` early on (M2) but never
+    # actually triggered on `v2` pushes until M12, so none of the packaging
+    # changes since had ever run through real CI. Same story again for `v3`
+    # (found at M18 - `v3` was simply never added here, so every push since
+    # the branch was created had silently never run CI). All three branches
+    # build the same way (Windows -> macOS -> Linux, same makers), just on
+    # different Electron/electron-forge versions.
+    branches: [main, v2, v3]
     tags: ["v*"]
   pull_request:
   workflow_dispatch:
