@@ -128,7 +128,7 @@ const buildGameMiddleware: Middleware<{}, RootState> = (store) => (
     if (module.hot) {
       module.hot.accept("../../../lib/compiler/buildProject", () => {
         dispatch(consoleActions.clearConsole());
-        dispatch(consoleActions.stdOut("Reloaded GB Studio Compiler"));
+        dispatch(consoleActions.stdOut("Reloaded GBSNES Studio Compiler"));
       });
     }
   } else if (actions.deleteBuildCache.match(action)) {
@@ -136,7 +136,7 @@ const buildGameMiddleware: Middleware<{}, RootState> = (store) => (
     const cacheRoot = Path.normalize(`${getTmp()}/_gbscache`);
     await rmdir(cacheRoot);
     dispatch(consoleActions.clearConsole());
-    dispatch(consoleActions.stdOut("Cleared GB Studio caches"));
+    dispatch(consoleActions.stdOut("Cleared GBSNES Studio caches"));
     
   } else if (actions.ejectEngine.match(action)) {
 

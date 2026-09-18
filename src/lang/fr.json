@@ -270,7 +270,7 @@
   "MENU_DOCUMENTATION": "Documentation",
   "MENU_LEARN_MORE": "En savoir plus",
   "MENU_SPEECH": "Discours",
-  "MENU_ABOUT": "À propos de GB Studio",
+  "MENU_ABOUT": "À propos de GBSNES Studio",
   "MENU_CART_TYPE": "Type de cartouche",
   "MENU_COPY_EVENT": "Copier un événement",
   "MENU_RENAME_EVENT": "Renommer l'événement",
@@ -344,9 +344,9 @@
   "DIALOG_OK": "OK",
   "DIALOG_CANCEL": "Annuler",
   "DIALOG_UPDATE_AVAILABLE": "Mise à jour disponible",
-  "DIALOG_UPDATE_DESCRIPTION": "GB Studio {version} disponible. Souhaitez-vous mettre à jour ?",
+  "DIALOG_UPDATE_DESCRIPTION": "GBSNES Studio {version} disponible. Souhaitez-vous mettre à jour ?",
   "DIALOG_UPDATE_DONT_ASK_AGAIN": "Ne plus me demander",
   "DIALOG_UP_TO_DATE": "Vous êtes à jour !",
-  "DIALOG_NEWEST_VERSION_AVAILABLE": "GB Studio {version} est la version la plus récente disponible.",
+  "DIALOG_NEWEST_VERSION_AVAILABLE": "GBSNES Studio {version} est la version la plus récente disponible.",
   "DIALOG_UNABLE_TO_CHECK_LATEST_VERSION": "Impossible de vérifier la dernière version pour le moment"
 }
