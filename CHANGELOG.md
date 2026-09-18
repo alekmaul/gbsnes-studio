@@ -60,6 +60,39 @@ decision log. **5 of 5 done as of 2026-09-18**:
   byte-exact by the existing test suite in M14, including real toolchain-gated
   end-to-end `.sfc` builds against the vendored PVSnesLib toolchain.
 
+Post-M18 polish, found through the user's own hands-on testing of the real app the same day:
+
+- Fixed CI: `get-pixels` was an undeclared dependency (only ever present transitively via
+  the now-removed `ggbgfx`), and `v3` had never actually triggered a CI run at all since the
+  branch's creation (`branches: [main, v2]` never included `v3`).
+- Fixed macOS packaging: `after-copy.js` still referenced the deleted `buildTools/darwin-x64`
+  folder, and `actions/setup-node@v4` forced Node itself to run x64-under-Rosetta-2 on the
+  arm64 `macos-15` CI runner, crashing hard partway through `yarn install`
+  (`electron`'s own arch-resolution env vars are sufficient on their own; Node doesn't also
+  need to run under emulation).
+- Fixed a new SNES project opening straight into a spurious "Project Requires Migrating"
+  dialog: all three templates shipped with stale `_version`/`_release` stamps from before the
+  `v2` rebuild; pre-migrated to the current schema.
+- Fixed `TypeError: trimlines is not a function` when typing into a dialogue/menu/choice text
+  field: the VM2 sandbox that loads event files mocked `trimlines` via a default import
+  (unwrapped value, no `.default`) while every event consuming it read `.default` off it,
+  matching every *other* mock in that file (all namespace imports) — pre-existing since before
+  `v2`, just never hit until real interactive typing exercised it.
+- Refreshed branding artwork to a new SNES-controller-handheld motif: the app icon, the
+  `.gbsproj` project-file icon, the macOS DMG installer background, the splash-screen logo,
+  and the Windows installer loading GIF.
+- SNES-sized the `snesgbs2` template's backgrounds (14 of 15 were still drawn at Game Boy
+  height) and re-laid out its scenes into a non-overlapping World-editor grid.
+- **Removed the GB-heritage "Custom Palettes" editor entirely** (menu entry, page, per-scene/
+  actor palette pickers, the "Colorize" paint tool, the `palettes`/`paletteIds`/`paletteId`/
+  `tileColors` project fields, `customColorsEnabled` and the four `default*PaletteId(s)`
+  settings, the two runtime palette-swap script events) — it had no purpose on this target,
+  since `snesgfx.js` already extracts every background/sprite's real palette straight from its
+  PNG with no user-editable overlay anywhere in the compile path. Also removed the World
+  editor's scene/sprite preview quantization (`ColorizedImage`, a GB-green-channel recolour
+  pass) that ran every preview through a 4-shade GB heuristic before display — previews now
+  show each PNG's real colours directly, matching what the compiler already builds into the ROM.
+
 ## [2.0.0] - 2026-09-18 - `v2` branch
 
 Rebuilt SNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
