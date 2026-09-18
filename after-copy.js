@@ -13,18 +13,19 @@ function afterCopy(buildPath, electronVersion, platform, arch, callback) {
 
   // Called from packagerConfig in forge.config.js
   // Copies correct build Tools for architecture + dynamically loaded js/json files.
-  // macOS needs two buildTools source folders, not one: the vendored PVSnesLib
-  // SNES toolchain is genuinely arm64-only (built on GitHub's arm64-only macOS
-  // runners), and lives under buildTools/darwin-arm64/pvsneslib, separately
-  // from GBDK's own real x64 binaries under buildTools/darwin-x64/gbdk (see
-  // consts.js's pvsneslibVendorDir for the full story - duplicated here since
-  // this plain Node script, run directly by electron-packager, doesn't go
-  // through the app's own babel/webpack import graph). Both need to land in
-  // the packaged app, each under its own real folder name. Ported from the
-  // equivalent fix on `main`.
+  // The vendored PVSnesLib SNES toolchain is genuinely arm64-only on macOS
+  // (built on GitHub's arm64-only macOS runners), so it lives under
+  // buildTools/darwin-arm64/pvsneslib regardless of the packaged app's own
+  // --arch (x64, cross-packaged - see consts.js's pvsneslibVendorDir for the
+  // full story, duplicated here since this plain Node script, run directly
+  // by electron-packager, doesn't go through the app's own babel/webpack
+  // import graph). v3 (M14) removed the Game Boy engine/toolchain entirely,
+  // including buildTools/darwin-x64/ (which only ever held GBDK's own real
+  // x64 binaries) - so macOS no longer needs a second buildTools source
+  // folder the way it did in the dual-target world.
   const buildToolsDirs =
     platform === "darwin"
-      ? ["/buildTools/darwin-x64", "/buildTools/darwin-arm64"]
+      ? ["/buildTools/darwin-arm64"]
       : ["/buildTools/" + platform + "-" + arch];
   const copyPaths = [
     ...buildToolsDirs,
