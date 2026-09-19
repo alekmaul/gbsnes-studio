@@ -6,6 +6,8 @@ import {
   Background,
   SpriteSheet,
   Music,
+  Font,
+  Emote,
 } from "../../../../src/store/features/entities/entitiesTypes";
 import actions from "../../../../src/store/features/entities/entitiesActions";
 import projectActions, {
@@ -17,6 +19,8 @@ import {
   dummyBackground,
   dummySpriteSheet,
   dummyMusic,
+  dummyFont,
+  dummyEmote,
   dummyActor,
   dummyTrigger,
   dummyCustomEvent,
@@ -1694,4 +1698,140 @@ test("Edits to custom event script should not affect event instance names", () =
 
   const newState = reducer(state, action);
   expect(newState.scenes.entities["scene1"]?.script?.[0]?.args?.__name).toBe("Event Name");
+});
+
+/**************************************************************************
+ * Fonts / Emotes (M5, v4)
+ */
+
+test("Should add new font if loaded while project is open", () => {
+  const state: EntitiesState = {
+    ...initialState,
+  };
+
+  const loadFont: Font = {
+    ...dummyFont,
+    id: "font1",
+    filename: "font1.png",
+  };
+
+  const action = projectActions.loadFont.fulfilled(
+    {
+      data: loadFont,
+    },
+    "randomid",
+    "font1.png"
+  );
+
+  expect(state.fonts.ids.length).toBe(0);
+  const newState = reducer(state, action);
+  expect(newState.fonts.ids.length).toBe(1);
+  expect(newState.fonts.entities["font1"]?.filename).toBe("font1.png");
+});
+
+test("Should remove fonts that are deleted while project is open", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    fonts: {
+      entities: {
+        font1: {
+          ...dummyFont,
+          id: "font1",
+          filename: "font1.png",
+        },
+      },
+      ids: ["font1"],
+    },
+  };
+
+  const action = projectActions.removeFont.fulfilled(
+    {
+      filename: "font1.png",
+      plugin: undefined,
+    },
+    "randomid",
+    "font1.png"
+  );
+
+  expect(state.fonts.ids.length).toBe(1);
+  const newState = reducer(state, action);
+  expect(newState.fonts.ids.length).toBe(0);
+});
+
+test("Should add new emote if loaded while project is open", () => {
+  const state: EntitiesState = {
+    ...initialState,
+  };
+
+  const loadEmote: Emote = {
+    ...dummyEmote,
+    id: "emote1",
+    filename: "emote1.png",
+  };
+
+  const action = projectActions.loadEmote.fulfilled(
+    {
+      data: loadEmote,
+    },
+    "randomid",
+    "emote1.png"
+  );
+
+  expect(state.emotes.ids.length).toBe(0);
+  const newState = reducer(state, action);
+  expect(newState.emotes.ids.length).toBe(1);
+  expect(newState.emotes.entities["emote1"]?.filename).toBe("emote1.png");
+});
+
+test("Should remove emotes that are deleted while project is open", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    emotes: {
+      entities: {
+        emote1: {
+          ...dummyEmote,
+          id: "emote1",
+          filename: "emote1.png",
+        },
+      },
+      ids: ["emote1"],
+    },
+  };
+
+  const action = projectActions.removeEmote.fulfilled(
+    {
+      filename: "emote1.png",
+      plugin: undefined,
+    },
+    "randomid",
+    "emote1.png"
+  );
+
+  expect(state.emotes.ids.length).toBe(1);
+  const newState = reducer(state, action);
+  expect(newState.emotes.ids.length).toBe(0);
+});
+
+test("Should load fonts and emotes via loadProject", () => {
+  const state: EntitiesState = {
+    ...initialState,
+  };
+
+  const loadData: ProjectData = {
+    ...dummyProjectData,
+    fonts: [{ ...dummyFont, id: "font1" }],
+    emotes: [{ ...dummyEmote, id: "emote1" }],
+  };
+
+  const action = projectActions.loadProject.fulfilled(
+    {
+      data: loadData,
+      path: "project.gbsproj",
+    },
+    "randomid",
+    "project.gbsproj"
+  );
+  const newState = reducer(state, action);
+  expect(newState.fonts.ids).toEqual(["font1"]);
+  expect(newState.emotes.ids).toEqual(["emote1"]);
 });

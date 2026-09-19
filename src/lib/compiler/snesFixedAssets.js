@@ -38,15 +38,19 @@ const TOOLS = path.join(
   "snes",
   "tools"
 );
-// Fallback emotes.png for callers that don't pass a project uiAssetDir (the
-// dummy-asset generator, gen-dummy-gfx.js). A real project's own
-// assets/ui/emotes.png (same file the Game Boy target reads, see
-// compileData.js's ensureProjectAsset) takes priority - see buildSpriteSheet().
+// Legacy fallback emotes.png for callers that pass neither a project
+// uiAssetDir nor real Emote entity files (the dummy-asset generator,
+// gen-dummy-gfx.js, and any project not yet using assets/emotes/*.png) -
+// see buildSpriteSheet()'s emoteSources fallback in snesFixedAssets() below.
 const DEFAULT_EMOTES_PNG = path.join(TOOLS, "emotes.png");
 
-// The BG3 UI graphics come from a project's assets/ui/{ascii,frame,cursor}.png
-// (same files the Game Boy target uses). When no project dir is given - the
-// dummy-asset generator (gen-dummy-gfx.js) - fall back to the stock sample's.
+// The BG3 UI graphics come from a project's assets/ui/{ascii,frame,cursor}.png.
+// When no project dir is given - the dummy-asset generator (gen-dummy-gfx.js)
+// - fall back to the stock sample's. Was appData/templates/gbhtml (the GB
+// sample) until v3 removed that template entirely (M15) without updating
+// this fallback - genuinely broken since then, since nothing exercised the
+// no-args call path until M5's tests did. sneshtml is the SNES sample's own
+// equivalent (same 4 files).
 const DEFAULT_UI_DIR = path.join(
   __dirname,
   "..",
@@ -54,7 +58,7 @@ const DEFAULT_UI_DIR = path.join(
   "..",
   "appData",
   "templates",
-  "gbhtml",
+  "sneshtml",
   "assets",
   "ui"
 );
@@ -172,15 +176,21 @@ const lum = ([r, g, b]) => 0.299 * r + 0.587 * g + 0.114 * b;
 // Palette: index 0 is left unused (BG colour 0 is transparent); the image's
 // colours are mapped to 1..3 by luminance (lightest = box interior), a 4th
 // colour snaps to the nearest of those - the stock UI art is 2-4 GB shades.
-const buildUiGfx = async uiDir => {
-  const load = async name => {
-    const px = await getPixels(path.join(uiDir, name));
+// M5 (v4): fontPath overrides where the font glyph grid is read from - a
+// project's own Font entity (assets/fonts/*.png) if it has one, falling
+// back to the legacy uiDir/ascii.png otherwise (see snesFixedAssets() below).
+// frame.png/cursor.png stay fixed in uiDir regardless - they're not entities
+// (yet), and the whole point of a shared palette scan across all three only
+// works when they're all read together here either way.
+const buildUiGfx = async (uiDir, fontPath) => {
+  const load = async filePath => {
+    const px = await getPixels(filePath);
     const [w, h] = px.shape;
     return { px, w, h };
   };
-  const ascii = await load("ascii.png");
-  const frame = await load("frame.png");
-  const cursor = await load("cursor.png");
+  const ascii = await load(fontPath || path.join(uiDir, "ascii.png"));
+  const frame = await load(path.join(uiDir, "frame.png"));
+  const cursor = await load(path.join(uiDir, "cursor.png"));
 
   // collect distinct colours across all three images, with pixel counts -
   // the count is what tells a real content colour apart from a stray
@@ -325,7 +335,18 @@ const SPR = [
   "0000110000110000"
 ];
 
-const buildSpriteSheet = async emotesPath => {
+// M5 (v4): Emote is now a real project entity (assets/emotes/*.png, one
+// 16x16 PNG per emote) instead of one fixed assets/ui/emotes.png sliced into
+// a hardcoded 8-wide grid. `emoteSources` is a list of { path, offsetX }
+// (offsetY is always 0 - every source is 16px tall): a project with real
+// Emote entities passes one entry per entity, offsetX always 0; a project
+// with none yet (not migrated to the new entity folder) falls back to 8
+// entries all pointing at the legacy assets/ui/emotes.png, offsetX = e*16 -
+// same pixels, same slicing, byte-identical output to before this change.
+// Capped at NUM_EMOTES (8) - the OBJ region this sheet builds into is a
+// project-wide fixed 8-slot area (unlike avatars/actor sheets, which are
+// reallocated per scene), a genuine SNES OBJ VRAM budget limit.
+const buildSpriteSheet = async emoteSources => {
   const sheet = new Array(SHEET_TILES * 32).fill(0); // 256 tiles, 8 KB. The
   // actor direction regions (tiles 96-255) stay zero here - populated per-
   // project by compileSnesData.js's placeTiles(), same as the avatar region.
@@ -342,8 +363,6 @@ const buildSpriteSheet = async emotesPath => {
     for (let i = 0; i < 32; i++) sheet[tile * 32 + i] = q[i];
   }
 
-  // emotes.png: 128x16 = 8 emotes of 16x16, first-seen palette (<=16 colours)
-  const pixels = await getPixels(emotesPath);
   const colors = [];
   const seen = new Map();
   const key = (r, g, b, list) => {
@@ -356,34 +375,55 @@ const buildSpriteSheet = async emotesPath => {
     }
     return 0;
   };
-  for (let e = 0; e < NUM_EMOTES; e++) {
+
+  const pixelsByPath = new Map();
+  const loadPixels = async filePath => {
+    if (!pixelsByPath.has(filePath)) {
+      pixelsByPath.set(filePath, await getPixels(filePath));
+    }
+    return pixelsByPath.get(filePath);
+  };
+
+  const numEmotes = Math.min(emoteSources.length, NUM_EMOTES);
+  for (let e = 0; e < numEmotes; e++) {
+    const { path: emotePath, offsetX } = emoteSources[e];
+    // eslint-disable-next-line no-await-in-loop
+    const pixels = await loadPixels(emotePath);
     // emote e -> grid tiles (32+2e), (33+2e), (48+2e), (49+2e)
     const t = [EMOTE_TILE0 + 2 * e, EMOTE_TILE0 + 2 * e + 1, EMOTE_TILE0 + 16 + 2 * e, EMOTE_TILE0 + 17 + 2 * e];
     const q = [
-      quadFromPixels(pixels, e * 16, 0, colors, key),
-      quadFromPixels(pixels, e * 16 + 8, 0, colors, key),
-      quadFromPixels(pixels, e * 16, 8, colors, key),
-      quadFromPixels(pixels, e * 16 + 8, 8, colors, key)
+      quadFromPixels(pixels, offsetX, 0, colors, key),
+      quadFromPixels(pixels, offsetX + 8, 0, colors, key),
+      quadFromPixels(pixels, offsetX, 8, colors, key),
+      quadFromPixels(pixels, offsetX + 8, 8, colors, key)
     ];
     q.forEach((tile, qi) => {
       for (let i = 0; i < 32; i++) sheet[t[qi] * 32 + i] = tile[i];
     });
   }
   colors[0] = [0, 0, 0]; // colour 0 transparent
-  return { sheet, emoteColors: colors };
+  return { sheet, emoteColors: colors, numEmotes };
 };
 
-const snesFixedAssets = async ({ uiAssetDir } = {}) => {
-  // emotes.png is a project asset (assets/ui/emotes.png), same file and same
-  // directory the ascii/frame/cursor UI graphics come from below - not the
-  // fixed appData/src/snes/tools/emotes.png the engine used to always read
-  // regardless of the project. User-found: a project's own emotes.png edits
-  // had no effect on the compiled palette because that file was never read.
-  const emotesPath = uiAssetDir
+const snesFixedAssets = async ({ uiAssetDir, emoteFilenames, fontFilename } = {}) => {
+  // Real Emote entities (assets/emotes/*.png, M5 v4) take priority; a
+  // project with none yet falls back to the legacy fixed
+  // assets/ui/emotes.png 8-wide grid (or the stock tools/emotes.png when no
+  // uiAssetDir is given at all, e.g. gen-dummy-gfx.js) - see buildSpriteSheet.
+  const legacyEmotesPath = uiAssetDir
     ? path.join(uiAssetDir, "emotes.png")
     : DEFAULT_EMOTES_PNG;
-  const { sheet, emoteColors } = await buildSpriteSheet(emotesPath);
-  const ui = await buildUiGfx(uiAssetDir || DEFAULT_UI_DIR);
+  const emoteSources =
+    emoteFilenames && emoteFilenames.length > 0
+      ? emoteFilenames.map(filePath => ({ path: filePath, offsetX: 0 }))
+      : Array.from({ length: NUM_EMOTES }, (_, e) => ({
+          path: legacyEmotesPath,
+          offsetX: e * 16
+        }));
+  const { sheet, emoteColors, numEmotes } = await buildSpriteSheet(
+    emoteSources
+  );
+  const ui = await buildUiGfx(uiAssetDir || DEFAULT_UI_DIR, fontFilename);
   return {
     uiFont: ui.font,
     uiPaletteBytes: ui.palette,
@@ -404,7 +444,11 @@ const snesFixedAssets = async ({ uiAssetDir } = {}) => {
     NUM_UI_GLYPHS,
     UI_FRAME_TILE0,
     UI_CURSOR_TILE,
-    NUM_EMOTES,
+    // The real number of emotes actually built into the sheet (<= the fixed
+    // NUM_EMOTES=8 OBJ region size) - a project with fewer real Emote
+    // entities than the region holds doesn't need to reserve slots for ones
+    // that don't exist.
+    NUM_EMOTES: numEmotes,
     EMOTE_TILE0,
     AVATAR_TILE0,
     AVATAR_SLOT0,

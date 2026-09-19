@@ -117,6 +117,30 @@ export type SpriteSheet = {
   _v: number;
 };
 
+// M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,
+// assets/ui/emotes/*.png), scanned the same way as Background/SpriteSheet.
+// No `mapping` field (unlike GB Studio 3.x's Font) - every font on this
+// target assumes the same fixed 224-glyph 16-wide grid layout
+// (snesFixedAssets.js), since only one font is ever compiled/loaded at a
+// time (no runtime font-switching yet, see EVENTS.md).
+export type Font = {
+  id: string;
+  name: string;
+  filename: string;
+  plugin?: string;
+  inode: string;
+  _v: number;
+};
+
+export type Emote = {
+  id: string;
+  name: string;
+  filename: string;
+  plugin?: string;
+  inode: string;
+  _v: number;
+};
+
 export type Scene = {
   id: string;
   type: string;
@@ -149,6 +173,8 @@ export type ProjectEntitiesData = {
   spriteSheets: SpriteSheet[];
   customEvents: CustomEvent[];
   music: Music[];
+  fonts: Font[];
+  emotes: Emote[];
   variables: Variable[];
 };
 
@@ -160,6 +186,8 @@ export interface EntitiesState {
   spriteSheets: EntityState<SpriteSheet>;
   customEvents: EntityState<CustomEvent>;
   music: EntityState<Music>;
+  fonts: EntityState<Font>;
+  emotes: EntityState<Emote>;
   variables: EntityState<Variable>;
   engineFieldValues: EntityState<EngineFieldValue>;
 }

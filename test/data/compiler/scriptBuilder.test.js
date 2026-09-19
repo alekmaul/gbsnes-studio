@@ -300,6 +300,22 @@ test("Should allow active actor to display emote", () => {
   expect(output).toEqual([cmd(ACTOR_EMOTE), 2]);
 });
 
+test("Should resolve a real Emote entity id to its compiled sheet index", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    emotes: [{ id: "emote-a" }, { id: "emote-b" }, { id: "emote-c" }],
+  });
+  sb.actorEmote("emote-b");
+  expect(output).toEqual([cmd(ACTOR_EMOTE), 1]);
+});
+
+test("Should fall back to a numeric emoteId when no Emote entities exist yet", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, { emotes: [] });
+  sb.actorEmote(5);
+  expect(output).toEqual([cmd(ACTOR_EMOTE), 5]);
+});
+
 test("Should be able to invoke script on active actor", () => {
   const output = [];
   const sb = new ScriptBuilder(output);

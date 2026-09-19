@@ -53,6 +53,8 @@ import {
   Background,
   SpriteSheet,
   Music,
+  Font,
+  Emote,
   Variable,
   CustomEvent,
   ScriptEvent,
@@ -75,6 +77,8 @@ const MIN_SCENE_HEIGHT = 18;
 const inodeToRecentBackground: Dictionary<Background> = {}
 const inodeToRecentSpriteSheet: Dictionary<SpriteSheet> = {}
 const inodeToRecentMusic: Dictionary<Music> = {}
+const inodeToRecentFont: Dictionary<Font> = {}
+const inodeToRecentEmote: Dictionary<Emote> = {}
 
 const matchAsset = (assetA: Asset) => (assetB: Asset) => {
   return assetA.filename === assetB.filename && assetA.plugin === assetB.plugin;
@@ -99,6 +103,12 @@ const customEventsAdapter = createEntityAdapter<CustomEvent>();
 const musicAdapter = createEntityAdapter<Music>({
   sortComparer: sortByFilename,
 });
+const fontsAdapter = createEntityAdapter<Font>({
+  sortComparer: sortByFilename,
+});
+const emotesAdapter = createEntityAdapter<Emote>({
+  sortComparer: sortByFilename,
+});
 const variablesAdapter = createEntityAdapter<Variable>();
 const engineFieldValuesAdapter = createEntityAdapter<EngineFieldValue>();
 
@@ -110,6 +120,8 @@ export const initialState: EntitiesState = {
   spriteSheets: spriteSheetsAdapter.getInitialState(),
   customEvents: customEventsAdapter.getInitialState(),
   music: musicAdapter.getInitialState(),
+  fonts: fontsAdapter.getInitialState(),
+  emotes: emotesAdapter.getInitialState(),
   variables: variablesAdapter.getInitialState(),
   engineFieldValues: engineFieldValuesAdapter.getInitialState(),
 };
@@ -353,6 +365,8 @@ const loadProject: CaseReducer<
   backgroundsAdapter.setAll(state.backgrounds, entities.backgrounds || {});
   spriteSheetsAdapter.setAll(state.spriteSheets, entities.spriteSheets || {});
   musicAdapter.setAll(state.music, entities.music || {});
+  fontsAdapter.setAll(state.fonts, entities.fonts || {});
+  emotesAdapter.setAll(state.emotes, entities.emotes || {});
   customEventsAdapter.setAll(state.customEvents, entities.customEvents || {});
   variablesAdapter.setAll(state.variables, entities.variables || {});
   engineFieldValuesAdapter.setAll(state.engineFieldValues, entities.engineFieldValues || {});
@@ -433,6 +447,82 @@ const removeSprite: CaseReducer<
   if (existingAsset) {
     inodeToRecentSpriteSheet[existingAsset.inode] = clone(existingAsset);
     spriteSheetsAdapter.removeOne(state.spriteSheets, existingAsset.id);
+  }
+};
+
+const loadFont: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    data: Font;
+  }>
+> = (state, action) => {
+  const fonts = localFontSelectors.selectAll(state);
+  const existingAsset = fonts.find(matchAsset(action.payload.data))
+    || inodeToRecentFont[action.payload.data.inode];
+  const existingId = existingAsset?.id;
+
+  if (existingId) {
+    delete inodeToRecentFont[action.payload.data.inode];
+    fontsAdapter.upsertOne(state.fonts, {
+      ...existingAsset,
+      ...action.payload.data,
+      id: existingId,
+    });
+  } else {
+    fontsAdapter.addOne(state.fonts, action.payload.data);
+  }
+};
+
+const removeFont: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    filename: string;
+    plugin: string | undefined;
+  }>
+> = (state, action) => {
+  const fonts = localFontSelectors.selectAll(state);
+  const existingAsset = fonts.find(matchAsset(action.payload));
+  if (existingAsset) {
+    inodeToRecentFont[existingAsset.inode] = clone(existingAsset);
+    fontsAdapter.removeOne(state.fonts, existingAsset.id);
+  }
+};
+
+const loadEmote: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    data: Emote;
+  }>
+> = (state, action) => {
+  const emotes = localEmoteSelectors.selectAll(state);
+  const existingAsset = emotes.find(matchAsset(action.payload.data))
+    || inodeToRecentEmote[action.payload.data.inode];
+  const existingId = existingAsset?.id;
+
+  if (existingId) {
+    delete inodeToRecentEmote[action.payload.data.inode];
+    emotesAdapter.upsertOne(state.emotes, {
+      ...existingAsset,
+      ...action.payload.data,
+      id: existingId,
+    });
+  } else {
+    emotesAdapter.addOne(state.emotes, action.payload.data);
+  }
+};
+
+const removeEmote: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    filename: string;
+    plugin: string | undefined;
+  }>
+> = (state, action) => {
+  const emotes = localEmoteSelectors.selectAll(state);
+  const existingAsset = emotes.find(matchAsset(action.payload));
+  if (existingAsset) {
+    inodeToRecentEmote[existingAsset.inode] = clone(existingAsset);
+    emotesAdapter.removeOne(state.emotes, existingAsset.id);
   }
 };
 
@@ -1886,6 +1976,10 @@ const entitiesSlice = createSlice({
       .addCase(projectActions.removeSprite.fulfilled, removeSprite)
       .addCase(projectActions.loadMusic.fulfilled, loadMusic)
       .addCase(projectActions.removeMusic.fulfilled, removeMusic)
+      .addCase(projectActions.loadFont.fulfilled, loadFont)
+      .addCase(projectActions.removeFont.fulfilled, removeFont)
+      .addCase(projectActions.loadEmote.fulfilled, loadEmote)
+      .addCase(projectActions.removeEmote.fulfilled, removeEmote)
       .addCase(projectActions.reloadAssets, reloadAssets),
 });
 
@@ -1921,6 +2015,12 @@ const localBackgroundSelectors = backgroundsAdapter.getSelectors(
 const localMusicSelectors = musicAdapter.getSelectors(
   (state: EntitiesState) => state.music
 );
+const localFontSelectors = fontsAdapter.getSelectors(
+  (state: EntitiesState) => state.fonts
+);
+const localEmoteSelectors = emotesAdapter.getSelectors(
+  (state: EntitiesState) => state.emotes
+);
 const localCustomEventSelectors = customEventsAdapter.getSelectors(
   (state: EntitiesState) => state.customEvents
 );
@@ -1946,6 +2046,12 @@ export const customEventSelectors = customEventsAdapter.getSelectors(
 );
 export const musicSelectors = musicAdapter.getSelectors(
   (state: RootState) => state.project.present.entities.music
+);
+export const fontSelectors = fontsAdapter.getSelectors(
+  (state: RootState) => state.project.present.entities.fonts
+);
+export const emoteSelectors = emotesAdapter.getSelectors(
+  (state: RootState) => state.project.present.entities.emotes
 );
 export const variableSelectors = variablesAdapter.getSelectors(
   (state: RootState) => state.project.present.entities.variables

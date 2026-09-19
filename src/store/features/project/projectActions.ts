@@ -4,6 +4,8 @@ import {
   Background,
   SpriteSheet,
   Music,
+  Font,
+  Emote,
   Variable,
   Actor,
   Trigger,
@@ -17,6 +19,8 @@ import saveAsProjectData from "../../../lib/project/saveAsProjectData";
 import { loadSpriteData } from "../../../lib/project/loadSpriteData";
 import { loadBackgroundData } from "../../../lib/project/loadBackgroundData";
 import { loadMusicData } from "../../../lib/project/loadMusicData";
+import { loadFontData } from "../../../lib/project/loadFontData";
+import { loadEmoteData } from "../../../lib/project/loadEmoteData";
 import { SettingsState } from "../settings/settingsState";
 import { MetadataState } from "../metadata/metadataState";
 import parseAssetPath from "../../../lib/helpers/path/parseAssetPath";
@@ -35,6 +39,8 @@ export type ProjectData = {
   spriteSheets: SpriteSheet[];
   customEvents: CustomEvent[];
   music: Music[];
+  fonts: Font[];
+  emotes: Emote[];
   variables: Variable[];
   settings: SettingsState;
 };
@@ -186,6 +192,80 @@ const removeMusic = createAsyncThunk<
 });
 
 /**************************************************************************
+ * Fonts
+ */
+
+const loadFont = createAsyncThunk<{ data: Font }, string>(
+  "project/loadFont",
+  async (filename, thunkApi) => {
+    const state = thunkApi.getState() as RootState;
+
+    const projectRoot = state.document && state.document.root;
+    const data = (await loadFontData(projectRoot)(filename)) as
+      | Font
+      | undefined;
+
+    if (!data) {
+      throw new Error("Unable to load font");
+    }
+
+    return {
+      data,
+    };
+  }
+);
+
+const removeFont = createAsyncThunk<
+  { filename: string; plugin: string | undefined },
+  string
+>("project/removeFont", async (filename, thunkApi) => {
+  const state = thunkApi.getState() as RootState;
+  const projectRoot = state.document && state.document.root;
+  const { file, plugin } = parseAssetPath(filename, projectRoot, "fonts");
+  return {
+    filename: file,
+    plugin,
+  };
+});
+
+/**************************************************************************
+ * Emotes
+ */
+
+const loadEmote = createAsyncThunk<{ data: Emote }, string>(
+  "project/loadEmote",
+  async (filename, thunkApi) => {
+    const state = thunkApi.getState() as RootState;
+
+    const projectRoot = state.document && state.document.root;
+    const data = (await loadEmoteData(projectRoot)(filename)) as
+      | Emote
+      | undefined;
+
+    if (!data) {
+      throw new Error("Unable to load emote");
+    }
+
+    return {
+      data,
+    };
+  }
+);
+
+const removeEmote = createAsyncThunk<
+  { filename: string; plugin: string | undefined },
+  string
+>("project/removeEmote", async (filename, thunkApi) => {
+  const state = thunkApi.getState() as RootState;
+  const projectRoot = state.document && state.document.root;
+  const { file, plugin } = parseAssetPath(filename, projectRoot, "emotes");
+  return {
+    filename: file,
+    plugin,
+  };
+});
+
+/**************************************************************************
  * UI
  */
 
@@ -252,6 +332,10 @@ export default {
   removeSprite,
   loadMusic,
   removeMusic,
+  loadFont,
+  removeFont,
+  loadEmote,
+  removeEmote,
   loadUI,
   reloadAssets,
   saveProject,

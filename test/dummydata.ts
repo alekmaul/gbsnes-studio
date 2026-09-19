@@ -3,6 +3,8 @@ import {
   Background,
   SpriteSheet,
   Music,
+  Font,
+  Emote,
   Actor,
   Trigger,
   CustomEvent,
@@ -102,6 +104,22 @@ export const dummyMusic: Music = {
   settings: {},
 };
 
+export const dummyFont: Font = {
+  id: "",
+  name: "",
+  filename: "",
+  inode: "3",
+  _v: 0,
+};
+
+export const dummyEmote: Emote = {
+  id: "",
+  name: "",
+  filename: "",
+  inode: "4",
+  _v: 0,
+};
+
 export const dummyCustomEvent: CustomEvent = {
   id: "",
   name: "",
@@ -123,6 +141,8 @@ export const dummyProjectData: ProjectData = {
   customEvents: [],
   variables: [],
   music: [],
+  fonts: [],
+  emotes: [],
   settings: {
     startSceneId: "",
     startX: 0,

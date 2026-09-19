@@ -42,12 +42,18 @@ watchProject(projectPath, {
   onAddSprite: (f) => store.dispatch(projectActions.loadSprite(f)),
   onAddBackground: (f) => store.dispatch(projectActions.loadBackground(f)),
   onAddMusic: (f) => store.dispatch(projectActions.loadMusic(f)),
+  onAddFont: (f) => store.dispatch(projectActions.loadFont(f)),
+  onAddEmote: (f) => store.dispatch(projectActions.loadEmote(f)),
   onChangedSprite: (f) => store.dispatch(projectActions.loadSprite(f)),
   onChangedBackground: (f) => store.dispatch(projectActions.loadBackground(f)),
   onChangedMusic: (f) => store.dispatch(projectActions.loadMusic(f)),
+  onChangedFont: (f) => store.dispatch(projectActions.loadFont(f)),
+  onChangedEmote: (f) => store.dispatch(projectActions.loadEmote(f)),
   onRemoveSprite: (f) => store.dispatch(projectActions.removeSprite(f)),
   onRemoveBackground: (f) => store.dispatch(projectActions.removeBackground(f)),
   onRemoveMusic: (f) => store.dispatch(projectActions.removeMusic(f)),
+  onRemoveFont: (f) => store.dispatch(projectActions.removeFont(f)),
+  onRemoveEmote: (f) => store.dispatch(projectActions.removeEmote(f)),
   onChangedUI: (f) => store.dispatch(projectActions.loadUI()),
   onChangedEngineSchema: (f) => store.dispatch(engineActions.scanEngine(projectPath))
 });

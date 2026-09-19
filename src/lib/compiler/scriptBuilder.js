@@ -263,10 +263,22 @@ class ScriptBuilder {
     output.push(continueUntilCollision ? 1 : 0);
   };
 
+  // M5 (v4): emoteId is a real Emote entity id, resolved here to its
+  // compiled OBJ-sheet index - the same order compileSnesData.js built the
+  // sheet in (projectData.emotes, unfiltered). Falls back to treating
+  // emoteId as an already-numeric index (0-7) for callers that still pass
+  // one directly (e.g. tests, or a project not yet migrated past the
+  // legacy fixed emotes.png).
   actorEmote = (emoteId = 0) => {
     const output = this.output;
+    const emotes = this.options && this.options.emotes;
+    let index = emoteId;
+    if (emotes) {
+      const foundIndex = emotes.findIndex((e) => e.id === emoteId);
+      index = foundIndex > -1 ? foundIndex : Number(emoteId) || 0;
+    }
     output.push(cmd(ACTOR_EMOTE));
-    output.push(emoteId);
+    output.push(index);
   };
 
   actorInvoke = () => {

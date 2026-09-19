@@ -257,12 +257,32 @@ const compileSnesData = async (
   const sceneAvatars = sceneAvatarIds.map((ids) => ids.map((id) => ({ id })));
   const maxAvatars = Math.max(0, ...sceneAvatarIds.map((a) => a.length));
 
-  // BG3 UI graphics (font + nine-slice frame + menu cursor) and the emote
-  // bubbles come from the project's own assets/ui/*.png, same as the Game Boy
-  // target. Missing files are backfilled from the stock sample by
-  // ensureSnesUiAssets().
+  // BG3 UI graphics (font + nine-slice frame + menu cursor) come from the
+  // project's own assets/ui/*.png, same as the Game Boy target. Missing
+  // files are backfilled from the stock sample by ensureSnesUiAssets().
   const uiAssetDir = await ensureSnesUiAssets(projectRoot, warnings);
-  const fixed = await snesFixedAssets({ uiAssetDir });
+  // M5 (v4): Emote is a real entity (assets/emotes/*.png) - a project with
+  // none yet falls back to the legacy assets/ui/emotes.png grid inside
+  // snesFixedAssets() itself. Order matters: this is the same order
+  // actorEmote() (scriptBuilder.js) resolves an emoteId against.
+  const emotes = projectData.emotes || [];
+  if (emotes.length > 8) {
+    warnings(
+      `Project has ${emotes.length} emotes, but only the first 8 fit the fixed OBJ region - the rest will be blank.`
+    );
+  }
+  const emoteFilenames = emotes.map((emote) =>
+    assetFilename(projectRoot, "emotes", emote)
+  );
+  // M5 (v4): Font is a real entity (assets/fonts/*.png) too, but only one
+  // font is ever compiled in - the project's first Font entity, falling
+  // back to the legacy assets/ui/ascii.png when it has none yet. No
+  // in-game font switching (see EVENTS.md).
+  const fonts = projectData.fonts || [];
+  const fontFilename = fonts[0]
+    ? assetFilename(projectRoot, "fonts", fonts[0])
+    : undefined;
+  const fixed = await snesFixedAssets({ uiAssetDir, emoteFilenames, fontFilename });
 
   // Convert every sprite sheet that's referenced anywhere, once.
   const spriteConv = {};
@@ -504,6 +524,7 @@ const compileSnesData = async (
       avatars: sceneAvatars[sceneIndex] || [],
       backgrounds,
       music: projectData.music || [],
+      emotes,
       strings,
       variables,
       labels: {},
