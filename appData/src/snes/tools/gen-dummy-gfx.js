@@ -318,7 +318,8 @@ const MOVE_AI_RANDOM_WALK = 5;
 //           height, scene_type]
 // M6 (v4): [MAX_PARALLAX_LAYERS*2] banded parallax table follows the [24]
 // sprite-slot table below (compileSnesData.js) - all-zero (no parallax) in
-// both dummy scenes.
+// both dummy scenes. Projectiles follow-up (v4): a further [3] On Player Hit
+// script-index table (collision group 1/2/3) follows the parallax table.
 // actor:   [tile_x, tile_y, dir, movement_type, sprite_idx, script_idx,
 //           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate,
 //           collision_group, hit1_idx, hit2_idx, hit3_idx] (13, v4 Projectiles)
@@ -341,10 +342,17 @@ const dummySprSlots = [].concat(
   [0, 3, 4, 5, 6, 7, 0, 0]
 );
 const dummyParallax = [0, 0, 0, 0, 0, 0]; // MAX_PARALLAX_LAYERS(3) * 2, no parallax
+// [3] On Player Hit script indices (collision group 1/2/3), v4 follow-up -
+// unreachable in this dummy fixture (nothing spawns a projectile), so any
+// valid event_ptrs[] index is a fine placeholder, same reasoning as the
+// per-actor hit1/2/3_idx placeholders below.
+const dummyPlayerHit0 = [EV_SCENE0, EV_SCENE0, EV_SCENE0];
+const dummyPlayerHit1 = [EV_SCENE1, EV_SCENE1, EV_SCENE1];
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
   ...dummyParallax,
+  ...dummyPlayerHit0,
   18, 24, 8, MOVE_AI_RANDOM_WALK, 0, EV_NPC, SPRITE_STATIC, 3, 0, // wandering NPC (off the walk path)
   0, EV_NPC, EV_NPC, EV_NPC, // v4: collision_group 0 (none) - hit1/2/3_idx unreachable, EV_NPC is just a valid placeholder
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
@@ -354,7 +362,7 @@ const scene0 = [
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...scene1Collision];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

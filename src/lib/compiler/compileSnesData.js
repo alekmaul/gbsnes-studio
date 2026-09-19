@@ -611,6 +611,24 @@ const compileSnesData = async (
     compile(scene.script, scene, "scene", sceneIndex, sceneIndex, scene, sceneOut);
     const sceneScriptIdx = pushScript(sceneOut);
 
+    // Projectiles (v4, follow-up): fired when a projectile whose own
+    // collisionGroup is "1"/"2"/"3" hits the *player* - a scene-level script
+    // (not per-actor), matching SceneEditor.tsx's already-existing "On
+    // Player Hit" tab / B's own script_p_hit1/2/3. There's no "player" slot
+    // here (unlike Actor.hit1/2/3Script's sibling "hitPlayer"->"script"
+    // mapping) - a player-owned projectile hitting the player makes no
+    // sense to author against, so collisionGroup "player" just doesn't fire
+    // anything on this path, same as B.
+    const playerHit1ScriptIdx = pushScript(
+      compile(scene.playerHit1Script, scene, "scene", sceneIndex, sceneIndex, scene)
+    );
+    const playerHit2ScriptIdx = pushScript(
+      compile(scene.playerHit2Script, scene, "scene", sceneIndex, sceneIndex, scene)
+    );
+    const playerHit3ScriptIdx = pushScript(
+      compile(scene.playerHit3Script, scene, "scene", sceneIndex, sceneIndex, scene)
+    );
+
     const actorScriptIdx = (scene.actors || []).map((actor, i) =>
       pushScript(compile(actor.script, actor, "actor", i, sceneIndex, scene))
     );
@@ -745,6 +763,11 @@ const compileSnesData = async (
       sceneTypeDec(scene.type), // v2 M5a: genre dispatch byte
       sprSlotBytes, // [24] sprite_type[8], sprite_frames[8], sprite_pal[8]
       parallaxBytes, // [6] M6 (v4): up to 3 {lines, shift} parallax bands
+      // [3] Projectiles (v4, follow-up): On Player Hit script indices,
+      // collision group 1/2/3 - see playerHit1/2/3ScriptIdx above.
+      playerHit1ScriptIdx,
+      playerHit2ScriptIdx,
+      playerHit3ScriptIdx,
       actorEntries,
       triggerEntries,
       collisions

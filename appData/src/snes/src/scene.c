@@ -127,6 +127,10 @@ typedef struct
                              doesn't need to */
 } PROJECTILE;
 static PROJECTILE projectiles[MAX_PROJECTILES];
+/* On Player Hit script indices (collision group 1/2/3), read from the scene
+ * blob by SceneInit right after the parallax table - see that code and
+ * ProjectilesUpdate() below. */
+static u8 player_hit_idx[3];
 /* One OAM id block per pool slot, right after the emote's own (EMOTE_OID is
  * defined further down, next to SceneRenderActors - this just documents the
  * relationship). */
@@ -644,6 +648,15 @@ void SceneInit(void)
         setModeHdmaReset(HDMA_CHANNEL3);
     }
     p += MAX_PARALLAX_LAYERS * 2;
+
+    /* Projectiles (v4, follow-up): [3] On Player Hit script indices
+     * (collision group 1/2/3) - see compileSnesData.js's
+     * playerHit1/2/3ScriptIdx and ProjectilesUpdate()'s own comment for how
+     * they're picked. */
+    player_hit_idx[0] = p[0];
+    player_hit_idx[1] = p[1];
+    player_hit_idx[2] = p[2];
+    p += 3;
 
     /* pick the tilemap size from the BG dimensions (one 2-term test per if) */
     if (bg_map_w[bg_index] > 32) sc_size = SC_64x64;
@@ -2252,14 +2265,36 @@ void ProjectilesUpdate(void)
             continue;
         }
 
-        /* Collision: actors only (1..scene_num_actors), never the player
-         * (index 0) - this schema has no scene-level "on player hit" script
-         * for an enemy projectile to fire (unlike B's script_p_hit1/2/3,
-         * which this fork never ported - see ProjectileSpawn's own note and
-         * EVENTS.md), so a projectile whose mask includes "player" currently
-         * just flies through the player untouched rather than doing nothing
-         * useful with a hit it can't report anywhere. Real player damage
-         * needs that scene-level hook added first, a separate follow-up. */
+        /* Collision vs. the player (index 0, follow-up - the actor loop just
+         * below only ever tested 1..scene_num_actors). Fires the scene's
+         * playerHit1/2/3Script by the *projectile's own* collision_group -
+         * "1"/"2"/"3" (bits 2/4/8) map to player_hit_idx[0/1/2]; "player"
+         * (bit 1) fires nothing (no slot for it - matches B: a player-owned
+         * projectile hitting the player isn't a thing to author against). No
+         * player_iframes/invincibility-window concept here, unlike B's own
+         * actor-walks-into-player path - not needed for this path specifically
+         * since a projectile is always a single, one-shot hit (destroyed
+         * immediately below), never a multi-frame overlap that would need
+         * debouncing the way a standing/wandering hostile actor would. */
+        if (actors[0].enabled && (actors[0].collision_group & projectiles[i].collision_mask))
+        {
+            s16 px = actors[0].x, py = actors[0].y;
+            if (projectiles[i].x + 4 >= px - 8 && projectiles[i].x - 4 <= px + 8 &&
+                projectiles[i].y + 4 >= py - 16 && projectiles[i].y - 4 <= py)
+            {
+                u8 g = projectiles[i].collision_group;
+                if (g == 2 || g == 4 || g == 8)
+                {
+                    u8 idx = player_hit_idx[g == 2 ? 0 : g == 4 ? 1 : 2];
+                    if (!script_ptr) run_script(event_ptrs[idx], 0);
+                }
+                projectiles[i].active = 0;
+                oamSetVisible(oid, OBJ_HIDE);
+            }
+        }
+        if (!projectiles[i].active) continue;
+
+        /* Collision vs. actors (1..scene_num_actors). */
         for (j = 1; j <= scene_num_actors && j < MAX_ACTORS; j++)
         {
             s16 ax, ay;

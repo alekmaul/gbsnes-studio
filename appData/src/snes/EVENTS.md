@@ -219,12 +219,22 @@ previously unused on this target) and `Actor.hit1Script`/`hit2Script`/`hit3Scrip
 compiled into the scene blob and actually wired: a projectile whose own `collisionGroup` is
 "player" fires the hit actor's regular script, "1"/"2"/"3" fire `hit1`/`hit2`/`hit3Script`
 respectively - matching B's own `ActorEditor.tsx` `hitTabs` mapping exactly (its "Player" hit
-tab maps to the plain `script` key too, not a dedicated slot). **Scope boundary, not an
-oversight**: only actors (index 1+) are ever hit-tested, never the player (index 0) - this
-schema has no scene-level "on player hit" script the way B's `script_p_hit1/2/3` does, so an
-enemy's projectile currently flies through the player rather than doing nothing useful with a
-hit it has nowhere to report. Adding that is a separate, later piece if a project actually needs
-enemies that can hurt the player.
+tab maps to the plain `script` key too, not a dedicated slot).
+
+**The player can be hit too (follow-up, same session).** `Scene.playerHit1Script`/
+`playerHit2Script`/`playerHit3Script` - already in the schema and already wired in
+`SceneEditor.tsx`'s "On Player Hit" tab, carried over from GB, previously uncompiled on this
+target - are now compiled into the scene blob (matching B's `script_p_hit1/2/3` exactly:
+collision group 1/2/3 fires `playerHit1`/`playerHit2`/`playerHit3Script` respectively; a
+"player"-group projectile hitting the player fires nothing, there's no slot for it, matching how
+`Actor.hit1/2/3Script` has no such case either). `ProjectilesUpdate()` now tests the player
+(index 0) the same way it tests every other actor. No `player_iframes`/invincibility-window
+concept was ported for this path - not needed for it specifically, since a projectile is always
+destroyed on the hit that triggers the script (a genuinely one-shot event), unlike B's other
+player-hit path (an actor *walking into* the player, which can overlap for many consecutive
+frames and would need real debouncing) - that path (enemy-actor-touches-player, as opposed to
+enemy-*projectile*-touches-player) is not ported and would need that invincibility window built
+first if it ever is.
 
 **No `lifeTime`/`destroyOnHit` fields** - this engine's Launch Projectile wire format (5 bytes,
 fixed since the original port) has no room for either (unlike B's own event). A launched
@@ -248,7 +258,11 @@ double-fire). Weapon Attack: spawn position exactly `actor position + offset` al
 with no collision fired (deliberately mismatched `collisionMask` in the test, to isolate the
 lifetime behaviour from the already-proven collision path). Both pool slots' full raw struct
 layout (including 816-tcc's own alignment padding, empirically confirmed rather than assumed)
-matched every expected field.
+matched every expected field. **Player-hit follow-up, same day**: a second Mesen run (a
+projectile spawned from a non-player actor, aimed at the player) confirmed it correctly hit the
+*player* specifically rather than its own source actor, and the scene's `playerHit1Script`
+(matching `collisionGroup "1"`) fired exactly once, writing its marker variable - the player's
+own position/state stayed stable afterward (no corruption, no re-trigger, no hang).
 
 ## Scenes
 
