@@ -29,6 +29,40 @@ const OPERATOR_LOOKUP = {
   ">=": 6,
 };
 
+// M3 (v4): RPN math-expression evaluator. A separate numbering from
+// OPERATOR_LOOKUP above (that one is baked into the existing IF_VALUE/
+// IF_VALUE_COMPARE opcode handlers) - kept in sync by convention with the
+// RPN_OP_* defines in appData/src/snes/src/rpn.h, the same way the opcode
+// table itself is kept in sync with scriptCommands.js. "u" (unary minus)
+// reuses SUB's code: the tokenizer (src/lib/helpers/rpn/tokenizer.js)
+// already lowers "-x" to "0 x SUB" before this table is ever consulted.
+const RPN_OPERATOR_LOOKUP = {
+  "/": 0,
+  "*": 1,
+  "+": 2,
+  "-": 3,
+  u: 3,
+  "%": 4,
+  "&": 5,
+  "|": 6,
+  "^": 7,
+  "~": 8,
+  "==": 9,
+  "!=": 10,
+  "<": 11,
+  "<=": 12,
+  ">": 13,
+  ">=": 14,
+  "&&": 15,
+  "||": 16,
+};
+
+const RPN_FUNCTION_LOOKUP = {
+  min: 17,
+  max: 18,
+  abs: 19,
+};
+
 const KEY_BITS = {
   left: 0x02,
   right: 0x01,
@@ -121,6 +155,10 @@ export const animSpeedDec = (animSpeed) => {
 }
 
 export const operatorDec = (operator) => OPERATOR_LOOKUP[operator] || 1;
+
+export const rpnOperatorDec = (operator) => RPN_OPERATOR_LOOKUP[operator];
+
+export const rpnFunctionDec = (fn) => RPN_FUNCTION_LOOKUP[fn];
 
 export const spriteTypeDec = (spriteType, numFrames) => {
   if (spriteType === SPRITE_TYPE_STATIC) {

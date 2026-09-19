@@ -98,7 +98,12 @@ import {
   ENGINE_FIELD_UPDATE_VAR,
   ENGINE_FIELD_UPDATE_VAR_WORD,
   ENGINE_FIELD_STORE,
-  ENGINE_FIELD_STORE_WORD
+  ENGINE_FIELD_STORE_WORD,
+  RPN_PUSH_CONST,
+  RPN_PUSH_VAR,
+  RPN_OPERATOR,
+  IF_EXPRESSION,
+  RPN_SET_VARIABLE
 } from "../events/scriptCommands";
 import {
   getActorIndex,
@@ -125,6 +130,8 @@ import {
   actorFramesPerDir,
   spriteTypeDec,
   textSpeedDec,
+  rpnOperatorDec,
+  rpnFunctionDec,
 } from "./helpers";
 import { hi, lo } from "../helpers/8bit";
 import trimlines from "../helpers/trimlines";
@@ -132,6 +139,8 @@ import { SPRITE_TYPE_ACTOR } from "../../consts";
 import { is16BitCType } from "../helpers/engineFields";
 import { nextVariable } from "../helpers/variables";
 import target from "./targets";
+import rpnTokenizer from "../helpers/rpn/tokenizer";
+import rpnShuntingYard from "../helpers/rpn/shuntingYard";
 
 class ScriptBuilder {
   constructor(output, options) {
@@ -971,6 +980,100 @@ class ScriptBuilder {
       ...this.options,
       output,
     });
+  };
+
+  // M3 (v4): RPN math-expression evaluator. tokenizer/shuntingYard are
+  // ported from GB Studio 3.2.1's src/shared/lib/rpn/ - see rpn.h in the
+  // engine tree for why the shunting-yard output is walked into a sequence
+  // of small fixed-arg opcodes instead of one variable-length opcode.
+  _rpnEmit = (expression) => {
+    const output = this.output;
+    const { variables } = this.options;
+    const tokens = rpnTokenizer(expression || "0");
+    const rpnTokens = rpnShuntingYard(tokens);
+    if (rpnTokens.length === 0) {
+      output.push(cmd(RPN_PUSH_CONST));
+      output.push(hi(0));
+      output.push(lo(0));
+      return;
+    }
+    rpnTokens.forEach((token) => {
+      if (token.type === "VAL") {
+        output.push(cmd(RPN_PUSH_CONST));
+        output.push(hi(token.value));
+        output.push(lo(token.value));
+      } else if (token.type === "VAR") {
+        const ref = token.symbol.replace(/\$/g, "");
+        const variableIndex = this.getVariableIndex(ref, variables);
+        output.push(cmd(RPN_PUSH_VAR));
+        output.push(hi(variableIndex));
+        output.push(lo(variableIndex));
+      } else if (token.type === "FUN") {
+        output.push(cmd(RPN_OPERATOR));
+        output.push(rpnFunctionDec(token.function));
+      } else if (token.type === "OP") {
+        output.push(cmd(RPN_OPERATOR));
+        output.push(rpnOperatorDec(token.operator));
+      }
+    });
+  };
+
+  ifExpression = (expression, truePath = [], falsePath = []) => {
+    const output = this.output;
+    this._rpnEmit(expression);
+    output.push(cmd(IF_EXPRESSION));
+    compileConditional(truePath, falsePath, {
+      ...this.options,
+      output,
+    });
+  };
+
+  // No named labels (unlike GB Studio 3.x's _label/_jump) - the backward
+  // jump to loopStart is a concrete output-array index by the time it's
+  // emitted, and the forward "condition false -> skip body" jump is patched
+  // the same way compileConditional() already patches its own placeholders.
+  whileExpression = (expression, truePath = []) => {
+    const output = this.output;
+    const { compileEvents } = this.options;
+    const loopStart = output.length;
+    this._rpnEmit(expression);
+    output.push(cmd(IF_EXPRESSION));
+    const truePtrIndex = output.length;
+    output.push("PTR_PLACEHOLDER1");
+    output.push("PTR_PLACEHOLDER2");
+
+    output.push(cmd(JUMP));
+    const endPtrIndex = output.length;
+    output.push("PTR_PLACEHOLDER1");
+    output.push("PTR_PLACEHOLDER2");
+
+    const truePointer = output.length;
+    output[truePtrIndex] = truePointer >> 8;
+    output[truePtrIndex + 1] = truePointer & 0xff;
+
+    if (typeof truePath === "function") {
+      truePath();
+    } else if (truePath) {
+      compileEvents(truePath);
+    }
+
+    output.push(cmd(JUMP));
+    output.push(loopStart >> 8);
+    output.push(loopStart & 0xff);
+
+    const endPointer = output.length;
+    output[endPtrIndex] = endPointer >> 8;
+    output[endPtrIndex + 1] = endPointer & 0xff;
+  };
+
+  variableEvaluateExpression = (variable, expression) => {
+    const output = this.output;
+    const { variables } = this.options;
+    this._rpnEmit(expression);
+    const variableIndex = this.getVariableIndex(variable, variables);
+    output.push(cmd(RPN_SET_VARIABLE));
+    output.push(hi(variableIndex));
+    output.push(lo(variableIndex));
   };
 
   ifInput = (input, truePath = [], falsePath = []) => {

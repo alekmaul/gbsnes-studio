@@ -21,6 +21,7 @@
 #include "camera.h"
 #include "music.h"
 #include "save.h"
+#include "rpn.h"
 
 /* SWITCH_SCENE fade handshake, owned by game.c */
 extern u8 scene_fade_pending;
@@ -889,6 +890,56 @@ void Script_IfColorSupported_b(void)
     script_continue = 1;
 }
 
+/* -------- M3 (v4): RPN math-expression evaluator, see rpn.h -------- */
+void Script_RpnPushConst_b(void)
+{
+    RpnPush((s16)ARG16(0, 1));
+    ADVANCE();
+    script_continue = 1;
+}
+
+void Script_RpnPushVar_b(void)
+{
+    RpnPush((s16)VAR(ARG16(0, 1)));
+    ADVANCE();
+    script_continue = 1;
+}
+
+void Script_RpnOperator_b(void)
+{
+    RpnApplyOperator(script_cmd_args[0]);
+    ADVANCE();
+    script_continue = 1;
+}
+
+// Consumes (pops) the expression result left on the RPN stack; jumps if
+// strictly positive, otherwise falls through - same shape as Script_IfFlag_b.
+// Matches GB Studio 3.x's own ifExpression (`.GT .ARG0 0`), reused as-is for
+// whileExpression's loop-continue test too (GB Studio uses `.EQ .ARG0 0`
+// there instead - a harmless inconsistency in the reference implementation
+// we don't replicate, since a single shared opcode can only encode one
+// comparison; virtually every real expression is comparison/logical-built
+// and only ever produces 0/1 either way).
+void Script_IfExpression_b(void)
+{
+    if (RpnPop() > 0)
+    {
+        script_ptr = script_start_ptr + ARG16(0, 1);
+    }
+    else
+    {
+        ADVANCE();
+    }
+    script_continue = 1;
+}
+
+void Script_RpnSetVariable_b(void)
+{
+    VAR(ARG16(0, 1)) = (u8)RpnPop();
+    ADVANCE();
+    script_continue = 1;
+}
+
 /*---------------------------------------------------------------------------------
     Dispatch table - index order MUST match src/lib/events/scriptCommands.js
     (and appData/src/gb/src/ScriptRunner.c script_cmds[]).
@@ -1005,7 +1056,12 @@ void Script_IfColorSupported_b(void)
     X(Script_Noop_b, 4) /* 0x6C ENGINE_FIELD_UPDATE_VAR */ \
     X(Script_Noop_b, 6) /* 0x6D ENGINE_FIELD_UPDATE_VAR_WORD */ \
     X(Script_Noop_b, 4) /* 0x6E ENGINE_FIELD_STORE */ \
-    X(Script_Noop_b, 6) /* 0x6F ENGINE_FIELD_STORE_WORD */
+    X(Script_Noop_b, 6) /* 0x6F ENGINE_FIELD_STORE_WORD */ \
+    X(Script_RpnPushConst_b, 2) /* 0x70 RPN_PUSH_CONST */ \
+    X(Script_RpnPushVar_b, 2) /* 0x71 RPN_PUSH_VAR */ \
+    X(Script_RpnOperator_b, 1) /* 0x72 RPN_OPERATOR */ \
+    X(Script_IfExpression_b, 2) /* 0x73 IF_EXPRESSION */ \
+    X(Script_RpnSetVariable_b, 2) /* 0x74 RPN_SET_VARIABLE */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

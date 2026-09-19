@@ -110,6 +110,12 @@ export const ENGINE_FIELD_UPDATE_VAR = "ENGINE_FIELD_UPDATE_VAR";
 export const ENGINE_FIELD_UPDATE_VAR_WORD = "ENGINE_FIELD_UPDATE_VAR_WORD";
 export const ENGINE_FIELD_STORE = "ENGINE_FIELD_STORE";
 export const ENGINE_FIELD_STORE_WORD = "ENGINE_FIELD_STORE_WORD";
+// M3 (v4): RPN math-expression evaluator - see src/lib/helpers/rpn/
+export const RPN_PUSH_CONST = "RPN_PUSH_CONST";
+export const RPN_PUSH_VAR = "RPN_PUSH_VAR";
+export const RPN_OPERATOR = "RPN_OPERATOR";
+export const IF_EXPRESSION = "IF_EXPRESSION";
+export const RPN_SET_VARIABLE = "RPN_SET_VARIABLE";
 
 export const scriptCommands = [
   END,
@@ -224,6 +230,11 @@ export const scriptCommands = [
   ENGINE_FIELD_UPDATE_VAR_WORD,
   ENGINE_FIELD_STORE,
   ENGINE_FIELD_STORE_WORD,
+  RPN_PUSH_CONST,
+  RPN_PUSH_VAR,
+  RPN_OPERATOR,
+  IF_EXPRESSION,
+  RPN_SET_VARIABLE,
 ];
 
 export const commandIndex = key => {

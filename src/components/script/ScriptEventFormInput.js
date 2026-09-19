@@ -19,6 +19,7 @@ import SoundEffectSelect from "../forms/SoundEffectSelect";
 import castEventValue from "../../lib/helpers/castEventValue";
 import OperatorSelect from "../forms/OperatorSelect";
 import ScriptEventFormTextArea from "./ScriptEventFormTextarea";
+import ScriptEventFormMathArea from "./ScriptEventFormMatharea";
 import { DropdownButton } from "../library/Button";
 import { MenuItem } from "../library/Menu";
 import { ConnectIcon, CheckIcon, BlankIcon } from "../library/Icons";
@@ -105,6 +106,17 @@ class ScriptEventFormInput extends Component {
           placeholder={field.placeholder}
           onChange={this.onChange}
           entityId={entityId}
+        />
+      );
+    }
+    if (type === "matharea") {
+      return (
+        <ScriptEventFormMathArea
+          id={id}
+          value={value}
+          rows={field.rows}
+          placeholder={field.placeholder}
+          onChange={this.onChange}
         />
       );
     }
