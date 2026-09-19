@@ -199,6 +199,13 @@ const EV_TRIG_A = 3;
 const EV_TRIG_B = 4;
 const EV_INPUT_HANDLER = 5;
 const EV_TIMER_HANDLER = 6;
+// On Update subsystem (v4): a genuinely empty compiled script (just the
+// EVENT_END terminator) - used as the dummy NPC's update_idx placeholder so
+// SceneInit's auto-launch-on-load correctly no-ops for it (unlike the
+// hit1/2/3_idx placeholders elsewhere in this file, update_idx IS evaluated
+// unconditionally at scene load now, so it can't reuse an arbitrary
+// already-used script index the way those still-unreachable ones do).
+const EV_EMPTY = 7;
 
 // M8 phase 1: MUSIC_PLAY track 0 (no loop flag wired yet) right at boot, so
 // the test track starts automatically - no input choreography needed to hear
@@ -309,6 +316,10 @@ const scriptTimerHandler = [
   0x24, 0x00, 0x0b, 1,  // SET var11 = 1
   0x00                  // END
 ];
+// On Update subsystem (v4): see EV_EMPTY above.
+const scriptEmpty = [
+  0x00                  // END
+];
 
 // MOVEMENT_TYPE (gbs_types.h): 1 none, 2 player, 3 random-face, 5 random-walk
 const MOVE_AI_RANDOM_WALK = 5;
@@ -322,7 +333,7 @@ const MOVE_AI_RANDOM_WALK = 5;
 // script-index table (collision group 1/2/3) follows the parallax table.
 // actor:   [tile_x, tile_y, dir, movement_type, sprite_idx, script_idx,
 //           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate,
-//           collision_group, hit1_idx, hit2_idx, hit3_idx] (13, v4 Projectiles)
+//           collision_group, hit1_idx, hit2_idx, hit3_idx, update_idx] (14, v4)
 // trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
 // then the collision bitmap: ceil(width*height/8) bytes
 //
@@ -355,6 +366,7 @@ const scene0 = [
   ...dummyPlayerHit0,
   18, 24, 8, MOVE_AI_RANDOM_WALK, 0, EV_NPC, SPRITE_STATIC, 3, 0, // wandering NPC (off the walk path)
   0, EV_NPC, EV_NPC, EV_NPC, // v4: collision_group 0 (none) - hit1/2/3_idx unreachable, EV_NPC is just a valid placeholder
+  EV_EMPTY, // On Update subsystem (v4): no update script authored - see EV_EMPTY above
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
   50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
   ...collision
@@ -602,10 +614,12 @@ ${cArray("script_trig_a", scriptTrigA)}
 ${cArray("script_trig_b", scriptTrigB)}
 ${cArray("script_input_handler", scriptInputHandler)}
 ${cArray("script_timer_handler", scriptTimerHandler)}
+${cArray("script_empty", scriptEmpty)}
 const BANK_PTR event_ptrs[] = {
     { script_scene0 }, { script_npc }, { script_scene1 },
     { script_trig_a }, { script_trig_b },
-    { script_input_handler }, { script_timer_handler }
+    { script_input_handler }, { script_timer_handler },
+    { script_empty }
 };
 
 ${uiStrings.map((s, i) => cArray(`string_${i}`, strBytes(s))).join("\n")}

@@ -463,6 +463,7 @@
   "EVENT_PLAYER_BOUNCE": "Actor: Player Bounce",
   "EVENT_WEAPON_ATTACK": "Item: Attack",
   "EVENT_ACTOR_STOP_UPDATE": "Actor: Stop \"On Update\" Script",
+  "EVENT_ACTOR_START_UPDATE": "Actor: Start \"On Update\" Script",
   "EVENT_ACTOR_SET_ANIMATE": "Actor: Set Animate While Stationary",
   "EVENT_IF_COLOR_SUPPORTED": "If Device Supports Color",
   "EVENT_FADE_SETTINGS": "Fade: Change Settings",

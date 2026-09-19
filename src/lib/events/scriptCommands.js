@@ -120,6 +120,9 @@ export const RPN_SET_VARIABLE = "RPN_SET_VARIABLE";
 export const IF_CURRENT_SCENE_IS = "IF_CURRENT_SCENE_IS";
 export const ACTOR_ACTIVATE = "ACTOR_ACTIVATE";
 export const ACTOR_DEACTIVATE = "ACTOR_DEACTIVATE";
+// v4: On Update subsystem - the sibling of the already-existing
+// ACTOR_STOP_UPDATE (which had no counterpart to start anything until now).
+export const ACTOR_START_UPDATE = "ACTOR_START_UPDATE";
 
 export const scriptCommands = [
   END,
@@ -242,6 +245,7 @@ export const scriptCommands = [
   IF_CURRENT_SCENE_IS,
   ACTOR_ACTIVATE,
   ACTOR_DEACTIVATE,
+  ACTOR_START_UPDATE,
 ];
 
 export const commandIndex = key => {

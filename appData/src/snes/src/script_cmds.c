@@ -22,6 +22,7 @@
 #include "music.h"
 #include "save.h"
 #include "rpn.h"
+#include "update_script.h"
 
 /* SWITCH_SCENE fade handshake, owned by game.c */
 extern u8 scene_fade_pending;
@@ -961,6 +962,17 @@ void Script_ActorSetAnimSpeed_b(void)   { actors[script_actor].anim_speed = scri
 // subsystem (another M16 opcode-audit mislabel, same class as
 // IF_ACTOR_RELATIVE_TO_ACTOR above).
 void Script_ActorSetAnimate_b(void)     { actors[script_actor].animate = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
+
+// ACTOR_START_UPDATE / ACTOR_STOP_UPDATE (v4): the real On Update subsystem
+// - see update_script.h for the full design note (a small fixed pool of
+// saved VM states independent of the foreground script_ptr, since this
+// engine has no real multi-threaded VM to give each actor a genuine
+// concurrent thread like GB Studio 3.x's GBVM does). Start is idempotent
+// (a no-op if already running); Stop just frees the actor's pool slot if
+// it has one.
+void Script_ActorStartUpdate_b(void) { ActorStartUpdate(script_actor); ADVANCE(); script_continue = 1; }
+void Script_ActorStopUpdate_b(void)  { ActorStopUpdate(script_actor);  ADVANCE(); script_continue = 1; }
+
 // args grew by one in v2 (2.0.0-beta5): a "fast-forward while A/B held" flag
 // appended after in/out/draw speed - consumed by ADVANCE()'s table-driven
 // length but not implemented (this engine's UI has no fast-forward path yet).
@@ -1091,20 +1103,23 @@ void Script_IfCurrentSceneIs_b(void)
     script_continue = 1;
 }
 
-// M4 (v4): scoped-down ACTOR_ACTIVATE/ACTOR_DEACTIVATE - toggles the new
-// `active` flag only (see gbs_types.h), gating AI/movement/collision/
-// interaction (npc_blocking, SceneTryInteract, actor_at_tile, SceneUpdateAi
-// in scene.c). Independent of `enabled` (ACTOR_SHOW/HIDE, visibility only).
-// Unlike GB Studio 3.x, this does NOT re-launch or terminate a persistent
-// per-actor "On Update" script - that subsystem isn't ported on this engine
-// yet (see EVENTS.md). The player (script_actor 0) can never be deactivated,
-// matching the GB Studio 3.x engine's own `if (actor == &PLAYER) return;`
-// guard. Named *Flag*_b - Script_ActorActivate_b (0x08, ACTOR_SET_ACTIVE) is
-// an unrelated, pre-existing "select current actor index" opcode; the name
+// M4 (v4): ACTOR_ACTIVATE/ACTOR_DEACTIVATE - toggles the new `active` flag
+// (see gbs_types.h), gating AI/movement/collision/interaction (npc_blocking,
+// SceneTryInteract, actor_at_tile, SceneUpdateAi in scene.c). Independent of
+// `enabled` (ACTOR_SHOW/HIDE, visibility only). v4 follow-up: now also
+// re-launches/terminates the actor's persistent "On Update" script exactly
+// like GB Studio 3.x's real activate_actor()/deactivate_actor() do -
+// ActorStartUpdate()/ActorStopUpdate() (update_script.c) are both no-ops if
+// the actor has no update script, so this is safe to call unconditionally.
+// The player (script_actor 0) can never be deactivated, matching the GB
+// Studio 3.x engine's own `if (actor == &PLAYER) return;` guard. Named
+// *Flag*_b - Script_ActorActivate_b (0x08, ACTOR_SET_ACTIVE) is an
+// unrelated, pre-existing "select current actor index" opcode; the name
 // collision is coincidental, not a semantic relationship.
 void Script_ActorActivateFlag_b(void)
 {
     actors[script_actor].active = 1;
+    ActorStartUpdate(script_actor);
     ADVANCE();
     script_continue = 1;
 }
@@ -1114,6 +1129,7 @@ void Script_ActorDeactivateFlag_b(void)
     if (script_actor != 0)
     {
         actors[script_actor].active = 0;
+        ActorStopUpdate(script_actor);
     }
     ADVANCE();
     script_continue = 1;
@@ -1227,7 +1243,7 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_Noop_b, 3) /* 0x64 PALETTE_SET_BACKGROUND - full colour, v2 M6 */ \
     X(Script_Noop_b, 2) /* 0x65 PALETTE_SET_ACTOR - full colour, v2 M6 */ \
     X(Script_Noop_b, 2) /* 0x66 PALETTE_SET_UI - full colour, v2 M6 */ \
-    X(Script_Noop_b, 0) /* 0x67 ACTOR_STOP_UPDATE - stops the persistent per-actor On Update script - genuinely blocked, see appData/src/snes/README.md */ \
+    X(Script_ActorStopUpdate_b, 0) /* 0x67 ACTOR_STOP_UPDATE - v4, real On Update subsystem, see update_script.h */ \
     X(Script_ActorSetAnimate_b, 1) /* 0x68 ACTOR_SET_ANIMATE - v4, plain field setter, not On Update */ \
     X(Script_IfColorSupported_b, 2) /* 0x69 IF_COLOR_SUPPORTED */ \
     X(Script_Noop_b, 3) /* 0x6A ENGINE_FIELD_UPDATE - runtime engine-field writes, as needed per genre */ \
@@ -1243,7 +1259,8 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_RpnSetVariable_b, 2) /* 0x74 RPN_SET_VARIABLE */ \
     X(Script_IfCurrentSceneIs_b, 4) /* 0x75 IF_CURRENT_SCENE_IS */ \
     X(Script_ActorActivateFlag_b, 0) /* 0x76 ACTOR_ACTIVATE */ \
-    X(Script_ActorDeactivateFlag_b, 0) /* 0x77 ACTOR_DEACTIVATE */
+    X(Script_ActorDeactivateFlag_b, 0) /* 0x77 ACTOR_DEACTIVATE */ \
+    X(Script_ActorStartUpdate_b, 0) /* 0x78 ACTOR_START_UPDATE - v4, real On Update subsystem, see update_script.h */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

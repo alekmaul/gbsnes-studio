@@ -666,6 +666,15 @@ const compileSnesData = async (
     const hit3ScriptIdx = (scene.actors || []).map((actor, i) =>
       pushScript(compile(actor.hit3Script, actor, "actor", i, sceneIndex, scene))
     );
+    // On Update subsystem (v4): Actor.updateScript, the "On Update" tab
+    // ActorEditor.tsx already had wired up (schema field pre-existing,
+    // carried over from GB - only the SNES compiler/engine side was
+    // missing). Always compiled, same as every other actor script slot -
+    // update_script.c's ActorStartUpdate() checks for a real (non-empty)
+    // compiled script at launch time, not here.
+    const updateScriptIdx = (scene.actors || []).map((actor, i) =>
+      pushScript(compile(actor.updateScript, actor, "actor", i, sceneIndex, scene))
+    );
 
     // Collision bitmap the C engine reads: 1 bit per tile, packed LSB-first,
     // ceil(w*h/8) bytes - col_solid() in scene.c does
@@ -714,7 +723,9 @@ const compileSnesData = async (
         collisionGroupDec(actor.collisionGroup),
         hit1ScriptIdx[i],
         hit2ScriptIdx[i],
-        hit3ScriptIdx[i]
+        hit3ScriptIdx[i],
+        // On Update subsystem (v4): see updateScriptIdx above.
+        updateScriptIdx[i]
       );
     });
 

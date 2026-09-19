@@ -19,6 +19,7 @@
 #include "states.h"
 #include "parallax.h"
 #include "camera.h"
+#include "update_script.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
@@ -748,15 +749,37 @@ void SceneInit(void)
         actors[i].hit1_idx = p[10];
         actors[i].hit2_idx = p[11];
         actors[i].hit3_idx = p[12];
-        p += 13;
+        /* On Update subsystem (v4): [13]=update_idx. update_ctx is runtime-
+         * only (which UPDATE_CTX pool slot owns this actor, or
+         * UPDATE_CTX_NONE) - reset here so a previous scene's slot index
+         * left over in this ACTOR struct entry (actors[] isn't cleared
+         * between scenes) never gets misread as "already running"; the
+         * actual pool reset + auto-launch happens in the loop below, once
+         * every actor's update_idx is known. */
+        actors[i].update_idx = p[13];
+        actors[i].update_ctx = UPDATE_CTX_NONE;
+        p += 14;
     }
     for (; i < MAX_ACTORS; i++)
     {
         actors[i].enabled = 0;
         actors[i].active = 0;
+        actors[i].update_ctx = UPDATE_CTX_NONE;
         /* Hide the unused OAM slots once here - SceneRenderActors only walks
          * 0..scene_num_actors every frame, so it never touches these again. */
         oamSetVisible((u16)i << 2, OBJ_HIDE);
+    }
+
+    /* On Update subsystem (v4): fresh pool for this scene (a previous
+     * scene's contexts point at bytecode addresses that are meaningless
+     * here), then auto-launch every scene-resident actor's own update
+     * script (mirrors GB Studio 3.x's real activate_actor(), called for
+     * every scene actor on load) - a no-op per actor if its compiled
+     * script is empty or the pool is already full (see update_script.c). */
+    UpdateScriptsReset();
+    for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
+    {
+        ActorStartUpdate(i);
     }
 
     /* Projectiles (v4): a fresh scene starts with none in flight - clear the
@@ -2556,4 +2579,5 @@ void SceneUpdate(void)
     SceneRenderActors();
     ProjectilesUpdate();
     PlayerContactUpdate();
+    UpdateScriptsProcess();
 }

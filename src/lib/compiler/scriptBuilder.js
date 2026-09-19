@@ -106,7 +106,8 @@ import {
   RPN_SET_VARIABLE,
   IF_CURRENT_SCENE_IS,
   ACTOR_ACTIVATE,
-  ACTOR_DEACTIVATE
+  ACTOR_DEACTIVATE,
+  ACTOR_START_UPDATE
 } from "../events/scriptCommands";
 import {
   getActorIndex,
@@ -293,15 +294,26 @@ class ScriptBuilder {
     output.push(cmd(ACTOR_HIDE));
   };
 
+  // v4: the real On Update subsystem (update_script.h/.c) - frees the
+  // actor's small-pool background-script slot, if it has one.
   actorStopUpdate = () => {
     const output = this.output;
     output.push(cmd(ACTOR_STOP_UPDATE));
   };
 
-  // M4 (v4). Scoped-down: toggles AI/movement/collision/interaction only
-  // (the `active` flag, gbs_types.h) - not tied to a persistent per-actor
-  // "On Update" script the way GB Studio 3.x's real Activate/Deactivate is,
-  // since that subsystem isn't ported on this engine yet.
+  // v4: (re)launches the actor's Actor.updateScript from the top via the
+  // same pool. A no-op if it's already running, has no compiled script, or
+  // the pool is full (ActorStartUpdate, update_script.c).
+  actorStartUpdate = () => {
+    const output = this.output;
+    output.push(cmd(ACTOR_START_UPDATE));
+  };
+
+  // M4 (v4), v4 follow-up: toggles AI/movement/collision/interaction (the
+  // `active` flag, gbs_types.h) and now also re-launches/terminates the
+  // actor's persistent "On Update" script, matching GB Studio 3.x's real
+  // activate_actor()/deactivate_actor() - see Script_ActorActivateFlag_b/
+  // Script_ActorDeactivateFlag_b (script_cmds.c).
   actorActivate = () => {
     const output = this.output;
     output.push(cmd(ACTOR_ACTIVATE));

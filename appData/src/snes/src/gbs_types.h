@@ -90,6 +90,16 @@ typedef struct
     u8 hit1_idx;
     u8 hit2_idx;
     u8 hit3_idx;
+    /* On Update subsystem (v4). update_idx is an event_ptrs[] index for this
+     * actor's Actor.updateScript (like hit1/2/3_idx, always compiled even
+     * empty - the "is it really empty" check is 0xFF or the compiled-script
+     * empty check, done at launch time, not pre-filtered here). update_ctx
+     * is which UPDATE_CTX pool slot (update_script.h) currently owns this
+     * actor's persistent script, or UPDATE_CTX_NONE if it isn't running -
+     * runtime-only, never compiled. See update_script.h for why this needs
+     * its own saved VM state instead of just reusing script_ptr. */
+    u8 update_idx;
+    u8 update_ctx;
 } ACTOR;
 
 typedef struct

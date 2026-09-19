@@ -62,7 +62,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Event | SNES | Notes |
 | --- | --- | --- |
 | Show Actor, Hide Actor | ✅ | |
-| Activate Actor, Deactivate Actor | ⚠️ | M4 (v4), scoped down. Toggles a new `active` flag (independent of `enabled`/Show-Hide) gating AI, movement, collision and interaction — `npc_blocking`, `SceneTryInteract`, `actor_at_tile`, `SceneUpdateAi` in `scene.c` all skip an inactive actor. Unlike GB Studio 3.x, this does **not** re-launch or terminate a persistent per-actor "On Update" script - that subsystem isn't ported on this engine (see "Not yet implemented" below), so Deactivate is closer to "freeze in place, can't be walked into or talked to" than B's full activity teardown. The player can never be deactivated (same guard as B's `if (actor == &PLAYER) return;`). Rendering and animation cycling are unaffected — a deactivated-but-shown actor still stands there and animates. |
+| Activate Actor, Deactivate Actor | ✅ | M4 (v4). Toggles a new `active` flag (independent of `enabled`/Show-Hide) gating AI, movement, collision and interaction — `npc_blocking`, `SceneTryInteract`, `actor_at_tile`, `SceneUpdateAi` in `scene.c` all skip an inactive actor. v4 follow-up: now also re-launches/terminates the actor's persistent "On Update" script (see its own section below), matching GB Studio 3.x's real `activate_actor()`/`deactivate_actor()`. The player can never be deactivated (same guard as B's `if (actor == &PLAYER) return;`). Rendering and animation cycling are unaffected — a deactivated-but-shown actor still stands there and animates. |
 | Show All Sprites, Hide All Sprites | ✅ | |
 | Actor animation | ✅ | A 6-frame actor sheet walk-cycles (2 poses per direction) while moving. An "animated" sheet with 2/4/5/6 frames auto-cycles all of them (a duck, a torch) when "Animate Frames" is ticked. 3-frame sheets are direction-only (no cycle); 1-frame sheets are static. |
 | Actor Emote | ✅ | 16×16 bubble on OBJ palette 1. Emote is a real project entity as of M5 (v4) - `assets/emotes/*.png`, one 16×16 PNG per emote, up to 8 (the fixed project-wide OBJ region this builds into - a genuine SNES OBJ VRAM budget, not per-scene like actor sheets/avatars). A project with none yet falls back to the legacy fixed `assets/ui/emotes.png` 8-wide grid; an already-saved numeric `emoteId` (from before this entity existed) still resolves correctly as long as no real Emote entities have since been added (mixing old numeric refs with new entities after the fact isn't handled - a documented, narrow gap, not silently papered over). |
@@ -366,12 +366,77 @@ not silent holes; every one has a real table row, just no runtime behaviour yet.
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Actor: Stop Update Script | ➖ | Genuinely needs the `On Update` per-actor persistent-script subsystem (see `appData/src/snes/README.md`) - there's nothing to stop until that exists. |
 | Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist and are edited from Settings, but a script can't write one back at runtime yet. |
 
 **Launch Projectile / Weapon: Attack / Player: Bounce shipped (v4, real Projectiles subsystem)** -
-see their own section below. All 3 were listed here through M16; they're the first opcode-audit
-gaps this doc has actually closed rather than just documented.
+see their own section below. **Actor: Start/Stop Update Script shipped (v4, real On Update
+subsystem)** - see its own section below. All 4 were listed here through M16; they're the opcode-
+audit gaps this doc has actually closed rather than just documented.
+
+## On Update (v4, `appData/src/snes/src/update_script.c`)
+
+| Event | SNES | Notes |
+| --- | --- | --- |
+| Actor: Start "On Update" Script, Actor: Stop "On Update" Script | ⚠️ | Real, but a scoped-down design, not a literal port - see below. |
+
+`Actor.updateScript` (the "On Update" tab `ActorEditor.tsx` already had, carried over from GB -
+only the SNES compiler/engine side was missing) is a persistent, per-actor background script.
+GB Studio 3.x's real engine runs it as a genuine concurrent GBVM thread (up to 16 script
+contexts, round-robin scheduled every frame, independent of whatever the foreground script is
+doing) - this engine has exactly one bytecode VM (`script_ptr` and friends in
+`script_runner.c`), so a literal port would mean rewriting the VM core into a real multi-context
+scheduler, the same class of change as adopting GBVM itself (excluded from this whole roadmap).
+
+Scoped design instead: a small fixed pool (`MAX_UPDATE_CONTEXTS = 4`) of saved VM states
+(pointer/call-stack/actor/wait-timer), each **independent of the foreground `script_ptr`** -
+critically, not the same global `SceneHandleInput()` checks to decide whether the player can
+move or interact. `UpdateScriptsProcess()` (called once per frame from `SceneUpdate`) gives
+every active context a turn by swapping its saved state into the shared globals the opcode
+dispatch table already operates on, letting `ScriptRunnerUpdate()` run its natural burst, then
+saving the (possibly still mid-`Wait`) state back out - the foreground's own live state is saved
+before the first swap and restored after the last, so none of this is ever visible to, or
+blocked by, the foreground script.
+
+**A real, non-obvious risk found and fixed before writing any of this**: a first design
+("`run_script()` the update script whenever the shared `script_ptr` happens to be idle, sharing
+the foreground's own state") was proposed, user-approved, and then found to be broken on closer
+inspection *before implementation* - GB Studio's own idiomatic authoring pattern for an ambient
+On Update script is `Loop Forever { Wait N; ...}`, which never naturally terminates. Sharing
+`script_ptr` with the foreground means that loop would occupy it **permanently** once started -
+and `SceneHandleInput()` (player movement/A-press) already refuses to run at all while
+`script_ptr` is non-zero (existing, intentional behaviour, e.g. during a dialogue). So the naive
+design would have **permanently frozen the player** the moment any actor's On Update script
+started - not a reduced-richness simplification, an outright regression on the most common
+authoring pattern the feature exists for. Flagged to the user before implementing (a second
+`AskUserQuestion` round, after the first had already approved the simpler design); user approved
+the corrected, separate-context design instead.
+
+Real, documented limitations of this scoped version vs GB Studio 3.x (see
+`update_script.h`'s own design note for the full detail):
+- Only `MAX_UPDATE_CONTEXTS` (4) actors can have a running update script at once *per scene* - a
+  small fixed cap, same class as `SPRITE_SLOTS`/`MAX_PROJECTILES`/the 4 timer contexts elsewhere
+  in this engine. A scene needing more just doesn't run the extras' update scripts (silent, like
+  every other pool-exhaustion cap in this engine).
+- An update script's own blocking opcodes only get a private `Wait` timer - `Camera Shake`/
+  `Await Input` still read/write the *foreground's* shared `shake_time`/`await_input`, so using
+  either inside an On Update script has undefined/shared behaviour. Not a realistic authoring
+  pattern for a background ambient script, so not solved here.
+- Turns are round-robined one context at a time per frame in pool-slot order, not truly
+  simultaneous - fine for the intended use (ambient/idle behaviour, simple per-actor AI), not a
+  general-purpose thread.
+- Auto-launch matches GB Studio 3.x's real `activate_actor()` (every scene-resident actor's
+  update script starts automatically on scene load; Activate/Deactivate Actor re-launch/
+  terminate it), but a naturally-*completed* update script does **not** auto-relaunch on its own
+  (matches B) - `Loop Forever` is how an author keeps one running, same as on B.
+
+**Verified**: `scriptBuilder.test.js` unchanged pattern reused for `actorStopUpdate`; full
+toolchain build (816-tcc/816-opt/wla-65816/wlalink) compiles and links `update_script.c`/
+`script_cmds.c`/`scene.c` cleanly. **Real Mesen run** (a throwaway fixture actor with
+`updateScript = [Wait 0.2s, Inc var0] × 3`, no d-pad input needed): `var0` read back `0 → 1 → 2
+→ 3` across the run, proving the saved context correctly resumes across many separate frames
+(pointer/call-stack/wait-timer save-restore is correct); the **foreground** `script_ptr` read
+`0,0,0` on every single sampled frame throughout, confirming the core fix - the update script's
+execution never touches the global that would otherwise freeze the player.
 
 **Actor: Set Sprite Sheet, If Actor Relative to Actor, Actor: Set Animate shipped (v4).** All 3
 were listed here through this point as needing the `On Update` per-actor script port - re-checked
