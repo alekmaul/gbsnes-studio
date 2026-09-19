@@ -31,9 +31,11 @@ const buildGame = createAction(
 
 const deleteBuildCache = createAction("buildGame/deleteCache");
 const ejectEngine = createAction("buildGame/ejectEngine");
+const exportProjectData = createAction("buildGame/exportProjectData");
 
 export default {
   buildGame,
   deleteBuildCache,
   ejectEngine,
+  exportProjectData,
 };

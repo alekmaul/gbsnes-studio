@@ -159,6 +159,69 @@ const buildGameMiddleware: Middleware<{}, RootState> = (store) => (
       remote.shell.openItem(outputDir);
     });
 
+  } else if (actions.exportProjectData.match(action)) {
+    const state = store.getState();
+    const dispatch = store.dispatch.bind(store);
+
+    if (state.console.status === "running") {
+      // Stop build if already building
+      return;
+    }
+
+    dispatch(consoleActions.startConsole());
+
+    try {
+      const projectRoot = state.document && state.document.root;
+      const project = denormalizeProject(state.project.present);
+      const outputRoot = Path.normalize(`${getTmp()}/${buildUUID}`);
+
+      await rmdir(outputRoot);
+
+      const { buildProjectData } = await import(
+        "../../../lib/compiler/buildProject"
+      );
+
+      await buildProjectData(project, {
+        projectRoot,
+        outputRoot,
+        progress: (message) => {
+          if (
+            message !== "'" &&
+            message.indexOf("unknown or unsupported #pragma") === -1
+          ) {
+            dispatch(consoleActions.stdOut(message));
+          }
+        },
+        warnings: (message) => {
+          dispatch(consoleActions.stdErr(message));
+        },
+      });
+
+      const exportRoot = `${projectRoot}/build/src`;
+      await copy(`${outputRoot}/src/data`, `${exportRoot}/src/data`);
+      await copy(`${outputRoot}/src/assets.h`, `${exportRoot}/src/assets.h`);
+      await copy(`${outputRoot}/src/assets.c`, `${exportRoot}/src/assets.c`);
+
+      dispatch(consoleActions.stdOut("-"));
+      dispatch(
+        consoleActions.stdOut(
+          `Success! Data is ready at ${Path.normalize(exportRoot)}`
+        )
+      );
+      dispatch(consoleActions.completeConsole());
+
+      remote.shell.openItem(exportRoot);
+    } catch (e) {
+      if (typeof e === "string") {
+        dispatch(navigationActions.setSection("build"));
+        dispatch(consoleActions.stdErr(e));
+      } else {
+        dispatch(navigationActions.setSection("build"));
+        dispatch(consoleActions.stdErr((e as Error).toString()));
+      }
+      dispatch(consoleActions.completeConsole());
+      throw e;
+    }
   }
 
   return next(action);

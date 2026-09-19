@@ -527,6 +527,7 @@
   "MENU_ADVANCED": "Advanced",
   "MENU_EJECT_ENGINE": "Eject Engine",
   "MENU_EJECT_PROJECT_BUILD": "Export Project Source",
+  "MENU_EJECT_PROJECT_DATA": "Export Project Data",
   "MENU_PASTE_IN_PLACE": "Paste in Place",
   "MENU_PREFERENCES": "Preferences...",
   "MENU_SHOW_NAVIGATOR": "Show Navigator",

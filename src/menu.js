@@ -144,6 +144,12 @@ const buildMenu = async (plugins = []) => {
                 notifyListeners("ejectProject");
               },
             },
+            {
+              label: l10n("MENU_EJECT_PROJECT_DATA"),
+              click() {
+                notifyListeners("exportProjectData");
+              },
+            },
           ],
         },
       ],
@@ -497,6 +503,7 @@ const listeners = {
   build: [],
   ejectEngine: [],
   ejectProject: [],
+  exportProjectData: [],
   pasteInPlace: [],
   preferences: []
 };

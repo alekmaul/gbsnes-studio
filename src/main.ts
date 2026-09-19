@@ -474,6 +474,10 @@ menu.on("ejectProject", () => {
   mainWindow && mainWindow.webContents.send("build", "rom", true);
 });
 
+menu.on("exportProjectData", () => {
+  mainWindow && mainWindow.webContents.send("exportProjectData");
+});
+
 menu.on("pasteInPlace", () => {
   mainWindow && mainWindow.webContents.send("paste-in-place");
 });

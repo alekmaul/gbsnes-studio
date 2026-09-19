@@ -44,14 +44,14 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
   await fs.writeFile(`${outputRoot}/build/web/index.html`, html);
 };
 
-// Eject the appData/src/snes engine, compile the project's scenes / scripts /
-// strings / backgrounds into src/assets.{c,h} + src/data/* (M7), rebuild the
-// snesmod soundbank from the project's .mod music (M8 phase 2), then build
-// the ROM (M8 phase 1). M12: also exports a "web" build via buildWebPlayer().
-const buildProject = async (
+// Eject the appData/src/snes engine and compile the project's scenes /
+// scripts / strings / backgrounds into src/assets.{c,h} + src/data/* (M7).
+// This is the "project data" half of a build - no soundbank, no ROM
+// assembly, no toolchain required - reused as-is by both a full buildProject()
+// and the standalone "Export Project Data" menu action (which stops here).
+const buildProjectData = async (
   data,
   {
-    buildType = "rom",
     projectRoot = "/tmp",
     outputRoot = "/tmp/testing",
     progress = (_msg) => {},
@@ -80,6 +80,22 @@ const buildProject = async (
   for (const [name, content] of Object.entries(snesData.assetsData || {})) {
     await fs.writeFile(`${outputRoot}/src/data/${name}`, content);
   }
+};
+
+// Full build: project data (above), then rebuild the snesmod soundbank from
+// the project's .mod music (M8 phase 2), then build the ROM (M8 phase 1).
+// M12: also exports a "web" build via buildWebPlayer().
+const buildProject = async (
+  data,
+  {
+    buildType = "rom",
+    projectRoot = "/tmp",
+    outputRoot = "/tmp/testing",
+    progress = (_msg) => {},
+    warnings = (_msg) => {},
+  } = {}
+) => {
+  await buildProjectData(data, { projectRoot, outputRoot, progress, warnings });
   await compileSnesMusic({
     music: data.music || [],
     projectRoot,
@@ -103,4 +119,5 @@ const buildProject = async (
   }
 };
 
+export { buildProjectData };
 export default buildProject;

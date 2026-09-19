@@ -154,6 +154,10 @@ const onEjectEngine = () => {
   store.dispatch(buildGameActions.ejectEngine());
 };
 
+const onExportProjectData = () => {
+  store.dispatch(buildGameActions.exportProjectData());
+};
+
 const onPluginRun = (event, pluginId) => {
   if (plugins.menu[pluginId] && plugins.menu[pluginId].run) {
     plugins.menu[pluginId].run(store, vmActions);
@@ -181,6 +185,7 @@ ipcRenderer.on("zoom", onZoom);
 ipcRenderer.on("run", onRun);
 ipcRenderer.on("build", onBuild);
 ipcRenderer.on("ejectEngine", onEjectEngine);
+ipcRenderer.on("exportProjectData", onExportProjectData);
 ipcRenderer.on("plugin-run", onPluginRun);
 ipcRenderer.on("paste-in-place", onPasteInPlace);
 
