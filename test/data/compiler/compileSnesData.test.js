@@ -43,8 +43,9 @@ describe("compileSnesData - Test_Math fixture", () => {
   test("one scene, one background, scene + actor scripts", () => {
     expect(out.stats.scenes).toBe(1);
     expect(out.stats.backgrounds).toBe(1);
-    // scene start script + 1 actor script
-    expect(out.stats.scripts).toBe(2);
+    // scene start script + 1 actor script + that actor's 3 hit1/2/3Script
+    // slots (v4, Projectiles - always compiled, even empty, same as .script)
+    expect(out.stats.scripts).toBe(5);
   });
 
   test("collects the actor's dialogue strings and variables", () => {

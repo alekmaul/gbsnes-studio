@@ -728,6 +728,63 @@ void Script_ActorMoveRel_b(void)
                actors[script_actor].y + (script_cmd_args[3] ? -dy : dy));
 }
 
+// LAUNCH_PROJECTILE (v4). args: sprite_slot, dirVarHi, dirVarLo, speed,
+// (mask<<4)|group. Spawns from the currently active actor (script_actor,
+// set by ACTOR_SET_ACTIVE right before this at every compiled call site) at
+// its own position, moving in whatever direction script_variables[dirVar]
+// holds - a plain GB direction code (1/2/4/8), the same encoding
+// actors[].dir_x/y already use (dir_to_vec decodes it identically). No
+// lifeTime field exists on this opcode's wire format (see the PROJECTILE
+// struct's own comment in scene.c) - ttl 0, relies entirely on leaving the
+// scene to despawn.
+void Script_LaunchProjectile_b(void)
+{
+    s8 dx, dy;
+    u16 dir_var = ARG16(1, 2);
+    dir_to_vec((u8)VAR(dir_var), &dx, &dy);
+    ProjectileSpawn(actors[script_actor].x, actors[script_actor].y, dx, dy,
+                     script_cmd_args[3], script_cmd_args[0],
+                     script_cmd_args[4] & 0x0F, script_cmd_args[4] >> 4, 0);
+    ADVANCE();
+    script_continue = 1;
+}
+
+// WEAPON_ATTACK (v4 - deprecated on B, but still a real, non-Noop opcode
+// here since it was already fully wired on the compiler side). args:
+// sprite_slot, offset (px), (mask<<4)|group. A momentary, non-moving hitbox
+// in front of the active actor, offset along its *current facing* (no
+// direction argument of its own - matches B: a melee swing always faces
+// wherever the attacking actor already faces). WEAPON_ATTACK_TTL is
+// arbitrary (a quarter-second at 60fps) - long enough that
+// ProjectilesUpdate's collision test actually runs against it more than
+// once, short enough to read as instantaneous.
+#define WEAPON_ATTACK_TTL 15
+void Script_WeaponAttack_b(void)
+{
+    s16 x = actors[script_actor].x + (s16)actors[script_actor].dir_x * script_cmd_args[1];
+    s16 y = actors[script_actor].y + (s16)actors[script_actor].dir_y * script_cmd_args[1];
+    ProjectileSpawn(x, y, 0, 0, 0, script_cmd_args[0],
+                     script_cmd_args[2] & 0x0F, script_cmd_args[2] >> 4, WEAPON_ATTACK_TTL);
+    ADVANCE();
+    script_continue = 1;
+}
+
+// PLAYER_BOUNCE (v4, Platformer-only - unrelated to Projectiles, see
+// EVENTS.md). Matches B exactly: a fixed upward velocity impulse, not a
+// simulated bounce - Platform's own gravity (Update_Platform) does the rest
+// every frame after this. Same 3 magnitudes as B (its own pl_vel_y uses the
+// identical fixed-point scale this engine's Platform physics was ported
+// from verbatim - see plat_jump_vel's own comment). args: height (0 low /
+// 1 medium / 2 high).
+void Script_PlayerBounce_b(void)
+{
+    static const s16 bounce_vel[3] = { -8192, -16384, -24576 };
+    u8 height = script_cmd_args[0] > 2 ? 1 : script_cmd_args[0];
+    PlatformSetVelY(bounce_vel[height]);
+    ADVANCE();
+    script_continue = 1;
+}
+
 // ACTOR_MOVE_TO_VALUE. x/y arrive via LOAD_VECTORS (script_ptr_x/y), not
 // inline bytes. args: useCollisions, moveType - both new in v2, same
 // deferred status as ACTOR_MOVE_TO above.
@@ -1090,12 +1147,12 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_TextWithAvatar_b, 4) /* 0x5B TEXT_WITH_AVATAR */ \
     X(Script_Menu_b, 7) /* 0x5C MENU */ \
     X(Script_ActorSetCollisions_b, 1) /* 0x5D ACTOR_SET_COLLISIONS */ \
-    X(Script_Noop_b, 5) /* 0x5E LAUNCH_PROJECTILE - Projectiles subsystem, v2 M5e */ \
+    X(Script_LaunchProjectile_b, 5) /* 0x5E LAUNCH_PROJECTILE - v4, Projectiles subsystem */ \
     X(Script_Noop_b, 4) /* 0x5F SET_PROPERTY - union-type generic property setter */ \
     X(Script_Noop_b, 2) /* 0x60 ACTOR_SET_SPRITE - per-actor sprite override, needs On Update port */ \
     X(Script_Noop_b, 4) /* 0x61 IF_ACTOR_RELATIVE_TO_ACTOR - needs On Update port */ \
-    X(Script_Noop_b, 1) /* 0x62 PLAYER_BOUNCE - Platformer, v2 M5d */ \
-    X(Script_Noop_b, 3) /* 0x63 WEAPON_ATTACK - Projectiles subsystem, v2 M5e */ \
+    X(Script_PlayerBounce_b, 1) /* 0x62 PLAYER_BOUNCE - v4, Platformer */ \
+    X(Script_WeaponAttack_b, 3) /* 0x63 WEAPON_ATTACK - v4, Projectiles subsystem */ \
     X(Script_Noop_b, 3) /* 0x64 PALETTE_SET_BACKGROUND - full colour, v2 M6 */ \
     X(Script_Noop_b, 2) /* 0x65 PALETTE_SET_ACTOR - full colour, v2 M6 */ \
     X(Script_Noop_b, 2) /* 0x66 PALETTE_SET_UI - full colour, v2 M6 */ \

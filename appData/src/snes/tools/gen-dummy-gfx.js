@@ -320,7 +320,8 @@ const MOVE_AI_RANDOM_WALK = 5;
 // sprite-slot table below (compileSnesData.js) - all-zero (no parallax) in
 // both dummy scenes.
 // actor:   [tile_x, tile_y, dir, movement_type, sprite_idx, script_idx,
-//           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate] (9)
+//           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate,
+//           collision_group, hit1_idx, hit2_idx, hit3_idx] (13, v4 Projectiles)
 // trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
 // then the collision bitmap: ceil(width*height/8) bytes
 //
@@ -345,6 +346,7 @@ const scene0 = [
   ...dummySprSlots,
   ...dummyParallax,
   18, 24, 8, MOVE_AI_RANDOM_WALK, 0, EV_NPC, SPRITE_STATIC, 3, 0, // wandering NPC (off the walk path)
+  0, EV_NPC, EV_NPC, EV_NPC, // v4: collision_group 0 (none) - hit1/2/3_idx unreachable, EV_NPC is just a valid placeholder
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
   50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
   ...collision

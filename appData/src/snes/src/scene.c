@@ -100,6 +100,38 @@ u8 sprite_frames_for_slot[SPRITE_SLOTS];
 u8 sprite_pal_for_slot[SPRITE_SLOTS];
 const unsigned char *sprite_slot_for_index = 0;
 
+/* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
+ * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
+ * is small enough this is cheaper than maintaining a list). sprite_slot is
+ * this *scene's* OBJ slot (0-7, already resolved at compile time by
+ * scriptBuilder.js's _projectileSpriteSlot - see compileSnesData.js's
+ * sceneSpriteIds/sceneProjectileSpriteIds), so rendering borrows whichever
+ * actor sheet's tiles/palette are already loaded there - no dedicated
+ * projectile VRAM region exists or is needed. Direction-only movement (no
+ * angle/trig, matching this engine's other movement everywhere else) and
+ * always-destroy-on-hit (this fork's LAUNCH_PROJECTILE payload has no
+ * "strong"/destroyOnHit flag - see scriptBuilder.js's 5-byte wire format). */
+typedef struct
+{
+    u8 active;
+    s16 x, y;
+    s8 dir_x, dir_y;
+    u8 speed;
+    u8 sprite_slot;
+    u8 collision_group;  /* what this projectile IS - selects which of the
+                             hit actor's scripts fires (see below) */
+    u8 collision_mask;   /* which actor collision_group(s) it can hit */
+    u8 ttl;              /* frames until auto-destroy, 0 = no ttl (relies on
+                             leaving the scene instead) - WEAPON_ATTACK's
+                             momentary hitbox uses this; LAUNCH_PROJECTILE
+                             doesn't need to */
+} PROJECTILE;
+static PROJECTILE projectiles[MAX_PROJECTILES];
+/* One OAM id block per pool slot, right after the emote's own (EMOTE_OID is
+ * defined further down, next to SceneRenderActors - this just documents the
+ * relationship). */
+#define PROJECTILE_OID_BASE ((u16)(MAX_ACTORS + 1) << 2)
+
 /* SCENE_PUSH_STATE / SCENE_POP_STATE / SCENE_STATE_RESET / SCENE_POP_ALL_STATE.
  * A small stack of (scene, player tile pos, player facing) snapshots, e.g. for
  * a pause-menu scene that later returns exactly where the player left off.
@@ -660,6 +692,15 @@ void SceneInit(void)
     actors[0].frames_len = frames_len_for(sprite_type_for_slot[PLAYER_SPRITE_SLOT], PLAYER_SPRITE_SLOT);
     actors[0].move_speed = 1;
     actors[0].collisions_enabled = 1;
+    /* Projectiles (v4): the player is always collision_group "player" (bit
+     * 1) - it isn't a compiled Actor entity, so this can't come from the
+     * scene blob like every other actor's group does. The player has no
+     * hit1/2/3_idx slot at all (this schema's Actor.hit1/2/3Script - the
+     * only place those scripts can be authored - doesn't apply to the
+     * player), so ProjectilesUpdate() never tests actor index 0 for a hit;
+     * see its own comment for why that's this pass's real scope boundary.
+     */
+    actors[0].collision_group = 1;
 
     for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
@@ -681,7 +722,13 @@ void SceneInit(void)
         actors[i].animate = p[8];
         actors[i].frames_len = frames_len_for(p[6], p[4]);
         actors[i].events_ptr = event_ptrs[p[5]];
-        p += 9;
+        /* Projectiles (v4): [9]=collision_group, [10..12]=hit1/2/3_idx - see
+         * compileSnesData.js actorEntries and gbs_types.h's ACTOR comment. */
+        actors[i].collision_group = p[9];
+        actors[i].hit1_idx = p[10];
+        actors[i].hit2_idx = p[11];
+        actors[i].hit3_idx = p[12];
+        p += 13;
     }
     for (; i < MAX_ACTORS; i++)
     {
@@ -690,6 +737,16 @@ void SceneInit(void)
         /* Hide the unused OAM slots once here - SceneRenderActors only walks
          * 0..scene_num_actors every frame, so it never touches these again. */
         oamSetVisible((u16)i << 2, OBJ_HIDE);
+    }
+
+    /* Projectiles (v4): a fresh scene starts with none in flight - clear the
+     * pool and hide their OAM entries, same reasoning as the unused-actor
+     * loop just above (SceneInit is the only place stale ones would
+     * otherwise linger from the previous scene). */
+    for (i = 0; i < MAX_PROJECTILES; i++)
+    {
+        projectiles[i].active = 0;
+        oamSetVisible(PROJECTILE_OID_BASE + ((u16)i << 2), OBJ_HIDE);
     }
 
     for (i = 0; i < scene_num_triggers && i < MAX_TRIGGERS; i++)
@@ -1246,6 +1303,20 @@ static s16 plat_vel_y = 0;
 static u8 plat_grounded = 0;
 static s16 plat_last_trigger_tx = -1;
 static s16 plat_last_trigger_ty = -1;
+
+/* PLAYER_BOUNCE (v4). plat_vel_y is file-static to this file, like every
+ * other Platform physics variable - a small setter instead of a new extern,
+ * matching the same "expose just the one thing script_cmds.c needs" shape
+ * as SceneStartEmote. Setting it outside of Update_Platform's own gravity
+ * step is safe - it's just a plain velocity impulse, no other state to keep
+ * in sync (unlike a full jump, which also flips plat_grounded). Called from
+ * genres other than Platform this does nothing useful (plat_vel_y is only
+ * ever read back by Update_Platform), matching B's own Player: Bounce -
+ * always compiles, only Platformer scenes actually do anything with it. */
+void PlatformSetVelY(s16 v)
+{
+    plat_vel_y = v;
+}
 
 void Start_Platform(void)
 {
@@ -2105,6 +2176,128 @@ static void SceneRenderActors(void)
     }
 }
 
+void ProjectileSpawn(s16 x, s16 y, s8 dir_x, s8 dir_y, u8 speed, u8 sprite_slot,
+                      u8 collision_group, u8 collision_mask, u8 ttl)
+{
+    u8 i;
+    for (i = 0; i < MAX_PROJECTILES; i++)
+    {
+        if (projectiles[i].active) continue;
+        projectiles[i].active = 1;
+        projectiles[i].x = x;
+        projectiles[i].y = y;
+        projectiles[i].dir_x = dir_x;
+        projectiles[i].dir_y = dir_y;
+        projectiles[i].speed = speed;
+        projectiles[i].sprite_slot = sprite_slot;
+        projectiles[i].collision_group = collision_group;
+        projectiles[i].collision_mask = collision_mask;
+        projectiles[i].ttl = ttl;
+        return;
+    }
+    /* Pool exhausted - silently dropped, matching B's own projectile_launch()
+     * behaviour (no warning/queueing mechanism on that side either). */
+}
+
+/* Fires the hit actor's own script matching the projectile's collision_group -
+ * "player" (bit 1) fires the actor's regular interact script (this schema has
+ * no player-specific hit slot - see ActorEditor.tsx's hitTabs on the B side,
+ * which maps its own "Player" hit tab to that same "script" key), groups
+ * 1/2/3 (bits 2/4/8) fire hit1/2/3_idx respectively. Dropped (not queued) if
+ * a script is already running - this engine only ever runs one script at a
+ * time project-wide, same constraint every other script-launch site already
+ * lives with (SceneTryInteract, timers, triggers). */
+static void projectile_fire_hit_script(u8 actor_i, u8 collision_group)
+{
+    if (script_ptr) return;
+    if (collision_group == 1) { run_script(actors[actor_i].events_ptr, actor_i); return; }
+    if (collision_group == 2) { run_script(event_ptrs[actors[actor_i].hit1_idx], actor_i); return; }
+    if (collision_group == 4) { run_script(event_ptrs[actors[actor_i].hit2_idx], actor_i); return; }
+    if (collision_group == 8) { run_script(event_ptrs[actors[actor_i].hit3_idx], actor_i); }
+}
+
+void ProjectilesUpdate(void)
+{
+    u8 i, j;
+    for (i = 0; i < MAX_PROJECTILES; i++)
+    {
+        u16 oid;
+        u8 tile, flip;
+
+        if (!projectiles[i].active) continue;
+        oid = PROJECTILE_OID_BASE + ((u16)i << 2);
+
+        if (projectiles[i].ttl)
+        {
+            projectiles[i].ttl--;
+            if (!projectiles[i].ttl)
+            {
+                projectiles[i].active = 0;
+                oamSetVisible(oid, OBJ_HIDE);
+                continue;
+            }
+        }
+
+        projectiles[i].x += (s16)projectiles[i].dir_x * projectiles[i].speed;
+        projectiles[i].y += (s16)projectiles[i].dir_y * projectiles[i].speed;
+
+        /* Leaving the scene despawns it - the only lifetime check
+         * LAUNCH_PROJECTILE relies on (its wire format has no lifeTime
+         * field to count down instead, see the PROJECTILE struct comment). */
+        if (projectiles[i].x < 0 || projectiles[i].x >= ((s16)scene_width << 3) ||
+            projectiles[i].y < 0 || projectiles[i].y >= ((s16)scene_height << 3))
+        {
+            projectiles[i].active = 0;
+            oamSetVisible(oid, OBJ_HIDE);
+            continue;
+        }
+
+        /* Collision: actors only (1..scene_num_actors), never the player
+         * (index 0) - this schema has no scene-level "on player hit" script
+         * for an enemy projectile to fire (unlike B's script_p_hit1/2/3,
+         * which this fork never ported - see ProjectileSpawn's own note and
+         * EVENTS.md), so a projectile whose mask includes "player" currently
+         * just flies through the player untouched rather than doing nothing
+         * useful with a hit it can't report anywhere. Real player damage
+         * needs that scene-level hook added first, a separate follow-up. */
+        for (j = 1; j <= scene_num_actors && j < MAX_ACTORS; j++)
+        {
+            s16 ax, ay;
+            if (!actors[j].enabled) continue;
+            if (!actors[j].active) continue;
+            if (!(actors[j].collision_group & projectiles[i].collision_mask)) continue;
+            ax = actors[j].x;
+            ay = actors[j].y;
+            /* Actor box: x-8..x+8, y-16..y (matches SceneRenderActors' own
+             * -8/-16 OAM offset). Projectile box: a small 8x8 centred on its
+             * own x,y. */
+            if (projectiles[i].x + 4 < ax - 8) continue;
+            if (projectiles[i].x - 4 > ax + 8) continue;
+            if (projectiles[i].y + 4 < ay - 16) continue;
+            if (projectiles[i].y - 4 > ay) continue;
+
+            projectile_fire_hit_script(j, projectiles[i].collision_group);
+            projectiles[i].active = 0;
+            oamSetVisible(oid, OBJ_HIDE);
+            break;
+        }
+        if (!projectiles[i].active) continue;
+
+        /* Render: borrows sprite_slot's own tiles/palette (already loaded by
+         * SceneInit for whichever actor/player sheet occupies that slot this
+         * scene - see the PROJECTILE struct's own comment). Always frame 0,
+         * h-flipped moving left - a full 4-direction facing pick (matching
+         * actor_render_tile) was skipped for this first pass: most
+         * projectile art (bullets, arrows fired only sideways) doesn't need
+         * it, and it can be added later without changing the wire format. */
+        tile = projectiles[i].sprite_slot * 2;
+        flip = projectiles[i].dir_x < 0 ? 1 : 0;
+        oamSet(oid, projectiles[i].x - scroll_x - 4, projectiles[i].y - scroll_y - 4, 0,
+               flip, 0, tile, sprite_pal_for_slot[projectiles[i].sprite_slot]);
+        oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
+    }
+}
+
 void SceneArmTriggers(void)
 {
     check_triggers = 1;
@@ -2117,4 +2310,5 @@ void SceneUpdate(void)
     SceneUpdateEmote();
     SceneCheckTriggers();
     SceneRenderActors();
+    ProjectilesUpdate();
 }

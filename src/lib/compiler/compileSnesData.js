@@ -71,7 +71,7 @@ import Path from "path";
 import snesgfx from "./snesgfx";
 import compileEntityEvents from "./compileEntityEvents";
 import { snesFixedAssets } from "./snesFixedAssets";
-import { dirDec, moveDec, animSpeedDec, spriteTypeDec } from "./helpers";
+import { dirDec, moveDec, animSpeedDec, spriteTypeDec, collisionGroupDec } from "./helpers";
 import { assetFilename } from "../helpers/gbstudio";
 import { projectTemplatesRoot, TILE_PROP_PRIORITY } from "../../consts";
 import snesTarget from "./targets/snes";
@@ -205,6 +205,41 @@ const compileSnesData = async (
       ? sc.playerSpriteSheetId
       : settings.playerSpriteSheetId;
 
+  // Projectiles (v4): a scene's own LAUNCH_PROJECTILE/WEAPON_ATTACK events can
+  // reference any project sprite sheet, same as an avatarId - it has to be
+  // loaded into this scene's own OBJ pool for launchProjectile()'s scene-
+  // relative slot lookup (below) to find it, same reasoning as sceneAvatarIds
+  // just above this in the file. Recurses into nested branches the same way.
+  const scanProjectileSpriteIds = (evs, ids) => {
+    (evs || []).forEach((ev) => {
+      if (
+        ev.command &&
+        (ev.command === "EVENT_LAUNCH_PROJECTILE" || ev.command === "EVENT_WEAPON_ATTACK") &&
+        ev.args &&
+        isSprite(ev.args.spriteSheetId) &&
+        ids.indexOf(ev.args.spriteSheetId) === -1
+      ) {
+        ids.push(ev.args.spriteSheetId);
+      }
+      if (ev.children) {
+        Object.keys(ev.children).forEach((k) => scanProjectileSpriteIds(ev.children[k], ids));
+      }
+    });
+  };
+  const sceneProjectileSpriteIds = scenes.map((sc) => {
+    const ids = [];
+    scanProjectileSpriteIds(sc.script, ids);
+    (sc.actors || []).forEach((a) => {
+      scanProjectileSpriteIds(a.script, ids);
+      scanProjectileSpriteIds(a.startScript, ids);
+      scanProjectileSpriteIds(a.hit1Script, ids);
+      scanProjectileSpriteIds(a.hit2Script, ids);
+      scanProjectileSpriteIds(a.hit3Script, ids);
+    });
+    (sc.triggers || []).forEach((t) => scanProjectileSpriteIds(t.script, ids));
+    return ids;
+  });
+
   // sceneSpriteIds[i][k] = the sprite sheet id loaded into scene i's slot k
   const sceneSpriteIds = scenes.map((sc, i) => {
     const ids = [];
@@ -215,9 +250,11 @@ const compileSnesData = async (
     };
     add(playerSpriteIdForScene(sc));
     (sc.actors || []).forEach((a) => add(a.spriteSheetId));
+    sceneProjectileSpriteIds[i].forEach(add);
     const distinct = new Set(
       [playerSpriteIdForScene(sc)]
         .concat((sc.actors || []).map((a) => a.spriteSheetId))
+        .concat(sceneProjectileSpriteIds[i])
         .filter(isSprite)
     );
     if (distinct.size > SPRITE_SLOTS) {
@@ -532,6 +569,11 @@ const compileSnesData = async (
       scenes,
       sprites: projectData.spriteSheets || [],
       avatars: sceneAvatars[sceneIndex] || [],
+      // Projectiles (v4): launchProjectile()/weaponAttack() (scriptBuilder.js)
+      // resolve a sprite to this scene's own OBJ slot (0-7) with this, same
+      // per-scene pool sceneSpriteIds[i] already seeds actors/the player from
+      // (above) - not the project-wide sprite index PLAYER_SET_SPRITE uses.
+      spriteSlots: sceneSpriteIds[sceneIndex] || [],
       backgrounds,
       music: projectData.music || [],
       emotes,
@@ -575,6 +617,22 @@ const compileSnesData = async (
     const triggerScriptIdx = (scene.triggers || []).map((trigger, i) =>
       pushScript(compile(trigger.script, trigger, "trigger", i, sceneIndex, scene))
     );
+    // Projectiles (v4): fired when a projectile whose own collisionGroup is
+    // "1"/"2"/"3" hits this actor - a projectile belonging to "player" fires
+    // the actor's regular script instead (matches B's ActorEditor.tsx
+    // hitTabs: the "Player" hit tab maps to the plain "script" key, only
+    // hit1/2/3 get their own dedicated script). Always compiled (even when
+    // empty, same as actor.script) so every actor has a valid event_ptrs[]
+    // slot to run - a hit with no authored script just completes instantly.
+    const hit1ScriptIdx = (scene.actors || []).map((actor, i) =>
+      pushScript(compile(actor.hit1Script, actor, "actor", i, sceneIndex, scene))
+    );
+    const hit2ScriptIdx = (scene.actors || []).map((actor, i) =>
+      pushScript(compile(actor.hit2Script, actor, "actor", i, sceneIndex, scene))
+    );
+    const hit3ScriptIdx = (scene.actors || []).map((actor, i) =>
+      pushScript(compile(actor.hit3Script, actor, "actor", i, sceneIndex, scene))
+    );
 
     // Collision bitmap the C engine reads: 1 bit per tile, packed LSB-first,
     // ceil(w*h/8) bytes - col_solid() in scene.c does
@@ -616,7 +674,14 @@ const compileSnesData = async (
         actorScriptIdx[i],
         spriteTypeForActor(actor.spriteSheetId, actor.spriteType),
         animSpeedDec(actor.animSpeed),
-        actor.animate ? 1 : 0
+        actor.animate ? 1 : 0,
+        // Projectiles (v4): [collision_group, hit1Idx, hit2Idx, hit3Idx] - see
+        // hit1ScriptIdx/2/3 above. collisionGroupDec("") === 0 (COLLISION_GROUP_NONE)
+        // for an actor that never opted in, matching B's own default.
+        collisionGroupDec(actor.collisionGroup),
+        hit1ScriptIdx[i],
+        hit2ScriptIdx[i],
+        hit3ScriptIdx[i]
       );
     });
 

@@ -117,7 +117,6 @@ import {
   compileConditional,
   getSpriteOffset,
   getSprite,
-  getSpriteSceneIndex,
 } from "../events/helpers";
 import {
   dirDec,
@@ -369,11 +368,32 @@ class ScriptBuilder {
 
   // Weapons
 
+  // v4: resolves against *this scene's* own OBJ slot pool (sceneSpriteIds,
+  // compileSnesData.js - threaded in as options.spriteSlots), not
+  // getSpriteSceneIndex's GB-only scene.sprites (always empty on this
+  // target, see helpers.js's own comment - that's why it always returned 0
+  // here). Falls back to slot 0 (the player) with a warning if the sheet
+  // somehow isn't loaded in this scene - shouldn't happen in practice since
+  // compileSnesData.js's sceneProjectileSpriteIds scan adds it automatically,
+  // short of the SPRITE_SLOTS overflow case that already warns on its own.
+  _projectileSpriteSlot = (spriteSheetId) => {
+    const { spriteSlots, warnings } = this.options;
+    const slot = (spriteSlots || []).indexOf(spriteSheetId);
+    if (slot === -1) {
+      if (warnings) {
+        warnings(
+          `Projectile sprite sheet not loaded in this scene - falling back to slot 0 (the player).`
+        );
+      }
+      return 0;
+    }
+    return slot;
+  };
+
   weaponAttack = (spriteSheetId, offset = 10, collisionGroup, collisionMask) => {
     const output = this.output;
-    const { sprites, scene } = this.options;
-    const spriteSceneIndex = getSpriteSceneIndex(spriteSheetId, sprites, scene);
-    
+    const spriteSceneIndex = this._projectileSpriteSlot(spriteSheetId);
+
     output.push(cmd(WEAPON_ATTACK));
     output.push(spriteSceneIndex);
     output.push(offset);
@@ -382,8 +402,8 @@ class ScriptBuilder {
 
   launchProjectile = (spriteSheetId, x, y, dirVariable, speed, collisionGroup, collisionMask) => {
     const output = this.output;
-    const { sprites, variables, scene } = this.options;
-    const spriteSceneIndex = getSpriteSceneIndex(spriteSheetId, sprites, scene);
+    const { variables } = this.options;
+    const spriteSceneIndex = this._projectileSpriteSlot(spriteSheetId);
     const dirVariableIndex = this.getVariableIndex(dirVariable, variables);
 
     output.push(cmd(LAUNCH_PROJECTILE));

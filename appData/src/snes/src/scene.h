@@ -62,6 +62,18 @@ void dir_to_vec(u8 d, s8 *dx, s8 *dy);
 /* ACTOR_EMOTE (M5c): a bubble above actor `a` for a fixed number of frames */
 void SceneStartEmote(u8 a, u8 emote_id);
 
+/* Projectiles (v4). ProjectileSpawn is called from script_cmds.c's
+ * LAUNCH_PROJECTILE/WEAPON_ATTACK handlers - dir_x/dir_y/speed/ttl==0 means
+ * "moving, no ttl" (Launch Projectile); dir_x=dir_y=0/speed=0/ttl!=0 means
+ * "static hitbox, self-destroys after ttl frames" (Weapon Attack). group/mask
+ * are the packed collision byte's two nibbles, already split by the caller. */
+void ProjectileSpawn(s16 x, s16 y, s8 dir_x, s8 dir_y, u8 speed, u8 sprite_slot,
+                      u8 collision_group, u8 collision_mask, u8 ttl);
+void ProjectilesUpdate(void);
+
+/* PLAYER_BOUNCE (v4) - a fixed velocity impulse, see scene.c's own comment. */
+void PlatformSetVelY(s16 v);
+
 void SceneInit(void);
 void SceneHandleInput(void);
 void SceneUpdate(void);

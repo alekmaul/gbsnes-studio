@@ -184,6 +184,72 @@ the two exactly as documented) is still sourced from SNES hardware documentation
 independently observed frame - but both engine-side mechanisms M7 introduced are now confirmed
 correct against real hardware state, not just re-read source code.
 
+## Projectiles (v4)
+
+`Launch Projectile`, `Weapon: Attack` and `Player: Bounce` (Platformer physics, unrelated to
+Projectiles proper - kept in this section only because all 3 were `Script_Noop_b` together
+since the original SNES port and got real handlers in the same pass) all shipped for real. The
+compiler side (event fields, `scriptBuilder.js`'s `launchProjectile()`/`weaponAttack()`/
+`playerBounce()`, opcode reservations) had existed since the original port; only the engine side
+was ever missing.
+
+**Direction-based, not angle-based** - unlike GB Studio 3.x's real Launch Projectile (4 aiming
+modes: fixed direction, aim-at-actor, literal 0-255 angle, angle-from-variable; genuine
+diagonal trig movement), this engine's own Launch Projectile only ever compiled a plain 4-way
+`direction` union (fixed/variable/property) - matching how every other actor on this engine
+already moves (axis-locked, `dir_x`/`dir_y` only, no angle/trig anywhere else in the codebase).
+Kept as-is rather than reopening the wire format to add angle support nothing else needs.
+
+**No dedicated projectile VRAM/sprite budget** - a projectile's sprite must already be loaded
+into the launching scene's own OBJ pool (same 8-slot-per-scene mechanism actors and the player
+use, M7-cont.), resolved at compile time to that scene's slot 0-7. `compileSnesData.js` scans
+every scene's scripts for `Launch Projectile`/`Weapon: Attack` sprite references
+(`sceneProjectileSpriteIds`) and adds them to that scene's sprite pool automatically, the same
+way avatar sprites already are - an author doesn't need to also add an actor using that sheet
+just to make it available. Rendering borrows whichever slot's tiles/palette are already
+resident; always frame 0 (h-flipped moving left) - full 4-direction facing wasn't ported this
+pass (most bullet/arrow art doesn't need it, and it's addable later without a wire-format
+change).
+
+**Real collision** (not just flight): a small fixed pool (`MAX_PROJECTILES = 4` per scene,
+`appData/src/snes/src/scene.c`) each carries the launching event's `collisionGroup`/
+`collisionMask` (packed into one byte, matching `collisionGroupDec()`/`collisionMaskDec()`'s
+existing bit values). `Actor.collisionGroup` (already in the schema, carried over from GB,
+previously unused on this target) and `Actor.hit1Script`/`hit2Script`/`hit3Script` are now
+compiled into the scene blob and actually wired: a projectile whose own `collisionGroup` is
+"player" fires the hit actor's regular script, "1"/"2"/"3" fire `hit1`/`hit2`/`hit3Script`
+respectively - matching B's own `ActorEditor.tsx` `hitTabs` mapping exactly (its "Player" hit
+tab maps to the plain `script` key too, not a dedicated slot). **Scope boundary, not an
+oversight**: only actors (index 1+) are ever hit-tested, never the player (index 0) - this
+schema has no scene-level "on player hit" script the way B's `script_p_hit1/2/3` does, so an
+enemy's projectile currently flies through the player rather than doing nothing useful with a
+hit it has nowhere to report. Adding that is a separate, later piece if a project actually needs
+enemies that can hurt the player.
+
+**No `lifeTime`/`destroyOnHit` fields** - this engine's Launch Projectile wire format (5 bytes,
+fixed since the original port) has no room for either (unlike B's own event). A launched
+projectile always destroys on hit and relies entirely on leaving the scene's bounds to despawn
+otherwise (no countdown). Weapon Attack's momentary hitbox uses a fixed internal 15-frame
+lifetime instead (not author-configurable) - long enough for the collision test to actually run
+against it, short enough to read as instantaneous.
+
+**Player: Bounce** matches B exactly: a fixed upward velocity impulse (`PlatformSetVelY()`,
+scene.c) using the identical fixed-point scale this engine's whole Platform physics was already
+ported from verbatim, not a simulated bounce - normal gravity does the rest. Only meaningful on
+Platformer scenes (compiles and no-ops harmlessly everywhere else, matching B).
+
+**Verified (v4)**: a real Mesen run confirmed the entire pipeline end to end against live WRAM
+state, not just source review - Launch Projectile: correct spawn position/direction/speed byte,
+movement (`x/y += dir*speed` matched exactly frame over frame), collision firing exactly when
+its box first overlapped the target actor's, the correct `hit1Script` (matching `collisionGroup
+"1"`) writing its marker variable, and clean post-hit pool cleanup (`active` back to 0, no
+double-fire). Weapon Attack: spawn position exactly `actor position + offset` along the actor's
+*current facing* (not a direction argument of its own), and correct ttl-driven self-destruct
+with no collision fired (deliberately mismatched `collisionMask` in the test, to isolate the
+lifetime behaviour from the already-proven collision path). Both pool slots' full raw struct
+layout (including 816-tcc's own alignment padding, empirically confirmed rather than assumed)
+matched every expected field.
+
 ## Scenes
 
 | Event | SNES | Notes |
@@ -231,11 +297,13 @@ not silent holes; every one has a real table row, just no runtime behaviour yet.
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Launch Projectile, Weapon: Attack | ➖ | No Projectiles subsystem on this engine (added in GB Studio 2.0.0-beta5, genre-transverse). |
 | Actor: Set Sprite Sheet (union-type variant) | ➖ | Per-actor sprite override introduced with the `On Update` scripted-movement rework; needs that port first. |
 | If Actor Relative to Actor, Actor: Stop Update Script, Actor: Set Animate | ➖ | All need the `On Update` per-actor movement-script port (see `appData/src/snes/README.md` — a real, separate architecture piece, not a mechanical opcode wire-up). |
-| Player: Bounce | ➖ | Platformer-genre physics opcode. |
 | Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist and are edited from Settings, but a script can't write one back at runtime yet. |
+
+**Launch Projectile / Weapon: Attack / Player: Bounce shipped (v4, real Projectiles subsystem)** -
+see their own section below. All 3 were listed here through M16; they're the first opcode-audit
+gaps this doc has actually closed rather than just documented.
 
 `Palette: Set Background` / `Set Actor` / `Set UI` used to be listed here as ➖ (dispatchable but
 inert). The GB-heritage custom-palette editor these events edited was removed entirely - it had
