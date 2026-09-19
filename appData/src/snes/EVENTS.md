@@ -25,7 +25,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Stop Script | ✅ | |
 | Call Custom Event, Group, Comment | ✅ | Compiler-side — inlined before any target sees them. |
 | Attach Script to Button (`SET_INPUT_SCRIPT` / remove) | ✅ | All 12 SNES buttons — d-pad, A, B, Select, Start, **and X / Y / L / R** (the input opcodes carry a 2-byte mask on SNES). |
-| If Expression, Loop While | ✅ | M3 (v4). No shared GB Studio 3.x GBVM value stack exists on this target (own flat-opcode VM, see `appData/src/snes/src/rpn.h`) — a shunting-yard-ordered expression is compiled to a sequence of small fixed-arg `RPN_PUSH_CONST` / `RPN_PUSH_VAR` / `RPN_OPERATOR` opcodes instead of GBVM's one variable-length `VM_RPN` meta-instruction. `If Expression` branches on the result `> 0`; `Loop While` reuses the same test as its loop-continue condition (GB Studio 3.x's own reference uses `> 0` for the former and `!= 0` for the latter — a harmless inconsistency we don't replicate, since one shared opcode can only encode one comparison and almost every real expression is comparison/logical-built, always 0/1 either way). |
+| If Expression, Loop While | ✅ | M3 (v4). No shared GB Studio 3.x GBVM value stack exists on this target (own flat-opcode VM, see `appData/src/snes/src/rpn.h`) — a shunting-yard-ordered expression is compiled to a sequence of small fixed-arg `RPN_PUSH_CONST` / `RPN_PUSH_VAR` / `RPN_OPERATOR` opcodes instead of GBVM's one variable-length `VM_RPN` meta-instruction. `If Expression` branches on the result `> 0`; `Loop While` reuses the same test as its loop-continue condition (GB Studio 3.x's own reference uses `> 0` for the former and `!= 0` for the latter — a harmless inconsistency we don't replicate, since one shared opcode can only encode one comparison and almost every real expression is comparison/logical-built, always 0/1 either way). **Verified (M8, v4)**: a real Mesen run of `5 + 3 * 2` (operator precedence) followed by `If Expression $var$ > 10` read the correct `11` then `> 0`-true branch result straight back from live WRAM. |
 
 ## Variables & math
 
@@ -36,7 +36,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | If Variable (value / compare / true / false), If Variable Flags Compare | ✅ | |
 | Add / Clear / Set Flags | ✅ | |
 | Reset All Variables | ✅ | |
-| Evaluate Expression | ✅ | M3 (v4). Same RPN micro-op sequence as If Expression / Loop While above, ending in a `RPN_SET_VARIABLE` opcode instead of a branch test. Variables are `u8` on this target (unlike GB Studio 3.x's 16-bit signed) — the RPN stack itself is `s16` internally (an intermediate result can go negative/out-of-range before a final compare), but the value actually stored back wraps to `u8` like every other math opcode (`MATH_ADD` etc). |
+| Evaluate Expression | ✅ | M3 (v4). Same RPN micro-op sequence as If Expression / Loop While above, ending in a `RPN_SET_VARIABLE` opcode instead of a branch test. Variables are `u8` on this target (unlike GB Studio 3.x's 16-bit signed) — the RPN stack itself is `s16` internally (an intermediate result can go negative/out-of-range before a final compare), but the value actually stored back wraps to `u8` like every other math opcode (`MATH_ADD` etc). **Verified (M8, v4)**: a real Mesen run of `Loop While $var$ < 5 { $var$ = $var$ + 1 }` (5 iterations, self-referencing evaluate) read the variable back as exactly `5` from live WRAM after the loop. |
 
 ## Timers & input
 
@@ -120,6 +120,15 @@ for one with none explicitly disables HDMA channel 3 (`setModeHdmaReset`) in `Sc
 a **sticky** register (`REG_HDMAEN`), so without this a scene with no parallax at all would
 otherwise keep replaying the *previous* scene's stale HDMA table over its own `BG1HOFS` forever.
 
+**Verified (M8, v4)**: a real Mesen run with a 2-band scene (`{height:8, speed:1}, {height:10,
+speed:-1}`) at a real non-zero `scroll_x` (104, from a wide test scene and an off-centre player
+spawn) read the live `HDMATable16` WRAM buffer back as `[64, 52, 0, 160, 208, 0, 0, ...]` -
+`52 = 104 >> 1` and `208 = 104 << 1` exactly, matching the signed-shift formula by hand for both
+a positive and a negative `speed` in the same run, with the correct per-band line counts (64,
+then 160 auto-extending to the screen height) and a `0`-line terminator. `parallax_active` read
+back `1` on the parallax scene. Confirms the HDMA table the hardware actually walks holds the
+right numbers, not just that the C code compiles.
+
 ## Priority tiles (M7, v4)
 
 Not a B feature - there's no equivalent GB Studio/GBC concept to port (checked B's real
@@ -160,12 +169,20 @@ priority 0 instead - below a painted priority tile, same as before above every *
 tile. The dialogue avatar portrait (`ui.c`, UI-space, unrelated to world priority tiles) is left
 at priority 2, unchanged.
 
-**Not verified**: this relies on the standard, well-documented SNES Mode 1 priority ordering
-above, but no live Mesen/SnesJs run was available this session to confirm a painted tile visually
-occludes the player as designed - same verification gap as M3's RPN opcodes and M6's parallax
-HDMA effect, flagged the same way rather than silently assumed correct. Given both the tilemap-
-bit change and the OAM-priority change are new and interact with real hardware layering rules,
-this is the top candidate for a first real Mesen pass if/when a reusable harness exists again.
+**Verified (M8, v4)**: a real Mesen run against a purpose-built fixture (BG1 tilemap base
+`bgSetMapPtr(0, 0x0000, SC_32x32)`) confirmed both halves directly, by reading real emulated
+state rather than trusting the source: the VRAM word at the painted tile's map index
+(`ty*32+tx`) read back `hi=0x20` (the `BG_TIL_PRIO` bit set, tile index 1 - the painted tile,
+not the shared background's tile 0), and a neighbouring unpainted tile in the same map read back
+`hi=0x00` (bit correctly scoped to only the painted tile). The player's real OAM attribute byte
+read back `0` (priority bits `00`), confirming the OBJ-priority-0 fix is actually in the compiled
+ROM, not just the source. Getting a literal rendered-pixel screenshot to confirm the visual
+occlusion hit a Mesen Lua tooling snag this session (`emu.getPixel` hung intermittently across
+repeated scripted relaunches, unrelated to ROM content - see Claude's memory `m8-verification-
+2026-09-19` for the full writeup), so the very last link (does Mode 1 hardware really composite
+the two exactly as documented) is still sourced from SNES hardware documentation rather than an
+independently observed frame - but both engine-side mechanisms M7 introduced are now confirmed
+correct against real hardware state, not just re-read source code.
 
 ## Scenes
 
