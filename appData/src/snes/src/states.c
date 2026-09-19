@@ -1,8 +1,15 @@
 /*
  * v2 M5a/M5b: genre dispatch tables. See states.h - indices are GB Studio
- * 2.0.0-beta5's real scene.type values, not build order, so slots 1-3
- * (Platformer/Adventure/Shoot Em Up) sit unfilled (Start_Noop/Update_Noop)
- * ahead of Point and Click (4), already built.
+ * 2.0.0-beta5's real scene.type values, not build order. All 5 genres now
+ * have real, named Start_ and Update_ functions below (Start_Noop and
+ * Update_Noop are dead code, kept only as a documented "this slot is
+ * genuinely empty" fallback shape if a future genre needs to be pulled back
+ * out) - but "has a real function" isn't the same as "matches GB Studio
+ * 3.x's full behaviour". Adventure in particular is still WIP on this SNES
+ * port specifically (GB's own Adventure.c reference is complete; the gap is
+ * in how much of it has been re-derived here, not a GB-side limitation) -
+ * see Update_Adventure's own comments for what's been ported vs re-derived
+ * vs still missing.
  */
 #include "states.h"
 
