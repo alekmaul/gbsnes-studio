@@ -16,12 +16,17 @@ const fields = [
       [2, "FIELD_SAVE_SLOT_3"]
     ],
     defaultValue: 0
+  },
+  {
+    key: "true",
+    label: l10n("FIELD_ON_SAVE"),
+    type: "events"
   }
 ];
 
 const compile = (input, helpers) => {
   const { dataSave } = helpers;
-  dataSave(input.saveSlot);
+  dataSave(input.saveSlot, input.true);
 };
 
 module.exports = {

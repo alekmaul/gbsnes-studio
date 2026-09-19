@@ -155,51 +155,75 @@ test("Should be able to extract named variables from custom event", () => {
         id: "0",
         code: "V0",
         name: "First",
-        group: ""
+        group: "Parameters"
     },{
         id: "1",
         code: "V1",
         name: "Second",
-        group: ""
+        group: "Parameters"
     },{
         id: "2",
         code: "V2",
         name: "Variable C",
-        group: ""
+        group: "Parameters"
     },{
         id: "3",
         code: "V3",
         name: "Variable D",
-        group: ""
+        group: "Parameters"
     },{
         id: "4",
         code: "V4",
         name: "Variable E",
-        group: ""
+        group: "Parameters"
     },{
         id: "5",
         code: "V5",
         name: "Variable F",
-        group: ""
+        group: "Parameters"
     },{
         id: "6",
         code: "V6",
         name: "Variable G",
-        group: ""
+        group: "Parameters"
     },{
         id: "7",
         code: "V7",
         name: "Variable H",
-        group: ""
+        group: "Parameters"
     },{
         id: "8",
         code: "V8",
         name: "Variable I",
-        group: ""
+        group: "Parameters"
     },{
         id: "9",
         code: "V9",
         name: "Variable J",
-        group: ""
+        group: "Parameters"
     }])
+})
+
+// M4 (v4): a custom event's own script can also reference project-global
+// variables now, not just its own V0-V9 parameters.
+test("Should also include global variables when a variablesLookup is given", () => {
+    const result = namedCustomEventVariables({
+        variables: {
+            0: {
+                name: "First"
+            }
+        }
+    }, {
+        "5": {
+            name: "Score"
+        }
+    });
+    expect(result.filter((v) => v.group === "Parameters").length).toBe(10);
+    const global5 = result.find((v) => v.group === "Global" && v.id === "5");
+    expect(global5).toEqual({
+        id: "5",
+        code: "05",
+        name: "Score",
+        group: "Global"
+    });
 })

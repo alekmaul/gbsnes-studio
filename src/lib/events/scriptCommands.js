@@ -116,6 +116,10 @@ export const RPN_PUSH_VAR = "RPN_PUSH_VAR";
 export const RPN_OPERATOR = "RPN_OPERATOR";
 export const IF_EXPRESSION = "IF_EXPRESSION";
 export const RPN_SET_VARIABLE = "RPN_SET_VARIABLE";
+// M4 (v4): bulk event port
+export const IF_CURRENT_SCENE_IS = "IF_CURRENT_SCENE_IS";
+export const ACTOR_ACTIVATE = "ACTOR_ACTIVATE";
+export const ACTOR_DEACTIVATE = "ACTOR_DEACTIVATE";
 
 export const scriptCommands = [
   END,
@@ -235,6 +239,9 @@ export const scriptCommands = [
   RPN_OPERATOR,
   IF_EXPRESSION,
   RPN_SET_VARIABLE,
+  IF_CURRENT_SCENE_IS,
+  ACTOR_ACTIVATE,
+  ACTOR_DEACTIVATE,
 ];
 
 export const commandIndex = key => {

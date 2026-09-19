@@ -70,12 +70,18 @@ static s8 topdown_move_dy = 0;
  * the GB engine - only REMOVE_INPUT_SCRIPT clears one). The timer script is a
  * single auto-repeating slot, disabled on every scene load like GB.
  * NUM_INPUT_SCRIPTS covers the 8 GB buttons plus the SNES X/Y/L/R (KEY_BITS
- * bits 8..11 in src/lib/compiler/helpers.js). */
+ * bits 8..11 in src/lib/compiler/helpers.js). Timer scripts (M4, v4) run in
+ * 4 independent contexts, each with its own duration/countdown/target -
+ * SceneUpdateTimerScript still only ever starts one script per frame (this
+ * engine has a single script_ptr, not GB Studio 3.x's real hyperthreads),
+ * so two contexts firing the same frame just means the second one starts a
+ * frame late. */
 #define NUM_INPUT_SCRIPTS 12
 static BANK_PTR input_script_ptrs[NUM_INPUT_SCRIPTS];
-static u8 timer_script_duration = 0;
-static u8 timer_script_time = 0;
-static BANK_PTR timer_script_ptr;
+#define NUM_TIMER_CONTEXTS 4
+static u8 timer_script_duration[NUM_TIMER_CONTEXTS];
+static u8 timer_script_time[NUM_TIMER_CONTEXTS];
+static BANK_PTR timer_script_ptr[NUM_TIMER_CONTEXTS];
 
 /* SHOW_SPRITES / HIDE_SPRITES. GB toggles a single hardware OAM-enable bit;
  * here SceneRenderActors just skips the oamSetEx(...OBJ_SHOW) every frame
@@ -177,9 +183,12 @@ void SceneScheduledScriptsInit(void)
     {
         input_script_ptrs[i].ptr = 0;
     }
-    timer_script_duration = 0;
-    timer_script_time = 0;
-    timer_script_ptr.ptr = 0;
+    for (i = 0; i < NUM_TIMER_CONTEXTS; i++)
+    {
+        timer_script_duration[i] = 0;
+        timer_script_time[i] = 0;
+        timer_script_ptr[i].ptr = 0;
+    }
 }
 
 void SceneSetInputScript(u16 mask, BANK_PTR target)
@@ -212,27 +221,31 @@ void SceneRemoveInputScript(u16 mask)
     }
 }
 
-void SceneSetTimerScript(u8 duration, BANK_PTR target)
+void SceneSetTimerScript(u8 duration, BANK_PTR target, u8 context)
 {
-    // A local copy, not `timer_script_ptr = target;` directly: 816-tcc's
-    // struct-by-value parameter copy-out references a `_locals` frame symbol
-    // it only emits when the function has a genuine local variable - with
-    // none, the reference is left unresolved and linking fails (matches the
-    // `run_script` local-copy pattern above, which sidesteps the same trap).
+    // A local copy, not `timer_script_ptr[context] = target;` directly:
+    // 816-tcc's struct-by-value parameter copy-out references a `_locals`
+    // frame symbol it only emits when the function has a genuine local
+    // variable - with none, the reference is left unresolved and linking
+    // fails (matches the `run_script` local-copy pattern above, which
+    // sidesteps the same trap).
     BANK_PTR t = target;
-    timer_script_duration = duration;
-    timer_script_time = duration;
-    timer_script_ptr = t;
+    if (context >= NUM_TIMER_CONTEXTS) context = 0;
+    timer_script_duration[context] = duration;
+    timer_script_time[context] = duration;
+    timer_script_ptr[context] = t;
 }
 
-void SceneTimerRestart(void)
+void SceneTimerRestart(u8 context)
 {
-    timer_script_time = timer_script_duration;
+    if (context >= NUM_TIMER_CONTEXTS) context = 0;
+    timer_script_time[context] = timer_script_duration[context];
 }
 
-void SceneTimerDisable(void)
+void SceneTimerDisable(u8 context)
 {
-    timer_script_duration = 0;
+    if (context >= NUM_TIMER_CONTEXTS) context = 0;
+    timer_script_duration[context] = 0;
 }
 
 void SceneShowSprites(void)
@@ -290,26 +303,36 @@ void SceneStackReset(void)
     scene_stack_ptr = 0;
 }
 
+// Ticks all 4 contexts every call, but only ever starts one script per frame
+// (script_ptr is a single global - see the NUM_TIMER_CONTEXTS comment above).
+// A context whose script didn't get to start this frame keeps timer_time at
+// 0 and simply retries on the next call.
 void SceneUpdateTimerScript(void)
 {
+    u8 i;
     if (!scene_loaded) return;
     if (script_ptr) return;
     if (IsFading()) return;
-    if (timer_script_duration == 0) return;
 
-    if (timer_script_time == 0)
+    for (i = 0; i < NUM_TIMER_CONTEXTS; i++)
     {
-        // Don't start the script while the player is mid-step, like GB.
-        if (!actor_on_tile(0)) return;
-        run_script(timer_script_ptr, 0);
-        timer_script_time = timer_script_duration;
-    }
-    else
-    {
-        // One tick every 16 frames, matching the compiler's TIMER_CYCLES scale.
-        if ((time & 0x0F) == 0)
+        if (timer_script_duration[i] == 0) continue;
+
+        if (timer_script_time[i] == 0)
         {
-            timer_script_time--;
+            // Don't start the script while the player is mid-step, like GB.
+            if (!actor_on_tile(0)) return;
+            run_script(timer_script_ptr[i], 0);
+            timer_script_time[i] = timer_script_duration[i];
+            return;
+        }
+        else
+        {
+            // One tick every 16 frames, matching the compiler's TIMER_CYCLES scale.
+            if ((time & 0x0F) == 0)
+            {
+                timer_script_time[i]--;
+            }
         }
     }
 }
@@ -357,6 +380,7 @@ static u8 npc_blocking(u16 skip, s16 tx, s16 ty)
         s16 jx, jy;
         if (j == skip) continue;
         if (!actors[j].enabled) continue;
+        if (!actors[j].active) continue;
         if (!actors[j].collisions_enabled) continue;
         jx = (actors[j].x - 8) >> 3;
         jy = (actors[j].y - 8) >> 3;
@@ -589,6 +613,7 @@ void SceneInit(void)
     actors[0].dir_x = map_next_dir_x;
     actors[0].dir_y = map_next_dir_y;
     actors[0].enabled = 1;
+    actors[0].active = 1;
     actors[0].moving = 0;
     actors[0].flip = 0;
     actors[0].frame = 0;
@@ -613,6 +638,7 @@ void SceneInit(void)
         actors[i].anim_hold = 0;
         actors[i].moving = 0;
         actors[i].enabled = 1;
+        actors[i].active = 1;
         actors[i].move_speed = 1;
         actors[i].collisions_enabled = 1;
         actors[i].sprite_type = p[6];
@@ -625,6 +651,7 @@ void SceneInit(void)
     for (; i < MAX_ACTORS; i++)
     {
         actors[i].enabled = 0;
+        actors[i].active = 0;
         /* Hide the unused OAM slots once here - SceneRenderActors only walks
          * 0..scene_num_actors every frame, so it never touches these again. */
         oamSetVisible((u16)i << 2, OBJ_HIDE);
@@ -659,7 +686,10 @@ void SceneInit(void)
     check_triggers = 1;
     scene_loaded = 1;
     emote_time = 0;
-    timer_script_duration = 0; /* disable any timer script from the last scene */
+    for (j = 0; j < NUM_TIMER_CONTEXTS; j++)
+    {
+        timer_script_duration[j] = 0; /* disable any timer script from the last scene, all 4 contexts */
+    }
     sprites_hidden = 0; /* GB: SHOW_SPRITES right before DISPLAY_ON on every scene load */
 
     /* Leave the screen force-blanked (setScreenOff above). main() un-blanks it
@@ -699,6 +729,10 @@ static void SceneTryInteract(void)
     {
         s16 ax, ay;
         if (!actors[i].enabled)
+        {
+            continue;
+        }
+        if (!actors[i].active)
         {
             continue;
         }
@@ -873,6 +907,7 @@ static u8 actor_at_tile(s16 tx, s16 ty)
     {
         s16 ax, ay;
         if (!actors[i].enabled) continue;
+        if (!actors[i].active) continue;
         ax = SceneActorTileX(i);
         ay = SceneActorTileY(i);
         // Sequential ifs, not one wide &&/|| chain: see the actor_on_tile
@@ -1743,6 +1778,7 @@ static void SceneUpdateAi(void)
         if (script_ptr) return;
         if ((i & 1) != first) continue;
         if (!actors[i].enabled) continue;
+        if (!actors[i].active) continue;
         if (actors[i].moving) continue;
         {
             u8 r = ((time >> 6) + i + actors[i].x) & 3;

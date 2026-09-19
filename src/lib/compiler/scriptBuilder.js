@@ -103,7 +103,10 @@ import {
   RPN_PUSH_VAR,
   RPN_OPERATOR,
   IF_EXPRESSION,
-  RPN_SET_VARIABLE
+  RPN_SET_VARIABLE,
+  IF_CURRENT_SCENE_IS,
+  ACTOR_ACTIVATE,
+  ACTOR_DEACTIVATE
 } from "../events/scriptCommands";
 import {
   getActorIndex,
@@ -284,7 +287,21 @@ class ScriptBuilder {
   actorStopUpdate = () => {
     const output = this.output;
     output.push(cmd(ACTOR_STOP_UPDATE));
-  };  
+  };
+
+  // M4 (v4). Scoped-down: toggles AI/movement/collision/interaction only
+  // (the `active` flag, gbs_types.h) - not tied to a persistent per-actor
+  // "On Update" script the way GB Studio 3.x's real Activate/Deactivate is,
+  // since that subsystem isn't ported on this engine yet.
+  actorActivate = () => {
+    const output = this.output;
+    output.push(cmd(ACTOR_ACTIVATE));
+  };
+
+  actorDeactivate = () => {
+    const output = this.output;
+    output.push(cmd(ACTOR_DEACTIVATE));
+  };
 
   actorSetCollisions = (enabled) => {
     const output = this.output;
@@ -794,6 +811,23 @@ class ScriptBuilder {
       output.push(fadeSpeed);
       this.scriptEnd();
     }
+  };
+
+  // M4 (v4). A missing sceneId resolves to index -1 -> wraps to 0xFFFF
+  // (hi/lo), which never matches a real scene_index - the branch always
+  // falls through to falsePath, same "safe default via wraparound" already
+  // relied on elsewhere in this file rather than a special-cased guard.
+  ifCurrentSceneIs = (sceneId, truePath = [], falsePath = []) => {
+    const output = this.output;
+    const { scenes } = this.options;
+    const sceneIndex = scenes.findIndex((s) => s.id === sceneId);
+    output.push(cmd(IF_CURRENT_SCENE_IS));
+    output.push(hi(sceneIndex));
+    output.push(lo(sceneIndex));
+    compileConditional(truePath, falsePath, {
+      ...this.options,
+      output,
+    });
   };
 
   scenePushState = () => {
@@ -1320,10 +1354,20 @@ class ScriptBuilder {
     output.push(saveSlot);
   };
 
-  dataSave = (saveSlot = 0) => {
+  // M4 (v4): "On Save" children. GB Studio 3.x's own dataSave() polls an
+  // async SRAM-write-completion flag before running these (real GB flash
+  // carts can take a write cycle) - consoleCopySramWithOffset on this
+  // toolchain is a synchronous call, so there is nothing to poll: the
+  // children just compile straight after the opcode, unconditionally.
+  dataSave = (saveSlot = 0, onSavePath = []) => {
     const output = this.output;
     output.push(cmd(SAVE_DATA));
     output.push(saveSlot);
+    if (typeof onSavePath === "function") {
+      onSavePath();
+    } else if (onSavePath && onSavePath.length) {
+      this.options.compileEvents(onSavePath);
+    }
   };
 
   dataClear = (saveSlot = 0) => {
@@ -1352,7 +1396,7 @@ class ScriptBuilder {
 
   // Timer Script
 
-  timerScriptSet = (duration = 10.0, script) => {
+  timerScriptSet = (duration = 10.0, script, timerContext = 0) => {
     const output = this.output;
     const { compileEvents, banked } = this.options;
 
@@ -1382,16 +1426,19 @@ class ScriptBuilder {
     output.push(bankPtr.bank);
     output.push(hi(bankPtr.offset));
     output.push(lo(bankPtr.offset));
+    output.push(timerContext);
   };
 
-  timerRestart = () => {
+  timerRestart = (timerContext = 0) => {
     const output = this.output;
     output.push(cmd(TIMER_RESTART));
+    output.push(timerContext);
   };
 
-  timerDisable = () => {
+  timerDisable = (timerContext = 0) => {
     const output = this.output;
     output.push(cmd(TIMER_DISABLE));
+    output.push(timerContext);
   };
 
   // Device

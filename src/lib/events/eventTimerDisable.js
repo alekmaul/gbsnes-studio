@@ -5,12 +5,24 @@ const id = "EVENT_TIMER_DISABLE";
 const fields = [
   {
     label: l10n("FIELD_TIMER_DISABLE")
+  },
+  {
+    key: "timer",
+    type: "select",
+    label: l10n("FIELD_TIMER"),
+    options: [
+      [0, "FIELD_TIMER_1"],
+      [1, "FIELD_TIMER_2"],
+      [2, "FIELD_TIMER_3"],
+      [3, "FIELD_TIMER_4"]
+    ],
+    defaultValue: 0
   }
 ];
 
 const compile = (input, helpers) => {
   const { timerDisable } = helpers;
-  timerDisable();
+  timerDisable(input.timer || 0);
 };
 
 module.exports = {

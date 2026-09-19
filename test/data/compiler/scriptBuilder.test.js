@@ -1050,7 +1050,26 @@ test("Should be able to add timer script", () => {
     }
   });
   sb.timerScriptSet(16.0, []);
-  expect(output).toEqual([cmd(SET_TIMER_SCRIPT), 60, 99, 0, 200]);
+  expect(output).toEqual([cmd(SET_TIMER_SCRIPT), 60, 99, 0, 200, 0]);
+});
+
+test("Should be able to add timer script to a specific timer context", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    compileEvents: (input, subScript) => {
+      subScript.push(99);
+    },
+    banked: {
+      push: () => {
+        return {
+          bank: 99,
+          offset: 200
+        };
+      }
+    }
+  });
+  sb.timerScriptSet(16.0, [], 2);
+  expect(output).toEqual([cmd(SET_TIMER_SCRIPT), 60, 99, 0, 200, 2]);
 });
 
 test("Should be able to add timer script as function", () => {
@@ -1071,21 +1090,35 @@ test("Should be able to add timer script as function", () => {
   sb.timerScriptSet(16.0, () => {
     sb.spritesHide();
   });
-  expect(output).toEqual([cmd(SET_TIMER_SCRIPT), 60, 99, 0, 200]);
+  expect(output).toEqual([cmd(SET_TIMER_SCRIPT), 60, 99, 0, 200, 0]);
 });
 
 test("Should be able to remove timer script", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.timerDisable();
-  expect(output).toEqual([cmd(TIMER_DISABLE)]);
+  expect(output).toEqual([cmd(TIMER_DISABLE), 0]);
+});
+
+test("Should be able to remove a specific timer context's script", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.timerDisable(3);
+  expect(output).toEqual([cmd(TIMER_DISABLE), 3]);
 });
 
 test("Should be able to restart countdown timer", () => {
   const output = [];
   const sb = new ScriptBuilder(output);
   sb.timerRestart();
-  expect(output).toEqual([cmd(TIMER_RESTART)]);
+  expect(output).toEqual([cmd(TIMER_RESTART), 0]);
+});
+
+test("Should be able to restart a specific timer context's countdown", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.timerRestart(1);
+  expect(output).toEqual([cmd(TIMER_RESTART), 1]);
 });
 
 test("Should be able to play music", () => {
@@ -1215,6 +1248,17 @@ test("Should be able to save data to a specific save slot", () => {
   const sb = new ScriptBuilder(output);
   sb.dataSave(1);
   expect(output).toEqual([cmd(SAVE_DATA), 1]);
+});
+
+test("Should compile On Save children straight after the opcode (no branch - the save is synchronous)", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    compileEvents: () => {
+      output.push(99);
+    },
+  });
+  sb.dataSave(1, [{ command: "EVENT_END", id: "abc" }]);
+  expect(output).toEqual([cmd(SAVE_DATA), 1, 99]);
 });
 
 test("Should be able to clear saved data", () => {

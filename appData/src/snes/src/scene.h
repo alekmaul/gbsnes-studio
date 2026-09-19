@@ -81,9 +81,9 @@ u16 SceneGbInputBits(u16 j);
 void SceneScheduledScriptsInit(void); /* boot-only: zero input_script_ptrs[] */
 void SceneSetInputScript(u16 mask, BANK_PTR target);
 void SceneRemoveInputScript(u16 mask);
-void SceneSetTimerScript(u8 duration, BANK_PTR target);
-void SceneTimerRestart(void);
-void SceneTimerDisable(void);
+void SceneSetTimerScript(u8 duration, BANK_PTR target, u8 context);
+void SceneTimerRestart(u8 context);
+void SceneTimerDisable(u8 context);
 void SceneUpdateTimerScript(void);
 
 /* SHOW_SPRITES / HIDE_SPRITES */

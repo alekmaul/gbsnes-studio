@@ -39,7 +39,7 @@ export const namedVariablesByContext = (
 ): NamedVariable[] => {
   if (context === "customEvent") {
     if (customEvent) {
-      return namedCustomEventVariables(customEvent);
+      return namedCustomEventVariables(customEvent, variablesLookup);
     }
     return [];
   }
@@ -49,18 +49,35 @@ export const namedVariablesByContext = (
   return [];
 };
 
+// M4 (v4): a custom event's own script now also sees project-global
+// variables (grouped separately from its own parameters), not just its own
+// V0-V9 args - matches GB Studio 3.x's namedCustomEventVariables. Purely a
+// picker-side change: getVariableIndex() already resolves any variable id
+// regardless of which UI context looked it up, so nothing on the compiler
+// side needed to change for this.
 export const namedCustomEventVariables = (
-  customEvent: CustomEvent
+  customEvent: CustomEvent,
+  variablesLookup: VariablesLookup | undefined
 ): NamedVariable[] => {
-  if (customEvent) {
-    return customEventVariables.map((variable) => ({
+  if (!customEvent) {
+    return [];
+  }
+  return ([] as NamedVariable[]).concat(
+    customEventVariables.map((variable) => ({
       id: variable,
       code: customEventVariableCode(variable),
       name: customEventVariableName(variable, customEvent),
-      group: "",
-    }));
-  }
-  return [];
+      group: "Parameters",
+    })),
+    variablesLookup
+      ? allVariables.map((variable) => ({
+          id: variable,
+          code: globalVariableCode(variable),
+          name: globalVariableName(variable, variablesLookup),
+          group: "Global",
+        }))
+      : []
+  );
 };
 
 export const namedEntityVariables = (

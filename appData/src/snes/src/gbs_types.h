@@ -58,6 +58,14 @@ typedef struct
     u8 anim_hold;    /* frames since last moved - bridges the 1-frame gaps at
                         tile boundaries so a walk cycle doesn't stutter/reset */
     u8 enabled;
+    u8 active;  /* M4 (v4): ACTOR_ACTIVATE/DEACTIVATE. Independent of `enabled`
+                   (visibility, ACTOR_SHOW/HIDE) - this only gates AI/movement/
+                   collision/interaction, matching GB Studio 3.x's real
+                   active/inactive split; a hidden-but-active actor still
+                   moves and blocks, an inactive-but-shown actor stands still
+                   and can't be walked into or interacted with. Rendering
+                   (SceneRenderActors) and per-frame animation cycling
+                   (SceneAnimateActors) are unaffected - only `enabled`. */
     u8 flip;
     u8 moving;
     u8 move_speed;

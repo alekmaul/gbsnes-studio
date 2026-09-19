@@ -505,11 +505,18 @@ void Script_OverlayMoveTo_b(void)
 
 // SET_TIMER_SCRIPT. args: duration (16-frame ticks), bank (unused, always 0),
 // event_ptrs index hi/lo. Auto-repeating background script (SceneUpdateTimerScript).
+// M4 (v4): args_len bumped 4->5, a trailing context byte (0-3, one of the
+// engine's 4 independent timer slots - see NUM_TIMER_CONTEXTS in scene.c).
+// script_cmd_args[1] (the sub-script's BANK_PTR bank byte) stays present but
+// still unused here, same as before this change - event_ptrs[idx] is
+// already the real indirection, the bank byte was always dead on this
+// engine (banked shim, see the comment above input_script_ptrs).
 void Script_SetTimerScript_b(void)
 {
     u8 duration = script_cmd_args[0];
     u16 idx = ARG16(2, 3);
-    SceneSetTimerScript(duration, event_ptrs[idx]);
+    u8 context = script_cmd_args[4];
+    SceneSetTimerScript(duration, event_ptrs[idx], context);
     ADVANCE();
     script_continue = 1;
 }
@@ -517,7 +524,7 @@ void Script_SetTimerScript_b(void)
 // TIMER_RESTART. Resets the countdown to its full duration without stopping it.
 void Script_TimerRestart_b(void)
 {
-    SceneTimerRestart();
+    SceneTimerRestart(script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
@@ -525,7 +532,7 @@ void Script_TimerRestart_b(void)
 // TIMER_DISABLE.
 void Script_TimerDisable_b(void)
 {
-    SceneTimerDisable();
+    SceneTimerDisable(script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
@@ -940,6 +947,50 @@ void Script_RpnSetVariable_b(void)
     script_continue = 1;
 }
 
+// M4 (v4): scene_index is a flat 0-based global (see scene.h) - unlike GB
+// Studio 3.x's bank+addr pointer compare against _current_scene, a literal
+// u16 equality test is all this needs.
+void Script_IfCurrentSceneIs_b(void)
+{
+    if (scene_index == ARG16(0, 1))
+    {
+        script_ptr = script_start_ptr + ARG16(2, 3);
+    }
+    else
+    {
+        ADVANCE();
+    }
+    script_continue = 1;
+}
+
+// M4 (v4): scoped-down ACTOR_ACTIVATE/ACTOR_DEACTIVATE - toggles the new
+// `active` flag only (see gbs_types.h), gating AI/movement/collision/
+// interaction (npc_blocking, SceneTryInteract, actor_at_tile, SceneUpdateAi
+// in scene.c). Independent of `enabled` (ACTOR_SHOW/HIDE, visibility only).
+// Unlike GB Studio 3.x, this does NOT re-launch or terminate a persistent
+// per-actor "On Update" script - that subsystem isn't ported on this engine
+// yet (see EVENTS.md). The player (script_actor 0) can never be deactivated,
+// matching the GB Studio 3.x engine's own `if (actor == &PLAYER) return;`
+// guard. Named *Flag*_b - Script_ActorActivate_b (0x08, ACTOR_SET_ACTIVE) is
+// an unrelated, pre-existing "select current actor index" opcode; the name
+// collision is coincidental, not a semantic relationship.
+void Script_ActorActivateFlag_b(void)
+{
+    actors[script_actor].active = 1;
+    ADVANCE();
+    script_continue = 1;
+}
+
+void Script_ActorDeactivateFlag_b(void)
+{
+    if (script_actor != 0)
+    {
+        actors[script_actor].active = 0;
+    }
+    ADVANCE();
+    script_continue = 1;
+}
+
 /*---------------------------------------------------------------------------------
     Dispatch table - index order MUST match src/lib/events/scriptCommands.js
     (and appData/src/gb/src/ScriptRunner.c script_cmds[]).
@@ -1033,9 +1084,9 @@ void Script_RpnSetVariable_b(void)
     X(Script_SoundStopTone_b, 0) /* 0x55 SOUND_STOP_TONE */ \
     X(Script_SoundPlayBeep_b, 1) /* 0x56 SOUND_PLAY_BEEP */ \
     X(Script_SoundPlayCrash_b, 0) /* 0x57 SOUND_PLAY_CRASH */ \
-    X(Script_SetTimerScript_b, 4) /* 0x58 SET_TIMER_SCRIPT */ \
-    X(Script_TimerRestart_b, 0) /* 0x59 TIMER_RESTART */ \
-    X(Script_TimerDisable_b, 0) /* 0x5A TIMER_DISABLE */ \
+    X(Script_SetTimerScript_b, 5) /* 0x58 SET_TIMER_SCRIPT - +1 byte (context), M4 v4 */ \
+    X(Script_TimerRestart_b, 1) /* 0x59 TIMER_RESTART - +1 byte (context), M4 v4 */ \
+    X(Script_TimerDisable_b, 1) /* 0x5A TIMER_DISABLE - +1 byte (context), M4 v4 */ \
     X(Script_TextWithAvatar_b, 4) /* 0x5B TEXT_WITH_AVATAR */ \
     X(Script_Menu_b, 7) /* 0x5C MENU */ \
     X(Script_ActorSetCollisions_b, 1) /* 0x5D ACTOR_SET_COLLISIONS */ \
@@ -1061,7 +1112,10 @@ void Script_RpnSetVariable_b(void)
     X(Script_RpnPushVar_b, 2) /* 0x71 RPN_PUSH_VAR */ \
     X(Script_RpnOperator_b, 1) /* 0x72 RPN_OPERATOR */ \
     X(Script_IfExpression_b, 2) /* 0x73 IF_EXPRESSION */ \
-    X(Script_RpnSetVariable_b, 2) /* 0x74 RPN_SET_VARIABLE */
+    X(Script_RpnSetVariable_b, 2) /* 0x74 RPN_SET_VARIABLE */ \
+    X(Script_IfCurrentSceneIs_b, 4) /* 0x75 IF_CURRENT_SCENE_IS */ \
+    X(Script_ActorActivateFlag_b, 0) /* 0x76 ACTOR_ACTIVATE */ \
+    X(Script_ActorDeactivateFlag_b, 0) /* 0x77 ACTOR_DEACTIVATE */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

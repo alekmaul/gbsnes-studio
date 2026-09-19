@@ -9,5 +9,17 @@ test("Should be able to disable timer", () => {
       timerDisable: mockTimerDisable
     }
   );
-  expect(mockTimerDisable).toBeCalledWith();
+  expect(mockTimerDisable).toBeCalledWith(0);
+});
+
+test("Should be able to disable a specific timer context", () => {
+  const mockTimerDisable = jest.fn();
+
+  compile(
+    { timer: 1 },
+    {
+      timerDisable: mockTimerDisable
+    }
+  );
+  expect(mockTimerDisable).toBeCalledWith(1);
 });

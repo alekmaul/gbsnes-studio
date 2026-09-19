@@ -42,7 +42,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Set Timer Script, Restart Timer, Disable Timer | ✅ | |
+| Set Timer Script, Restart Timer, Disable Timer | ✅ | **4 independent timer contexts** (M4, v4) - each with its own duration/countdown/target script (`NUM_TIMER_CONTEXTS`, `scene.c`). Still only one script can be *running* project-wide at a time (single `script_ptr`, not real hyperthreads like GB Studio 3.x's GBVM) - two contexts firing the same frame just means the second one starts a frame late. |
 | If Button Pressed (`IF_INPUT`), Await Input (`AWAIT_INPUT`) | ✅ | All 12 SNES buttons, X / Y / L / R included. On the SNES target these opcodes (plus `SET_INPUT_SCRIPT` / `REMOVE_INPUT_SCRIPT`) carry a 2-byte button mask — X/Y/L/R are `KEY_BITS` bits 8..11 in `src/lib/compiler/helpers.js`. The Game Boy engine and its byte-exact tests are untouched (GB still emits a 1-byte mask). |
 
 ## Actors — position & movement
@@ -62,6 +62,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Event | SNES | Notes |
 | --- | --- | --- |
 | Show Actor, Hide Actor | ✅ | |
+| Activate Actor, Deactivate Actor | ⚠️ | M4 (v4), scoped down. Toggles a new `active` flag (independent of `enabled`/Show-Hide) gating AI, movement, collision and interaction — `npc_blocking`, `SceneTryInteract`, `actor_at_tile`, `SceneUpdateAi` in `scene.c` all skip an inactive actor. Unlike GB Studio 3.x, this does **not** re-launch or terminate a persistent per-actor "On Update" script - that subsystem isn't ported on this engine (see "Not yet implemented" below), so Deactivate is closer to "freeze in place, can't be walked into or talked to" than B's full activity teardown. The player can never be deactivated (same guard as B's `if (actor == &PLAYER) return;`). Rendering and animation cycling are unaffected — a deactivated-but-shown actor still stands there and animates. |
 | Show All Sprites, Hide All Sprites | ✅ | |
 | Actor animation | ✅ | A 6-frame actor sheet walk-cycles (2 poses per direction) while moving. An "animated" sheet with 2/4/5/6 frames auto-cycles all of them (a duck, a torch) when "Animate Frames" is ticked. 3-frame sheets are direction-only (no cycle); 1-frame sheets are static. |
 | Actor Emote | ✅ | 16×16 bubble on OBJ palette 1. |
@@ -116,7 +117,7 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Save Data, Load Data, Clear Data, If Data Saved | ✅ | Cartridge SRAM, **3 independent save slots** (`FIELD_SAVE_SLOT`), each its own fixed-size region. Saves the same scope as GB: player position / facing + all `script_variables[]` (not other actors, the scene stack, or timers). |
+| Save Data, Load Data, Clear Data, If Data Saved | ✅ | Cartridge SRAM, **3 independent save slots** (`FIELD_SAVE_SLOT`), each its own fixed-size region. Saves the same scope as GB: player position / facing + all `script_variables[]` (not other actors, the scene stack, or timers). Save Data (M4, v4) also runs an **On Save** child branch straight after the opcode - GB Studio 3.x polls an async write-completion flag first (real GB flash carts), but `consoleCopySramWithOffset` on this toolchain is synchronous, so there's nothing to poll and no branch is needed. |
 
 ## Not yet implemented (M16 opcode audit, 2026-09-18)
 
