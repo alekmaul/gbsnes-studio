@@ -196,14 +196,29 @@ const compileSnesData = async (
   const isSprite = (id) => id && !!spriteById(id);
 
   // A scene's own playerSpriteSheetId overrides the project-wide default
-  // (settings.playerSpriteSheetId) when set - lets a scene give the player a
-  // different costume, matching GB Studio 3.x's per-scene field. Player is
+  // when set - lets a scene give the player a different costume, matching
+  // GB Studio 3.x's per-scene field. Below that, settings.defaultPlayerSprites
+  // (v4, "Default Player Sprites" in Settings) picks a default *per scene
+  // type* instead of one single project-wide sheet - also matches GB Studio
+  // 3.2.1 exactly (defaultPlayerSprites[scene.type] in its own compileData.js),
+  // keyed by this fork's own numeric-string scene type ("0".."4",
+  // SceneTypeSelect.tsx) rather than B's string enum. settings.playerSpriteSheetId
+  // (the old single default) stays as the final fallback for a scene type with
+  // no configured default - additive, not a migration: an unset
+  // defaultPlayerSprites falls straight through to the old behaviour. Player is
   // still always OBJ slot 0 in every scene (a fork-wide simplification kept
   // as-is - only *which sheet* loads into that slot varies per scene now).
-  const playerSpriteIdForScene = (sc) =>
-    isSprite(sc.playerSpriteSheetId)
-      ? sc.playerSpriteSheetId
-      : settings.playerSpriteSheetId;
+  const playerSpriteIdForScene = (sc) => {
+    if (isSprite(sc.playerSpriteSheetId)) {
+      return sc.playerSpriteSheetId;
+    }
+    const defaultForType =
+      settings.defaultPlayerSprites && settings.defaultPlayerSprites[sc.type];
+    if (isSprite(defaultForType)) {
+      return defaultForType;
+    }
+    return settings.playerSpriteSheetId;
+  };
 
   // Projectiles (v4): a scene's own LAUNCH_PROJECTILE/WEAPON_ATTACK events can
   // reference any project sprite sheet, same as an avatarId - it has to be

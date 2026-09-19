@@ -677,6 +677,7 @@
   "SETTINGS_SNES_REGION": "Region",
   "SETTINGS_SNES_SRAM": "Save Data (SRAM)",
   "SETTINGS_SNES_ROM_BANKS": "ROM Size",
+  "SETTINGS_PLAYER_DEFAULT_SPRITES": "Default Player Sprites",
   "SETTINGS_CONTROLS": "Controls",
   "SETTINGS_COLORS": "Colors",
   "SETTINGS_CPU": "CPU",

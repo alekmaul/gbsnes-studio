@@ -16,6 +16,14 @@ export type SettingsState = {
   snesRomBanks?: number;
   startSceneId: string;
   playerSpriteSheetId: string;
+  // Per scene-type default (keyed by SceneTypeSelect's numeric-string
+  // `value`, e.g. "0".."4" - this fork never adopted GB Studio 3.x's
+  // string-enum scene type, see CLAUDE.md/memory). Falls back to the
+  // single `playerSpriteSheetId` above when a scene type has no entry -
+  // ported from GB Studio 3.2.1's `defaultPlayerSprites`, additive (no
+  // migration needed: an empty `{}` degrades to the old single-default
+  // behaviour exactly).
+  defaultPlayerSprites: Record<string, string>;
   startX: number;
   startY: number;
   startMoveSpeed: number;
@@ -35,6 +43,7 @@ export type SettingsState = {
 export const initialState: SettingsState = {
   startSceneId: "",
   playerSpriteSheetId: "",
+  defaultPlayerSprites: {},
   startX: 0,
   startY: 0,
   startMoveSpeed: 1,
@@ -73,6 +82,17 @@ const settingsSlice = createSlice({
 
     setShowNavigator: (state, action: PayloadAction<boolean>) => {
       state.showNavigator = action.payload;
+    },
+
+    setSceneTypeDefaultPlayerSprite: (
+      state,
+      action: PayloadAction<{
+        sceneType: string;
+        spriteSheetId: string;
+      }>
+    ) => {
+      state.defaultPlayerSprites[action.payload.sceneType] =
+        action.payload.spriteSheetId;
     },
 
     toggleFavoriteEvent: (state, action: PayloadAction<string>) => {

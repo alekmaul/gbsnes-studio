@@ -11,6 +11,21 @@ import { getSettings } from "../../store/features/settings/settingsState";
 
 const menuPortalEl = document.getElementById("MenuPortal");
 
+// v4: same fallback chain as compileSnesData.js's playerSpriteIdForScene -
+// a scene's own override, then settings.defaultPlayerSprites[scene.type]
+// ("Default Player Sprites" in Settings), then the old single project-wide
+// default - so this preview matches what actually gets compiled.
+const resolvePlayerSpriteSheetId = (scene, settings) => {
+  if (scene && scene.playerSpriteSheetId) {
+    return scene.playerSpriteSheetId;
+  }
+  const defaultForType =
+    scene &&
+    settings.defaultPlayerSprites &&
+    settings.defaultPlayerSprites[scene.type];
+  return defaultForType || settings.playerSpriteSheetId;
+};
+
 const properties = {
   xpos: l10n("FIELD_X_POSITION"),
   ypos: l10n("FIELD_Y_POSITION"),
@@ -46,8 +61,7 @@ const GroupWithData = connect((state, ownProps) => {
   const actorIds = getSceneActorIds(state, { id: state.editor.scene });
   const settings = getSettings(state);
   const scene = sceneSelectors.selectById(state, state.editor.scene);
-  const playerSpriteSheetId =
-    (scene && scene.playerSpriteSheetId) || settings.playerSpriteSheetId;
+  const playerSpriteSheetId = resolvePlayerSpriteSheetId(scene, settings);
   const {
     data: { actorId, contextEntityId },
   } = ownProps;
@@ -104,8 +118,7 @@ const DropdownIndicatorWithData = (actorId) =>
     const actorsLookup = actorSelectors.selectEntities(state);
     const settings = getSettings(state);
     const scene = sceneSelectors.selectById(state, state.editor.scene);
-    const playerSpriteSheetId =
-      (scene && scene.playerSpriteSheetId) || settings.playerSpriteSheetId;
+    const playerSpriteSheetId = resolvePlayerSpriteSheetId(scene, settings);
     const actor =
       actorsLookup[actorId] ||
       getCachedObject({

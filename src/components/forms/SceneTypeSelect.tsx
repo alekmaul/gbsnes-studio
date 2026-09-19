@@ -13,7 +13,7 @@ interface SceneTypeOption {
   label: string;
 }
 
-const options: SceneTypeOption[] = [
+export const options: SceneTypeOption[] = [
   { value: "0", label: l10n("GAMETYPE_TOP_DOWN") },
   { value: "1", label: l10n("GAMETYPE_PLATFORMER") },
   {

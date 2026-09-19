@@ -3,6 +3,8 @@ import { useDispatch, useSelector } from "react-redux";
 import l10n from "../../lib/helpers/l10n";
 import castEventValue from "../../lib/helpers/castEventValue";
 import CustomControlsPicker from "../../components/forms/CustomControlsPicker";
+import { SpriteSheetSelect } from "../../components/forms/SpriteSheetSelect";
+import { options as sceneTypeOptions } from "../../components/forms/SceneTypeSelect";
 import Alert, { AlertItem } from "../../components/library/Alert";
 import { Select } from "../../components/ui/form/Select";
 import { SettingsState } from "../../store/features/settings/settingsState";
@@ -151,6 +153,16 @@ const SettingsPage: FC = () => {
     editSettings({ snesRomBanks });
   };
 
+  const defaultPlayerSprites = settings.defaultPlayerSprites || {};
+  const onEditDefaultPlayerSprite = (sceneType: string, spriteSheetId: string) => {
+    dispatch(
+      settingsActions.setSceneTypeDefaultPlayerSprite({
+        sceneType,
+        spriteSheetId,
+      })
+    );
+  };
+
   return (
     <SettingsPageWrapper>
       {showMenu && (
@@ -167,6 +179,9 @@ const SettingsPage: FC = () => {
             </SettingsSearchWrapper>
             <SettingsMenuItem onClick={onMenuItem("settingsSnesOptions")}>
               {l10n("SETTINGS_SNES_OPTIONS")}
+            </SettingsMenuItem>
+            <SettingsMenuItem onClick={onMenuItem("settingsPlayerDefaultSprites")}>
+              {l10n("SETTINGS_PLAYER_DEFAULT_SPRITES")}
             </SettingsMenuItem>
             {groupedFields.map((group) => (
               <SettingsMenuItem
@@ -250,6 +265,34 @@ const SettingsPage: FC = () => {
               />
             </SettingRowInput>
           </SearchableSettingRow>
+        </SearchableCard>
+
+        <SearchableCard
+          searchTerm={searchTerm}
+          searchMatches={[l10n("SETTINGS_PLAYER_DEFAULT_SPRITES")]}
+        >
+          <CardAnchor id="settingsPlayerDefaultSprites" />
+          <CardHeading>{l10n("SETTINGS_PLAYER_DEFAULT_SPRITES")}</CardHeading>
+          {sceneTypeOptions.map((sceneType) => (
+            <SearchableSettingRow
+              key={sceneType.value}
+              searchTerm={searchTerm}
+              searchMatches={[sceneType.label]}
+            >
+              <SettingRowLabel>{sceneType.label}</SettingRowLabel>
+              <SettingRowInput>
+                <SpriteSheetSelect
+                  name={`defaultPlayerSprite__${sceneType.value}`}
+                  value={defaultPlayerSprites[sceneType.value] || ""}
+                  optional
+                  optionalLabel={l10n("FIELD_NONE")}
+                  onChange={(value: string) =>
+                    onEditDefaultPlayerSprite(sceneType.value, value)
+                  }
+                />
+              </SettingRowInput>
+            </SearchableSettingRow>
+          ))}
         </SearchableCard>
 
         <EngineFieldsEditor searchTerm={searchTerm} />
