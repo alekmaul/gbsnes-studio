@@ -849,6 +849,20 @@ static void SceneTryInteract(void)
         {
             continue;
         }
+        // A "hostile" actor (collision_group set - Projectiles/contact-
+        // damage follow-up) is never A-press-interactable, only contact-
+        // triggered (PlayerContactUpdate) - matches B's real topdown.c AND
+        // adventure.c exactly (both gate their own equivalent A-press script
+        // run on `!hit_actor->collision_group`; user-found comparing against
+        // B while looking at Adventure specifically, but the same exclusion
+        // is real in B's Top Down too, so fixed here once for both callers
+        // rather than duplicated per genre). Treated as "nothing found"
+        // rather than "found but blocked" - falls through to the trigger
+        // check below like any other non-match, not a special early return.
+        if (actors[i].collision_group)
+        {
+            continue;
+        }
         ax = SceneActorTileX(i);
         ay = SceneActorTileY(i);
         if (in_box(ntx, nty, ax, ay, 2, 2))
@@ -1495,7 +1509,11 @@ void Update_Platform(void)
         {
             hit_actor = actor_at_tile(tile_x - 1, tile_y);
         }
-        if (hit_actor != 0xFF)
+        // A "hostile" actor is never A-press-interactable, only contact-
+        // triggered - same B-matching fix as SceneTryInteract's own (its
+        // comment has the full reasoning); B's platform.c has this exact
+        // exclusion too (`!hit_actor->collision_group`).
+        if (hit_actor != 0xFF && !actors[hit_actor].collision_group)
         {
             run_script(actors[hit_actor].events_ptr, hit_actor);
         }
