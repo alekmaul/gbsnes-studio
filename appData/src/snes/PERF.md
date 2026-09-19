@@ -1,15 +1,21 @@
 # SNES target — performance profile (M11)
 
 Measured 2026-09-05 in **Mesen 2** (cycle-accurate) against real project ROMs built through the
-normal pipeline. Method notes at the bottom.
+normal pipeline. Method notes at the bottom. **Re-checked 2026-09-19** (see "2026-09-19
+re-profile" below) after a whole v4 milestone's worth of new engine code (RPN evaluator, bulk
+event port, Font/Emote entities, HDMA parallax, priority tiles, per-scene player sprite, and a
+real Projectiles subsystem) - ROM headroom has genuinely shrunk a lot; CPU has not regressed.
 
-**TL;DR** — ROM, WRAM, VRAM and ARAM all have comfortable headroom. The one soft spot is **CPU
-time per frame**: a typical scene holds a locked 60 fps, but a scene with more than ~5–6
-*simultaneously moving* actors starts dropping the odd frame (graceful — ~54 fps, not 30). That
-ceiling is a property of the `816-tcc` toolchain (a small non-optimising C compiler), not a bug.
-2026-09-11: found and fixed a real O(N²) spike in the movement/collision path (an actor-count
-scan that could run once per actor on the very frame several actors' AI ticks coincided) - see
-"Done" below. The underlying `816-tcc`-is-slow ceiling itself is unchanged.
+**TL;DR** — WRAM, VRAM and ARAM still have comfortable headroom. **ROM headroom is now the real
+soft spot** (see below - a full sample project sits at 97% of its default 8-bank allocation,
+down from the ~77% this doc originally measured against a smaller stress fixture), and **CPU
+time per frame** is still the other one: a typical scene holds a locked 60 fps, but a scene with
+more than ~5–6 *simultaneously moving* actors starts dropping the odd frame (graceful — ~54 fps,
+not 30). That ceiling is a property of the `816-tcc` toolchain (a small non-optimising C
+compiler), not a bug. 2026-09-11: found and fixed a real O(N²) spike in the movement/collision
+path (an actor-count scan that could run once per actor on the very frame several actors' AI
+ticks coincided) - see "Done" below. The underlying `816-tcc`-is-slow ceiling itself is
+unchanged.
 
 ---
 
@@ -31,7 +37,9 @@ The ROM is padded to the 8-bank (256 KB) minimum; ~77 % of the used banks is occ
 banks $05–$07 gets a build warning (`compileSnesMusic.js`).
 Banks $00/$01 read as "full" only because `wla` packs `SUPERFREE` sections tightly — new engine
 code spills into the empty banks automatically, and the ROM can grow to 128 banks (4 MB).
-**ROM is not a constraint.**
+**ROM is not a constraint.** *(2026-09-19: this "not a constraint" verdict is now stale - see
+below. Still true that it's elastic, not a hard wall - just much less headroom than this table
+suggests today.)*
 
 ## WRAM
 
@@ -139,6 +147,50 @@ it tips over one frame.
   curtain via a real BG3 vscroll register, deferred (BG3 is shared with the dialogue/menu box,
   which would need to compensate its own draw position to stay fixed on screen while the curtain
   scrolls - a bigger, riskier change than this mechanical one).
+
+### 2026-09-19 re-profile
+
+Same two methods as above (`snesromusage`, and the `time`-vs-PPU-frame ratio), run against a
+different and more representative ROM than the original 2026-09-05 measurement: the **`sneshtml`
+sample project** (8 real scenes, real backgrounds/sprites/music) built through the normal
+pipeline, rather than a synthetic "9-actor stress" fixture - and against today's engine, after a
+whole v4 milestone's worth of new code landed since (RPN evaluator, bulk event port, Font/Emote
+entities, HDMA parallax, priority tiles, per-scene player sprite override, a real Projectiles
+subsystem with its own new per-frame `ProjectilesUpdate()` call). Prompted by the user, right
+after Projectiles shipped, specifically to check whether that much new code had eaten into the
+headroom this doc promised.
+
+**ROM: genuinely tighter now, still not a hard wall.** `snesromusage -r lorom -g -i game.sym`:
+
+| Bank | Used | Free |
+| --- | --- | --- |
+| $00 – $05 | **100%** each | 75, 0, 0, 0, 0, 0 bytes |
+| $06 | 79% | 6854 B (21%) |
+| **Total (7 banks)** | **97%** | **6929 B (3%)** |
+
+Six banks fully packed (vs. two in the original measurement) and only ~6.9 KB free across the
+whole ROM - a real, substantial drop from the ~77%-used figure this doc originally reported,
+because this is a much bigger real project *and* a lot of new engine/compiler code has landed
+since. Still genuinely elastic, not a hard ceiling: the build log already shows `OBTAIN_ROMBANKS:
+Using the biggest selected amount of ROM banks (8)` - i.e. `settings.snesRomBanks` (Settings >
+SNES Options) is what actually caps this, and it can go up to 128 banks (4 MB) same as before.
+**Practical guidance**: a project that's this close to its currently-configured bank count and
+hits a real "doesn't fit" build error should just raise `snesRomBanks` in Settings - not a code
+fix, an author-facing setting already in place for exactly this.
+
+**CPU: no regression.** `time` turned out to be a `u8` (wraps mod 256, not `u16` as first
+assumed when this check was set up - re-derived correctly after the first attempt's numbers came
+out nonsensically low, a measurement bug on this session's part, not an engine one). Corrected
+measurement: **777 engine ticks / 780 PPU frames = 0.9962** (essentially locked 60 fps) over a
+~13 s window spanning several of the sample's real scenes with the player idle (no simulated
+movement - the same Mesen input-simulation gap this doc's own Method section already worked
+around by walking the player via script for the original 2026-09-05 numbers is still unfixed
+this session, see memory `gbsnes-v2-migration`). This *does* confirm the new unconditional
+per-frame `ProjectilesUpdate()` call (added for v4's Projectiles subsystem - it scans
+`MAX_PROJECTILES(4)` pool slots every frame regardless of how many are actually active) costs
+nothing measurable at idle. It does **not** by itself re-confirm the ~90% (moving-actor) or
+~54 fps (heavy collision) numbers further down this doc, which specifically need real movement
+to exercise - those numbers are carried forward unchanged, not re-verified this pass.
 
 ### Not done — future work
 
