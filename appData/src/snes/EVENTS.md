@@ -81,6 +81,45 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Camera Move To | ✅ | Clamped to the SNES screen size (32×28 tiles), not the GB 20×18. |
 | Camera Lock, Camera Shake | ✅ | |
 
+## Parallax scrolling (M6, v4)
+
+Not a scripting event - a per-scene editor field (`Scene.parallax`, Scene properties sidebar),
+matching GB Studio 3.x's `SceneParallaxLayer[]` shape exactly (`{height, speed}`, up to 3 bands
+stacked top-to-bottom, the last one always auto-extending to fill the rest of the screen).
+
+The mechanism is completely different from B's, though. GB Studio's own engine has no hardware
+for this: it reprograms `SCX`/`SCY` from an LCD STAT (LYC) interrupt fired at each band's start
+scanline (`appData/src/gb/src/core/parallax.c` in the B reference tree). The SNES has real
+hardware for exactly this - **HDMA** - so this port uses that instead: PVSnesLib's
+`setParallaxScrolling()` (`dma.h`) arms HDMA channel 3 from a small table (`HDMATable16`) that
+the PPU itself walks once per scanline during the active picture, rewriting `BG1HOFS` with zero
+CPU involvement after the table is built. No second BG layer is used (BG2 stays unused) - all
+bands render from the *same* BG1 scene background, just scrolled at different rates, exactly
+like B's own single-layer model.
+
+`speed` is a **signed shift**, not a fraction or a multiplier - matching B's `PARALLAX_STEP`
+macro/`parallax_row_t.shift` field exactly: positive = slower than the camera (`scroll_x >>
+speed`, e.g. a distant background), negative = faster (`scroll_x << -speed`, a foreground
+layer), 0 = matches the camera exactly (same as no parallax for that band). `height` is in
+tiles; `compileSnesData.js` converts it to scanlines (`× 8`) and always auto-extends the last
+band to cover every remaining line down to the SNES's real screen height (224 NTSC), so there
+are never gaps.
+
+**X-axis only** - matches `setParallaxScrolling()` itself, which drives a single `BGxHOFS`
+register (`dmas.asm`'s `_bgscridx` table). GB Studio 3.x's own parallax also shifts `SCY` per
+band; there's no ready-made SNES equivalent for that and no engine need identified yet, so this
+is a deliberately narrower port, not an oversight.
+
+Engine: `appData/src/snes/src/parallax.c`/`.h`. `SceneInit` (`scene.c`) reads the scene blob's
+fixed `[MAX_PARALLAX_LAYERS(3)*2]` band table (right after the `[24]` sprite-slot table - see
+`compileSnesData.js`) into `parallax_lines[]`/`parallax_shift[]`, and sets `parallax_active`.
+`game.c`'s main loop calls `ParallaxUpdate()` once per frame, right after the existing
+`bgSetScroll(0, scroll_x, scroll_y)` call, only while `parallax_active` is set - `scroll_y`
+(vertical) is still owned by the plain `bgSetScroll` call either way. Leaving a parallax scene
+for one with none explicitly disables HDMA channel 3 (`setModeHdmaReset`) in `SceneInit` - it's
+a **sticky** register (`REG_HDMAEN`), so without this a scene with no parallax at all would
+otherwise keep replaying the *previous* scene's stale HDMA table over its own `BG1HOFS` forever.
+
 ## Scenes
 
 | Event | SNES | Notes |

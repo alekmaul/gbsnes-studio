@@ -316,6 +316,9 @@ const MOVE_AI_RANDOM_WALK = 5;
 // ---- scene data blobs ----------------------------------------------
 // header:  [bg_index, num_actors, num_triggers, scene_script_idx, width,
 //           height, scene_type]
+// M6 (v4): [MAX_PARALLAX_LAYERS*2] banded parallax table follows the [24]
+// sprite-slot table below (compileSnesData.js) - all-zero (no parallax) in
+// both dummy scenes.
 // actor:   [tile_x, tile_y, dir, movement_type, sprite_idx, script_idx,
 //           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate] (9)
 // trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
@@ -336,9 +339,11 @@ const dummySprSlots = [].concat(
   [1, 1, 1, 1, 1, 1, 1, 1],
   [0, 3, 4, 5, 6, 7, 0, 0]
 );
+const dummyParallax = [0, 0, 0, 0, 0, 0]; // MAX_PARALLAX_LAYERS(3) * 2, no parallax
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
+  ...dummyParallax,
   18, 24, 8, MOVE_AI_RANDOM_WALK, 0, EV_NPC, SPRITE_STATIC, 3, 0, // wandering NPC (off the walk path)
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
   50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
@@ -347,7 +352,7 @@ const scene0 = [
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...scene1Collision];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...scene1Collision];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

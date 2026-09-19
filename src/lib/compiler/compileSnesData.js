@@ -614,6 +614,40 @@ const compileSnesData = async (
     const spr = sceneSprites[sceneIndex];
     const sprSlotBytes = [].concat(spr.types, spr.frames, spr.pals);
 
+    // M6 (v4): banded X-axis parallax scrolling, driven by the SNES's own
+    // HDMA (setParallaxScrolling/HDMATable16, appData/src/snes/src/parallax.c)
+    // instead of a second BG layer - matches GB Studio 3.x's real model (N
+    // stacked bands on the SAME background, not two independent layers).
+    // Fixed-size table (MAX_PARALLAX_LAYERS * 2 bytes), matching the [24]
+    // sprite-slot table's own "always present, zero-filled when unused"
+    // convention. lines=0 in the first entry means "no parallax" to the
+    // engine (skip HDMA, plain bgSetScroll as before).
+    const MAX_PARALLAX_LAYERS = 3;
+    const parallaxLayers = (scene.parallax || []).filter((l) => l.height > 0);
+    if (parallaxLayers.length > MAX_PARALLAX_LAYERS) {
+      warnings(
+        `Scene has ${parallaxLayers.length} parallax layers, but only the first ${MAX_PARALLAX_LAYERS} fit - the rest will be ignored.`
+      );
+    }
+    const usedLayers = parallaxLayers.slice(0, MAX_PARALLAX_LAYERS);
+    const screenLines = snesTarget.screenTileHeight * 8;
+    let linesUsed = 0;
+    const parallaxBytes = [];
+    usedLayers.forEach((layer, i) => {
+      const isLast = i === usedLayers.length - 1;
+      const lines = isLast
+        ? Math.max(1, screenLines - linesUsed)
+        : Math.min(layer.height * 8, screenLines - linesUsed);
+      linesUsed += lines;
+      // shift is a signed byte (INT8-equivalent): positive = slower than
+      // camera (>> shift), negative = faster (<< -shift), 0 = matches the
+      // camera exactly - see parallax.c.
+      parallaxBytes.push(lines & 0xff, layer.speed & 0xff);
+    });
+    while (parallaxBytes.length < MAX_PARALLAX_LAYERS * 2) {
+      parallaxBytes.push(0, 0);
+    }
+
     const triggerEntries = [];
     (scene.triggers || []).forEach((trigger, i) => {
       triggerEntries.push(
@@ -635,6 +669,7 @@ const compileSnesData = async (
       h,
       sceneTypeDec(scene.type), // v2 M5a: genre dispatch byte
       sprSlotBytes, // [24] sprite_type[8], sprite_frames[8], sprite_pal[8]
+      parallaxBytes, // [6] M6 (v4): up to 3 {lines, shift} parallax bands
       actorEntries,
       triggerEntries,
       collisions

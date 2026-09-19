@@ -17,6 +17,7 @@
 #include "script_runner.h"
 #include "fade.h"
 #include "states.h"
+#include "parallax.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
@@ -587,6 +588,30 @@ void SceneInit(void)
     }
     sprite_slot_for_index = scene_sprite_slot_ptrs[scene_index];
     p += 3 * SPRITE_SLOTS;
+
+    /* M6 (v4): [MAX_PARALLAX_LAYERS*2] banded X-axis parallax table - see
+     * compileSnesData.js and parallax.c. lines=0 in slot 0 means no
+     * parallax; ParallaxUpdate() itself would already no-op on an empty
+     * table, but game.c's main loop still gates the call on this flag to
+     * skip the HDMA rebuild/arm entirely on the (overwhelmingly common)
+     * case of a scene with no parallax at all. */
+    for (i = 0; i < MAX_PARALLAX_LAYERS; i++)
+    {
+        parallax_lines[i] = p[i * 2];
+        parallax_shift[i] = (s8)p[i * 2 + 1];
+    }
+    parallax_active = parallax_lines[0] != 0;
+    if (!parallax_active)
+    {
+        /* REG_HDMAEN (setParallaxScrolling's enable bit) is sticky - it
+         * stays set across frames until explicitly cleared, so leaving a
+         * parallax scene for one with none would otherwise keep replaying
+         * the previous scene's stale HDMA table over this one's BG1HOFS
+         * forever (game.c only calls ParallaxUpdate() while parallax_active
+         * is set). */
+        setModeHdmaReset(HDMA_CHANNEL3);
+    }
+    p += MAX_PARALLAX_LAYERS * 2;
 
     /* pick the tilemap size from the BG dimensions (one 2-term test per if) */
     if (bg_map_w[bg_index] > 32) sc_size = SC_64x64;

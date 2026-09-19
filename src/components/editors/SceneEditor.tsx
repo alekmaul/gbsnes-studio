@@ -35,6 +35,7 @@ import { SceneTypeSelect } from "../forms/SceneTypeSelect";
 import { BackgroundSelectButton } from "../forms/BackgroundSelectButton";
 import { LabelButton, LabelColor } from "../ui/buttons/LabelButton";
 import { CoordinateInput } from "../ui/form/CoordinateInput";
+import { ParallaxLayersEditor } from "../forms/ParallaxLayersEditor";
 import DirectionPicker from "../forms/DirectionPicker";
 import { SettingsState } from "../../store/features/settings/settingsState";
 import { TabBar } from "../ui/tabs/Tabs";
@@ -363,6 +364,18 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
                   name="type"
                   value={scene.type}
                   onChange={onChangeField("type")}
+                />
+              </FormField>
+            </FormRow>
+
+            <FormDivider />
+
+            <FormRow>
+              <FormField name="parallax" label={l10n("FIELD_PARALLAX")}>
+                <ParallaxLayersEditor
+                  name="parallax"
+                  value={scene.parallax}
+                  onChange={onChangeField("parallax")}
                 />
               </FormField>
             </FormRow>

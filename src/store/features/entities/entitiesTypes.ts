@@ -141,6 +141,14 @@ export type Emote = {
   _v: number;
 };
 
+// M6 (v4): banded X-axis parallax (see ParallaxLayersEditor.tsx for the
+// exact height/speed semantics). Matches GB Studio 3.x's SceneParallaxLayer
+// shape exactly - same field names, same meaning.
+export type SceneParallaxLayer = {
+  height: number;
+  speed: number;
+};
+
 export type Scene = {
   id: string;
   type: string;
@@ -156,6 +164,7 @@ export type Scene = {
   collisions: number[];
   actors: string[];
   triggers: string[];
+  parallax?: SceneParallaxLayer[];
   script: ScriptEvent[];
   playerHit1Script: ScriptEvent[];
   playerHit2Script: ScriptEvent[];

@@ -26,6 +26,7 @@
 #include "ui.h"
 #include "camera.h"
 #include "music.h"
+#include "parallax.h"
 
 #define SCREEN_W_HALF 128
 #define SCREEN_H_HALF 112
@@ -216,6 +217,14 @@ int main(void)
          * the camera is moving. Also keeps BG1 and the OAM sprite positions
          * (SceneRenderActors also reads scroll_x/y) in lockstep. */
         bgSetScroll(0, (u16)scroll_x, (u16)scroll_y);
+        // M6 (v4): banded X-axis parallax (see parallax.c) - HDMA overrides
+        // BG1HOFS per scanline band for the rest of this frame's active
+        // picture; the plain bgSetScroll above still owns Y (and X for any
+        // scene with no parallax at all, the overwhelmingly common case).
+        if (parallax_active)
+        {
+            ParallaxUpdate();
+        }
         UIFlush();
 
         /* SceneInit leaves the screen force-blanked; un-blank it here, the

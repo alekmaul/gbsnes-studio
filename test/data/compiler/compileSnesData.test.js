@@ -54,16 +54,20 @@ describe("compileSnesData - Test_Math fixture", () => {
 
   // v2 M5a: the scene blob header gained a scene_type byte at position 6
   // (after height, before the [24] sprite-slot table) - every offset past
-  // height in the old (v1.1.4) layout shifts by +1 here.
-  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [24] sprite table", () => {
+  // height in the old (v1.1.4) layout shifts by +1 here. M6 (v4): a further
+  // [6]-byte parallax table follows the [24] sprite-slot table, shifting
+  // every offset past it by +6 on top of that.
+  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [24] sprite table + [6] parallax table", () => {
     const blob = out.stats.sceneBlobs[0];
     expect(blob.slice(0, 6)).toEqual([0, 1, 0, 0, 20, 18]);
     expect(blob[6]).toBe(0); // scene.type undefined -> defaults to 0 (Top Down)
     // [7..30] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
     expect(blob.slice(23, 31)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]); // pal numbers
-    // first actor entry (9 bytes) starts right after the 24-byte table (at 31)
+    // [31..36] parallax table (MAX_PARALLAX_LAYERS*2): no parallax on this fixture
+    expect(blob.slice(31, 37)).toEqual([0, 0, 0, 0, 0, 0]);
+    // first actor entry (9 bytes) starts right after the parallax table (at 37)
     // x, y, dir(down=1), move(static=1), spriteSlot, scriptIdx, ...
-    expect(blob.slice(31, 37)).toEqual([9, 7, 1, 1, 0, 1]);
+    expect(blob.slice(37, 43)).toEqual([9, 7, 1, 1, 0, 1]);
   });
 
   test("the actor's first TEXT resolves to a string index", () => {
@@ -143,11 +147,11 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
       warnings: () => {},
     });
     const blob = out.stats.sceneBlobs[0];
-    // header(7) + sprite-slot table(24) + 0 actors + 0 triggers = 31 bytes
-    // before the ceil(w*h/8) = 45-byte collision bitmap.
+    // header(7) + sprite-slot table(24) + parallax table(6) + 0 actors +
+    // 0 triggers = 37 bytes before the ceil(w*h/8) = 45-byte collision bitmap.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(31 + colLen);
-    const colByte = blob[31];
+    expect(blob.length).toBe(37 + colLen);
+    const colByte = blob[37];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).
     expect(colByte & (1 << 0)).toBeTruthy(); // tile 0: COLLISION_ALL
@@ -163,7 +167,7 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // so most of the "bitmap" ended up reading whatever raw per-tile bytes
     // happened to land within the first colLen indices (mostly garbage
     // relative to real tile positions), not real per-tile solidity.
-    expect(blob.slice(32, 31 + colLen)).toEqual(new Array(colLen - 1).fill(0));
+    expect(blob.slice(38, 37 + colLen)).toEqual(new Array(colLen - 1).fill(0));
   });
 });
 
@@ -238,9 +242,89 @@ describe("compileSnesData - actor.spriteType (v2, replaces movementType inferenc
       projectRoot: PROJECT_ROOT,
       warnings: () => {},
     });
-    // actor entry starts right after [6]+[24]=[31]; spriteType is byte 6 of
-    // the 9-byte actor entry (x,y,dir,move,slot,scriptIdx,spriteType,...)
-    const actorEntry = out.stats.sceneBlobs[0].slice(31, 40);
+    // actor entry starts right after [7]+[24]+[6]=[37]; spriteType is byte 6
+    // of the 9-byte actor entry (x,y,dir,move,slot,scriptIdx,spriteType,...)
+    const actorEntry = out.stats.sceneBlobs[0].slice(37, 46);
     expect(actorEntry[6]).toBe(0); // SPRITE_STATIC despite movementType=randomWalk
+  });
+});
+
+describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
+  // screenTileHeight (targets/snes.js) is 28 tiles = 224 scanlines (NTSC).
+  const w = 20;
+  const h = 18;
+
+  const baseProject = (parallax) => ({
+    _version: "2.0.0",
+    _release: "6",
+    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "parallaxTest",
+        backgroundId: "bg",
+        width: w,
+        height: h,
+        actors: [],
+        triggers: [],
+        script: [],
+        parallax,
+      },
+    ],
+  });
+
+  test("no parallax field emits an all-zero [6] table", async () => {
+    const out = await compileSnesData(baseProject(undefined), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    expect(out.stats.sceneBlobs[0].slice(31, 37)).toEqual([0, 0, 0, 0, 0, 0]);
+  });
+
+  test("layer heights convert to scanlines and the last layer fills the rest of the screen", async () => {
+    const out = await compileSnesData(
+      baseProject([
+        { height: 4, speed: 2 },
+        { height: 6, speed: 1 },
+      ]),
+      {
+        projectRoot: PROJECT_DIR,
+        warnings: () => {},
+      }
+    );
+    const table = out.stats.sceneBlobs[0].slice(31, 37);
+    // layer 0: 4 tiles * 8 = 32 lines, shift 2
+    // layer 1 (last): auto-extends to 224 - 32 = 192 lines, shift 1
+    expect(table).toEqual([32, 2, 192, 1, 0, 0]);
+  });
+
+  test("a negative speed (faster than camera) round-trips as a signed byte", async () => {
+    const out = await compileSnesData(baseProject([{ height: 4, speed: -1 }]), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const table = out.stats.sceneBlobs[0].slice(31, 37);
+    // Single layer auto-extends to the full screen (224 lines); -1 as an
+    // unsigned byte is 0xff (255), matching the engine's (s8) reinterpret.
+    expect(table).toEqual([224, 255, 0, 0, 0, 0]);
+  });
+
+  test("warns and truncates when more than 3 layers are given", async () => {
+    const warnings = [];
+    await compileSnesData(
+      baseProject([
+        { height: 4, speed: 1 },
+        { height: 4, speed: 1 },
+        { height: 4, speed: 1 },
+        { height: 4, speed: 1 },
+      ]),
+      {
+        projectRoot: PROJECT_DIR,
+        warnings: (m) => warnings.push(m),
+      }
+    );
+    expect(warnings.some((w2) => /parallax layers/.test(w2))).toBe(true);
   });
 });
