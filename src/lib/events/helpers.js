@@ -25,40 +25,6 @@ export const getSprite = (spriteId, sprites) => {
   return sprites.find(sprite => sprite.id === spriteId);
 };
 
-export const getSpriteOffset = (spriteId, sprites, scene) => {
-  // scene.sprites (GB-only, see getSpriteSceneIndex above) doesn't exist on
-  // the SNES compile path - ACTOR_SET_SPRITE is a Noop there too, so the
-  // offset compiled here is inert; fall back instead of crashing the build.
-  if (!scene.sprites) {
-    return 0;
-  }
-  const spriteIndex = getSpriteIndex(spriteId, sprites);
-
-  let spriteOffset = 6;
-  for(let i=0; i<scene.sprites.length; i++) {
-    if(scene.sprites[i] === spriteIndex) {
-      break;
-    }
-    const sprite = sprites[scene.sprites[i]];
-    spriteOffset += sprite.size / 64;
-  }
-
-  return spriteOffset;
-}
-
-export const getSpriteSceneIndex = (spriteId, sprites, scene) => {
-  // scene.sprites (the GB-only per-scene sprite-slot list built by the GB
-  // compileData.js) doesn't exist on the SNES compile path - the projectile
-  // subsystem (LAUNCH_PROJECTILE / WEAPON_ATTACK) is a Noop on that engine
-  // (see appData/src/snes/src/script_cmds.c), so any index compiles here is
-  // inert there; fall back to 0 instead of crashing the whole build.
-  if (!scene.sprites) {
-    return 0;
-  }
-  const spriteIndex = getSpriteIndex(spriteId, sprites);
-  return scene.sprites.indexOf(spriteIndex) + 1;
-}
-
 export const getVariableIndex = (variable, variables) => {
   const normalisedVariable = String(variable)
     .replace(/\$/g, "")

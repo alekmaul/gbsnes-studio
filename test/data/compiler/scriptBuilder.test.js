@@ -82,7 +82,10 @@ import {
   TIMER_RESTART,
   TIMER_DISABLE,
   TEXT_WITH_AVATAR,
-  MENU
+  MENU,
+  ACTOR_SET_SPRITE,
+  ACTOR_SET_ANIMATE,
+  IF_ACTOR_RELATIVE_TO_ACTOR
 } from "../../../src/lib/events/scriptCommands";
 import {
   dirDec,
@@ -353,6 +356,36 @@ test("Should be able to change player sprite with persist", () => {
   });
   sb.playerSetSprite("def", true);
   expect(output).toEqual([cmd(PLAYER_SET_SPRITE), 0, 0, 1]);
+});
+
+// v4: was a Noop with a broken wire format (getSpriteOffset()/scene.sprites,
+// GB-only, always inert on this target) - rewritten to the same ARG16
+// project-sprite-index format playerSetSprite() uses above, so this asserts
+// the exact same 2-byte shape, no persist flag (ACTOR_SET_SPRITE's own
+// args_len is 2, not 3).
+test("Should be able to change active actor's sprite", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    sprites: [{ id: "abc" }, { id: "def" }]
+  });
+  sb.actorSetSprite("def");
+  expect(output).toEqual([cmd(ACTOR_SET_SPRITE), 0, 1]);
+});
+
+// v4: a plain field setter, no relation to the On Update subsystem despite
+// the stale "needs On Update port" label it used to carry in script_cmds.c.
+test("Should be able to toggle active actor's animate-when-stationary flag", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.actorSetAnimate(true);
+  expect(output).toEqual([cmd(ACTOR_SET_ANIMATE), 1]);
+});
+
+test("Should be able to disable active actor's animate-when-stationary flag", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.actorSetAnimate(false);
+  expect(output).toEqual([cmd(ACTOR_SET_ANIMATE), 0]);
 });
 
 test("Should be able to hide all sprites", () => {
@@ -880,6 +913,36 @@ test("Should be able to conditionally execute if active actor is at a position",
     cmd(IF_ACTOR_AT_POSITION),
     5,
     8,
+    0,
+    9,
+    99,
+    cmd(JUMP),
+    0,
+    10,
+    99
+  ]);
+});
+
+// v4: no relation to the On Update subsystem despite the stale "needs On
+// Update port" label it used to carry in script_cmds.c - a plain position
+// compare between the active actor and a second actor slot, same
+// true/false jump-target shape as every other IF_* opcode (see
+// ifActorAtPosition above).
+test("Should be able to conditionally execute if active actor is relative to another actor", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    scene: {
+      actors: [{ id: "npc1" }]
+    },
+    compileEvents: () => {
+      output.push(99);
+    }
+  });
+  sb.ifActorRelativeToActor("left", "npc1", [], []);
+  expect(output).toEqual([
+    cmd(IF_ACTOR_RELATIVE_TO_ACTOR),
+    2,
+    1,
     0,
     9,
     99,

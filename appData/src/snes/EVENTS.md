@@ -366,13 +366,41 @@ not silent holes; every one has a real table row, just no runtime behaviour yet.
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Actor: Set Sprite Sheet (union-type variant) | ➖ | Per-actor sprite override introduced with the `On Update` scripted-movement rework; needs that port first. |
-| If Actor Relative to Actor, Actor: Stop Update Script, Actor: Set Animate | ➖ | All need the `On Update` per-actor movement-script port (see `appData/src/snes/README.md` — a real, separate architecture piece, not a mechanical opcode wire-up). |
+| Actor: Stop Update Script | ➖ | Genuinely needs the `On Update` per-actor persistent-script subsystem (see `appData/src/snes/README.md`) - there's nothing to stop until that exists. |
 | Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist and are edited from Settings, but a script can't write one back at runtime yet. |
 
 **Launch Projectile / Weapon: Attack / Player: Bounce shipped (v4, real Projectiles subsystem)** -
 see their own section below. All 3 were listed here through M16; they're the first opcode-audit
 gaps this doc has actually closed rather than just documented.
+
+**Actor: Set Sprite Sheet, If Actor Relative to Actor, Actor: Set Animate shipped (v4).** All 3
+were listed here through this point as needing the `On Update` per-actor script port - re-checked
+while actually scoping that port and found none of them really do:
+- **Actor: Set Sprite Sheet** (the general-actor sibling of the already-shipped Player: Set Sprite
+  Sheet) was a Noop with a **broken wire format** inherited from the original port -
+  `scriptBuilder.js`'s `actorSetSprite()` resolved via `getSpriteOffset()`/`scene.sprites`, a
+  GB-only field that's never populated on the SNES compile path (the same root cause as the
+  Projectiles `getSpriteSceneIndex` bug fixed earlier this session's M4) - always compiled a dead
+  offset of 0 regardless of what was authored. Rewritten to emit the same `ARG16` project-sprite-
+  index format Player: Set Sprite Sheet already uses; the engine resolves it via the identical
+  `sprite_slot_for_index[]` pre-loaded-slot lookup, just applied to `script_actor` instead of the
+  hardcoded player slot - shares that event's own real behaviour and its own documented
+  limitation (only a sheet already used somewhere in the scene can be switched to). Both now-dead
+  helpers (`getSpriteOffset`, and the already-orphaned `getSpriteSceneIndex` left over from the
+  Projectiles fix) removed from `src/lib/events/helpers.js`.
+- **If Actor Relative to Actor** is a plain position compare between the active actor and a second
+  actor slot (up/down/left/right, strict pixel comparison) - a self-contained dedicated opcode
+  with the same true/false jump-target shape every other `IF_*` opcode already uses (see If Actor
+  At Position). No relation to On Update at all.
+- **Actor: Set Animate** is a plain field setter (`actors[script_actor].animate`) - the same flag
+  `SceneAnimateActors` already reads at compile time from a sprite sheet's own "Animate Frames"
+  checkbox, just exposed as a runtime toggle. No relation to On Update either.
+
+All 3 were simply mislabeled in the original M16 audit pass, not actually blocked - found by
+reading what each one's `compile()`/`scriptBuilder.js` helper really does before assuming the
+audit's grouping was correct, the same "verify against the real code" discipline this session has
+applied everywhere else. Tests: `scriptBuilder.test.js` (byte-exact for all 3), full toolchain
+build confirms `script_cmds.c` still compiles/links.
 
 `Palette: Set Background` / `Set Actor` / `Set UI` used to be listed here as ➖ (dispatchable but
 inert). The GB-heritage custom-palette editor these events edited was removed entirely - it had

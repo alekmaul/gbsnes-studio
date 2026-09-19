@@ -115,8 +115,6 @@ import {
   getSpriteIndex,
   getMusicIndex,
   compileConditional,
-  getSpriteOffset,
-  getSprite,
 } from "../events/helpers";
 import {
   dirDec,
@@ -326,14 +324,21 @@ class ScriptBuilder {
     output.push(enabled ? 1 : 0);
   }
 
+  // v4: was resolved via getSpriteOffset()/scene.sprites, a GB-only field
+  // that's never populated on the SNES compile path (same root cause as
+  // the Projectiles getSpriteSceneIndex bug fixed earlier this session) -
+  // always compiled a dead offset of 0 while the opcode was still a Noop.
+  // Now emits the same ARG16 project-sprite-index format playerSetSprite()
+  // already uses just below - Script_ActorSetSprite_b (script_cmds.c)
+  // resolves it via the same sprite_slot_for_index[] lookup, just applied
+  // to script_actor instead of the hardcoded player slot.
   actorSetSprite = (spriteSheetId) => {
     const output = this.output;
-    const { sprites, scene } = this.options;
-    const spriteOffset = getSpriteOffset(spriteSheetId, sprites, scene);
-    const sprite = getSprite(spriteSheetId, sprites);
+    const { sprites } = this.options;
+    const spriteIndex = getSpriteIndex(spriteSheetId, sprites);
     output.push(cmd(ACTOR_SET_SPRITE));
-    output.push(spriteOffset);
-    output.push(sprite ? sprite.numFrames : 1);
+    output.push(hi(spriteIndex));
+    output.push(lo(spriteIndex));
   };
 
   // Player

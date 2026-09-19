@@ -679,6 +679,71 @@ void Script_PlayerSetSprite_b(void)
     script_continue = 1;
 }
 
+// ACTOR_SET_SPRITE (v4): the general-actor sibling of PLAYER_SET_SPRITE -
+// same pre-loaded-slot lookup (sprite_slot_for_index[], scene-relative,
+// see that opcode's own comment), just applied to script_actor instead of
+// the hardcoded player slot 0. Was Noop with a broken wire format inherited
+// from the original port: scriptBuilder.js's actorSetSprite() used to
+// resolve via getSpriteOffset()/scene.sprites, a GB-only field that never
+// exists on the SNES compile path (same root cause as the Projectiles
+// getSpriteSceneIndex bug fixed earlier this session) - always compiled a
+// dead 0. Rewritten to emit the same ARG16 project-sprite-index format
+// PLAYER_SET_SPRITE already uses, so this shares its exact real behaviour
+// and its exact real limitation (only a sheet already used somewhere in
+// this scene can be switched to - not a new gap, matches the already-
+// documented PLAYER_SET_SPRITE restriction).
+void Script_ActorSetSprite_b(void)
+{
+    u16 idx = ARG16(0, 1);
+    if (idx < NUM_SPRITE_SHEETS)
+    {
+        u8 slot = sprite_slot_for_index[idx];
+        if (slot != 0xFF)
+        {
+            actors[script_actor].frame_offset = slot * 2;
+            actors[script_actor].sprite_type = sprite_type_for_slot[slot];
+            actors[script_actor].frame = 0;
+            actors[script_actor].flip = 0;
+        }
+    }
+    ADVANCE();
+    script_continue = 1;
+}
+
+// IF_ACTOR_RELATIVE_TO_ACTOR (v4): a plain position compare between
+// script_actor and a second actor slot - no relation to the On Update
+// subsystem at all (the M16 opcode audit's "needs On Update port" label
+// on this one was a mislabel, not a real dependency; found by actually
+// reading what ifActorRelativeToActor() compiles - a self-contained
+// dedicated opcode, operation + other-actor-index + the same true/false
+// jump-target pair every other IF_* opcode already uses, e.g.
+// Script_IfActorPos_b just above). operation: 0=up (strictly above,
+// smaller y), 1=down, 2=left, 3=right - matches actorRelativeDec()
+// (compiler/helpers.js) and GB Studio 3.2.1's own eventIfActorRelativeToActor.js
+// semantics ("is above/below/left/right of").
+void Script_IfActorRelativeToActor_b(void)
+{
+    u8 op = script_cmd_args[0];
+    u8 other = script_cmd_args[1];
+    u8 match;
+    switch (op)
+    {
+        case 0: match = actors[script_actor].y < actors[other].y; break;
+        case 1: match = actors[script_actor].y > actors[other].y; break;
+        case 2: match = actors[script_actor].x < actors[other].x; break;
+        default: match = actors[script_actor].x > actors[other].x; break;
+    }
+    if (match)
+    {
+        script_ptr = script_start_ptr + ARG16(2, 3);
+    }
+    else
+    {
+        ADVANCE();
+    }
+    script_continue = 1;
+}
+
 void Script_ActorSetDir_b(void)
 {
     u8 d = script_cmd_args[0];
@@ -890,6 +955,12 @@ void Script_ActorHide_b(void)           { actors[script_actor].enabled = 0;     
 void Script_ActorSetCollisions_b(void)  { actors[script_actor].collisions_enabled = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
 void Script_ActorSetMoveSpeed_b(void)   { actors[script_actor].move_speed = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
 void Script_ActorSetAnimSpeed_b(void)   { actors[script_actor].anim_speed = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
+// ACTOR_SET_ANIMATE (v4): a plain field setter, same `animate` flag
+// SceneAnimateActors already reads at compile time from the sprite sheet's
+// own "Animate Frames" checkbox (scene.c) - no relation to the On Update
+// subsystem (another M16 opcode-audit mislabel, same class as
+// IF_ACTOR_RELATIVE_TO_ACTOR above).
+void Script_ActorSetAnimate_b(void)     { actors[script_actor].animate = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
 // args grew by one in v2 (2.0.0-beta5): a "fast-forward while A/B held" flag
 // appended after in/out/draw speed - consumed by ADVANCE()'s table-driven
 // length but not implemented (this engine's UI has no fast-forward path yet).
@@ -1149,15 +1220,15 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ActorSetCollisions_b, 1) /* 0x5D ACTOR_SET_COLLISIONS */ \
     X(Script_LaunchProjectile_b, 5) /* 0x5E LAUNCH_PROJECTILE - v4, Projectiles subsystem */ \
     X(Script_Noop_b, 4) /* 0x5F SET_PROPERTY - union-type generic property setter */ \
-    X(Script_Noop_b, 2) /* 0x60 ACTOR_SET_SPRITE - per-actor sprite override, needs On Update port */ \
-    X(Script_Noop_b, 4) /* 0x61 IF_ACTOR_RELATIVE_TO_ACTOR - needs On Update port */ \
+    X(Script_ActorSetSprite_b, 2) /* 0x60 ACTOR_SET_SPRITE - v4, same pre-loaded-slot lookup as PLAYER_SET_SPRITE, not On Update */ \
+    X(Script_IfActorRelativeToActor_b, 4) /* 0x61 IF_ACTOR_RELATIVE_TO_ACTOR - v4, plain position compare, not On Update */ \
     X(Script_PlayerBounce_b, 1) /* 0x62 PLAYER_BOUNCE - v4, Platformer */ \
     X(Script_WeaponAttack_b, 3) /* 0x63 WEAPON_ATTACK - v4, Projectiles subsystem */ \
     X(Script_Noop_b, 3) /* 0x64 PALETTE_SET_BACKGROUND - full colour, v2 M6 */ \
     X(Script_Noop_b, 2) /* 0x65 PALETTE_SET_ACTOR - full colour, v2 M6 */ \
     X(Script_Noop_b, 2) /* 0x66 PALETTE_SET_UI - full colour, v2 M6 */ \
-    X(Script_Noop_b, 0) /* 0x67 ACTOR_STOP_UPDATE - stops movement_ptr, needs On Update port */ \
-    X(Script_Noop_b, 1) /* 0x68 ACTOR_SET_ANIMATE - needs On Update port */ \
+    X(Script_Noop_b, 0) /* 0x67 ACTOR_STOP_UPDATE - stops the persistent per-actor On Update script - genuinely blocked, see appData/src/snes/README.md */ \
+    X(Script_ActorSetAnimate_b, 1) /* 0x68 ACTOR_SET_ANIMATE - v4, plain field setter, not On Update */ \
     X(Script_IfColorSupported_b, 2) /* 0x69 IF_COLOR_SUPPORTED */ \
     X(Script_Noop_b, 3) /* 0x6A ENGINE_FIELD_UPDATE - runtime engine-field writes, as needed per genre */ \
     X(Script_Noop_b, 4) /* 0x6B ENGINE_FIELD_UPDATE_WORD */ \
