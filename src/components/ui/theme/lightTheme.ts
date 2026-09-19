@@ -68,6 +68,11 @@ const lightTheme: ThemeInterface = {
     sidebar: {
       background: "#f2f2f2",
       border: "#d4d4d4",
+      well: {
+        background: "#dddddd",
+        boxShadow: "-1px 0px 2px 0px rgba(0, 0, 0, 0.2) inset",
+        hoverBackground: "#cfcfcf",
+      },
     },
     document: {
       background: "#f9f9f9",

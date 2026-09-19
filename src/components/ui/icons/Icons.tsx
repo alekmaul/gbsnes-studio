@@ -93,6 +93,12 @@ export const CloseIcon = () => (
   </svg>
 );
 
+export const ParallaxIcon = () => (
+  <svg width="24" height="24" viewBox="0 0 24 24">
+    <path d="M4 17.162l-2 .838v-12.972l12-5.028v2.507l-10 4.19v10.465zm18-11.162l-12 5.028v12.972l12-5.028v-12.972zm-14 3.697l10-4.19v-2.507l-12 5.028v12.972l2-.838v-10.465z" />
+  </svg>
+);
+
 export const SelectIcon = () => (
   <svg width="24" height="24" viewBox="0 0 24 24">
     <path d="M4 0l16 12.279-6.78 1.138 4.256 8.676-3.902 1.907-4.281-8.758-5.293 4.581z" />

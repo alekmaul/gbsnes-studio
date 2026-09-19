@@ -9,6 +9,7 @@ export interface CoordinateInputProps {
   min?: number;
   max?: number;
   placeholder?: string;
+  disabled?: boolean;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
 }
 
@@ -45,6 +46,7 @@ export const CoordinateInput: FC<CoordinateInputProps> = ({
   min,
   max,
   placeholder,
+  disabled,
   onChange,
 }) => (
   <Wrapper>
@@ -56,6 +58,7 @@ export const CoordinateInput: FC<CoordinateInputProps> = ({
       min={min}
       max={max}
       placeholder={placeholder}
+      disabled={disabled}
       onChange={onChange}
     />
     <Label htmlFor={name}>{coordinate}</Label>

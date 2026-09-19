@@ -34,6 +34,8 @@ import { NoteField } from "../ui/form/NoteField";
 import { SceneTypeSelect } from "../forms/SceneTypeSelect";
 import { BackgroundSelectButton } from "../forms/BackgroundSelectButton";
 import { SpriteSheetSelectButton } from "../forms/SpriteSheetSelectButton";
+import { ParallaxIcon } from "../ui/icons/Icons";
+import { defaultValues as parallaxDefaultValues } from "../forms/ParallaxLayersEditor";
 import { LabelButton, LabelColor } from "../ui/buttons/LabelButton";
 import { CoordinateInput } from "../ui/form/CoordinateInput";
 import { ParallaxLayersEditor } from "../forms/ParallaxLayersEditor";
@@ -144,6 +146,19 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
         sceneId: id,
         changes: {
           [key]: editValue,
+        },
+      })
+    );
+  };
+
+  const onToggleParallax = () => {
+    dispatch(
+      entitiesActions.editScene({
+        sceneId: id,
+        changes: {
+          parallax: scene?.parallax
+            ? undefined
+            : parallaxDefaultValues.slice(-2),
         },
       })
     );
@@ -346,23 +361,6 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
             )}
 
             <FormRow>
-              <FormField name="backgroundId" label={l10n("FIELD_BACKGROUND")}>
-                <BackgroundSelectButton
-                  name="backgroundId"
-                  value={scene.backgroundId}
-                  onChange={onChangeField("backgroundId")}
-                  includeInfo
-                />
-              </FormField>
-            </FormRow>
-
-            <FormRow>
-              <BackgroundWarnings id={scene.backgroundId} />
-            </FormRow>
-
-            <FormDivider />
-
-            <FormRow>
               <FormField name="type" label={l10n("FIELD_TYPE")}>
                 <SceneTypeSelect
                   name="type"
@@ -371,6 +369,57 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
                 />
               </FormField>
             </FormRow>
+
+            <FormRow>
+              <FormField name="backgroundId" label={l10n("FIELD_BACKGROUND")}>
+                <div style={{ display: "flex" }}>
+                  <BackgroundSelectButton
+                    name="backgroundId"
+                    value={scene.backgroundId}
+                    onChange={onChangeField("backgroundId")}
+                    includeInfo
+                  />
+                  {/* Parallax only makes sense on Platformer scenes on this
+                      engine - unlike B, which instead gates it on the scene
+                      being wider than one screen: this fork's own scenes can
+                      never exceed the 32-tile (one screen) max background
+                      size, so that condition would never be true here. */}
+                  {scene.type === "1" && (
+                    <Button
+                      style={{
+                        padding: "5px 0",
+                        minWidth: 28,
+                        marginLeft: 10,
+                      }}
+                      variant={scene.parallax ? "primary" : undefined}
+                      onClick={onToggleParallax}
+                      title={l10n("FIELD_PARALLAX")}
+                    >
+                      <ParallaxIcon />
+                    </Button>
+                  )}
+                </div>
+              </FormField>
+            </FormRow>
+
+            <FormRow>
+              <BackgroundWarnings id={scene.backgroundId} />
+            </FormRow>
+
+            {scene.type === "1" && scene.parallax && (
+              <FormRow>
+                <FormField name="parallax" label={l10n("FIELD_PARALLAX")}>
+                  <ParallaxLayersEditor
+                    name="parallax"
+                    value={scene.parallax}
+                    sceneHeight={scene.height}
+                    onChange={onChangeField("parallax")}
+                  />
+                </FormField>
+              </FormRow>
+            )}
+
+            <FormDivider />
 
             <FormRow>
               <FormField
@@ -391,16 +440,6 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
             </FormRow>
 
             <FormDivider />
-
-            <FormRow>
-              <FormField name="parallax" label={l10n("FIELD_PARALLAX")}>
-                <ParallaxLayersEditor
-                  name="parallax"
-                  value={scene.parallax}
-                  onChange={onChangeField("parallax")}
-                />
-              </FormField>
-            </FormRow>
 
             {isStartingScene && (
               <>

@@ -68,6 +68,11 @@ const darkheme: ThemeInterface = {
     sidebar: {
       background: "#222222",
       border: "#000000",
+      well: {
+        background: "#333333",
+        boxShadow: "-1px 0px 2px 1px rgba(0, 0, 0, 0.5) inset",
+        hoverBackground: "#505252",
+      },
     },
     document: {
       background: "#444444",
