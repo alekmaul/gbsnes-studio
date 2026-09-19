@@ -264,6 +264,38 @@ projectile spawned from a non-player actor, aimed at the player) confirmed it co
 (matching `collisionGroup "1"`) fired exactly once, writing its marker variable - the player's
 own position/state stayed stable afterward (no corruption, no re-trigger, no hang).
 
+**Walk-into-a-hostile-actor damage, same day (`PlayerContactUpdate()`, scene.c).** The other
+half of B's `actors_handle_player_collision()` - now that `Actor.collisionGroup` and the
+`playerHit1/2/3Script` firing path both exist from the work above, this was a much smaller
+follow-up than it looked like when Adventure/Platform's own comments first flagged it (M5c/M5d)
+as blocked on both. Runs once per frame, after every genre's own `Update_*` - **overlap-based,
+not movement-blocking-based, and shared across every genre by one function** rather than
+genre-specific code in each `Update_*`: Top Down's `actor_try_move()`/`npc_blocking()` already
+*blocks* the player from ever stepping onto another actor's tile at all (so real overlap never
+happens there to detect), but Adventure and Platform's own player movement never call
+`npc_blocking()` in the first place - their collision tests are narrow and terrain-only, so the
+player can already freely walk through an NPC in those two genres today. One shared overlap
+check (same 16x16-actor-box test used everywhere else actor bounds are compared) covers all five
+genres without new genre-specific plumbing. A `player_iframes` cooldown (60 frames, ~1s, no
+visual flash during it - GB's own cue, not ported, a documented simplification) prevents
+re-firing every single frame while the player stays in contact; once it expires, continued
+contact re-fires and restarts the cooldown, matching the intended "still standing in the fire
+hurts again" behaviour rather than a permanent one-shot per scene. Only fires the scene's
+`playerHit1/2/3Script` (by the *actor's* `collisionGroup` this time, not a projectile's) - not
+also the actor's own script the way B fires both, since this engine only runs one script at a
+time project-wide; picking one consistently (matching the already-shipped projectile-hits-player
+path) beats trying to fire two and only ever reaching the first.
+
+No compiler/schema changes needed - `Actor.collisionGroup` and `Scene.playerHit1/2/3Script` were
+already compiled by the work above, this is purely new engine reaction logic. **Verified**: a
+real Mesen run (Adventure-genre scene, player spawned exactly overlapping a `collisionGroup:
+"2"` actor, no simulated movement needed since the check is overlap- not movement-triggered)
+confirmed the full cycle on live WRAM state: the hit fires once (`playerHit2Script`'s marker set
+correctly), `player_iframes` starts at ~60 and decrements exactly 1/frame while the marker stays
+unchanged (no re-fire during cooldown), and once it reaches 0 the still-overlapping contact
+correctly re-fires and restarts the cooldown (~59) - the intended repeating-damage cycle,
+confirmed end to end rather than assumed from the code alone.
+
 ## Scenes
 
 | Event | SNES | Notes |

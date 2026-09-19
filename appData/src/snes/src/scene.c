@@ -131,6 +131,12 @@ static PROJECTILE projectiles[MAX_PROJECTILES];
  * blob by SceneInit right after the parallax table - see that code and
  * ProjectilesUpdate() below. */
 static u8 player_hit_idx[3];
+
+/* Contact damage follow-up (v4): walking into a hostile actor. See
+ * PlayerContactUpdate()'s own comment for the full design. */
+#define PLAYER_IFRAMES 60 /* ~1s at 60fps - no visual flash during it (GB's
+                              own "flash" cue) yet, a documented simplification */
+static u8 player_iframes = 0;
 /* One OAM id block per pool slot, right after the emote's own (EMOTE_OID is
  * defined further down, next to SceneRenderActors - this just documents the
  * relationship). */
@@ -761,6 +767,8 @@ void SceneInit(void)
         projectiles[i].active = 0;
         oamSetVisible(PROJECTILE_OID_BASE + ((u16)i << 2), OBJ_HIDE);
     }
+    /* Contact-damage iframes shouldn't carry across a scene switch either. */
+    player_iframes = 0;
 
     for (i = 0; i < scene_num_triggers && i < MAX_TRIGGERS; i++)
     {
@@ -1228,12 +1236,11 @@ void Update_Adventure(void)
     }
 
     // player_iframes / hit_actor / collision_group (GB's own "touch an
-    // enemy, flash, take no more damage for N frames" mechanic) is NOT
-    // ported here - it depends on a collision_group field this engine's
-    // ACTOR struct doesn't have yet, and on the Projectiles subsystem the
-    // M4 audit scoped as cross-genre, built once, around M5e - not
-    // something to half-invent now. Adventure has no damage-on-touch this
-    // milestone.
+    // enemy, flash, take no more damage for N frames" mechanic) - v4
+    // follow-up: PlayerContactUpdate() now handles this, shared across every
+    // genre from SceneUpdate() rather than inline here (Adventure's own
+    // narrow collision test above never blocks the player from overlapping
+    // an actor, so this is the only place that damage can be detected).
 
     // Gated on `moving`, not on dir_x/dir_y being nonzero: dir_x/dir_y are
     // the actor's persistent *facing* (read by rendering and by
@@ -1273,8 +1280,10 @@ void Update_Adventure(void)
  *   solid/not-solid bit per tile (established since M4c); a solid tile
  *   blocks from every direction here, a documented simplification, not a
  *   partial port of GB's richer per-tile byte.
- * - player_iframes/hit_actor/collision_group (hit-invincibility) - same
- *   Projectiles/M5e dependency already deferred in M5c (Adventure).
+ * - player_iframes/hit_actor/collision_group (hit-invincibility) - v4
+ *   follow-up: PlayerContactUpdate() (below Update_Shmup) now handles this
+ *   for every genre, including Platform (this collision test above never
+ *   blocks the player from overlapping an actor either).
  * - GB's pre-jump ceiling peek (declining a jump that would immediately
  *   headbutt a ceiling) - skipped for simplicity; the real ceiling-
  *   collision check later in this same function still catches it a frame
@@ -1567,18 +1576,13 @@ void Update_Platform(void)
  * controlled), only the perpendicular axis keeps moving - e.g. so a ship
  * can lock horizontally in a boss arena and still dodge vertically.
  *
- * Deliberately NOT ported this milestone (documented, not half-invented -
- * the same dependency M5c/M5d already deferred): the actual "combat"
- * reaction to touching an enemy (GB's player_iframes/collision_group/
- * hit_actor, running the enemy's script on contact) - needs a
- * collision_group ACTOR field this engine doesn't have, and the
- * Projectiles subsystem (EVENT_LAUNCH_PROJECTILE/EVENT_WEAPON_ATTACK, a
- * projectile pool) the M4 audit scoped as cross-genre and built once, not
- * something to half-invent at the tail of M5's genre-by-genre sequence.
- * All 5 genres now share this one remaining dependency - the natural next
- * major piece of work once M5 itself is done. A Shoot Em Up scene this
- * milestone auto-scrolls, dodges, and can reach trigger-driven exits, but
- * nothing shoots or hurts yet.
+ * v4 follow-up: both dependencies this comment used to flag (a
+ * collision_group ACTOR field, and the Projectiles subsystem) now exist.
+ * Shooting: author a script here (or anywhere) that calls Launch Projectile
+ * on an input script. Taking damage from touching an enemy: handled by
+ * PlayerContactUpdate() (below Update_Shmup), shared across every genre
+ * rather than genre-specific code here - this genre's own collision test
+ * above never blocks the player from overlapping an actor either.
  *
  * Collision uses the same narrow, direction-biased single-point test
  * Adventure already established (see its own comment) rather than GB's
@@ -2333,6 +2337,73 @@ void ProjectilesUpdate(void)
     }
 }
 
+/* Follow-up to Projectiles (v4): "walk into a hostile actor" damage -
+ * B's actors_handle_player_collision() (fires script_p_hit1/2/3 + the
+ * actor's own script, sets player_iframes), the "player_iframes/hit_actor/
+ * collision_group" mechanic Adventure/Platform's own comments (above) have
+ * flagged as not-ported since M5c/M5d. Both real dependencies it was
+ * blocked on (Actor.collision_group, the playerHit1/2/3Script firing path)
+ * now exist from the Projectiles work, so this is a much smaller follow-up
+ * than it looked like at the time.
+ *
+ * Deliberately overlap-based, not movement-blocking-based, and shared
+ * across every genre by one function (not genre-specific code in each
+ * Update_*): Top Down's own actor_try_move()/npc_blocking() already BLOCKS
+ * the player from ever stepping onto another actor's tile at all (so a
+ * bump there never produces real overlap to detect), but Adventure and
+ * Platform's player movement never call npc_blocking() in the first place -
+ * their own collision tests are narrow, terrain-only (col_solid), so the
+ * player can already freely walk through/over an NPC in those two genres
+ * today. One overlap check, run after every genre's Update_* regardless of
+ * how (or whether) that genre blocks actor-vs-actor movement, covers all
+ * five without new genre-specific plumbing.
+ *
+ * Only fires the scene's playerHit1/2/3Script (same as a projectile hitting
+ * the player) - not also the actor's own script the way B fires both context
+ * fires, since this engine only ever runs one script at a time project-wide;
+ * picking one consistently (matching the already-shipped projectile path)
+ * beats trying to fire two and only getting to the first. */
+void PlayerContactUpdate(void)
+{
+    u8 j;
+    s16 px, py;
+
+    if (player_iframes)
+    {
+        player_iframes--;
+        return;
+    }
+    if (!actors[0].enabled) return;
+
+    px = actors[0].x;
+    py = actors[0].y;
+    for (j = 1; j <= scene_num_actors && j < MAX_ACTORS; j++)
+    {
+        s16 ax, ay;
+        u8 g;
+        if (!actors[j].enabled) continue;
+        if (!actors[j].active) continue;
+        g = actors[j].collision_group;
+        if (g != 2 && g != 4 && g != 8) continue; /* "1"/"2"/"3" only - see PROJECTILE's own note on the bit values */
+        ax = actors[j].x;
+        ay = actors[j].y;
+        /* Same 16x16-actor-box-vs-16x16-actor-box test as everywhere else
+         * actor bounds are compared (SceneRenderActors' -8/-16 OAM offset). */
+        if (px + 8 < ax - 8) continue;
+        if (px - 8 > ax + 8) continue;
+        if (py + 8 < ay - 16) continue;
+        if (py - 8 > ay) continue;
+
+        if (!script_ptr)
+        {
+            u8 idx = player_hit_idx[g == 2 ? 0 : g == 4 ? 1 : 2];
+            run_script(event_ptrs[idx], 0);
+        }
+        player_iframes = PLAYER_IFRAMES;
+        return;
+    }
+}
+
 void SceneArmTriggers(void)
 {
     check_triggers = 1;
@@ -2346,4 +2417,5 @@ void SceneUpdate(void)
     SceneCheckTriggers();
     SceneRenderActors();
     ProjectilesUpdate();
+    PlayerContactUpdate();
 }

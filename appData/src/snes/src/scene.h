@@ -70,6 +70,8 @@ void SceneStartEmote(u8 a, u8 emote_id);
 void ProjectileSpawn(s16 x, s16 y, s8 dir_x, s8 dir_y, u8 speed, u8 sprite_slot,
                       u8 collision_group, u8 collision_mask, u8 ttl);
 void ProjectilesUpdate(void);
+/* Follow-up: walk-into-a-hostile-actor damage, see scene.c's own comment. */
+void PlayerContactUpdate(void);
 
 /* PLAYER_BOUNCE (v4) - a fixed velocity impulse, see scene.c's own comment. */
 void PlatformSetVelY(s16 v);
