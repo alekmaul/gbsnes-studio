@@ -97,6 +97,9 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
   const startDirection = useSelector(
     (state: RootState) => state.project.present.settings.startDirection
   );
+  const defaultPlayerSpriteSheetId = useSelector(
+    (state: RootState) => state.project.present.settings.playerSpriteSheetId
+  );
   const tabs = Object.keys(defaultTabs);
   const secondaryTabs = Object.keys(hitTabs);
 
@@ -382,6 +385,7 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
                   includeInfo
                   optional
                   optionalLabel={l10n("FIELD_DEFAULT")}
+                  optionalValue={defaultPlayerSpriteSheetId}
                 />
               </FormField>
             </FormRow>

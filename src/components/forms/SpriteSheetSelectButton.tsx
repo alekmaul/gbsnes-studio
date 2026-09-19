@@ -19,6 +19,7 @@ interface SpriteSheetSelectProps {
   onChange?: (newId: string) => void;
   optional?: boolean;
   optionalLabel?: string;
+  optionalValue?: string;
 }
 
 interface WrapperProps {
@@ -148,6 +149,7 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   includeInfo,
   optional,
   optionalLabel,
+  optionalValue,
 }) => {
   const buttonRef = useRef<HTMLButtonElement>(null);
   // ReturnType<typeof setTimeout>, not "number" - see use-delayed-state.ts's
@@ -155,7 +157,7 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   // Node's NodeJS.Timeout-returning overload, not the DOM one).
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spriteSheet = useSelector((state: RootState) =>
-    spriteSheetSelectors.selectById(state, value || "")
+    spriteSheetSelectors.selectById(state, value || optionalValue || "")
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [buttonFocus, setButtonFocus] = useState<boolean>(false);
@@ -239,7 +241,7 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
           {spriteSheet ? (
             <PreviewWrapper>
               <SpriteSheetCanvas
-                spriteSheetId={value}
+                spriteSheetId={value || optionalValue}
                 direction={direction}
                 frame={frame}
               />
