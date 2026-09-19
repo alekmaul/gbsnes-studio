@@ -29,6 +29,7 @@ class AddCommandButton extends Component {
   constructor(props) {
     super(props);
     this.button = React.createRef();
+    this.searchInput = React.createRef();
     this.state = {
       query: "",
       selectedIndex: 0,
@@ -125,25 +126,47 @@ class AddCommandButton extends Component {
     });
   };
 
+  // Clicking a category/back/star row blurs the search input like any other
+  // click in the menu, which arms onClose's 500ms delayed-close timer (the
+  // same one onAdd/onAddText rely on to close *after* an add) - unlike
+  // those two, none of these three should close the menu, so each must
+  // cancel that timer itself (user-found: picking a category showed its
+  // events, then the menu closed on its own ~500ms later before anything
+  // could be clicked - the pending blur-close timer firing, uncancelled).
+  // Refocusing the search input afterwards (matches GB Studio 3.2.1's own
+  // AddScriptEventMenu behaviour) also keeps arrow-key/Enter navigation
+  // working without an extra click back into the box.
   onSelectCategory = categoryIndex => () => {
+    clearTimeout(this.timeout);
     this.setState({
       selectedCategoryIndex: categoryIndex,
       selectedIndex: 0
     });
+    if (this.searchInput.current) {
+      this.searchInput.current.focus();
+    }
   };
 
   onBack = () => {
+    clearTimeout(this.timeout);
     this.setState({
       selectedCategoryIndex: -1,
       selectedIndex: 0
     });
+    if (this.searchInput.current) {
+      this.searchInput.current.focus();
+    }
   };
 
   onToggleFavorite = key => e => {
     const { dispatch } = this.props;
     e.preventDefault();
     e.stopPropagation();
+    clearTimeout(this.timeout);
     dispatch(settingsActions.toggleFavoriteEvent(key));
+    if (this.searchInput.current) {
+      this.searchInput.current.focus();
+    }
   };
 
   onKeyDown = e => {
@@ -402,6 +425,7 @@ class AddCommandButton extends Component {
             )}
             <div className="AddCommandButton__Search">
               <input
+                ref={this.searchInput}
                 autoFocus
                 placeholder="Search..."
                 onChange={this.onSearch}
