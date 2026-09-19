@@ -1,6 +1,7 @@
 const l10n = require("../helpers/l10n").default;
 
 const id = "EVENT_SET_TIMER_SCRIPT";
+const groups = ["EVENT_GROUP_TIMER"];
 
 const fields = [
   {
@@ -55,6 +56,7 @@ const compile = (input, helpers) => {
 
 module.exports = {
   id,
+  groups,
   fields,
   compile
 };

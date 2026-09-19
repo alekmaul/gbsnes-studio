@@ -29,6 +29,7 @@ export type SettingsState = {
   customHead: string;
   navigatorSplitSizes: number[];
   showNavigator: boolean;
+  favoriteEvents: string[];
 };
 
 export const initialState: SettingsState = {
@@ -47,6 +48,7 @@ export const initialState: SettingsState = {
   customHead: "",
   navigatorSplitSizes: [300, 100, 100],
   showNavigator: true,
+  favoriteEvents: ["EVENT_TEXT", "EVENT_SWITCH_SCENE"],
 };
 
 const settingsSlice = createSlice({
@@ -71,6 +73,16 @@ const settingsSlice = createSlice({
 
     setShowNavigator: (state, action: PayloadAction<boolean>) => {
       state.showNavigator = action.payload;
+    },
+
+    toggleFavoriteEvent: (state, action: PayloadAction<string>) => {
+      if (state.favoriteEvents.includes(action.payload)) {
+        state.favoriteEvents = state.favoriteEvents.filter(
+          (id) => id !== action.payload
+        );
+      } else {
+        state.favoriteEvents.push(action.payload);
+      }
     },
   },
   extraReducers: (builder) =>

@@ -58,8 +58,10 @@
 }
 
 .AddCommandButton__ListItem {
-  /* padding: 5px; */
+  display: flex;
+  align-items: center;
   padding: 6px 10px;
+  cursor: pointer;
 }
 
 .AddCommandButton__ListItem--Selected {
@@ -73,4 +75,76 @@
 .AddCommandButton__ListItem__Highlight {
   color: var(--highlight-color);
   background: var(--menu-hover-color);
+}
+
+.AddCommandButton__Spacer {
+  flex-grow: 1;
+}
+
+.AddCommandButton__Caret svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+  fill: currentColor;
+  opacity: 0.6;
+}
+
+.AddCommandButton__Star {
+  display: flex;
+  align-items: center;
+  margin: -4px -4px -4px 4px;
+  padding: 4px;
+  opacity: 0;
+}
+
+.AddCommandButton__Star svg {
+  width: 10px;
+  height: 10px;
+  display: block;
+  fill: currentColor;
+  opacity: 0.3;
+}
+
+.AddCommandButton__ListItem:hover .AddCommandButton__Star,
+.AddCommandButton__ListItem--Selected .AddCommandButton__Star,
+.AddCommandButton__Star--Active {
+  opacity: 1;
+}
+
+.AddCommandButton__Star--Active svg {
+  opacity: 1;
+}
+
+.AddCommandButton__GroupHeader {
+  padding: 5px 10px;
+  font-size: 10px;
+  text-transform: uppercase;
+  opacity: 0.8;
+}
+
+.AddCommandButton__GroupHeader:not(:first-child) {
+  margin-top: 10px;
+}
+
+.AddCommandButton__CategoryHeader {
+  display: flex;
+  align-items: center;
+  padding: 8px 10px;
+  font-weight: bold;
+  cursor: pointer;
+  border-bottom: 1px solid var(--sidebar-edge-color);
+}
+
+.AddCommandButton__CategoryHeader .AddCommandButton__BackIcon {
+  display: flex;
+  align-items: center;
+  margin-right: 6px;
+}
+
+.AddCommandButton__CategoryHeader .AddCommandButton__BackIcon svg {
+  width: 8px;
+  height: 8px;
+  display: block;
+  fill: currentColor;
+  transform: scaleX(-1);
 }

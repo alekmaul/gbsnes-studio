@@ -1,4 +1,5 @@
 const id = "EVENT_LOOP";
+const groups = ["EVENT_GROUP_CONTROL_FLOW"];
 
 const fields = [
   {
@@ -24,6 +25,7 @@ const compile = (input, helpers) => {
 
 module.exports = {
   id,
+  groups,
   fields,
   compile
 };

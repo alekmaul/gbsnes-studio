@@ -3,6 +3,7 @@ const l10n = require("../helpers/l10n").default;
 const target = require("../compiler/targets").default;
 
 const id = "EVENT_TEXT";
+const groups = ["EVENT_GROUP_DIALOGUE"];
 
 // Editor pre-wrap width - mirrors the real engine's own runtime word-wrap
 // (ui.c's TXT_COLS), see targets/snes.js.
@@ -85,6 +86,7 @@ const compile = (input, helpers) => {
 
 module.exports = {
   id,
+  groups,
   fields,
   compile
 };

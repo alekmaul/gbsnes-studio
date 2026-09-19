@@ -2,6 +2,7 @@ const getSprite = require("./helpers").getSprite;
 const directionToFrame = require("../helpers/gbstudio").directionToFrame;
 
 const id = "EVENT_ACTOR_SET_DIRECTION";
+const groups = ["EVENT_GROUP_ACTOR"];
 
 const fields = [
   {
@@ -100,6 +101,7 @@ function changeDirection(direction, input, helpers) {
 
 module.exports = {
   id,
+  groups,
   fields,
   compile
 };

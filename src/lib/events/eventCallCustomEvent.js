@@ -2,6 +2,7 @@ const walkEvents = require("../helpers/eventSystem").walkEvents;
 const compileEntityEvents = require("../compiler/compileEntityEvents").default;
 
 const id = "EVENT_CALL_CUSTOM_EVENT";
+const groups = ["EVENT_GROUP_CONTROL_FLOW"];
 
 const fields = [
   {
@@ -70,6 +71,7 @@ const compile = (input, helpers) => {
 
 module.exports = {
   id,
+  groups,
   fields,
   compile
 };

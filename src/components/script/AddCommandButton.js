@@ -5,6 +5,7 @@ import Highlighter from "react-highlight-words";
 import { connect } from "react-redux";
 import ScrollIntoViewIfNeeded from "react-scroll-into-view-if-needed";
 import Button from "../library/Button";
+import { CaretRightIcon, StarIcon } from "../ui/icons/Icons";
 import {
   EventsOnlyForActors,
   EventsHidden,
@@ -16,7 +17,14 @@ import trimlines from "../../lib/helpers/trimlines";
 import events from "../../lib/events";
 import { CustomEventShape } from "../../store/stateShape";
 import { customEventSelectors } from "../../store/features/entities/entitiesState";
+import settingsActions from "../../store/features/settings/settingsActions";
 
+// v4: the flat search-only list was replaced with a GB Studio 3.2.1-style
+// Favorites/Categories menu (Scene/Camera/Actor/... - see settingsState.ts
+// `favoriteEvents`), matching the picker's real design instead of always
+// dumping every event id into one list. The search box (already working)
+// still searches the whole flat list unchanged - only the closed-search
+// "root" view is now grouped, drilling into a category on click.
 class AddCommandButton extends Component {
   constructor(props) {
     super(props);
@@ -24,6 +32,7 @@ class AddCommandButton extends Component {
     this.state = {
       query: "",
       selectedIndex: 0,
+      selectedCategoryIndex: -1,
       open: false,
       pasteMode: false
     };
@@ -61,7 +70,9 @@ class AddCommandButton extends Component {
     }
     this.setState({
       open: true,
-      query: ""
+      query: "",
+      selectedCategoryIndex: -1,
+      selectedIndex: 0
     });
   };
 
@@ -82,6 +93,7 @@ class AddCommandButton extends Component {
     this.setState({
       open: false,
       query: "",
+      selectedCategoryIndex: -1,
       selectedIndex: index
     });
   };
@@ -94,6 +106,7 @@ class AddCommandButton extends Component {
     this.setState({
       open: false,
       query: "",
+      selectedCategoryIndex: -1,
       selectedIndex: 0
     });
   };
@@ -106,48 +119,77 @@ class AddCommandButton extends Component {
 
   onSearch = e => {
     this.setState({
-      query: e.currentTarget.value
+      query: e.currentTarget.value,
+      selectedCategoryIndex: -1,
+      selectedIndex: 0
     });
   };
 
+  onSelectCategory = categoryIndex => () => {
+    this.setState({
+      selectedCategoryIndex: categoryIndex,
+      selectedIndex: 0
+    });
+  };
+
+  onBack = () => {
+    this.setState({
+      selectedCategoryIndex: -1,
+      selectedIndex: 0
+    });
+  };
+
+  onToggleFavorite = key => e => {
+    const { dispatch } = this.props;
+    e.preventDefault();
+    e.stopPropagation();
+    dispatch(settingsActions.toggleFavoriteEvent(key));
+  };
+
   onKeyDown = e => {
-    const { selectedIndex, query } = this.state;
-    const actionsList = this.filteredList();
+    const { selectedIndex, query, selectedCategoryIndex } = this.state;
+    const items = this.visibleItems();
     if (e.key === "Enter") {
-      if (actionsList[selectedIndex]) {
-        this.onAdd(actionsList[selectedIndex].key)();
+      const item = items[selectedIndex];
+      if (item && item.kind === "category") {
+        this.onSelectCategory(item.categoryIndex)();
+      } else if (item) {
+        this.onAdd(item.action.key)();
       } else if (query.length > 0) {
         this.onAddText();
       }
     } else if (e.key === "Escape") {
-      this.setState({
-        open: false
-      });
+      if (!query && selectedCategoryIndex !== -1) {
+        this.onBack();
+      } else {
+        this.setState({
+          open: false
+        });
+      }
     } else if (e.key === "ArrowDown") {
       this.setState({
-        selectedIndex: Math.min(actionsList.length - 1, selectedIndex + 1)
+        selectedIndex: Math.min(items.length - 1, selectedIndex + 1)
       });
     } else if (e.key === "ArrowUp") {
       this.setState({ selectedIndex: Math.max(0, selectedIndex - 1) });
     } else {
       this.setState({
-        selectedIndex: Math.max(
-          0,
-          Math.min(actionsList.length - 1, selectedIndex)
-        )
+        selectedIndex: Math.max(0, Math.min(items.length - 1, selectedIndex))
       });
     }
   };
 
   onKeyUp = e => {
     const { selectedIndex } = this.state;
-    const actionsList = this.filteredList();
+    const items = this.visibleItems();
     this.setState({
-      selectedIndex: Math.max(
-        0,
-        Math.min(actionsList.length - 1, selectedIndex)
-      )
+      selectedIndex: Math.max(0, Math.min(items.length - 1, selectedIndex))
     });
+  };
+
+  isFavorite = key => {
+    const { favoriteEvents } = this.props;
+    return favoriteEvents.indexOf(key) > -1;
   };
 
   fullList = () => {
@@ -173,7 +215,8 @@ class AddCommandButton extends Component {
           },
           name,
           searchName,
-          key: `EVENT_CALL_CUSTOM_EVENT_${index}`
+          key: `EVENT_CALL_CUSTOM_EVENT_${index}`,
+          isCustomEventInstance: true
         };
       });
     }
@@ -235,10 +278,107 @@ class AddCommandButton extends Component {
       });
   };
 
+  // Root (search-closed) view: every event grouped by its `groups` field
+  // (EVENT_GROUP_ACTOR, EVENT_GROUP_CAMERA, ... - src/lib/events/event*.js,
+  // ported from GB Studio 3.2.1's own event files), an event with no
+  // `groups` at all falls into EVENT_GROUP_MISC same as GB. Favorites
+  // resolve against the fullList entries directly so a favorited event
+  // still shows its live name/args.
+  rootOptions = () => {
+    const { favoriteEvents } = this.props;
+    const fullList = this.fullList();
+    const byKey = {};
+    fullList.forEach(event => {
+      byKey[event.key] = event;
+    });
+
+    const byName = (a, b) => {
+      if (a.name === b.name) return 0;
+      return a.name < b.name ? -1 : 1;
+    };
+
+    const favorites = favoriteEvents
+      .map(id => byKey[id])
+      .filter(Boolean)
+      .sort(byName);
+
+    const groupedEvents = {};
+    fullList.forEach(event => {
+      const eventGroups =
+        Array.isArray(event.groups) && event.groups.length > 0
+          ? event.groups
+          : ["EVENT_GROUP_MISC"];
+      eventGroups.forEach(group => {
+        if (!groupedEvents[group]) {
+          groupedEvents[group] = [];
+        }
+        groupedEvents[group].push(event);
+      });
+    });
+
+    const categories = Object.keys(groupedEvents)
+      .map(group => ({
+        key: group,
+        name: l10n(group),
+        options: groupedEvents[group].sort(byName)
+      }))
+      .sort((a, b) => {
+        if (a.key === "EVENT_GROUP_MISC") return 1;
+        if (b.key === "EVENT_GROUP_MISC") return -1;
+        return byName(a, b);
+      });
+
+    return { favorites, categories };
+  };
+
+  // Flattens whichever view is currently showing (search results / root
+  // Favorites+Categories / a drilled-in category's own events) into one
+  // array so keyboard nav and click handlers share a single index space -
+  // each item also carries a `groupLabel` on the first item of a section,
+  // rendered as a header row (mirrors GB Studio 3.2.1's own AddScriptEventMenu
+  // approach for the same reason: one list to walk, not two nested ones).
+  visibleItems = () => {
+    const { query, selectedCategoryIndex } = this.state;
+    if (query) {
+      return this.filteredList().map(action => ({ kind: "event", action }));
+    }
+
+    const { favorites, categories } = this.rootOptions();
+
+    if (selectedCategoryIndex === -1) {
+      const items = [];
+      favorites.forEach((action, index) => {
+        items.push({
+          kind: "event",
+          action,
+          groupLabel: index === 0 ? l10n("FIELD_FAVORITES") : undefined
+        });
+      });
+      categories.forEach((category, categoryIndex) => {
+        items.push({
+          kind: "category",
+          category,
+          categoryIndex,
+          groupLabel: categoryIndex === 0 ? l10n("FIELD_CATEGORIES") : undefined
+        });
+      });
+      return items;
+    }
+
+    const category = categories[selectedCategoryIndex];
+    return category
+      ? category.options.map(action => ({ kind: "event", action }))
+      : [];
+  };
+
   render() {
-    const { query, open, selectedIndex, pasteMode } = this.state;
+    const { query, open, selectedIndex, pasteMode, selectedCategoryIndex } = this.state;
     const { onPaste } = this.props;
-    const actionsList = open && this.filteredList();
+    const items = open ? this.visibleItems() : [];
+    const currentCategory =
+      open && !query && selectedCategoryIndex > -1
+        ? this.rootOptions().categories[selectedCategoryIndex]
+        : null;
 
     return (
       <div ref={this.button} className="AddCommandButton">
@@ -249,6 +389,17 @@ class AddCommandButton extends Component {
         )}
         {open && (
           <div className={cx("AddCommandButton__Menu")}>
+            {currentCategory && (
+              <div
+                className="AddCommandButton__CategoryHeader"
+                onClick={this.onBack}
+              >
+                <span className="AddCommandButton__BackIcon">
+                  <CaretRightIcon />
+                </span>
+                {currentCategory.name}
+              </div>
+            )}
             <div className="AddCommandButton__Search">
               <input
                 autoFocus
@@ -261,30 +412,76 @@ class AddCommandButton extends Component {
               />
             </div>
             <div className="AddCommandButton__List">
-              {actionsList.map((action, actionIndex) => (
-                <ScrollIntoViewIfNeeded
-                  active={selectedIndex === actionIndex}
-                  options={{
-                    behavior: "instant",
-                    block: "nearest"
-                  }}
-                  key={action.key}
-                  className={cx("AddCommandButton__ListItem", {
-                    "AddCommandButton__ListItem--Selected":
-                      selectedIndex === actionIndex
-                  })}
-                  onClick={this.onAdd(action.key)}
-                  onMouseEnter={this.onHover(actionIndex)}
+              {items.map((item, itemIndex) => (
+                <React.Fragment
+                  key={
+                    item.kind === "category"
+                      ? `category:${item.category.key}`
+                      : item.action.key
+                  }
                 >
-                  <Highlighter
-                    highlightClassName="AddCommandButton__ListItem__Highlight"
-                    searchWords={query.split(" ")}
-                    autoEscape
-                    textToHighlight={action.name}
-                  />
-                </ScrollIntoViewIfNeeded>
+                  {item.groupLabel && (
+                    <div className="AddCommandButton__GroupHeader">
+                      {item.groupLabel}
+                    </div>
+                  )}
+                  {item.kind === "category" ? (
+                    <div
+                      className={cx(
+                        "AddCommandButton__ListItem",
+                        "AddCommandButton__ListItem--Category",
+                        {
+                          "AddCommandButton__ListItem--Selected":
+                            selectedIndex === itemIndex
+                        }
+                      )}
+                      onClick={this.onSelectCategory(item.categoryIndex)}
+                      onMouseEnter={this.onHover(itemIndex)}
+                    >
+                      {item.category.name}
+                      <span className="AddCommandButton__Spacer" />
+                      <span className="AddCommandButton__Caret">
+                        <CaretRightIcon />
+                      </span>
+                    </div>
+                  ) : (
+                    <ScrollIntoViewIfNeeded
+                      active={selectedIndex === itemIndex}
+                      options={{
+                        behavior: "instant",
+                        block: "nearest"
+                      }}
+                      className={cx("AddCommandButton__ListItem", {
+                        "AddCommandButton__ListItem--Selected":
+                          selectedIndex === itemIndex
+                      })}
+                      onClick={this.onAdd(item.action.key)}
+                      onMouseEnter={this.onHover(itemIndex)}
+                    >
+                      <Highlighter
+                        highlightClassName="AddCommandButton__ListItem__Highlight"
+                        searchWords={query.split(" ")}
+                        autoEscape
+                        textToHighlight={item.action.name}
+                      />
+                      <span className="AddCommandButton__Spacer" />
+                      {!item.action.isCustomEventInstance && (
+                        <span
+                          className={cx("AddCommandButton__Star", {
+                            "AddCommandButton__Star--Active": this.isFavorite(
+                              item.action.key
+                            )
+                          })}
+                          onClick={this.onToggleFavorite(item.action.key)}
+                        >
+                          <StarIcon />
+                        </span>
+                      )}
+                    </ScrollIntoViewIfNeeded>
+                  )}
+                </React.Fragment>
               ))}
-              {actionsList.length === 0 && (
+              {open && query.length > 0 && items.length === 0 && (
                 <div
                   className={cx(
                     "AddCommandButton__ListItem",
@@ -312,13 +509,17 @@ AddCommandButton.propTypes = {
   onAdd: PropTypes.func.isRequired,
   onPaste: PropTypes.func.isRequired,
   type: PropTypes.string.isRequired,
-  customEvents: PropTypes.arrayOf(CustomEventShape).isRequired
+  customEvents: PropTypes.arrayOf(CustomEventShape).isRequired,
+  favoriteEvents: PropTypes.arrayOf(PropTypes.string).isRequired,
+  dispatch: PropTypes.func.isRequired
 };
 
 function mapStateToProps(state) {
   const customEvents = customEventSelectors.selectAll(state);
+  const favoriteEvents = state.project.present.settings.favoriteEvents || [];
   return {
-    customEvents
+    customEvents,
+    favoriteEvents
   };
 }
 

@@ -1,4 +1,5 @@
 const id = "EVENT_ENGINE_FIELD_SET";
+const groups = ["EVENT_GROUP_ENGINE_FIELDS"];
 
 const fields = [
   {
@@ -29,6 +30,7 @@ const compile = (input, helpers) => {
 
 module.exports = {
   id,
+  groups,
   fields,
   compile,
 };
