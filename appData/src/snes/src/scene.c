@@ -868,10 +868,22 @@ static void SceneTryInteract(void)
         ay = SceneActorTileY(i);
         if (in_box(ntx, nty, ax, ay, 2, 2))
         {
-            // Face the player and stop
+            // Face the player and stop - matches B's real topdown.c, which
+            // does this unconditionally even for a scriptless actor (only
+            // the script_execute call itself is gated on script.bank).
             actor_face(i, -actors[0].dir_x, -actors[0].dir_y);
             actors[i].moving = 0;
-            run_script(actors[i].events_ptr, i);
+            // GB found+extended: B gates the actual script run on
+            // hit_actor->script.bank; a compiled script is never truly
+            // empty (EVENT_END is a real, always-emitted byte), so a first
+            // byte of 0 means "nothing authored" - same check already
+            // established for Point and Click's hover-gate above, now
+            // applied here too (shared by every SceneTryInteract caller -
+            // Top Down, Adventure, and Shmup's new A-press interact below).
+            if (actors[i].events_ptr.ptr[0] != 0)
+            {
+                run_script(actors[i].events_ptr, i);
+            }
             return;
         }
     }
@@ -1680,6 +1692,17 @@ void Update_Platform(void)
  * rather than genre-specific code here - this genre's own collision test
  * above never blocks the player from overlapping an actor either.
  *
+ * v4 follow-up #2: A-press interact was entirely missing (user-found,
+ * comparing to B while looking at Adventure's own A-press gap - B's real
+ * shmup.c has the same `!hit_actor->collision_group` + `script.bank` guard
+ * as topdown.c/adventure.c/platform.c, all four states share the idea even
+ * though B implements each inline). Ported the cheap way: reuses the exact
+ * same SceneTryInteract() Top Down and Adventure already call on a fresh
+ * KEY_A press - it already had the hostile-actor exclusion (previous v4
+ * follow-up) and now also the empty-script gate (this follow-up, see
+ * SceneTryInteract's own comment) - both were already correct for Shmup's
+ * needs with zero Shmup-specific code, just never wired up.
+ *
  * Collision uses the same narrow, direction-biased single-point test
  * Adventure already established (see its own comment) rather than GB's
  * own per-direction pixel biases (which differ oddly by direction there -
@@ -1772,6 +1795,15 @@ void Update_Shmup(void)
         shmup_last_trigger_tx = tile_x;
         shmup_last_trigger_ty = tile_y;
         if (SceneActivateTriggerAt(tile_x, tile_y))
+        {
+            return;
+        }
+    }
+
+    if ((joy & KEY_A) && !(prev_joy & KEY_A))
+    {
+        SceneTryInteract();
+        if (script_ptr)
         {
             return;
         }
