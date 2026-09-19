@@ -1007,12 +1007,13 @@ void Start_PointNClick(void)
 // passes inc_noclip=TRUE, so collisions_enabled is deliberately not checked.
 //
 // GB additionally gates both hover states on `events_ptr.bank != 0` (only a
-// script-bearing actor/trigger shows as hoverable) - this engine's BANK_PTR
-// is a plain pointer with no bank field and no established "no script"
-// sentinel yet (M7 doesn't exist), so that check has nothing to port to; any
-// hit actor/trigger counts as hoverable here, matching how SceneTryInteract
-// (Top Down's own A-button interact, above) already runs whatever script is
-// there unconditionally.
+// script-bearing actor/trigger shows as hoverable) - v4 follow-up: now
+// ported too (Update_PointNClick's own is_hover_actor/is_hover_trigger,
+// checking events_ptr.ptr[0] != 0 - a compiled script is never truly empty,
+// see that comment). SceneTryInteract (Top Down's own A-button interact)
+// still runs whatever script is there unconditionally, same as before -
+// that's a plain instant interact with no hover state to gate, unlike this
+// genre's dedicated "is this even worth highlighting" concept.
 static u8 actor_at_tile(s16 tx, s16 ty)
 {
     u8 i;
@@ -1055,33 +1056,59 @@ static u8 trigger_at_tile(s16 tx, s16 ty)
 // actor_try_move only arms `moving`+facing there) must never pick this actor
 // up, or it would snap/halt the cursor to 8px tile boundaries like a walking
 // actor instead of letting it glide freely.
+// Diagonal-move parity toggle (user-found, comparing against B's real
+// pointnclick.c): B moves the cursor via point_translate_angle() - real
+// trig, so a diagonal move covers the same real-world distance per frame as
+// a straight one. This engine's simple x+-1/y+-1-per-axis version moved on
+// BOTH axes every frame a diagonal was held, covering sqrt(2) (~41%) more
+// distance per frame than a straight move - a real, if minor, speed bug,
+// not a stylistic difference. Fixed with a well-known integer-only trick
+// instead of adding real trig (nothing else on this engine uses it, see the
+// Projectiles direction-vs-angle decision for the same reasoning): only
+// move ONE axis per frame while both are held, alternating - over N frames
+// that's N/2 + N/2 pixels on the two axes = a diagonal distance of
+// N/sqrt(2), matching a straight move's own distance of N to within
+// integer rounding. Explicitly initialised (not left to .bss-style zero-init
+// this toolchain doesn't reliably guarantee - see CLAUDE.md's "816-tcc traps
+// hit so far"), so it's always 0 at boot; not otherwise reset per-scene,
+// since which axis a diagonal move happens to prioritise on its very first
+// frame has no visible effect either way.
+static u8 pnc_diag_toggle = 0;
+
 void Update_PointNClick(void)
 {
-    s16 tile_x = SceneActorTileX(0);
-    s16 tile_y = SceneActorTileY(0);
+    s16 tile_x, tile_y;
     s16 max_x = (s16)scene_width << 3;
     s16 max_y = (s16)scene_height << 3;
-    u8 hit_actor, hit_trigger;
+    u8 hit_actor, hit_trigger, is_hover_actor, is_hover_trigger;
+    s8 dx = 0, dy = 0;
 
     actors[0].moving = 0;
 
-    if ((joy & KEY_LEFT) && actors[0].x > 8)
+    if (joy & KEY_LEFT) dx = -1;
+    else if (joy & KEY_RIGHT) dx = 1;
+    if (joy & KEY_UP) dy = -1;
+    else if (joy & KEY_DOWN) dy = 1;
+
+    if (dx && dy)
     {
-        actors[0].x--;
-    }
-    else if ((joy & KEY_RIGHT) && actors[0].x < max_x)
-    {
-        actors[0].x++;
+        pnc_diag_toggle ^= 1;
+        if (pnc_diag_toggle) dy = 0; else dx = 0;
     }
 
-    if ((joy & KEY_UP) && actors[0].y > 8)
-    {
-        actors[0].y--;
-    }
-    else if ((joy & KEY_DOWN) && actors[0].y < max_y)
-    {
-        actors[0].y++;
-    }
+    // Clamped to the cursor's own real 16x16 render box (SceneRenderActors'
+    // -8/-16 OAM offset - x spans [x-8, x+8], y spans [y-16, y]), not a flat
+    // 8px margin on every edge: the old margin let the cursor's right edge
+    // go 8px past max_x and its top edge 8px above y=0 before B's
+    // equivalent bounds-based clamp would have stopped it (user-found,
+    // comparing against B's real PLAYER.bounds-based clamp).
+    if (dx < 0 && actors[0].x > 8) actors[0].x--;
+    else if (dx > 0 && actors[0].x < max_x - 8) actors[0].x++;
+    if (dy < 0 && actors[0].y > 16) actors[0].y--;
+    else if (dy > 0 && actors[0].y < max_y) actors[0].y++;
+
+    tile_x = SceneActorTileX(0);
+    tile_y = SceneActorTileY(0);
 
     // One tile above the cursor's own tile for triggers, matching GB's own
     // `TriggerAtTile(tile_x, tile_y - 1)` call exactly - a deliberate GB
@@ -1091,7 +1118,20 @@ void Update_PointNClick(void)
     hit_trigger = trigger_at_tile(tile_x, tile_y - 1);
     hit_actor = actor_at_tile(tile_x, tile_y);
 
-    if ((hit_actor != 0xFF || hit_trigger != 0xFF) && actors[0].frames_len != 1)
+    // Only treat a hit as "hovering" (or A-press-interactable) if it
+    // actually has a real (non-empty) script - matches B's own
+    // `hit_actor->script.bank` / `triggers[..].script.bank` gate
+    // (user-found: this engine used to show the hover frame, and run a
+    // script on A-press, for any actor/trigger at all - even a purely
+    // decorative one with nothing authored). A compiled script is never
+    // truly empty - it's always at least the single EVENT_END byte (opcode
+    // 0x00, see script_cmds.c) - so "first byte is 0" is a reliable,
+    // no-extra-compiled-data way to tell "nothing was authored" from
+    // "something was".
+    is_hover_actor = hit_actor != 0xFF && actors[hit_actor].events_ptr.ptr[0] != 0;
+    is_hover_trigger = hit_trigger != 0xFF && triggers[hit_trigger].events_ptr.ptr[0] != 0;
+
+    if ((is_hover_actor || is_hover_trigger) && actors[0].frames_len != 1)
     {
         actors[0].frame = 1;
     }
@@ -1102,11 +1142,11 @@ void Update_PointNClick(void)
 
     if ((joy & KEY_A) && !(prev_joy & KEY_A))
     {
-        if (hit_actor != 0xFF)
+        if (is_hover_actor)
         {
             run_script(actors[hit_actor].events_ptr, hit_actor);
         }
-        else if (hit_trigger != 0xFF)
+        else if (is_hover_trigger)
         {
             run_script(triggers[hit_trigger].events_ptr, 0);
         }
