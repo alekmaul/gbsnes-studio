@@ -16,6 +16,7 @@ const unsigned short bg_maps_len[2] = { 8192, 2048 };
 const unsigned short bg_pals_len[2] = { 32, 28 };
 const unsigned char bg_map_w[2] = { 64, 20 };
 const unsigned char bg_map_h[2] = { 64, 18 };
+const unsigned char *const scene_bg_map_ptrs[2] = { 0, 0 };
 
 const unsigned char script_scene0[122] = {
     30, 0, 0, 36, 0, 0, 5, 11, 30, 36, 0, 1, 6, 16, 32, 45,

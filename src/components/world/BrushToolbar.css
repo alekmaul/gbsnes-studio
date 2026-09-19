@@ -142,3 +142,28 @@
   border-bottom: 4px solid green;
 }
 
+/* M7 (v4): SNES-native BG-above-OBJ tile priority - a gold swatch (distinct
+   from every collision colour) with a small upward chevron, suggesting
+   "renders above". */
+.BrushToolbar__Tile--priority::before {
+  content: "";
+  display: block;
+  background-color: rgb(230,180,20);
+  height: 20px;
+  border-radius: 4px;
+  border: 1px solid rgba(0,0,0,0.3);
+}
+
+.BrushToolbar__Tile--priority::after {
+  position: absolute;
+  content: "";
+  display: block;
+  width: 8px;
+  height: 8px;
+  left: 8px;
+  top: 8px;
+  border-top: 3px solid rgba(0,0,0,0.6);
+  border-right: 3px solid rgba(0,0,0,0.6);
+  transform: rotate(-45deg);
+}
+

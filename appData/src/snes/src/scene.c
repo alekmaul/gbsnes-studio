@@ -622,7 +622,13 @@ void SceneInit(void)
     WaitForVBlank();
     setScreenOff();
     dmaCopyVram((u8 *)bg_tiles_ptrs[bg_index], 0x2000, bg_tiles_len[bg_index]);
-    dmaCopyVram((u8 *)bg_maps_ptrs[bg_index], 0x0000, bg_maps_len[bg_index]);
+    /* M7 (v4): a scene that painted TILE_PROP_PRIORITY tiles has its own
+     * tilemap copy (scene_bg_map_ptrs[scene_index], real SNES BG_TIL_PRIO
+     * bit set at those positions) - same length as the shared
+     * bg_maps_ptrs[bg_index] it's derived from, just a different source. */
+    dmaCopyVram(
+        (u8 *)(scene_bg_map_ptrs[scene_index] ? scene_bg_map_ptrs[scene_index] : bg_maps_ptrs[bg_index]),
+        0x0000, bg_maps_len[bg_index]);
     SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
@@ -2063,7 +2069,13 @@ static void SceneRenderActors(void)
             // actor's tile, matching the GB engine (actor pos = tile*8+8, GB
             // OAM shows at pos - {8,16}); -8 y put every sprite a tile too low
             // (an actor placed "on the stairs" rendered one row below them).
-            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 16, 2,
+            // M7 (v4): priority 0, not 2 - Mode 1's OBJ0 sits below a BG1
+            // "high priority" tile (BG_TIL_PRIO), so a painted priority tile
+            // now actually renders above the actor; a normal (non-priority)
+            // BG1 tile still sits below OBJ0, so ordinary scenes are
+            // unaffected. See EVENTS.md's Parallax/Priority sections for the
+            // full Mode 1 layer ordering this relies on.
+            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 16, 0,
                    flip, 0, tile, sprite_pal_for_slot[actors[i].frame_offset >> 1]);
             oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         }
@@ -2075,8 +2087,11 @@ static void SceneRenderActors(void)
 
     if (emote_time != 0)
     {
+        /* M7 (v4): priority 0, same reasoning as the actor oamSet above -
+         * the emote bubble is a world-space sprite (floats above the
+         * actor's head), so it should respect priority tiles the same way. */
         oamSet(EMOTE_OID, actors[emote_actor].x - scroll_x - 8,
-               actors[emote_actor].y - scroll_y - 32, 2, 0, 0,
+               actors[emote_actor].y - scroll_y - 32, 0, 0, 0,
                EMOTE_TILE0 + emote_id * 2, 1);
         oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
     }

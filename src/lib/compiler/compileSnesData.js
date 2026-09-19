@@ -73,7 +73,7 @@ import compileEntityEvents from "./compileEntityEvents";
 import { snesFixedAssets } from "./snesFixedAssets";
 import { dirDec, moveDec, animSpeedDec, spriteTypeDec } from "./helpers";
 import { assetFilename } from "../helpers/gbstudio";
-import { projectTemplatesRoot } from "../../consts";
+import { projectTemplatesRoot, TILE_PROP_PRIORITY } from "../../consts";
 import snesTarget from "./targets/snes";
 import migrateProject from "../project/migrateProject";
 
@@ -700,6 +700,40 @@ const compileSnesData = async (
     };
   });
 
+  // ---- per-scene priority-tile tilemap overrides (M7, v4) -------------
+  // Most scenes need none - the shared bgTables[i].map above (32x32x2,
+  // padded) is used unmodified, matching every scene that references the
+  // same background today. A scene that paints any TILE_PROP_PRIORITY
+  // collision-grid tiles (BrushToolbar.js) gets its own copy of that
+  // background's tilemap with BG_TIL_PRIO (snesgfx.js's tile<<13 priority
+  // bit) OR'd in at the painted positions. This can't be a shared per-
+  // background flag: two scenes can share one background and paint
+  // different priority patterns, so priority has to live at the same
+  // per-scene granularity collision itself already does.
+  const BG_TIL_PRIO_HI = 0x20; // (1<<13) >> 8 - the high byte of a tilemap word
+  const scenePriorityMaps = scenes.map((scene, sceneIndex) => {
+    const bgIndex = bgIndexById[scene.backgroundId] || 0;
+    const bg = bgTables[bgIndex];
+    const collisions = scene.collisions || [];
+    let hasPriority = false;
+    for (let i = 0; i < bg.w * bg.h; i++) {
+      if (collisions[i] & TILE_PROP_PRIORITY) {
+        hasPriority = true;
+        break;
+      }
+    }
+    if (!hasPriority) return null;
+    const map = bg.map.slice();
+    for (let ty = 0; ty < bg.h; ty++) {
+      for (let tx = 0; tx < bg.w; tx++) {
+        if (collisions[ty * bg.w + tx] & TILE_PROP_PRIORITY) {
+          map[(ty * 32 + tx) * 2 + 1] |= BG_TIL_PRIO_HI;
+        }
+      }
+    }
+    return { name: `scene_bgmap_${sceneIndex}`, map };
+  });
+
   // ---- start position ------------------------------------------------
   const startSceneIndex = Math.max(0, scenes.findIndex((s) => s.id === settings.startSceneId));
   const startX = clampByte(settings.startX !== undefined ? settings.startX : 0);
@@ -780,6 +814,16 @@ extern const unsigned short bg_maps_len[${nBg}];
 extern const unsigned short bg_pals_len[${nBg}];
 extern const unsigned char bg_map_w[${nBg}];
 extern const unsigned char bg_map_h[${nBg}];
+
+/* M7 (v4): per-scene priority-tile tilemap override - 0 (most scenes) means
+ * "use bg_maps_ptrs[bg_index] unmodified", a real pointer means this scene
+ * painted TILE_PROP_PRIORITY tiles and has its own tilemap copy with the
+ * SNES BG_TIL_PRIO bit set at those positions. See SceneInit (scene.c). */
+${scenePriorityMaps
+  .filter((e) => e)
+  .map((e) => `extern const unsigned char ${e.name}[${e.map.length}];`)
+  .join("\n")}
+extern const unsigned char *const scene_bg_map_ptrs[${scenes.length}];
 
 extern const BANK_PTR event_ptrs[${scriptBytes.length}];
 extern const BANK_PTR string_ptrs[${nStr}];
@@ -865,6 +909,12 @@ extern const unsigned char *const scenes[${scenes.length}];
       { label: `scene_spr_pal_${i}`, bytes: a },
     ]);
   });
+  scenePriorityMaps.forEach((entry) => {
+    if (!entry) return;
+    assetsData[`${entry.name}_data.as`] = asmAsset(entry.name, [
+      { label: entry.name, bytes: entry.map },
+    ]);
+  });
   const includeLines = Object.keys(assetsData)
     .map((f) => `.include "src/data/${f}"`)
     .join("\n");
@@ -897,6 +947,9 @@ const unsigned short bg_maps_len[${nBg}] = { ${bgTables.map((b) => b.map.length)
 const unsigned short bg_pals_len[${nBg}] = { ${bgTables.map((b) => b.pal.length).join(", ")} };
 const unsigned char bg_map_w[${nBg}] = { ${bgTables.map((b) => b.w).join(", ")} };
 const unsigned char bg_map_h[${nBg}] = { ${bgTables.map((b) => b.h).join(", ")} };
+const unsigned char *const scene_bg_map_ptrs[${scenes.length}] = {
+${scenePriorityMaps.map((e) => (e ? `    ${e.name}` : "    0")).join(",\n")}
+};
 
 ${scriptArrays}
 const BANK_PTR event_ptrs[${scriptBytes.length}] = {

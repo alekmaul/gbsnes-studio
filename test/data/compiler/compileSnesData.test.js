@@ -3,7 +3,7 @@ import Path from "path";
 import compileSnesData, {
   resolvePlaceholders,
 } from "../../../src/lib/compiler/compileSnesData";
-import { COLLISION_ALL, COLLISION_TOP } from "../../../src/consts";
+import { COLLISION_ALL, COLLISION_TOP, TILE_PROP_PRIORITY } from "../../../src/consts";
 
 const PROJECT_DIR = Path.join(__dirname, "..", "..", "projects", "Test_Math");
 const loadProject = () => {
@@ -326,5 +326,70 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       }
     );
     expect(warnings.some((w2) => /parallax layers/.test(w2))).toBe(true);
+  });
+});
+
+describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
+  const w = 20;
+  const h = 18;
+
+  const baseProject = (collisions) => ({
+    _version: "2.0.0",
+    _release: "6",
+    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "priorityTest",
+        backgroundId: "bg",
+        width: w,
+        height: h,
+        actors: [],
+        triggers: [],
+        script: [],
+        collisions,
+      },
+    ],
+  });
+
+  test("a scene with no priority tiles gets a null (shared tilemap) entry", async () => {
+    const out = await compileSnesData(baseProject(new Array(w * h).fill(0)), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    expect(out.assetsC).toMatch(
+      /const unsigned char \*const scene_bg_map_ptrs\[1\] = \{\s*0\s*\};/
+    );
+    expect(Object.keys(out.assetsData)).not.toContain("scene_bgmap_0_data.as");
+  });
+
+  test("a painted priority tile gets its own tilemap override with the BG_TIL_PRIO bit set", async () => {
+    const collisions = new Array(w * h).fill(0);
+    // tile (tx=3, ty=1) -> collision index 1*20+3 = 23
+    collisions[23] = TILE_PROP_PRIORITY;
+    const out = await compileSnesData(baseProject(collisions), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    expect(out.assetsC).toMatch(
+      /const unsigned char \*const scene_bg_map_ptrs\[1\] = \{\s*scene_bgmap_0\s*\};/
+    );
+    const asFile = out.assetsData["scene_bgmap_0_data.as"];
+    expect(asFile).toBeDefined();
+    // The override is a 32x32x2 tilemap; tile (3,1) -> byte offset
+    // (1*32+3)*2 = 70, high byte (offset 71) should have bit 0x20 set
+    // ((1<<13)>>8 - see compileSnesData.js's BG_TIL_PRIO_HI).
+    const dbMatch = asFile.match(/scene_bgmap_0:\n([\s\S]*?)\n\.ends/);
+    expect(dbMatch).not.toBeNull();
+    const bytes = dbMatch[1]
+      .split(/\r?\n/)
+      .map((line) => line.replace(/^\.db\s*/, "").trim())
+      .filter(Boolean)
+      .join(",")
+      .split(",")
+      .map((v) => parseInt(v.trim(), 10));
+    expect(bytes[71] & 0x20).toBe(0x20);
   });
 });

@@ -23,7 +23,8 @@ import {
   COLLISION_LEFT,
   COLLISION_RIGHT,
   COLLISION_ALL,
-  TILE_PROP_LADDER
+  TILE_PROP_LADDER,
+  TILE_PROP_PRIORITY
 } from "../../consts";
 import editorActions from "../../store/features/editor/editorActions";
 
@@ -52,6 +53,10 @@ const tileTypes = [{
   key: "ladder",
   name: "Ladder",
   flag: TILE_PROP_LADDER
+},{
+  key: "priority",
+  name: "Priority (renders above sprites)",
+  flag: TILE_PROP_PRIORITY
 }];
 
 const collisionDirectionFlags = [COLLISION_TOP, COLLISION_BOTTOM, COLLISION_LEFT, COLLISION_RIGHT];
@@ -84,6 +89,8 @@ class BrushToolbar extends Component {
       this.setSelectedTileTypeIndex(4)(e);
     } else if (e.code === "Digit6") {
       this.setSelectedTileTypeIndex(5)(e);
+    } else if (e.code === "Digit7") {
+      this.setSelectedTileTypeIndex(6)(e);
     } else if (e.code === "Digit8") {
       this.setBrush(BRUSH_8PX)(e);
     } else if (e.code === "Digit9") {

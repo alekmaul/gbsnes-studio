@@ -470,6 +470,10 @@ extern const unsigned short bg_maps_len[${bgs.length}];
 extern const unsigned short bg_pals_len[${bgs.length}];
 extern const unsigned char bg_map_w[${bgs.length}];
 extern const unsigned char bg_map_h[${bgs.length}];
+// M7 (v4): per-scene priority-tile tilemap override - see compileSnesData.js.
+// Both dummy scenes have no priority tiles painted, so this is all-zero
+// ("use bg_maps_ptrs[bg_index] unmodified" for every scene).
+extern const unsigned char *const scene_bg_map_ptrs[2];
 
 extern const BANK_PTR event_ptrs[];
 extern const BANK_PTR string_ptrs[];
@@ -581,6 +585,7 @@ const unsigned short bg_pals_len[${bgs.length}] = { ${bgs
     .join(", ")} };
 const unsigned char bg_map_w[${bgs.length}] = { ${bgs.map(b => b.w).join(", ")} };
 const unsigned char bg_map_h[${bgs.length}] = { ${bgs.map(b => b.h).join(", ")} };
+const unsigned char *const scene_bg_map_ptrs[2] = { 0, 0 };
 
 ${cArray("script_scene0", scriptScene0)}
 ${cArray("script_npc", scriptNpc)}

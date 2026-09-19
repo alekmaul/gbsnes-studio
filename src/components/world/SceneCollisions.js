@@ -1,6 +1,6 @@
 import React, { Component } from "react";
 import PropTypes from "prop-types";
-import { COLLISION_TOP, COLLISION_ALL, COLLISION_BOTTOM, COLLISION_LEFT, COLLISION_RIGHT, TILE_PROP_LADDER } from "../../consts";
+import { COLLISION_TOP, COLLISION_ALL, COLLISION_BOTTOM, COLLISION_LEFT, COLLISION_RIGHT, TILE_PROP_LADDER, TILE_PROP_PRIORITY } from "../../consts";
 
 const TILE_SIZE = 8;
 
@@ -54,7 +54,18 @@ class SceneCollisions extends Component {
             ctx.fillRect((xi + 0.0) * TILE_SIZE, yi * TILE_SIZE, TILE_SIZE * 0.2, TILE_SIZE);
             ctx.fillRect((xi + 0.8) * TILE_SIZE, yi * TILE_SIZE, TILE_SIZE * 0.2, TILE_SIZE);
             ctx.fillRect(xi * TILE_SIZE, (yi + 0.4) * TILE_SIZE, TILE_SIZE, TILE_SIZE * 0.2);
-          }             
+          }
+          if (tile & TILE_PROP_PRIORITY) {
+            // M7 (v4): a gold corner marker - renders above sprites (real
+            // SNES BG1 tile priority, see EVENTS.md).
+            ctx.fillStyle = "rgba(230,180,20,0.75)";
+            ctx.beginPath();
+            ctx.moveTo((xi + 0.55) * TILE_SIZE, yi * TILE_SIZE);
+            ctx.lineTo((xi + 1) * TILE_SIZE, yi * TILE_SIZE);
+            ctx.lineTo((xi + 1) * TILE_SIZE, (yi + 0.45) * TILE_SIZE);
+            ctx.closePath();
+            ctx.fill();
+          }
         }
       }
     }

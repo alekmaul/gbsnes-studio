@@ -28,6 +28,10 @@ extern const unsigned short bg_maps_len[2];
 extern const unsigned short bg_pals_len[2];
 extern const unsigned char bg_map_w[2];
 extern const unsigned char bg_map_h[2];
+// M7 (v4): per-scene priority-tile tilemap override - see compileSnesData.js.
+// Both dummy scenes have no priority tiles painted, so this is all-zero
+// ("use bg_maps_ptrs[bg_index] unmodified" for every scene).
+extern const unsigned char *const scene_bg_map_ptrs[2];
 
 extern const BANK_PTR event_ptrs[];
 extern const BANK_PTR string_ptrs[];

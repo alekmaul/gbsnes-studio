@@ -120,6 +120,53 @@ for one with none explicitly disables HDMA channel 3 (`setModeHdmaReset`) in `Sc
 a **sticky** register (`REG_HDMAEN`), so without this a scene with no parallax at all would
 otherwise keep replaying the *previous* scene's stale HDMA table over its own `BG1HOFS` forever.
 
+## Priority tiles (M7, v4)
+
+Not a B feature - there's no equivalent GB Studio/GBC concept to port (checked B's real
+`consts.ts`: its `TILE_PROPS` upper nibble is entirely ladder/slope flags for the Platformer
+genre, nothing priority-related). This is a genuinely new capability added specifically because
+the SNES PPU natively supports real per-tile BG-above-OBJ priority in Mode 1 - the DMG/GBC has
+nothing like it (only a per-*sprite* OAM priority bit, no fine per-BG-tile control at all).
+
+**Editor**: a "Priority" brush (`BrushToolbar.js`, `TILE_PROP_PRIORITY = 0x20`), painted exactly
+like collisions/the existing (SNES-unused until now) Ladder brush - a free bit in the same
+`TILE_PROPS` (0xF0) upper nibble of the collision-grid byte, reusing 100% of the existing
+collision paint-tool infrastructure (`SceneCursor.js`'s `TILE_PROPS`-masked painting already
+worked generically, no code changes needed there at all). Rendered in the World editor as a gold
+corner marker (`SceneCollisions.js`).
+
+**Compiler** (`compileSnesData.js`): background tilemaps are cached **per background asset**
+(shared across every scene that uses it), but priority is painted **per scene** (same grid as
+collision) - two scenes sharing one background could paint different priority patterns. A scene
+with no priority tiles painted keeps referencing the shared tilemap unmodified, at zero cost
+(`scene_bg_map_ptrs[i] = 0`). A scene that paints any gets its own tilemap *copy*, with the real
+SNES tilemap priority bit (`BG_TIL_PRIO`, `1<<13` - the same bit `snesgfx.js` already reserved
+per-tile in its packed format) OR'd in at the painted positions, emitted as its own `src/data/
+scene_bgmap_<n>_data.as` blob (the same "graphic assets are 65816 source" scheme every other
+per-scene override already uses) and referenced from `scene_bg_map_ptrs[i]`.
+
+**Engine** (`scene.c`): `SceneInit` DMAs from `scene_bg_map_ptrs[scene_index]` when it's set,
+falling back to the shared `bg_maps_ptrs[bg_index]` otherwise - no other engine change needed to
+make the *tilemap* bit itself take effect, since per-tile BG priority is a Mode 1 PPU hardware
+feature the tilemap format already fully supports once the bit is set correctly.
+
+**What *did* need an engine change**: every OAM sprite (actors, the emote bubble) used to render
+at OBJ priority 2. In Mode 1 (with BG3 kept in "priority high" mode for the dialogue box, as this
+engine already does), the layer order back-to-front is `BG1/BG2(low) < OBJ0 < BG1/BG2(high) <
+OBJ1 < OBJ2 < OBJ3 < BG3(high)` - so a BG1 "high priority" (painted) tile sits *below* OBJ1-3,
+meaning it would never actually render above the player at the old priority 2. Actors and the
+emote bubble (both world-space sprites a priority tile is meant to occlude) now render at OBJ
+priority 0 instead - below a painted priority tile, same as before above every *ordinary* BG1
+tile. The dialogue avatar portrait (`ui.c`, UI-space, unrelated to world priority tiles) is left
+at priority 2, unchanged.
+
+**Not verified**: this relies on the standard, well-documented SNES Mode 1 priority ordering
+above, but no live Mesen/SnesJs run was available this session to confirm a painted tile visually
+occludes the player as designed - same verification gap as M3's RPN opcodes and M6's parallax
+HDMA effect, flagged the same way rather than silently assumed correct. Given both the tilemap-
+bit change and the OAM-priority change are new and interact with real hardware layering rules,
+this is the top candidate for a first real Mesen pass if/when a reusable harness exists again.
+
 ## Scenes
 
 | Event | SNES | Notes |

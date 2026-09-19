@@ -67,6 +67,13 @@ export const COLLISION_LEFT = 0x4;
 export const COLLISION_RIGHT = 0x8;
 export const COLLISION_ALL = 0xF;
 export const TILE_PROP_LADDER = 0x10;
+// M7 (v4): SNES-native BG-above-OBJ per-tile priority (native Mode 1 PPU
+// feature, no GB/GBC equivalent - TILE_PROP_LADDER's sibling bits 0x20/0x40/
+// 0x80 were GB Studio 3.x's platformer slope flags, unused on this SNES-only,
+// top-down-only fork, so free to repurpose). See snesgfx.js/compileSnesData.js
+// for how a painted tile becomes the real tilemap priority bit (BG_TIL_PRIO,
+// 1<<13) and appData/src/snes/EVENTS.md for the full design note.
+export const TILE_PROP_PRIORITY = 0x20;
 export const TILE_PROPS = 0xF0;
 
 export const DRAG_PLAYER = "DRAG_PLAYER";
