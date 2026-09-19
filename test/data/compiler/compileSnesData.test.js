@@ -329,6 +329,82 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
   });
 });
 
+describe("compileSnesData - per-scene Player Sprite Sheet override (v4)", () => {
+  // Reuses Test_Math's real sprite fixtures: actor_animated (6 frames, the
+  // project-wide default) and static (1 frame) - frame count is an easy,
+  // unambiguous signal that a scene's own override sheet was really loaded
+  // into player slot 0, not just the global default every time.
+  const PLAYER_DEFAULT_ID = "581d34d0-9591-4e6e-a609-1d94f203b0cd"; // actor_animated, 6 frames
+  const OVERRIDE_ID = "daf95270-e30d-423b-9ee7-990ae29f57f6"; // static, 1 frame
+
+  const project = {
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+      playerSpriteSheetId: PLAYER_DEFAULT_ID,
+    },
+    backgrounds: [
+      { id: "bg", filename: "placeholder.png", width: 20, height: 18 },
+    ],
+    spriteSheets: [
+      { id: PLAYER_DEFAULT_ID, filename: "actor_animated.png", type: "actor_animated" },
+      { id: OVERRIDE_ID, filename: "static.png", type: "static" },
+    ],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "overridden",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [],
+        triggers: [],
+        script: [],
+        playerSpriteSheetId: OVERRIDE_ID,
+      },
+      {
+        id: "s1",
+        name: "usesDefault",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [],
+        triggers: [],
+        script: [],
+      },
+    ],
+  };
+
+  test("a scene's own playerSpriteSheetId loads into slot 0 instead of the project default", async () => {
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    // scene blob layout: [7]-byte header, then types[8] at offset 7..14,
+    // frames[8] at offset 15..22 (see the M6 describe block above).
+    const overriddenBlob = out.stats.sceneBlobs[0];
+    const defaultBlob = out.stats.sceneBlobs[1];
+    expect(overriddenBlob[15]).toBe(1); // static.png -> 1 frame
+    expect(defaultBlob[15]).toBe(6); // actor_animated.png -> 6 frames
+    expect(overriddenBlob[7]).not.toBe(defaultBlob[7]); // distinct sprite types too
+  });
+
+  test("no scene falls back to the removed PLAYER_SPRITE_TYPE/_PAL compile-time constants", async () => {
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    expect(out.assetsH).toContain("PLAYER_SPRITE_SLOT");
+    expect(out.assetsH).not.toContain("PLAYER_SPRITE_TYPE");
+    expect(out.assetsH).not.toContain("PLAYER_SPRITE_PAL");
+  });
+});
+
 describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
   const w = 20;
   const h = 18;

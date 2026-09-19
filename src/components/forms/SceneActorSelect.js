@@ -8,7 +8,7 @@ import {
   getSettings,
 } from "../../store/features/settings/settingsState";
 import { getCachedObject, createCacheFunction } from "../../lib/helpers/cache";
-import { actorSelectors, getSceneActorIds } from "../../store/features/entities/entitiesState";
+import { actorSelectors, sceneSelectors, getSceneActorIds } from "../../store/features/entities/entitiesState";
 
 const menuPortalEl = document.getElementById("MenuPortal");
 
@@ -44,7 +44,9 @@ const DropdownIndicatorWithData = (direction, frame) =>
     const actorId = ownProps.selectProps.value.id;
     const actorsLookup = actorSelectors.selectEntities(state);
     const settings = getSettings(state);
-    const playerSpriteSheetId = settings.playerSpriteSheetId;
+    const scene = sceneSelectors.selectById(state, state.editor.scene);
+    const playerSpriteSheetId =
+      (scene && scene.playerSpriteSheetId) || settings.playerSpriteSheetId;
     const actor =
       actorsLookup[actorId] ||
       getCachedObject({
@@ -91,7 +93,9 @@ Option.defaultProps = {
 const OptionWithData = connect((state, ownProps) => {
   const actorsLookup = actorSelectors.selectEntities(state);
   const settings = getSettings(state);
-  const playerSpriteSheetId = settings.playerSpriteSheetId;
+  const scene = sceneSelectors.selectById(state, state.editor.scene);
+  const playerSpriteSheetId =
+    (scene && scene.playerSpriteSheetId) || settings.playerSpriteSheetId;
   const {
     value,
     label,

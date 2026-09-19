@@ -652,8 +652,12 @@ void SceneInit(void)
     actors[0].anim_hold = 0;
     actors[0].anim_speed = PLAYER_ANIM_SPEED;
     actors[0].frame_offset = PLAYER_SPRITE_SLOT * 2; /* OBJ grid TL tile */
-    actors[0].sprite_type = PLAYER_SPRITE_TYPE;
-    actors[0].frames_len = frames_len_for(PLAYER_SPRITE_TYPE, PLAYER_SPRITE_SLOT);
+    /* v4: the player's sheet can now vary per scene (Scene.playerSpriteSheetId),
+     * so its type/frame count can't be a compile-time constant any more -
+     * read the same per-scene sprite_type_for_slot[]/sprite_frames_for_slot[]
+     * arrays SceneInit already just DMA'd above, same as every other actor. */
+    actors[0].sprite_type = sprite_type_for_slot[PLAYER_SPRITE_SLOT];
+    actors[0].frames_len = frames_len_for(sprite_type_for_slot[PLAYER_SPRITE_SLOT], PLAYER_SPRITE_SLOT);
     actors[0].move_speed = 1;
     actors[0].collisions_enabled = 1;
 

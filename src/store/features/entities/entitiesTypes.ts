@@ -161,6 +161,7 @@ export type Scene = {
   width: number;
   height: number;
   backgroundId: string;
+  playerSpriteSheetId?: string;
   collisions: number[];
   actors: string[];
   triggers: string[];

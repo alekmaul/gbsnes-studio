@@ -6,7 +6,7 @@ import ActorCanvas from "../world/ActorCanvas";
 import { ActorShape } from "../../store/stateShape";
 import { getCachedObject } from "../../lib/helpers/cache";
 import l10n from "../../lib/helpers/l10n";
-import { actorSelectors, getSceneActorIds } from "../../store/features/entities/entitiesState";
+import { actorSelectors, sceneSelectors, getSceneActorIds } from "../../store/features/entities/entitiesState";
 import { getSettings } from "../../store/features/settings/settingsState";
 
 const menuPortalEl = document.getElementById("MenuPortal");
@@ -45,7 +45,9 @@ const GroupWithData = connect((state, ownProps) => {
   const actorsLookup = actorSelectors.selectEntities(state);
   const actorIds = getSceneActorIds(state, { id: state.editor.scene });
   const settings = getSettings(state);
-  const playerSpriteSheetId = settings.playerSpriteSheetId;
+  const scene = sceneSelectors.selectById(state, state.editor.scene);
+  const playerSpriteSheetId =
+    (scene && scene.playerSpriteSheetId) || settings.playerSpriteSheetId;
   const {
     data: { actorId, contextEntityId },
   } = ownProps;
@@ -101,7 +103,9 @@ const DropdownIndicatorWithData = (actorId) =>
   connect((state) => {
     const actorsLookup = actorSelectors.selectEntities(state);
     const settings = getSettings(state);
-    const playerSpriteSheetId = settings.playerSpriteSheetId;
+    const scene = sceneSelectors.selectById(state, state.editor.scene);
+    const playerSpriteSheetId =
+      (scene && scene.playerSpriteSheetId) || settings.playerSpriteSheetId;
     const actor =
       actorsLookup[actorId] ||
       getCachedObject({

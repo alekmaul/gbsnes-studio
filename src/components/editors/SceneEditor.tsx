@@ -33,6 +33,7 @@ import { DropdownButton } from "../ui/buttons/DropdownButton";
 import { NoteField } from "../ui/form/NoteField";
 import { SceneTypeSelect } from "../forms/SceneTypeSelect";
 import { BackgroundSelectButton } from "../forms/BackgroundSelectButton";
+import { SpriteSheetSelectButton } from "../forms/SpriteSheetSelectButton";
 import { LabelButton, LabelColor } from "../ui/buttons/LabelButton";
 import { CoordinateInput } from "../ui/form/CoordinateInput";
 import { ParallaxLayersEditor } from "../forms/ParallaxLayersEditor";
@@ -364,6 +365,23 @@ export const SceneEditor: FC<SceneEditorProps> = ({ id }) => {
                   name="type"
                   value={scene.type}
                   onChange={onChangeField("type")}
+                />
+              </FormField>
+            </FormRow>
+
+            <FormRow>
+              <FormField
+                name="playerSpriteSheetId"
+                label={l10n("FIELD_PLAYER_SPRITE_SHEET")}
+              >
+                <SpriteSheetSelectButton
+                  name="playerSpriteSheetId"
+                  value={scene.playerSpriteSheetId}
+                  direction={isStartingScene ? startDirection : "down"}
+                  onChange={onChangeField("playerSpriteSheetId")}
+                  includeInfo
+                  optional
+                  optionalLabel={l10n("FIELD_DEFAULT")}
                 />
               </FormField>
             </FormRow>

@@ -195,6 +195,16 @@ const compileSnesData = async (
   const spriteById = (id) => spriteSheets.find((s) => s.id === id);
   const isSprite = (id) => id && !!spriteById(id);
 
+  // A scene's own playerSpriteSheetId overrides the project-wide default
+  // (settings.playerSpriteSheetId) when set - lets a scene give the player a
+  // different costume, matching GB Studio 3.x's per-scene field. Player is
+  // still always OBJ slot 0 in every scene (a fork-wide simplification kept
+  // as-is - only *which sheet* loads into that slot varies per scene now).
+  const playerSpriteIdForScene = (sc) =>
+    isSprite(sc.playerSpriteSheetId)
+      ? sc.playerSpriteSheetId
+      : settings.playerSpriteSheetId;
+
   // sceneSpriteIds[i][k] = the sprite sheet id loaded into scene i's slot k
   const sceneSpriteIds = scenes.map((sc, i) => {
     const ids = [];
@@ -203,10 +213,10 @@ const compileSnesData = async (
         ids.push(id);
       }
     };
-    add(settings.playerSpriteSheetId);
+    add(playerSpriteIdForScene(sc));
     (sc.actors || []).forEach((a) => add(a.spriteSheetId));
     const distinct = new Set(
-      [settings.playerSpriteSheetId]
+      [playerSpriteIdForScene(sc)]
         .concat((sc.actors || []).map((a) => a.spriteSheetId))
         .filter(isSprite)
     );
@@ -468,13 +478,13 @@ const compileSnesData = async (
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
 
-  // player is always slot 0; its sheet is the same in every scene, so its type
-  // is scene-independent (the frame count still comes from the loaded blob).
+  // Player is always OBJ slot 0 - a fork-wide simplification kept as-is -
+  // but which sheet is loaded there is per-scene now (playerSpriteIdForScene
+  // above), so its type/frame count can no longer be a single compile-time
+  // constant: scene.c reads them straight out of the per-scene
+  // sprite_type_for_slot[0]/sprite_frames_for_slot[0] arrays SceneInit
+  // already DMAs fresh every scene load, same as every other actor slot.
   const playerSpriteSlot = 0;
-  const playerConv = isSprite(settings.playerSpriteSheetId)
-    ? spriteConv[settings.playerSpriteSheetId]
-    : null;
-  const playerSpriteType = playerConv ? playerConv.spriteType : 0;
 
   // v2: actor.spriteType is now a real, explicit field (GB Studio 2.0 -
   // "static"/"actor"/"actor_animated"/"animated"), independent of
@@ -856,8 +866,6 @@ extern const unsigned char *const scenes[${scenes.length}];
 #define START_Y ${startY}
 #define START_DIR ${startDir}
 #define PLAYER_SPRITE_SLOT ${playerSpriteSlot}
-#define PLAYER_SPRITE_TYPE ${playerSpriteType}
-#define PLAYER_SPRITE_PAL ${objPalForSlot(playerSpriteSlot)}
 #define PLAYER_ANIM_SPEED 3
 #define NUM_MUSIC_TRACKS ${(projectData.music || []).length}
 

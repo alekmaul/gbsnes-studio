@@ -64,8 +64,6 @@ extern const unsigned char *const scenes[];
 #define START_Y 20
 #define START_DIR 1
 #define PLAYER_SPRITE_SLOT 0
-#define PLAYER_SPRITE_TYPE 0
-#define PLAYER_SPRITE_PAL 0
 #define PLAYER_ANIM_SPEED 3
 #define NUM_MUSIC_TRACKS 1
 
