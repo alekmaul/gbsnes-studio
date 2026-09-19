@@ -18,6 +18,7 @@
 #include "fade.h"
 #include "states.h"
 #include "parallax.h"
+#include "camera.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
@@ -887,12 +888,11 @@ static void SceneTryInteract(void)
     }
 }
 
-/* v2 M5a: Top Down genre pair (states.h). Camera has no deadzone concept at
- * all yet (CameraInit always centers directly on the player) - that already
- * matches what GB's own Start_TopDown wants (camera_deadzone.x/y = 0), so
- * there's nothing to reset here yet. Real deadzone support lands with
- * whichever later genre actually needs slack (Platformer/Adventure/Point and
- * Click all want a non-zero one).
+/* v2 M5a: Top Down genre pair (states.h). v4: real camera deadzone/offset
+ * now exists (camera.h/game.c CameraUpdate) - Top Down still wants a hard
+ * lock, matching GB's own Start_TopDown (camera_deadzone.x/y = 0,
+ * camera_offset.x/y = 0), so this explicitly zeroes all 4 every scene load
+ * rather than relying on whatever the previous scene's genre left behind.
  *
  * topdown_grid == 16: snap the spawn position down to an even tile pair on
  * both axes (a 16px cell boundary), matching GB's own Start_TopDown snap -
@@ -900,6 +900,11 @@ static void SceneTryInteract(void)
  * reach a fully-16px-aligned position at all. */
 void Start_TopDown(void)
 {
+    camera_deadzone_x = 0;
+    camera_deadzone_y = 0;
+    camera_offset_x = 0;
+    camera_offset_y = 0;
+
     topdown_move_pending = 0;
     if (topdown_grid == 16)
     {
@@ -992,13 +997,19 @@ void Update_TopDown(void)
  * own cursor actor), so it gets the existing camera-lock-onto-actor-0 and
  * SceneRenderActors OBJ rendering for free.
  *
- * GB's own Start_PointNClick also sets camera_offset=0/camera_deadzone=24 -
- * this engine's camera has no deadzone concept at all yet (CameraInit always
- * centers hard on actor 0 - same note as Start_TopDown above), so the cursor
- * gets the same hard camera lock Top Down does for now; real deadzone
- * support stays deferred to whichever genre first needs it. */
+ * GB's own Start_PointNClick sets camera_offset=0/camera_deadzone=24 - now
+ * ported for real (v4), giving the cursor 24px of free-roam slack before
+ * the camera starts tracking it, instead of the hard lock every other genre
+ * without a deadzone still gets. */
+#define POINT_N_CLICK_CAMERA_DEADZONE 24
+
 void Start_PointNClick(void)
 {
+    camera_deadzone_x = POINT_N_CLICK_CAMERA_DEADZONE;
+    camera_deadzone_y = POINT_N_CLICK_CAMERA_DEADZONE;
+    camera_offset_x = 0;
+    camera_offset_y = 0;
+
     // GB forces sprite_type to SPRITE_STATIC regardless of what the assigned
     // sheet's own frame count implied (frames_len_for() already ran in
     // SceneInit, before startFuncs[] - so a directional 3-frame sheet keeps
@@ -1188,6 +1199,8 @@ static s16 adv_last_trigger_ty = -1;
 // alternates correctly on whichever axis is actually still moving.
 static u8 adv_diag_toggle = 0;
 
+#define ADVENTURE_CAMERA_DEADZONE 8
+
 void Start_Adventure(void)
 {
     // Guaranteed not to match any real tile, so the very first check on
@@ -1196,10 +1209,12 @@ void Start_Adventure(void)
     adv_last_trigger_tx = -1;
     adv_last_trigger_ty = -1;
 
-    // GB's own Start_Adventure sets an 8px camera deadzone - this engine's
-    // camera still has no deadzone concept at all (CameraInit always
-    // centers hard on actor 0 - same note Start_TopDown/Start_PointNClick
-    // already carry), so Adventure gets the same hard lock for now.
+    // GB's own Start_Adventure sets an 8px camera deadzone - ported for
+    // real (v4), same value both axes.
+    camera_deadzone_x = ADVENTURE_CAMERA_DEADZONE;
+    camera_deadzone_y = ADVENTURE_CAMERA_DEADZONE;
+    camera_offset_x = 0;
+    camera_offset_y = 0;
 }
 
 // Narrow, direction-biased collision test - deliberately NOT the full 16x16
@@ -1412,6 +1427,9 @@ void PlatformSetVelY(s16 v)
     plat_vel_y = v;
 }
 
+#define PLATFORM_CAMERA_DEADZONE_X 4
+#define PLATFORM_CAMERA_DEADZONE_Y 16
+
 void Start_Platform(void)
 {
     plat_x = actors[0].x << 4;
@@ -1428,9 +1446,11 @@ void Start_Platform(void)
         actors[0].dir_x = 1;
     }
 
-    // GB's own camera deadzone here (4x/16y) has nothing to port to yet -
-    // this engine's camera still has no deadzone concept at all (same
-    // deferred note every other genre's Start_ already carries).
+    // GB's own camera deadzone here (4x/16y) - ported for real (v4).
+    camera_deadzone_x = PLATFORM_CAMERA_DEADZONE_X;
+    camera_deadzone_y = PLATFORM_CAMERA_DEADZONE_Y;
+    camera_offset_x = 0;
+    camera_offset_y = 0;
 }
 
 void Update_Platform(void)
@@ -1668,14 +1688,15 @@ void Update_Platform(void)
  * engine's own established style, not a guess at GB's exact intent.
  *
  * Camera: GB's own Start_Shmup biases the view ahead of the scroll
- * direction with a fixed pixel camera_offset - this engine's camera has
- * no offset/deadzone concept at all yet (same deferred note every other
- * genre's Start_ already carries), so Shmup gets the same hard lock
- * centred on the player for now. The "reached the scrollable edge"
- * threshold below is derived from this engine's own real camera clamp
- * (game.c's cam_max_x/cam_max_y formula, mirrored here since those helpers
- * are file-static to game.c) rather than GB's offset-tuned magic numbers,
- * which assume a camera feature this target doesn't have.
+ * direction with a fixed pixel camera_offset (no deadzone) - ported for
+ * real (v4), same 4 magic numbers (48/-64/48/-48) and the same per-
+ * direction branch this function already has for shmup_horizontal/
+ * shmup_direction, just also setting camera_offset_x/y there. The
+ * "reached the scrollable edge" threshold below is still derived from this
+ * engine's own real camera clamp (game.c's cam_max_x/cam_max_y formula,
+ * mirrored here since those helpers are file-static to game.c) rather than
+ * switched over to GB's own offset-relative threshold - a separate, later
+ * cleanup, not required for the offset itself to work.
  */
 // game.c's own SCREEN_W_HALF/SCREEN_H_HALF are file-static - redefined here
 // rather than exported, since they're plain screen-geometry constants
@@ -1691,6 +1712,11 @@ static s16 shmup_last_trigger_ty = -1;
 
 void Start_Shmup(void)
 {
+    camera_deadzone_x = 0;
+    camera_deadzone_y = 0;
+    camera_offset_x = 0;
+    camera_offset_y = 0;
+
     if (actors[0].dir_x < 0)
     {
         // Right to left scrolling. Face the ship right so a single-facing
@@ -1699,21 +1725,25 @@ void Start_Shmup(void)
         shmup_horizontal = 1;
         shmup_direction = -1;
         actors[0].dir_x = 1;
+        camera_offset_x = 48;
     }
     else if (actors[0].dir_x > 0)
     {
         shmup_horizontal = 1;
         shmup_direction = 1;
+        camera_offset_x = -64;
     }
     else if (actors[0].dir_y < 0)
     {
         shmup_horizontal = 0;
         shmup_direction = -1;
+        camera_offset_y = 48;
     }
     else
     {
         shmup_horizontal = 0;
         shmup_direction = 1;
+        camera_offset_y = -48;
     }
 
     shmup_reached_end = 0;

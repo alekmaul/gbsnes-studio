@@ -81,6 +81,29 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 | Camera Move To | ✅ | Clamped to the SNES screen size (32×28 tiles), not the GB 20×18. |
 | Camera Lock, Camera Shake | ✅ | |
 
+**Camera deadzone/offset (v4).** Not a scripting event on either engine - GB 3.2.1's own
+`camera_deadzone_x/y` (a follow-window pixel half-width around the player) and
+`camera_offset_x/y` (a fixed shift of that window) are pure per-genre state defaults, set once
+by each genre's own `Start_<Genre>()`/`*_init()`, with no event anywhere that sets them from a
+script. Now ported to this engine's `CameraUpdate()` (`game.c`) as a direct port of GB's real
+formula (`appData/src/gb/src/core/camera.c` in the v3.2.1 reference), converted only for this
+engine's camera_x/y being a *scroll* (left-edge) value rather than GB's own *screen-centre*
+value. Defaults, matching GB exactly: Top Down 0/0 (unchanged hard lock - this genre's own prior
+behaviour already matched GB's own Top Down default), Adventure 8px both axes, Platform 4x/16y,
+Point and Click 24px both axes, Shmup 0 deadzone + a scroll-direction-biased offset (48/-64/48/-48
+depending on the scene's initial facing, same 4 magic numbers GB uses). `camera_settings` now
+uses GB's real independent `CAMERA_LOCK_X_FLAG`/`CAMERA_LOCK_Y_FLAG` bits (`camera.h`) instead of
+this fork's own single combined bit, even though no event here locks one axis without the other
+yet (`CAMERA_LOCK_FLAG` is still both bits together, same wire behaviour as before). **Verified**:
+full test suite green, a real toolchain build (816-tcc/816-opt/wla-65816/wlalink) compiles/links
+the changed `game.c`/`scene.c` cleanly. **Not verified**: an actual live Mesen run watching the
+deadzone/offset take effect during real movement - same gap class as M3's RPN opcodes, M6's HDMA
+parallax and M7's priority tiles (no reusable Mesen automation harness exists this session, and
+this change's own risk is comparatively lower than those three - pure CPU-side position
+arithmetic feeding the same scroll-register write path already Mesen-verified many times, not new
+PPU/hardware-timing behaviour), so building a whole new asset-backed fixture just for this was
+judged disproportionate; flagged here rather than silently assumed correct.
+
 ## Parallax scrolling (M6, v4)
 
 Not a scripting event - a per-scene editor field (`Scene.parallax`, Scene properties sidebar),

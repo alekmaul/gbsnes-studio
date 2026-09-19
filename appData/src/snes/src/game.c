@@ -44,6 +44,8 @@ s16 scroll_y = 0;
 u8 camera_settings = CAMERA_LOCK_FLAG;
 s16 camera_x, camera_y;
 s16 camera_dest_x, camera_dest_y;
+s8 camera_deadzone_x = 0, camera_deadzone_y = 0;
+s8 camera_offset_x = 0, camera_offset_y = 0;
 u8 camera_script_wait = 0;
 static u8 camera_speed = 0;
 
@@ -119,11 +121,39 @@ void CameraUpdate(void)
 {
     s16 sx, sy;
     s16 amount;
+    s16 target, lo, hi, center;
 
-    if (camera_settings & CAMERA_LOCK_FLAG)
+    /* GB's real camera_update() (v3.2.1 core/camera.c): only push the camera
+     * when the player leaves a deadzone window around the current camera
+     * centre - deadzone 0 (Top Down's default) makes this degenerate back
+     * to the old hard lock exactly (lo == hi == target, any drift snaps
+     * straight back). offset_x/y shift the window itself (Shmup's
+     * scroll-direction bias); both are 0 unless the scene's genre
+     * Start_<Genre>() set them. This engine's camera_x/y hold the scroll
+     * (left-edge) value, unlike GB's own camera_x/y, which hold a screen-
+     * centre value (scroll = camera_x - halfscreen, see GB's own scroll.c);
+     * the SCREEN_W_HALF/SCREEN_H_HALF add/subtract below convert between the
+     * two conventions, everything else below is GB's formula unchanged. */
+    if (camera_settings & CAMERA_LOCK_X_FLAG)
     {
-        camera_dest_x = clamp16(actors[0].x - SCREEN_W_HALF, 0, cam_max_x());
-        camera_dest_y = clamp16(actors[0].y - SCREEN_H_HALF, 0, cam_max_y());
+        target = actors[0].x - camera_offset_x;
+        lo = target - camera_deadzone_x;
+        hi = target + camera_deadzone_x;
+        center = camera_x + SCREEN_W_HALF;
+        if (center < lo) center = lo;
+        else if (center > hi) center = hi;
+        camera_dest_x = clamp16(center - SCREEN_W_HALF, 0, cam_max_x());
+    }
+
+    if (camera_settings & CAMERA_LOCK_Y_FLAG)
+    {
+        target = actors[0].y - camera_offset_y;
+        lo = target - camera_deadzone_y;
+        hi = target + camera_deadzone_y;
+        center = camera_y + SCREEN_H_HALF;
+        if (center < lo) center = lo;
+        else if (center > hi) center = hi;
+        camera_dest_y = clamp16(center - SCREEN_H_HALF, 0, cam_max_y());
     }
 
     amount = 1;
