@@ -1162,6 +1162,17 @@ void Update_PointNClick(void)
  * SceneCheckTriggers - see that function's own M5c comment for why). */
 static s16 adv_last_trigger_tx = -1;
 static s16 adv_last_trigger_ty = -1;
+// Diagonal-move parity toggle (user-found comparing against B's real
+// adventure.c, same class of bug already fixed in Point and Click - see
+// Update_PointNClick's own comment for the full reasoning): B normalises
+// diagonal speed via point_translate_angle() (real trig); this engine moved
+// both axes at full move_speed every frame a diagonal was held, covering
+// sqrt(2) (~41%) more ground per frame than a straight move. Fixed with the
+// same integer-only "alternate one axis per frame" trick, applied to the
+// *final* dir_x/dir_y (after the wall-collision checks below, not at input
+// time) so a diagonal move that got partially blocked by a wall still
+// alternates correctly on whichever axis is actually still moving.
+static u8 adv_diag_toggle = 0;
 
 void Start_Adventure(void)
 {
@@ -1294,11 +1305,18 @@ void Update_Adventure(void)
     // Adventure.c, which gates its own position update on `player.moving`.
     if (actors[0].moving)
     {
-        if (actors[0].dir_x)
+        u8 move_x = actors[0].dir_x != 0;
+        u8 move_y = actors[0].dir_y != 0;
+        if (move_x && move_y)
+        {
+            adv_diag_toggle ^= 1;
+            if (adv_diag_toggle) move_y = 0; else move_x = 0;
+        }
+        if (move_x)
         {
             actors[0].x += (s16)actors[0].dir_x * actors[0].move_speed;
         }
-        if (actors[0].dir_y)
+        if (move_y)
         {
             actors[0].y += (s16)actors[0].dir_y * actors[0].move_speed;
         }
