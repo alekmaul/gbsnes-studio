@@ -608,6 +608,7 @@ void SceneInit(void)
     u16 col_bytes;
     u16 j;
     u8 i;
+    u16 mapLen; /* v4 safety clamp, see its own comment further down */
 
     scene_num_actors = s[1];
     scene_num_triggers = s[2];
@@ -680,6 +681,24 @@ void SceneInit(void)
     if (bg_map_w[bg_index] > 32) sc_size = SC_64x64;
     if (bg_map_h[bg_index] > 32) sc_size = SC_64x64;
 
+    /* v4 safety clamp: compileSnesData.js now emits a background's real,
+     * unpadded tilemap (fixed 2026-09-20 - it used to hard-cap at 32x32,
+     * silently truncating anything bigger with no VRAM risk). SC_64x64's
+     * real VRAM budget is 8192 bytes (0x0000-0x0FFF, 4096 words) - a
+     * background over 64x64 tiles (e.g. a 255-tile-wide scrolling scene)
+     * now has more map data than fits, and dmaCopyVram doesn't know where
+     * the BG1 tilemap region ends: an unclamped copy would plow straight
+     * through BG3's tilemap/font (0x1000+) and eventually the BG1 tileset
+     * (0x2000+). Real horizontal streaming (loading only a sliding 64-tile
+     * window and DMAing new columns as the camera scrolls) is the intended
+     * fix for those scenes - not done yet; until then, clamp to what
+     * SC_64x64 can safely hold so the game only shows the top-left 64x64
+     * corner instead of corrupting VRAM. This only engages for scenes
+     * already beyond the compiler's own 64x64 warning, so it's a silent
+     * no-op for every already-warned-about-or-smaller scene. */
+    mapLen = bg_maps_len[bg_index];
+    if (mapLen > 8192) mapLen = 8192;
+
     /* Force blank for the (large) VRAM DMAs; setBrightness() restores it below,
      * or leaves it black if a fade-in is pending after a SWITCH_SCENE. */
     WaitForVBlank();
@@ -691,7 +710,7 @@ void SceneInit(void)
      * bg_maps_ptrs[bg_index] it's derived from, just a different source. */
     dmaCopyVram(
         (u8 *)(scene_bg_map_ptrs[scene_index] ? scene_bg_map_ptrs[scene_index] : bg_maps_ptrs[bg_index]),
-        0x0000, bg_maps_len[bg_index]);
+        0x0000, mapLen);
     SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
