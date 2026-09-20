@@ -3,16 +3,19 @@
  * equivalent, compileEngineFields, for how a real project build
  * differs (project-chosen Settings values instead of defaultValue). */
 #include "gbs_types.h"
+#include "engine_fields.h"
 
-u8 topdown_grid = 8;
-s16 plat_min_vel = 304;
-s16 plat_walk_vel = 6400;
-s16 plat_run_vel = 10496;
-s16 plat_walk_acc = 152;
-s16 plat_run_acc = 228;
-s16 plat_dec = 208;
-s16 plat_jump_vel = 16384;
-s16 plat_grav = 1792;
-s16 plat_hold_grav = 512;
-s16 plat_max_fall_vel = 20000;
-u8 shooter_scroll_speed = 1;
+u8 engine_fields_raw[ENGINE_FIELDS_SIZE] = {
+    8, /* topdown_grid @0 = 8 */
+    48, 1, /* plat_min_vel @1 = 304 */
+    0, 25, /* plat_walk_vel @3 = 6400 */
+    0, 41, /* plat_run_vel @5 = 10496 */
+    152, 0, /* plat_walk_acc @7 = 152 */
+    228, 0, /* plat_run_acc @9 = 228 */
+    208, 0, /* plat_dec @11 = 208 */
+    0, 64, /* plat_jump_vel @13 = 16384 */
+    0, 7, /* plat_grav @15 = 1792 */
+    0, 2, /* plat_hold_grav @17 = 512 */
+    32, 78, /* plat_max_fall_vel @19 = 20000 */
+    1, /* shooter_scroll_speed @21 = 1 */
+};

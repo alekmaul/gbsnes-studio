@@ -489,9 +489,12 @@ describe("compileSnesData - Engine Fields (v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    expect(out.engineFieldsC).toMatch(/\bu8 topdown_grid = 8;/);
-    expect(out.engineFieldsC).toMatch(/\bs16 plat_jump_vel = 16384;/);
-    expect(out.engineFieldsC).toMatch(/\bu8 shooter_scroll_speed = 1;/);
+    expect(out.engineFieldsC).toMatch(/topdown_grid @0 = 8/);
+    expect(out.engineFieldsC).toMatch(/plat_jump_vel @13 = 16384/);
+    expect(out.engineFieldsC).toMatch(/shooter_scroll_speed @21 = 1/);
+    // the actual byte(s), not just the doc comment - 16384 = 0x4000,
+    // little-endian -> lo=0x00, hi=0x40
+    expect(out.engineFieldsC).toMatch(/\s+0, 64, \/\* plat_jump_vel @13 = 16384 \*\//);
   });
 
   test("a project-chosen value overrides the default", async () => {
@@ -504,10 +507,12 @@ describe("compileSnesData - Engine Fields (v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    expect(out.engineFieldsC).toMatch(/\bu8 shooter_scroll_speed = 4;/);
-    expect(out.engineFieldsC).toMatch(/\bu8 topdown_grid = 16;/);
+    expect(out.engineFieldsC).toMatch(/shooter_scroll_speed @21 = 4/);
+    expect(out.engineFieldsC).toMatch(/topdown_grid @0 = 16/);
+    expect(out.engineFieldsC).toMatch(/\s+4, \/\* shooter_scroll_speed @21 = 4 \*\//);
+    expect(out.engineFieldsC).toMatch(/\s+16, \/\* topdown_grid @0 = 16 \*\//);
     // an untouched field alongside the overridden ones still falls back to
     // its own default, not some shared/reset value
-    expect(out.engineFieldsC).toMatch(/\bs16 plat_jump_vel = 16384;/);
+    expect(out.engineFieldsC).toMatch(/plat_jump_vel @13 = 16384/);
   });
 });

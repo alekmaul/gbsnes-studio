@@ -85,13 +85,20 @@ import {
   MENU,
   ACTOR_SET_SPRITE,
   ACTOR_SET_ANIMATE,
-  IF_ACTOR_RELATIVE_TO_ACTOR
+  IF_ACTOR_RELATIVE_TO_ACTOR,
+  ENGINE_FIELD_UPDATE,
+  ENGINE_FIELD_UPDATE_WORD,
+  ENGINE_FIELD_UPDATE_VAR,
+  ENGINE_FIELD_UPDATE_VAR_WORD,
+  ENGINE_FIELD_STORE,
+  ENGINE_FIELD_STORE_WORD
 } from "../../../src/lib/events/scriptCommands";
 import {
   dirDec,
   operatorDec,
   inputDec
 } from "../../../src/lib/compiler/helpers";
+import { hi, lo } from "../../../src/lib/helpers/8bit";
 
 test("Should be able to set active actor to player", () => {
   const output = [];
@@ -1366,6 +1373,99 @@ test("Should be able to wait for a number of frames", () => {
   const sb = new ScriptBuilder(output);
   sb.wait(5);
   expect(output).toEqual([cmd(WAIT), 5]);
+});
+
+// v4 follow-up: Engine Field runtime writes. engineFields mirrors the real
+// shape src/lib/helpers/engineFields.ts's precompileEngineFields() builds
+// (options.engineFields[key] = { offset, field: { cType, defaultValue } }),
+// so these tests exercise the same wire format compileSnesData.js's real
+// projects use, not a simplified stand-in.
+const testEngineFields = {
+  byte_field: { offset: 5, field: { cType: "UBYTE", defaultValue: 8 } },
+  word_field: { offset: 10, field: { cType: "WORD", defaultValue: 300 } },
+};
+
+test("Should be able to set a byte engine field to a literal value", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, { engineFields: testEngineFields });
+  sb.engineFieldSetToValue("byte_field", 42);
+  expect(output).toEqual([cmd(ENGINE_FIELD_UPDATE), hi(5), lo(5), 42]);
+});
+
+test("Should fall back to the field's own defaultValue when no value is given", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, { engineFields: testEngineFields });
+  sb.engineFieldSetToValue("byte_field");
+  expect(output).toEqual([cmd(ENGINE_FIELD_UPDATE), hi(5), lo(5), 8]);
+});
+
+test("Should be able to set a word engine field to a literal value", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, { engineFields: testEngineFields });
+  sb.engineFieldSetToValue("word_field", 300);
+  expect(output).toEqual([
+    cmd(ENGINE_FIELD_UPDATE_WORD),
+    hi(10),
+    lo(10),
+    hi(300),
+    lo(300),
+  ]);
+});
+
+test("Should be able to set a byte engine field to a variable", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    engineFields: testEngineFields,
+    variables: ["0", "1"],
+  });
+  sb.engineFieldSetToVariable("byte_field", "0");
+  expect(output).toEqual([cmd(ENGINE_FIELD_UPDATE_VAR), hi(5), lo(5), hi(0), lo(0)]);
+});
+
+test("Should be able to set a word engine field from a hi/lo variable pair", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    engineFields: testEngineFields,
+    variables: ["0", "1"],
+  });
+  sb.engineFieldSetToVariable("word_field", "0");
+  expect(output).toEqual([
+    cmd(ENGINE_FIELD_UPDATE_VAR_WORD),
+    hi(10),
+    lo(10),
+    hi(0), // hi byte source: variable "0" -> index 0
+    lo(0),
+    hi(1), // lo byte source: variable "1" -> index 1
+    lo(1),
+  ]);
+});
+
+test("Should be able to store a byte engine field in a variable", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    engineFields: testEngineFields,
+    variables: ["0", "1"],
+  });
+  sb.engineFieldStoreInVariable("byte_field", "0");
+  expect(output).toEqual([cmd(ENGINE_FIELD_STORE), hi(5), lo(5), hi(0), lo(0)]);
+});
+
+test("Should be able to store a word engine field in a hi/lo variable pair", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    engineFields: testEngineFields,
+    variables: ["0", "1"],
+  });
+  sb.engineFieldStoreInVariable("word_field", "0");
+  expect(output).toEqual([
+    cmd(ENGINE_FIELD_STORE_WORD),
+    hi(10),
+    lo(10),
+    hi(1), // lo byte destination: variable "1" -> index 1, pushed first
+    lo(1),
+    hi(0), // hi byte destination: variable "0" -> index 0, pushed second
+    lo(0),
+  ]);
 });
 
 test("Should be able to end the script", () => {

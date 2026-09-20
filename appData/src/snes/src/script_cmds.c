@@ -23,6 +23,7 @@
 #include "save.h"
 #include "rpn.h"
 #include "update_script.h"
+#include "engine_fields.h"
 
 /* SWITCH_SCENE fade handshake, owned by game.c */
 extern u8 scene_fade_pending;
@@ -1037,6 +1038,78 @@ void Script_IfColorSupported_b(void)
     script_continue = 1;
 }
 
+/* -------- v4 follow-up: Engine Field runtime writes, see engine_fields.h --
+ * All 6 opcodes share the same first arg pair: ARG16(0,1) is the byte
+ * offset into engine_fields_raw[] the compiler already computes for this
+ * field (src/lib/helpers/engineFields.ts's precompileEngineFields, in
+ * engine.json's own field order) - the same offset engine_fields.h's macro
+ * accessors are hand-pinned to. A word-sized field's value is stored via a
+ * plain `*(s16/u16 *)&engine_fields_raw[offset]` (65816 is little-endian, so
+ * this matches a normal in-place s16 store - no manual byte packing needed
+ * here); the wire format for a word ARG is still big-endian hi/lo, like
+ * every other opcode's ARG16() convention, so UPDATE_WORD's literal and the
+ * VAR_WORD/STORE_WORD variants' hi/lo *variable indices* are combined/split
+ * with plain shifts, matching ARG16 itself. -------- */
+
+// ENGINE_FIELD_UPDATE. args: offset(hi,lo), value. Byte field := literal.
+void Script_EngineFieldUpdate_b(void)
+{
+    engine_fields_raw[ARG16(0, 1)] = script_cmd_args[2];
+    ADVANCE();
+    script_continue = 1;
+}
+
+// ENGINE_FIELD_UPDATE_WORD. args: offset(hi,lo), value(hi,lo). Word field := literal.
+void Script_EngineFieldUpdateWord_b(void)
+{
+    *(u16 *)&engine_fields_raw[ARG16(0, 1)] = ARG16(2, 3);
+    ADVANCE();
+    script_continue = 1;
+}
+
+// ENGINE_FIELD_UPDATE_VAR. args: offset(hi,lo), varIndex(hi,lo). Byte field := VAR(varIndex).
+void Script_EngineFieldUpdateVar_b(void)
+{
+    engine_fields_raw[ARG16(0, 1)] = VAR(ARG16(2, 3));
+    ADVANCE();
+    script_continue = 1;
+}
+
+// ENGINE_FIELD_UPDATE_VAR_WORD. args: offset(hi,lo), hiVarIndex(hi,lo),
+// loVarIndex(hi,lo). Word field := (VAR(hiVarIndex) << 8) | VAR(loVarIndex)
+// - matches scriptBuilder.js's engineFieldSetToVariable exactly (a 16-bit
+// script value split across two u8 script_variables[], hi pushed first).
+void Script_EngineFieldUpdateVarWord_b(void)
+{
+    u16 offset = ARG16(0, 1);
+    u8 hiByte = VAR(ARG16(2, 3));
+    u8 loByte = VAR(ARG16(4, 5));
+    *(u16 *)&engine_fields_raw[offset] = ((u16)hiByte << 8) | loByte;
+    ADVANCE();
+    script_continue = 1;
+}
+
+// ENGINE_FIELD_STORE. args: offset(hi,lo), varIndex(hi,lo). VAR(varIndex) := byte field.
+void Script_EngineFieldStore_b(void)
+{
+    VAR(ARG16(2, 3)) = engine_fields_raw[ARG16(0, 1)];
+    ADVANCE();
+    script_continue = 1;
+}
+
+// ENGINE_FIELD_STORE_WORD. args: offset(hi,lo), loVarIndex(hi,lo),
+// hiVarIndex(hi,lo) - note the reversed var order vs UPDATE_VAR_WORD,
+// matching scriptBuilder.js's engineFieldStoreInVariable exactly (it pushes
+// loIndex before hiIndex, the opposite order to engineFieldSetToVariable).
+void Script_EngineFieldStoreWord_b(void)
+{
+    u16 value = *(u16 *)&engine_fields_raw[ARG16(0, 1)];
+    VAR(ARG16(2, 3)) = (u8)(value & 0xff);
+    VAR(ARG16(4, 5)) = (u8)(value >> 8);
+    ADVANCE();
+    script_continue = 1;
+}
+
 /* -------- M3 (v4): RPN math-expression evaluator, see rpn.h -------- */
 void Script_RpnPushConst_b(void)
 {
@@ -1246,12 +1319,12 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ActorStopUpdate_b, 0) /* 0x67 ACTOR_STOP_UPDATE - v4, real On Update subsystem, see update_script.h */ \
     X(Script_ActorSetAnimate_b, 1) /* 0x68 ACTOR_SET_ANIMATE - v4, plain field setter, not On Update */ \
     X(Script_IfColorSupported_b, 2) /* 0x69 IF_COLOR_SUPPORTED */ \
-    X(Script_Noop_b, 3) /* 0x6A ENGINE_FIELD_UPDATE - runtime engine-field writes, as needed per genre */ \
-    X(Script_Noop_b, 4) /* 0x6B ENGINE_FIELD_UPDATE_WORD */ \
-    X(Script_Noop_b, 4) /* 0x6C ENGINE_FIELD_UPDATE_VAR */ \
-    X(Script_Noop_b, 6) /* 0x6D ENGINE_FIELD_UPDATE_VAR_WORD */ \
-    X(Script_Noop_b, 4) /* 0x6E ENGINE_FIELD_STORE */ \
-    X(Script_Noop_b, 6) /* 0x6F ENGINE_FIELD_STORE_WORD */ \
+    X(Script_EngineFieldUpdate_b, 3) /* 0x6A ENGINE_FIELD_UPDATE - v4, runtime engine-field writes */ \
+    X(Script_EngineFieldUpdateWord_b, 4) /* 0x6B ENGINE_FIELD_UPDATE_WORD - v4 */ \
+    X(Script_EngineFieldUpdateVar_b, 4) /* 0x6C ENGINE_FIELD_UPDATE_VAR - v4 */ \
+    X(Script_EngineFieldUpdateVarWord_b, 6) /* 0x6D ENGINE_FIELD_UPDATE_VAR_WORD - v4 */ \
+    X(Script_EngineFieldStore_b, 4) /* 0x6E ENGINE_FIELD_STORE - v4 */ \
+    X(Script_EngineFieldStoreWord_b, 6) /* 0x6F ENGINE_FIELD_STORE_WORD - v4 */ \
     X(Script_RpnPushConst_b, 2) /* 0x70 RPN_PUSH_CONST */ \
     X(Script_RpnPushVar_b, 2) /* 0x71 RPN_PUSH_VAR */ \
     X(Script_RpnOperator_b, 1) /* 0x72 RPN_OPERATOR */ \

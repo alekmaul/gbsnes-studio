@@ -250,12 +250,12 @@ collision group 1/2/3 fires `playerHit1`/`playerHit2`/`playerHit3Script` respect
 "player"-group projectile hitting the player fires nothing, there's no slot for it, matching how
 `Actor.hit1/2/3Script` has no such case either). `ProjectilesUpdate()` now tests the player
 (index 0) the same way it tests every other actor. No `player_iframes`/invincibility-window
-concept was ported for this path - not needed for it specifically, since a projectile is always
-destroyed on the hit that triggers the script (a genuinely one-shot event), unlike B's other
-player-hit path (an actor *walking into* the player, which can overlap for many consecutive
-frames and would need real debouncing) - that path (enemy-actor-touches-player, as opposed to
-enemy-*projectile*-touches-player) is not ported and would need that invincibility window built
-first if it ever is.
+concept was needed *for this path specifically*, since a projectile is always destroyed on the
+hit that triggers the script (a genuinely one-shot event) - unlike B's other player-hit path (an
+actor *walking into* the player, which can overlap for many consecutive frames and needs real
+debouncing). That other path (enemy-*actor*-touches-player, as opposed to enemy-*projectile*-
+touches-player) **is now also shipped** - see "Walk-into-a-hostile-actor damage" below, which
+does port a real `player_iframes` cooldown.
 
 **No `lifeTime`/`destroyOnHit` fields** - this engine's Launch Projectile wire format (5 bytes,
 fixed since the original port) has no room for either (unlike B's own event). A launched
@@ -362,14 +362,12 @@ A full row-by-row re-check of `script_cmds.c` against `scriptCommands.js` (guard
 doc — all deliberately deferred (each has its own comment in `script_cmds.c` explaining why),
 not silent holes; every one has a real table row, just no runtime behaviour yet.
 
-| Event | SNES | Notes |
-| --- | --- | --- |
-| Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist, have a real schema, and are edited from Settings (see "Engine Fields" below), but a script still can't write one back at runtime. |
-
-**Launch Projectile / Weapon: Attack / Player: Bounce shipped (v4, real Projectiles subsystem)** -
-see their own section below. **Actor: Start/Stop Update Script shipped (v4, real On Update
-subsystem)** - see its own section below. All 4 were listed here through M16; they're the opcode-
-audit gaps this doc has actually closed rather than just documented.
+This section is now empty — the last remaining item, Engine Field runtime writes, shipped (v4
+follow-up, see "Engine Fields" below). **Launch Projectile / Weapon: Attack / Player: Bounce
+shipped (v4, real Projectiles subsystem)** - see their own section below. **Actor: Start/Stop
+Update Script shipped (v4, real On Update subsystem)** - see its own section below. All 4 were
+listed here through M16; they're the opcode-audit gaps this doc has actually closed rather than
+just documented.
 
 ## Engine Fields (v4, `appData/src/snes/engine.json`)
 
@@ -407,26 +405,61 @@ per-action remappable table; wiring that up is a real, separate engine change, n
 here. `fade_style` (white/black fade direction) - `fade.c` has no such option at all currently.
 `plat_climb_vel` (ladder speed) - no ladder/climb physics exist in `Update_Platform`.
 
-**Mechanism**: GB Studio 3.x's real engine writes a chosen value into these globals at boot, via
-a GBVM assembly routine generated from the schema (`compileBootstrap.ts`'s `_script_engine_init`).
-This engine has no such VM injection point (no GBVM - see the On Update section above for why),
-so `compileSnesData.js`'s new `compileEngineFields()` bakes the chosen value straight into a
-generated `src/engine_fields.c` initializer instead: one real `<cType> <key> = <value>;` per
-schema entry, value from the project's own `engineFieldValues` (Settings) or the schema's
-`defaultValue`. Same end result as B (a real, still-mutable global - a future Engine Field
-Update/Store implementation could still write to it at runtime), simpler mechanism for this
-target - no init call needed, 816-tcc just links the real value in. `engine_fields.h` is the
-`extern` declaration list every consumer (`scene.c`) includes instead of hardcoding its own
-default; `appData/src/snes/tools/gen-dummy-gfx.js` emits a matching committed dummy
-`engine_fields.c` (schema defaults) so a plain `make` against committed data still links.
+**Mechanism (compile-time default)**: GB Studio 3.x's real engine writes a chosen value into
+these globals at boot, via a GBVM assembly routine generated from the schema
+(`compileBootstrap.ts`'s `_script_engine_init`). This engine has no such VM injection point (no
+GBVM - see the On Update section above for why), so `compileSnesData.js`'s `compileEngineFields()`
+bakes the chosen value straight into a generated `src/engine_fields.c` initializer instead - see
+"Runtime writes" just below for the storage layout this now implies.
 
-**Verified**: full test suite green (141/141, 2 new `compileSnesData.test.js` cases - default
-values, and a project override not disturbing an untouched field's own default), a real
-toolchain build compiles/links `engine_fields.c` cleanly. **Real Mesen run** (a throwaway
-fixture with `engineFieldValues: [{shooter_scroll_speed: 5}, {topdown_grid: 16}]`, no d-pad
-input needed): read both globals back from real WRAM as `16` and `5` - the project's own chosen
-values, not the schema's `8`/`1` defaults - confirming the whole pipeline (Settings value →
-`compileEngineFields` → `engine_fields.c` → linked into the ROM → real runtime value) end to end.
+**Verified (compile-time default)**: full test suite green, a real toolchain build compiles/links
+`engine_fields.c` cleanly. A real Mesen run (a throwaway fixture with `engineFieldValues:
+[{shooter_scroll_speed: 5}, {topdown_grid: 16}]`, no d-pad input needed) read both fields back
+from real WRAM as `16` and `5` - the project's own chosen values, not the schema's `8`/`1`
+defaults - confirming the whole pipeline (Settings value → `compileEngineFields` →
+`engine_fields.c` → linked into the ROM → real runtime value) end to end.
+
+**Runtime writes (v4 follow-up, shipped) — Engine Field: Set / Store.** A script can now both
+write an Engine Field at runtime (`EVENT_ENGINE_FIELD_SET`, literal or from a variable) and read
+one into a variable (`EVENT_ENGINE_FIELD_STORE`) - the last item on this doc's "Not yet
+implemented" list. Both event files (`eventEngineFieldSet.js`/`eventEngineFieldStore.js`) and
+`scriptBuilder.js`'s `engineFieldSetToValue`/`engineFieldSetToVariable`/
+`engineFieldStoreInVariable` helpers already existed unchanged from the original GB-era port,
+emitting a valid wire format against 6 already-scaffolded opcodes
+(`ENGINE_FIELD_UPDATE(_WORD)`/`_VAR(_WORD)`, `ENGINE_FIELD_STORE(_WORD)`) - only the SNES C
+engine (still `Script_Noop_b`) and one missing compiler wire (below) were ever missing, the same
+"compiler half already built" shape as several other v4 milestones this session.
+
+Storage changed from one named C global per field to a single little-endian byte array,
+`engine_fields_raw[]` (`engine_fields.h`/`.c`) - a runtime opcode addresses a field by the same
+byte offset the compiler already computes (`src/lib/helpers/engineFields.ts`'s
+`precompileEngineFields()`, cumulative byte size in `engine.json`'s own field order), which a
+named-global-per-field scheme has no way to expose. `engine_fields.h`'s macros
+(`#define topdown_grid (engine_fields_raw[0])`, `#define plat_min_vel (*(s16 *)&engine_fields_raw
+[1])`, …) keep every existing consumer (`scene.c`'s `Update_TopDown`/`Update_Platform`/
+`Update_Shmup`) reading/writing the plain field name unchanged - only the header's definition of
+that name changed, no call site did. Offsets are guarded against `engine.json` drifting out of
+sync by `test/helpers/engineFieldsOffsets.test.js`.
+
+**Real gap found while implementing, not assumed fixed**: `compileSnesData.js` never actually
+built the `options.engineFields` map (`{offset, field}` per key) that `scriptBuilder.js`'s three
+helpers require - the "compiler half already built" framing above was only true for the
+*event files and ScriptBuilder helpers*, not the options wiring one level up. Compiling any
+project using either event threw a plain `TypeError` (`Cannot read properties of undefined`)
+until this was added (`compileSnesData.js` now passes `engineFields: precompileEngineFields
+(getEngineFieldsSchema())` into `compileEntityEvents`'s options) - caught by actually building a
+fixture ROM, not by reading the source alone.
+
+**Verified (runtime writes)**: full test suite green, byte-exact `scriptBuilder.test.js` cases
+for all 6 opcodes (literal/variable × byte/word, both Set and Store, including the hi/lo
+variable-pair byte order - Set pushes hi then lo, Store pushes lo then hi, matched exactly). A
+real Mesen run (throwaway fixture: seed a variable to 42, `ENGINE_FIELD_SET` a byte field to a
+literal, a different byte field from that variable, a word field to a literal, then
+`ENGINE_FIELD_STORE` the first field back into a second variable) read `engine_fields_raw[]`
+back from real WRAM with every value exactly as scripted (byte literal, byte-from-variable, word
+literal all correct at their real byte offsets) and the Store variable read back the same value
+the Set had written two events earlier - confirms the full runtime round-trip, not just that it
+compiles.
 
 ## On Update (v4, `appData/src/snes/src/update_script.c`)
 
