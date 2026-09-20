@@ -214,10 +214,9 @@ const SettingsPage: FC = () => {
           <CardHeading>{l10n("SETTINGS_SNES_OPTIONS")}</CardHeading>
           {!searchTerm && (
             <Alert variant="warning">
-              <AlertItem>{l10n("WARNING_SNES_ENGINE_FIELDS")}</AlertItem>
-              <AlertItem>{l10n("WARNING_SNES_PROJECTILES")}</AlertItem>
               <AlertItem>{l10n("WARNING_SNES_SPRITE_SHEETS")}</AlertItem>
-              <AlertItem>{l10n("WARNING_SNES_NO_WEB_PLAYER")}</AlertItem>
+              <AlertItem>{l10n("WARNING_SNES_PROJECTILE_POOL")}</AlertItem>
+              <AlertItem>{l10n("WARNING_SNES_UPDATE_SCRIPT_POOL")}</AlertItem>
             </Alert>
           )}
           <SearchableSettingRow

@@ -575,10 +575,9 @@
   "WARNING_SHEETS_LIMIT": "This scene uses too many distinct actor sprite sheets - some actors will fall back to the player's sheet during gameplay. Try reusing sprite sheets between actors in this scene.",
   "WARNING_ACTORS_LIMIT": "This scene contains too many actors, some actors will not be visible during gameplay",
   "WARNING_TRIGGERS_LIMIT": "This scene contains too many triggers, some triggers will not be included during gameplay",
-  "WARNING_SNES_ENGINE_FIELDS": "Engine settings (Platformer physics, Top Down grid size, etc.) use fixed defaults for SNES - there is no way to customise them per project yet.",
-  "WARNING_SNES_PROJECTILES": "Weapons, projectiles, and actor hit/damage scripts are not implemented for SNES yet.",
-  "WARNING_SNES_SPRITE_SHEETS": "A single scene can use at most 8 distinct actor sprite sheets.",
-  "WARNING_SNES_NO_WEB_PLAYER": "There is no Play button or web export for SNES yet - use Build ROM and an emulator (e.g. Mesen) to test.",
+  "WARNING_SNES_SPRITE_SHEETS": "A single scene can use up to 8 distinct sprite sheets in total (the player plus up to 7 actor sheets) - a scene needing more falls the extras back to a shared slot.",
+  "WARNING_SNES_PROJECTILE_POOL": "Up to 4 projectiles (Launch Projectile / Weapon Attack) can be in flight at once per scene.",
+  "WARNING_SNES_UPDATE_SCRIPT_POOL": "Up to 4 actors can have a running \"On Update\" script at once per scene.",
 
   "// 12": "Errors -------------------------------------------------------",
 
