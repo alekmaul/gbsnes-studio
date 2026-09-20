@@ -18,9 +18,9 @@ module.exports = {
     poll: true,
     ignored: /node_modules/
   },
-  entry: Path.resolve(__dirname, "./src/bin/gb-studio-cli.ts"),
+  entry: Path.resolve(__dirname, "./src/bin/snes-studio-cli.ts"),
   output: {
-    filename: 'gb-studio-cli.js',
+    filename: 'snes-studio-cli.js',
     path: Path.resolve(__dirname, './out/cli'),
     publicPath: __dirname
   },

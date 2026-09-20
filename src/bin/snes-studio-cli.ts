@@ -5,7 +5,7 @@ import uuid from "uuid";
 import os from "os";
 
 const usage = () => {
-    console.log("usage: gb-studio-cli <command> [<args>]");
+    console.log("usage: snes-studio-cli <command> [<args>]");
     console.log("");
     console.log("These are the valid commands available:");
     console.log("");
