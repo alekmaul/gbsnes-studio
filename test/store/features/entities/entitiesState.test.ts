@@ -333,6 +333,84 @@ test("Should remove sprite sheets that are deleted while project is open", () =>
   expect(newState.spriteSheets.ids.length).toBe(0);
 });
 
+test("Should add a named state to a sprite sheet", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.addSpriteState({
+    spriteSheetId: "sprite1",
+    name: "Jump",
+    targetSpriteSheetId: "sprite2",
+  });
+
+  const newState = reducer(state, action);
+  const states = newState.spriteSheets.entities["sprite1"]?.states;
+  expect(states?.length).toBe(1);
+  expect(states?.[0].name).toBe("Jump");
+  expect(states?.[0].spriteSheetId).toBe("sprite2");
+});
+
+test("Should edit a named state on a sprite sheet", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+          states: [{ id: "state1", name: "Jump", spriteSheetId: "sprite2" }],
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.editSpriteState({
+    spriteSheetId: "sprite1",
+    stateId: "state1",
+    changes: { name: "Climb" },
+  });
+
+  const newState = reducer(state, action);
+  const states = newState.spriteSheets.entities["sprite1"]?.states;
+  expect(states?.[0].name).toBe("Climb");
+  expect(states?.[0].spriteSheetId).toBe("sprite2");
+});
+
+test("Should remove a named state from a sprite sheet", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+          states: [{ id: "state1", name: "Jump", spriteSheetId: "sprite2" }],
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.removeSpriteState({
+    spriteSheetId: "sprite1",
+    stateId: "state1",
+  });
+
+  const newState = reducer(state, action);
+  expect(newState.spriteSheets.entities["sprite1"]?.states).toEqual([]);
+});
+
 test("Should add new music track if loaded while project is open", () => {
   const state: EntitiesState = {
     ...initialState,

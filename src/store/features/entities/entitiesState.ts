@@ -52,6 +52,7 @@ import {
   Scene,
   Background,
   SpriteSheet,
+  SpriteState,
   Music,
   Font,
   Emote,
@@ -447,6 +448,85 @@ const removeSprite: CaseReducer<
   if (existingAsset) {
     inodeToRecentSpriteSheet[existingAsset.inode] = clone(existingAsset);
     spriteSheetsAdapter.removeOne(state.spriteSheets, existingAsset.id);
+  }
+};
+
+const addSpriteState: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    stateId: string;
+    name: string;
+    targetSpriteSheetId: string;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (spriteSheet) {
+    spriteSheetsAdapter.updateOne(state.spriteSheets, {
+      id: spriteSheet.id,
+      changes: {
+        states: [
+          ...(spriteSheet.states || []),
+          {
+            id: action.payload.stateId,
+            name: action.payload.name,
+            spriteSheetId: action.payload.targetSpriteSheetId,
+          },
+        ],
+      },
+    });
+  }
+};
+
+const editSpriteState: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    stateId: string;
+    changes: Partial<SpriteState>;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (spriteSheet) {
+    spriteSheetsAdapter.updateOne(state.spriteSheets, {
+      id: spriteSheet.id,
+      changes: {
+        states: (spriteSheet.states || []).map((spriteState) =>
+          spriteState.id === action.payload.stateId
+            ? { ...spriteState, ...action.payload.changes }
+            : spriteState
+        ),
+      },
+    });
+  }
+};
+
+const removeSpriteState: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    stateId: string;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (spriteSheet) {
+    spriteSheetsAdapter.updateOne(state.spriteSheets, {
+      id: spriteSheet.id,
+      changes: {
+        states: (spriteSheet.states || []).filter(
+          (spriteState) => spriteState.id !== action.payload.stateId
+        ),
+      },
+    });
   }
 };
 
@@ -1959,6 +2039,29 @@ const entitiesSlice = createSlice({
      */
 
     editMusicSettings,
+
+    /**************************************************************************
+     * Sprite States
+     */
+
+    addSpriteState: {
+      reducer: addSpriteState,
+      prepare: (payload: {
+        spriteSheetId: string;
+        name: string;
+        targetSpriteSheetId: string;
+      }) => {
+        return {
+          payload: {
+            ...payload,
+            stateId: uuid(),
+          },
+        };
+      },
+    },
+
+    editSpriteState,
+    removeSpriteState,
 
     /**************************************************************************
      * Engine Field Values

@@ -310,19 +310,38 @@ const compileSnesData = async (
   // swap event silently never got a slot (0xFF, the opcode's own no-op guard),
   // even though the author genuinely referenced it. Recurses into nested
   // branches the same way.
+  // ACTOR_SET_STATE/PLAYER_SET_STATE (named animation states, v4) compile
+  // through the exact same actorSetSprite/playerSetSprite helpers as
+  // ACTOR_SET_SPRITE/PLAYER_SET_SPRITE (see eventActorSetState.js), but their
+  // JSON only carries stateId - the real target sheet is one level removed,
+  // resolved via the *referenced* sheet's own states[] (Phase 2). Mirrors
+  // eventActorSetState.js's own resolution exactly so the scanner and the
+  // compiler never disagree on which sheet an event actually swaps to.
+  const resolveStateTargetSpriteSheetId = (args) => {
+    const sheet = spriteById(args.spriteSheetId);
+    const state = sheet && sheet.states && sheet.states.find((s) => s.id === args.stateId);
+    return state ? state.spriteSheetId : args.spriteSheetId;
+  };
   const scanRuntimeSpriteIds = (evs, ids) => {
     (evs || []).forEach((ev) => {
-      if (
-        ev.command &&
-        (ev.command === "EVENT_LAUNCH_PROJECTILE" ||
+      if (ev.command && ev.args) {
+        let targetId;
+        if (
+          ev.command === "EVENT_LAUNCH_PROJECTILE" ||
           ev.command === "EVENT_WEAPON_ATTACK" ||
           ev.command === "EVENT_ACTOR_SET_SPRITE" ||
-          ev.command === "EVENT_PLAYER_SET_SPRITE") &&
-        ev.args &&
-        isSprite(ev.args.spriteSheetId) &&
-        ids.indexOf(ev.args.spriteSheetId) === -1
-      ) {
-        ids.push(ev.args.spriteSheetId);
+          ev.command === "EVENT_PLAYER_SET_SPRITE"
+        ) {
+          targetId = ev.args.spriteSheetId;
+        } else if (
+          ev.command === "EVENT_ACTOR_SET_STATE" ||
+          ev.command === "EVENT_PLAYER_SET_STATE"
+        ) {
+          targetId = resolveStateTargetSpriteSheetId(ev.args);
+        }
+        if (isSprite(targetId) && ids.indexOf(targetId) === -1) {
+          ids.push(targetId);
+        }
       }
       if (ev.children) {
         Object.keys(ev.children).forEach((k) => scanRuntimeSpriteIds(ev.children[k], ids));

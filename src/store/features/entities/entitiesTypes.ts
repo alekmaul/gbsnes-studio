@@ -106,6 +106,12 @@ export type EngineFieldValue = {
   value: number | string | boolean | undefined;
 };
 
+export type SpriteState = {
+  id: string;
+  name: string;
+  spriteSheetId: string;
+};
+
 export type SpriteSheet = {
   id: string;
   name: string;
@@ -115,6 +121,7 @@ export type SpriteSheet = {
   plugin?: string;
   inode: string;
   _v: number;
+  states?: SpriteState[];
 };
 
 // M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,

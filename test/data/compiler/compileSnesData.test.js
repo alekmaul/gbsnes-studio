@@ -644,4 +644,75 @@ describe("compileSnesData - runtime sprite-swap events get a real slot (v4 fix)"
     const swapOnlyIndex = baseProject.spriteSheets.findIndex((s) => s.id === SWAP_ONLY_ID);
     expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
   });
+
+  // Named animation states (v4, Phase 3): EVENT_ACTOR_SET_STATE/
+  // EVENT_PLAYER_SET_STATE carry a stateId, not a spriteSheetId - the real
+  // target sheet is one level removed, through the referenced sheet's own
+  // states[] (Phase 2). The scanner has to resolve that indirection the
+  // same way the event's own compile() does, or a state-only sheet stays
+  // unloaded exactly like the original swap-event bug this whole describe
+  // block guards against.
+  const STATE_ID = "state1";
+  const projectWithState = {
+    ...baseProject,
+    spriteSheets: [
+      {
+        ...baseProject.spriteSheets[0],
+        states: [{ id: STATE_ID, name: "Jump", spriteSheetId: SWAP_ONLY_ID }],
+      },
+      baseProject.spriteSheets[1],
+    ],
+  };
+
+  const sceneWithStateEvent = (command) => ({
+    ...projectWithState,
+    scenes: [
+      {
+        id: "s0",
+        name: "swap",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [
+          {
+            id: "a0",
+            spriteSheetId: DEFAULT_ID,
+            x: 0,
+            y: 0,
+            script: [
+              {
+                id: "ev0",
+                command,
+                args: {
+                  actorId: command === "EVENT_ACTOR_SET_STATE" ? "a0" : undefined,
+                  spriteSheetId: DEFAULT_ID,
+                  stateId: STATE_ID,
+                },
+              },
+            ],
+          },
+        ],
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("EVENT_ACTOR_SET_STATE resolves through states[] to a real (non-0xff) slot", async () => {
+    const out = await compileSnesData(sceneWithStateEvent("EVENT_ACTOR_SET_STATE"), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const swapOnlyIndex = baseProject.spriteSheets.findIndex((s) => s.id === SWAP_ONLY_ID);
+    expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
+  });
+
+  test("EVENT_PLAYER_SET_STATE resolves through states[] to a real (non-0xff) slot", async () => {
+    const out = await compileSnesData(sceneWithStateEvent("EVENT_PLAYER_SET_STATE"), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const swapOnlyIndex = baseProject.spriteSheets.findIndex((s) => s.id === SWAP_ONLY_ID);
+    expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
+  });
 });
