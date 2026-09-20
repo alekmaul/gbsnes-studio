@@ -24,6 +24,14 @@ extern u8 sprite_frames_for_slot[SPRITE_SLOTS];
 extern u8 sprite_pal_for_slot[SPRITE_SLOTS];
 extern const unsigned char *sprite_slot_for_index;
 
+/* v4 fix (user-found: swapping sprite sheets at runtime left frames_len
+ * stale - see Script_ActorSetSprite_b/Script_PlayerSetSprite_b in
+ * script_cmds.c). Was file-local (static) to scene.c, only ever called from
+ * SceneInit at actor spawn - exposed here so the runtime sprite-swap opcodes
+ * can recompute it the same way instead of leaving the old sheet's value in
+ * place. */
+u8 frames_len_for(u8 sprite_type, u8 slot);
+
 /* Dummy scenes reuse the M3 64x64 map. The real limit comes from the target
  * descriptor + collision bitmap size. */
 #define SCENE_TILE_W 64

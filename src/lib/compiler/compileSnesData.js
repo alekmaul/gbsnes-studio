@@ -299,16 +299,25 @@ const compileSnesData = async (
     return settings.playerSpriteSheetId;
   };
 
-  // Projectiles (v4): a scene's own LAUNCH_PROJECTILE/WEAPON_ATTACK events can
-  // reference any project sprite sheet, same as an avatarId - it has to be
-  // loaded into this scene's own OBJ pool for launchProjectile()'s scene-
-  // relative slot lookup (below) to find it, same reasoning as sceneAvatarIds
-  // just above this in the file. Recurses into nested branches the same way.
-  const scanProjectileSpriteIds = (evs, ids) => {
+  // Projectiles (v4) + v4 follow-up (Set Sprite Sheet runtime swap, user-found):
+  // a scene's own LAUNCH_PROJECTILE/WEAPON_ATTACK events, AND ACTOR_SET_SPRITE/
+  // PLAYER_SET_SPRITE events, can reference any project sprite sheet, same as
+  // an avatarId - it has to be loaded into this scene's own OBJ pool for the
+  // runtime slot lookup (below, and Script_ActorSetSprite_b/
+  // Script_PlayerSetSprite_b in script_cmds.c) to find it, same reasoning as
+  // sceneAvatarIds just above this in the file. Originally only scanned
+  // LAUNCH_PROJECTILE/WEAPON_ATTACK - a sheet referenced *only* via a sprite-
+  // swap event silently never got a slot (0xFF, the opcode's own no-op guard),
+  // even though the author genuinely referenced it. Recurses into nested
+  // branches the same way.
+  const scanRuntimeSpriteIds = (evs, ids) => {
     (evs || []).forEach((ev) => {
       if (
         ev.command &&
-        (ev.command === "EVENT_LAUNCH_PROJECTILE" || ev.command === "EVENT_WEAPON_ATTACK") &&
+        (ev.command === "EVENT_LAUNCH_PROJECTILE" ||
+          ev.command === "EVENT_WEAPON_ATTACK" ||
+          ev.command === "EVENT_ACTOR_SET_SPRITE" ||
+          ev.command === "EVENT_PLAYER_SET_SPRITE") &&
         ev.args &&
         isSprite(ev.args.spriteSheetId) &&
         ids.indexOf(ev.args.spriteSheetId) === -1
@@ -316,21 +325,21 @@ const compileSnesData = async (
         ids.push(ev.args.spriteSheetId);
       }
       if (ev.children) {
-        Object.keys(ev.children).forEach((k) => scanProjectileSpriteIds(ev.children[k], ids));
+        Object.keys(ev.children).forEach((k) => scanRuntimeSpriteIds(ev.children[k], ids));
       }
     });
   };
-  const sceneProjectileSpriteIds = scenes.map((sc) => {
+  const sceneRuntimeSpriteIds = scenes.map((sc) => {
     const ids = [];
-    scanProjectileSpriteIds(sc.script, ids);
+    scanRuntimeSpriteIds(sc.script, ids);
     (sc.actors || []).forEach((a) => {
-      scanProjectileSpriteIds(a.script, ids);
-      scanProjectileSpriteIds(a.startScript, ids);
-      scanProjectileSpriteIds(a.hit1Script, ids);
-      scanProjectileSpriteIds(a.hit2Script, ids);
-      scanProjectileSpriteIds(a.hit3Script, ids);
+      scanRuntimeSpriteIds(a.script, ids);
+      scanRuntimeSpriteIds(a.startScript, ids);
+      scanRuntimeSpriteIds(a.hit1Script, ids);
+      scanRuntimeSpriteIds(a.hit2Script, ids);
+      scanRuntimeSpriteIds(a.hit3Script, ids);
     });
-    (sc.triggers || []).forEach((t) => scanProjectileSpriteIds(t.script, ids));
+    (sc.triggers || []).forEach((t) => scanRuntimeSpriteIds(t.script, ids));
     return ids;
   });
 
@@ -344,11 +353,11 @@ const compileSnesData = async (
     };
     add(playerSpriteIdForScene(sc));
     (sc.actors || []).forEach((a) => add(a.spriteSheetId));
-    sceneProjectileSpriteIds[i].forEach(add);
+    sceneRuntimeSpriteIds[i].forEach(add);
     const distinct = new Set(
       [playerSpriteIdForScene(sc)]
         .concat((sc.actors || []).map((a) => a.spriteSheetId))
-        .concat(sceneProjectileSpriteIds[i])
+        .concat(sceneRuntimeSpriteIds[i])
         .filter(isSprite)
     );
     if (distinct.size > SPRITE_SLOTS) {
@@ -1188,6 +1197,13 @@ ${sceneBlobs.map((_, i) => `    scene_${i}`).join(",\n")}
       startSceneIndex,
       sceneBlobs,
       scriptBytes,
+      // [sceneIndex][projectSpriteIndex] -> the scene's own OBJ slot for that
+      // project sprite, or 0xff if it was never loaded into this scene - the
+      // same array Script_ActorSetSprite_b/Script_PlayerSetSprite_b look up
+      // at runtime (scene_sprite_slot_ptrs). Exposed for tests to verify a
+      // sheet referenced only via a runtime sprite-swap event still gets a
+      // real slot (v4 fix).
+      sceneSlotForIndex,
     },
   };
 };

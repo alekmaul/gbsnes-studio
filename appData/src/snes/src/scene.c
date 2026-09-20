@@ -535,7 +535,7 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  * sheet with 2-6 frames auto-cycles all of them (GB Studio's "animated" type -
  * a 2-frame duck, a 4-frame torch, ...); a 3-frame SPRITE_ACTOR and 1-frame
  * sheet are a single frame. */
-static u8 frames_len_for(u8 sprite_type, u8 slot)
+u8 frames_len_for(u8 sprite_type, u8 slot)
 {
     if (sprite_type == SPRITE_ACTOR_ANIMATED) return 2;
     if (sprite_type == SPRITE_STATIC)

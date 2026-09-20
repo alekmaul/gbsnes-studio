@@ -673,6 +673,13 @@ void Script_PlayerSetSprite_b(void)
         {
             actors[0].frame_offset = slot * 2;
             actors[0].sprite_type = sprite_type_for_slot[slot];
+            /* v4 fix: frames_len used to stay at the OLD sheet's value here -
+             * swapping to a sheet with more frames left the extra ones dead
+             * (frames_len still too small to animate past them), swapping to
+             * one with fewer read OBJ tile data this sheet's own upload never
+             * wrote (real corruption risk, not just "no effect"). Recomputed
+             * the same way SceneInit does at spawn. */
+            actors[0].frames_len = frames_len_for(actors[0].sprite_type, slot);
             actors[0].frame = 0;
             actors[0].flip = 0;
         }
@@ -704,6 +711,9 @@ void Script_ActorSetSprite_b(void)
         {
             actors[script_actor].frame_offset = slot * 2;
             actors[script_actor].sprite_type = sprite_type_for_slot[slot];
+            /* v4 fix - see Script_PlayerSetSprite_b's own comment. */
+            actors[script_actor].frames_len =
+                frames_len_for(actors[script_actor].sprite_type, slot);
             actors[script_actor].frame = 0;
             actors[script_actor].flip = 0;
         }

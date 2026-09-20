@@ -562,3 +562,86 @@ describe("compileSnesData - oversized background warning (v4)", () => {
     expect(leavingEarth).not.toMatch(/32x32|32 tiles/);
   });
 });
+
+describe("compileSnesData - runtime sprite-swap events get a real slot (v4 fix)", () => {
+  // user-found: a sheet referenced *only* via EVENT_ACTOR_SET_SPRITE/
+  // EVENT_PLAYER_SET_SPRITE (not any actor's own default sheet, not a
+  // projectile/weapon event) used to stay unloaded (0xff slot) - the scanner
+  // that feeds sceneSpriteIds only ever looked at LAUNCH_PROJECTILE/
+  // WEAPON_ATTACK and avatarId. This is exactly the shape a "named animation
+  // state" (a dedicated alternate-look sheet, switched to only via a swap
+  // event) needs to work.
+  const DEFAULT_ID = "581d34d0-9591-4e6e-a609-1d94f203b0cd"; // actor_animated, 6 frames
+  const SWAP_ONLY_ID = "swap-only-sheet";
+
+  const baseProject = {
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+      playerSpriteSheetId: DEFAULT_ID,
+    },
+    backgrounds: [
+      { id: "bg", filename: "placeholder.png", width: 20, height: 18 },
+    ],
+    spriteSheets: [
+      { id: DEFAULT_ID, filename: "actor_animated.png", type: "actor_animated" },
+      { id: SWAP_ONLY_ID, filename: "actor.png", type: "actor" },
+    ],
+    variables: [],
+  };
+
+  const sceneWithSwapEvent = (command) => ({
+    ...baseProject,
+    scenes: [
+      {
+        id: "s0",
+        name: "swap",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [
+          {
+            id: "a0",
+            spriteSheetId: DEFAULT_ID,
+            x: 0,
+            y: 0,
+            script: [
+              {
+                id: "ev0",
+                command,
+                args: {
+                  actorId: command === "EVENT_ACTOR_SET_SPRITE" ? "a0" : undefined,
+                  spriteSheetId: SWAP_ONLY_ID,
+                },
+              },
+            ],
+          },
+        ],
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("EVENT_ACTOR_SET_SPRITE's own target sheet gets a real (non-0xff) slot", async () => {
+    const out = await compileSnesData(sceneWithSwapEvent("EVENT_ACTOR_SET_SPRITE"), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const swapOnlyIndex = baseProject.spriteSheets.findIndex((s) => s.id === SWAP_ONLY_ID);
+    expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
+  });
+
+  test("EVENT_PLAYER_SET_SPRITE's own target sheet gets a real (non-0xff) slot", async () => {
+    const out = await compileSnesData(sceneWithSwapEvent("EVENT_PLAYER_SET_SPRITE"), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const swapOnlyIndex = baseProject.spriteSheets.findIndex((s) => s.id === SWAP_ONLY_ID);
+    expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
+  });
+});
