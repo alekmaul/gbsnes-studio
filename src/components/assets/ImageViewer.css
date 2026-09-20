@@ -11,8 +11,11 @@
   min-width: 100%;
   min-height: 100%;
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
+  padding: 20px 0;
+  box-sizing: border-box;
 }
 
 .ImageViewer__Image {
@@ -41,4 +44,10 @@
 .ImageViewer__Warning ul {
   padding-left: 25px;
   line-height: 1.5;
+}
+
+.ImageViewer__States {
+  margin-top: 20px;
+  width: 320px;
+  max-width: calc(100vw - 340px);
 }

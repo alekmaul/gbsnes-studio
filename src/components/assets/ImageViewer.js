@@ -59,6 +59,11 @@ class ImageViewer extends Component {
               />
             </div>
           )}
+          {file && folder === "sprites" && (
+            <div className="ImageViewer__States">
+              <SpriteStatesEditor id={file.id} />
+            </div>
+          )}
         </div>
         {file && (
           <div
@@ -71,11 +76,6 @@ class ImageViewer extends Component {
         {file && folder === "backgrounds" && (
           <div className="ImageViewer__Warning" style={{ right: sidebarWidth + 10 }}>
             <BackgroundWarnings id={file.id} />
-          </div>
-        )}
-        {file && folder === "sprites" && (
-          <div className="ImageViewer__Warning" style={{ right: sidebarWidth + 10 }}>
-            <SpriteStatesEditor id={file.id} />
           </div>
         )}
       </div>
