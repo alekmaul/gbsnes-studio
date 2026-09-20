@@ -530,6 +530,57 @@ const removeSpriteState: CaseReducer<
   }
 };
 
+const addAnimationFrame: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    animationIndex: number;
+    frame: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (spriteSheet) {
+    const animationFrames = (spriteSheet.animationFrames || []).slice();
+    const existing = animationFrames[action.payload.animationIndex] || [];
+    animationFrames[action.payload.animationIndex] = [
+      ...existing,
+      action.payload.frame,
+    ];
+    spriteSheetsAdapter.updateOne(state.spriteSheets, {
+      id: spriteSheet.id,
+      changes: { animationFrames },
+    });
+  }
+};
+
+const removeAnimationFrame: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    animationIndex: number;
+    position: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (spriteSheet) {
+    const animationFrames = (spriteSheet.animationFrames || []).slice();
+    const existing = animationFrames[action.payload.animationIndex] || [];
+    animationFrames[action.payload.animationIndex] = existing.filter(
+      (_frame, position) => position !== action.payload.position
+    );
+    spriteSheetsAdapter.updateOne(state.spriteSheets, {
+      id: spriteSheet.id,
+      changes: { animationFrames },
+    });
+  }
+};
+
 const loadFont: CaseReducer<
   EntitiesState,
   PayloadAction<{
@@ -2062,6 +2113,8 @@ const entitiesSlice = createSlice({
 
     editSpriteState,
     removeSpriteState,
+    addAnimationFrame,
+    removeAnimationFrame,
 
     /**************************************************************************
      * Engine Field Values

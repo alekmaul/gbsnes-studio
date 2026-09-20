@@ -19,6 +19,7 @@ workerCtx.onmessage = async (evt) => {
     const numFrames = evt.data.numFrames;
     const type = evt.data.type;
     const frame = evt.data.frame;
+    const rawFrame = evt.data.rawFrame;
 
     let canvas: OffscreenCanvas;
     let ctx: OffscreenCanvasRenderingContext2D;
@@ -47,12 +48,19 @@ workerCtx.onmessage = async (evt) => {
         };
     }
 
-    const directionFrame = directionToFrame(direction, numFrames);
-    const spriteOffset = directionFrame + (frame || 0);
+    // rawFrame bypasses directionToFrame entirely - an absolute index into
+    // the sheet's own frame strip (0..numFrames-1), used by the sprite
+    // editor's Animations/Frames panel to show/curate a project's own
+    // chosen frames rather than the engine's direction-based convention.
+    const spriteOffset =
+        rawFrame !== undefined
+            ? rawFrame
+            : directionToFrame(direction, numFrames) + (frame || 0);
 
     // Draw Sprite
     ctx.save();
     if (
+        rawFrame === undefined &&
         direction === "left" &&
         (type === "actor" || type === "actor_animated")
     ) {

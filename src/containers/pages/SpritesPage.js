@@ -66,7 +66,7 @@ class SpritesPage extends Component {
         {file && selectedAnimation && (
           <SpriteFramesPanel
             id={file.id}
-            animation={selectedAnimation}
+            animationIndex={animationIndex}
             sidebarWidth={sidebarWidth}
           />
         )}

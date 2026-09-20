@@ -35,27 +35,30 @@ class SpriteSheetCanvas extends Component {
   }
 
   shouldComponentUpdate(nextProps) {
-    const { direction, frame, spriteSheet } = this.props;
+    const { direction, frame, rawFrame, spriteSheet } = this.props;
     return (
       nextProps.direction !== direction ||
       nextProps.frame !== frame ||
+      nextProps.rawFrame !== rawFrame ||
       spriteSheet !== nextProps.spriteSheet
     );
   }
 
   componentDidUpdate(prevProps) {
-    const { direction, frame } = prevProps;
+    const { direction, frame, rawFrame } = prevProps;
     const {
       projectRoot,
       spriteSheet,
       direction: nextDirection,
       frame: nextFrame,
+      rawFrame: nextRawFrame,
     } = this.props;
     const newSrc = this.imageSrc(projectRoot, spriteSheet);
     if (
       newSrc !== this.src ||
       direction !== nextDirection ||
-      frame !== nextFrame
+      frame !== nextFrame ||
+      rawFrame !== nextRawFrame
     ) {
       this.debouncedDraw();
     }
@@ -66,7 +69,7 @@ class SpriteSheetCanvas extends Component {
   }
 
   draw = () => {
-    const { projectRoot, spriteSheet = {}, direction = "down", frame } = this.props;
+    const { projectRoot, spriteSheet = {}, direction = "down", frame, rawFrame } = this.props;
     if (this.canvas && this.canvas.current && spriteSheet) {
       this.worker.postMessage({
         src: this.imageSrc(projectRoot, spriteSheet),
@@ -77,6 +80,7 @@ class SpriteSheetCanvas extends Component {
         type: spriteSheet.type,
         direction,
         frame,
+        rawFrame,
       });
     }
   };

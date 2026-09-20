@@ -5,8 +5,7 @@ import l10n from "../../lib/helpers/l10n";
 
 export interface SpriteAnimation {
   name: string;
-  direction: string;
-  frameCount: number;
+  frames: number[];
 }
 
 interface SpriteAnimationsPanelProps {

@@ -411,6 +411,87 @@ test("Should remove a named state from a sprite sheet", () => {
   expect(newState.spriteSheets.entities["sprite1"]?.states).toEqual([]);
 });
 
+test("Should add a frame to an animation's custom frame list", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.addAnimationFrame({
+    spriteSheetId: "sprite1",
+    animationIndex: 0,
+    frame: 2,
+  });
+
+  const newState = reducer(state, action);
+  expect(newState.spriteSheets.entities["sprite1"]?.animationFrames).toEqual([
+    [2],
+  ]);
+});
+
+test("Should append to an existing animation's custom frame list without disturbing other animations", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+          animationFrames: [[0], [4, 5]],
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.addAnimationFrame({
+    spriteSheetId: "sprite1",
+    animationIndex: 0,
+    frame: 1,
+  });
+
+  const newState = reducer(state, action);
+  expect(newState.spriteSheets.entities["sprite1"]?.animationFrames).toEqual([
+    [0, 1],
+    [4, 5],
+  ]);
+});
+
+test("Should remove a frame from an animation's custom frame list by position", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+          animationFrames: [[0, 1, 2]],
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.removeAnimationFrame({
+    spriteSheetId: "sprite1",
+    animationIndex: 0,
+    position: 1,
+  });
+
+  const newState = reducer(state, action);
+  expect(newState.spriteSheets.entities["sprite1"]?.animationFrames).toEqual([
+    [0, 2],
+  ]);
+});
+
 test("Should add new music track if loaded while project is open", () => {
   const state: EntitiesState = {
     ...initialState,
