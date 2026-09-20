@@ -49,7 +49,7 @@ class FilesSidebar extends Component {
     const { resizeFilesSidebar } = this.props;
     const { dragging } = this.state;
     if (dragging) {
-      resizeFilesSidebar(window.innerWidth - event.pageX);
+      resizeFilesSidebar(event.pageX);
     }
   };
 
@@ -80,12 +80,6 @@ class FilesSidebar extends Component {
 
     return (
       <div className="FilesSidebarWrapper">
-        <div
-          ref={this.dragHandler}
-          className="FilesSidebarDragHandle"
-          onMouseDown={this.onMouseDown}
-          onMouseUp={this.onMouseUp}
-        />
         <div className="FilesSidebar" style={{ width }}>
           <div className="FilesSidebar__Search">
             <input
@@ -114,6 +108,12 @@ class FilesSidebar extends Component {
               );
             })}
         </div>
+        <div
+          ref={this.dragHandler}
+          className="FilesSidebarDragHandle"
+          onMouseDown={this.onMouseDown}
+          onMouseUp={this.onMouseUp}
+        />
       </div>
     );
   }

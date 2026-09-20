@@ -42,7 +42,7 @@ class ImageViewer extends Component {
   render() {
     const { projectRoot, file, folder, zoom, sidebarWidth } = this.props;
     return (
-      <div className="ImageViewer" style={{ right: sidebarWidth }}>
+      <div className="ImageViewer" style={{ left: sidebarWidth }}>
         <div className="ImageViewer__Content">
           {file && (
             <div
@@ -68,13 +68,13 @@ class ImageViewer extends Component {
         {file && (
           <div
             className="ImageViewer__Edit"
-            style={{ right: sidebarWidth + 10 }}
+            style={{ left: sidebarWidth + 10 }}
           >
             <Button onClick={this.onOpen}>{l10n("ASSET_EDIT")}</Button>
           </div>
         )}
         {file && folder === "backgrounds" && (
-          <div className="ImageViewer__Warning" style={{ right: sidebarWidth + 10 }}>
+          <div className="ImageViewer__Warning" style={{ left: sidebarWidth + 10 }}>
             <BackgroundWarnings id={file.id} />
           </div>
         )}

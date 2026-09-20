@@ -1,7 +1,7 @@
 .ImageViewer {
   position: fixed;
-  right: 300px;
-  left: 0px;
+  left: 300px;
+  right: 0px;
   top: 38px;
   bottom: 0px;
   overflow: auto;
@@ -31,12 +31,12 @@
 .ImageViewer__Edit {
   position: fixed;
   top: 48px;
-  right: 310px;
+  left: 310px;
 }
 
 .ImageViewer__Warning {
   position: fixed;
-  left: 10px;
+  left: 310px;
   right: 10px;
   bottom: 20px;
 }

@@ -1,5 +1,5 @@
 .FilesSidebarWrapper {
-  right: 0;
+  left: 0;
   position: fixed;
   top: 38px;
   bottom: 0px;
@@ -17,7 +17,7 @@
 
 .FilesSidebar {
   background-color: var(--sidebar-bg-color);
-  border-left: 1px solid var(--sidebar-edge-color);
+  border-right: 1px solid var(--sidebar-edge-color);
   overflow: auto;
   overflow-x: hidden;
   padding: 0px;
