@@ -3,15 +3,18 @@ import PropTypes from "prop-types";
 import { connect } from "react-redux";
 import FilesSidebar from "../../components/assets/FilesSidebar";
 import ImageViewer from "../../components/assets/ImageViewer";
+import SpriteAnimationsPanel from "../../components/assets/SpriteAnimationsPanel";
 import SpriteStatesEditor from "../../components/assets/SpriteStatesEditor";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import electronActions from "../../store/features/electron/electronActions";
 
-// Height reserved at the bottom of the left-hand file list for the States
-// dock below (fixed budget, not measured - keeps FilesSidebar's own
-// bottomOffset simple and avoids a layout-thrashing resize-observer for
-// what the plan scoped as a small, fixed-shape panel).
-const STATES_DOCK_HEIGHT = 220;
+// Height reserved at the bottom of the left-hand file list for the
+// Animations + States dock below (fixed budget, not measured - keeps
+// FilesSidebar's own bottomOffset simple and avoids a layout-thrashing
+// resize-observer for what the plan scoped as small, fixed-shape panels;
+// the dock itself scrolls internally if either section's content is
+// taller than this).
+const SPRITE_PANELS_DOCK_HEIGHT = 380;
 
 class SpritesPage extends Component {
   constructor(props) {
@@ -47,7 +50,7 @@ class SpritesPage extends Component {
           selectedFile={file}
           query={query}
           onSearch={this.onSearch}
-          bottomOffset={file ? STATES_DOCK_HEIGHT : 0}
+          bottomOffset={file ? SPRITE_PANELS_DOCK_HEIGHT : 0}
           onAdd={() => {
             openHelp("sprites");
           }}
@@ -55,8 +58,9 @@ class SpritesPage extends Component {
         {file && (
           <div
             className="FilesSidebar__StatesDock"
-            style={{ height: STATES_DOCK_HEIGHT, width: sidebarWidth }}
+            style={{ height: SPRITE_PANELS_DOCK_HEIGHT, width: sidebarWidth }}
           >
+            <SpriteAnimationsPanel id={file.id} />
             <SpriteStatesEditor id={file.id} />
           </div>
         )}
