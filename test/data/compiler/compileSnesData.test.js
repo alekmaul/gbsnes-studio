@@ -465,8 +465,11 @@ describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
     );
     const asFile = out.assetsData["scene_bgmap_0_data.as"];
     expect(asFile).toBeDefined();
-    // The override is a 32x32x2 tilemap; tile (3,1) -> byte offset
-    // (1*32+3)*2 = 70, high byte (offset 71) should have bit 0x20 set
+    // The override tilemap is sized to the background's own real width (w=20
+    // here), not a fixed 32 - v4 fix, this test used to hardcode the 32-wide
+    // stride even though its own fixture background is 20 tiles wide,
+    // enshrining the pre-fix bug instead of catching it. tile (3,1) -> byte
+    // offset (1*20+3)*2 = 46, high byte (offset 47) should have bit 0x20 set
     // ((1<<13)>>8 - see compileSnesData.js's BG_TIL_PRIO_HI).
     const dbMatch = asFile.match(/scene_bgmap_0:\n([\s\S]*?)\n\.ends/);
     expect(dbMatch).not.toBeNull();
@@ -477,7 +480,7 @@ describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
       .join(",")
       .split(",")
       .map((v) => parseInt(v.trim(), 10));
-    expect(bytes[71] & 0x20).toBe(0x20);
+    expect(bytes[47] & 0x20).toBe(0x20);
   });
 });
 
@@ -560,6 +563,80 @@ describe("compileSnesData - oversized background warning (v4)", () => {
     expect(leavingEarth).toMatch(/255x28 tiles/);
     expect(leavingEarth).toMatch(/64x64 tiles/);
     expect(leavingEarth).not.toMatch(/32x32|32 tiles/);
+  });
+
+  // v4 fix, found while scoping background streaming: the two tests above
+  // only ever checked whether the *warning* fired - neither actually
+  // verified the tilemap DATA itself was complete. sample_town.png is 56x56
+  // tiles (comfortably between 32 and the 64-tile warning threshold, so it
+  // never warned) but bgTables' map-building loop was hardcoded to 32x32,
+  // silently dropping everything past that corner - a real, previously
+  // undetected content bug affecting any background over 32 tiles in either
+  // dimension, not just the two the user originally reported.
+  test("a background between 32 and 64 tiles wide compiles its full tilemap, not a 32x32 corner", async () => {
+    const project = JSON.parse(
+      fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
+    );
+    const bgIndex = project.backgrounds.findIndex(
+      (b) => b.filename === "sample_town.png"
+    );
+    expect(bgIndex).toBeGreaterThanOrEqual(0);
+    const out = await compileSnesData(project, {
+      projectRoot: SNESGBS2_DIR,
+      warnings: () => {},
+    });
+    const lenMatch = out.assetsC.match(/bg_maps_len\[\d+\] = \{ ([^}]+) \};/);
+    expect(lenMatch).toBeTruthy();
+    const lens = lenMatch[1].split(",").map((s) => parseInt(s.trim(), 10));
+    // 56x56 tiles x 2 bytes/tile - was hardcoded to 2048 (32x32x2) before the fix.
+    expect(lens[bgIndex]).toBe(56 * 56 * 2);
+  });
+
+  // Same root cause, a second, independent hardcoded-32 stride in the
+  // priority-tile tilemap override (scenePriorityMaps) - a painted priority
+  // tile beyond column 32 used to write its BG_TIL_PRIO bit at the WRONG
+  // byte offset (computed with a 32-wide stride against a now-wider map).
+  test("a priority tile beyond the old 32-wide corner lands at the correct (not the old 32-stride) offset", async () => {
+    const collisions = new Array(40 * 4).fill(0);
+    // tx=5, ty=1: old (buggy) 32-wide stride offset (75) differs from the
+    // real 40-wide stride offset (91) - ty=0 would coincide with both and
+    // wouldn't prove anything.
+    collisions[1 * 40 + 5] = TILE_PROP_PRIORITY;
+    const project = {
+      _version: "2.0.0",
+      _release: "7",
+      settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+      backgrounds: [{ id: "bg-wide", filename: "wide40.png", width: 40, height: 4 }],
+      spriteSheets: [],
+      variables: [],
+      scenes: [
+        {
+          id: "s0",
+          name: "wide",
+          backgroundId: "bg-wide",
+          width: 40,
+          height: 4,
+          actors: [],
+          triggers: [],
+          script: [],
+          collisions,
+        },
+      ],
+    };
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const text = out.assetsData["scene_bgmap_0_data.as"];
+    expect(text).toBeDefined();
+    const body = text.match(/scene_bgmap_0:\n([\s\S]*?)\n\.ends/)[1];
+    const bytes = [];
+    body.split("\n").forEach((line) => {
+      const m = line.match(/^\.db (.+)$/);
+      if (m) m[1].split(",").forEach((n) => bytes.push(parseInt(n.trim(), 10)));
+    });
+    expect(bytes[91] & 0x20).toBe(0x20); // real 40-wide stride offset
+    expect(bytes[75] & 0x20).toBe(0); // old buggy 32-wide stride offset
   });
 });
 

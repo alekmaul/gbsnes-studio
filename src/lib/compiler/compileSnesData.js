@@ -65,8 +65,6 @@
  * SPRITE_ACTOR_ANIMATED (walk cycle). Each used sprite slot gets its own
  * 16-colour OBJ palette (spr_pal is the whole OBJ CGRAM image; sprite_pal_for_slot[]
  * says which of the 8 OBJ palettes a slot draws from).
- *
- * Not handled yet: SC_64x64 scenes wider than 32 tiles.
  */
 import fs from "fs-extra";
 import Path from "path";
@@ -917,14 +915,25 @@ const compileSnesData = async (
     resolvePlaceholders(b, `event_ptrs[${i}]`, warnings)
   );
 
-  // ---- backgrounds -> padded tables ----------------------------------
+  // ---- backgrounds -> tables ------------------------------------------
+  // v4 fix (user-found, via the "SNES scenes wider/taller than 64x64" warning):
+  // this used to hard-code a 32x32 loop regardless of the background's real
+  // size (conv.tileW/tileH), so ANY background over 32 tiles in either
+  // dimension silently lost everything past that corner at compile time -
+  // with no warning below the unrelated 64-tile warning threshold
+  // (maxBackgroundWidth/Height in targets/snes.js). conv.tilemap is already
+  // exactly tileW*tileH entries (snesgfx.js imageToBGData), so there's no
+  // padding to do - just emit it as-is. No size cap here: background tile/
+  // map data is emitted as its own `.as` superfree section (see below), not
+  // packed into assets.c's atomic 32 KB .rodata section, so there's no ROM
+  // constraint forcing an artificial ceiling. scene.c's own VRAM budget
+  // (SC_64x64, up to 64x64 tiles in one DMA) is a separate, runtime concern -
+  // see the background-streaming work for scenes beyond that.
   const bgTables = bgConverted.map((conv, i) => {
     const map = [];
-    for (let ty = 0; ty < 32; ty++) {
-      for (let tx = 0; tx < 32; tx++) {
-        const e = ty < conv.tileH && tx < conv.tileW ? conv.tilemap[ty * conv.tileW + tx] : 0;
-        map.push(e & 0xff, (e >> 8) & 0xff);
-      }
+    for (let i2 = 0; i2 < conv.tilemap.length; i2++) {
+      const e = conv.tilemap[i2];
+      map.push(e & 0xff, (e >> 8) & 0xff);
     }
     return {
       name: `bg${i}`,
@@ -937,15 +946,15 @@ const compileSnesData = async (
   });
 
   // ---- per-scene priority-tile tilemap overrides (M7, v4) -------------
-  // Most scenes need none - the shared bgTables[i].map above (32x32x2,
-  // padded) is used unmodified, matching every scene that references the
-  // same background today. A scene that paints any TILE_PROP_PRIORITY
-  // collision-grid tiles (BrushToolbar.js) gets its own copy of that
-  // background's tilemap with BG_TIL_PRIO (snesgfx.js's tile<<13 priority
-  // bit) OR'd in at the painted positions. This can't be a shared per-
-  // background flag: two scenes can share one background and paint
-  // different priority patterns, so priority has to live at the same
-  // per-scene granularity collision itself already does.
+  // Most scenes need none - the shared bgTables[i].map above is used
+  // unmodified, matching every scene that references the same background
+  // today. A scene that paints any TILE_PROP_PRIORITY collision-grid tiles
+  // (BrushToolbar.js) gets its own copy of that background's tilemap with
+  // BG_TIL_PRIO (snesgfx.js's tile<<13 priority bit) OR'd in at the painted
+  // positions. This can't be a shared per-background flag: two scenes can
+  // share one background and paint different priority patterns, so priority
+  // has to live at the same per-scene granularity collision itself already
+  // does.
   const BG_TIL_PRIO_HI = 0x20; // (1<<13) >> 8 - the high byte of a tilemap word
   const scenePriorityMaps = scenes.map((scene, sceneIndex) => {
     const bgIndex = bgIndexById[scene.backgroundId] || 0;
@@ -963,7 +972,10 @@ const compileSnesData = async (
     for (let ty = 0; ty < bg.h; ty++) {
       for (let tx = 0; tx < bg.w; tx++) {
         if (collisions[ty * bg.w + tx] & TILE_PROP_PRIORITY) {
-          map[(ty * 32 + tx) * 2 + 1] |= BG_TIL_PRIO_HI;
+          // v4 fix (same truncation bug as bgTables above): was a
+          // hardcoded 32-wide stride, wrong for any background that isn't
+          // exactly 32 tiles wide - now matches bg.map's real stride.
+          map[(ty * bg.w + tx) * 2 + 1] |= BG_TIL_PRIO_HI;
         }
       }
     }
