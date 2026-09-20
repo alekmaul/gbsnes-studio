@@ -74,12 +74,12 @@ class FilesSidebar extends Component {
   };
 
   render() {
-    const { files, onAdd, query, width } = this.props;
+    const { files, onAdd, query, width, bottomOffset } = this.props;
 
     const groupedFiles = groupByPlugin(files);
 
     return (
-      <div className="FilesSidebarWrapper">
+      <div className="FilesSidebarWrapper" style={{ bottom: bottomOffset }}>
         <div className="FilesSidebar" style={{ width }}>
           <div className="FilesSidebar__Search">
             <input
@@ -111,6 +111,7 @@ class FilesSidebar extends Component {
         <div
           ref={this.dragHandler}
           className="FilesSidebarDragHandle"
+          style={{ bottom: bottomOffset }}
           onMouseDown={this.onMouseDown}
           onMouseUp={this.onMouseUp}
         />
@@ -124,6 +125,7 @@ FilesSidebar.propTypes = {
   setNavigationId: PropTypes.func.isRequired,
   onSearch: PropTypes.func.isRequired,
   width: PropTypes.number,
+  bottomOffset: PropTypes.number,
   files: PropTypes.arrayOf(
     PropTypes.shape({
       id: PropTypes.string.isRequired,
@@ -140,6 +142,7 @@ FilesSidebar.propTypes = {
 
 FilesSidebar.defaultProps = {
   width: 300,
+  bottomOffset: 0,
   selectedFile: {
     id: "",
     name: ""

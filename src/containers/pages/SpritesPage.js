@@ -3,8 +3,15 @@ import PropTypes from "prop-types";
 import { connect } from "react-redux";
 import FilesSidebar from "../../components/assets/FilesSidebar";
 import ImageViewer from "../../components/assets/ImageViewer";
+import SpriteStatesEditor from "../../components/assets/SpriteStatesEditor";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import electronActions from "../../store/features/electron/electronActions";
+
+// Height reserved at the bottom of the left-hand file list for the States
+// dock below (fixed budget, not measured - keeps FilesSidebar's own
+// bottomOffset simple and avoids a layout-thrashing resize-observer for
+// what the plan scoped as a small, fixed-shape panel).
+const STATES_DOCK_HEIGHT = 220;
 
 class SpritesPage extends Component {
   constructor(props) {
@@ -21,7 +28,7 @@ class SpritesPage extends Component {
   };
 
   render() {
-    const { files, id, openHelp } = this.props;
+    const { files, id, openHelp, sidebarWidth } = this.props;
     const { query } = this.state;
 
     const filesList = query
@@ -40,10 +47,19 @@ class SpritesPage extends Component {
           selectedFile={file}
           query={query}
           onSearch={this.onSearch}
+          bottomOffset={file ? STATES_DOCK_HEIGHT : 0}
           onAdd={() => {
             openHelp("sprites");
           }}
         />
+        {file && (
+          <div
+            className="FilesSidebar__StatesDock"
+            style={{ height: STATES_DOCK_HEIGHT, width: sidebarWidth }}
+          >
+            <SpriteStatesEditor id={file.id} />
+          </div>
+        )}
       </div>
     );
   }
@@ -57,7 +73,8 @@ SpritesPage.propTypes = {
       name: PropTypes.string.isRequired
     })
   ).isRequired,
-  openHelp: PropTypes.func.isRequired
+  openHelp: PropTypes.func.isRequired,
+  sidebarWidth: PropTypes.number.isRequired
 };
 
 SpritesPage.defaultProps = {
@@ -67,9 +84,11 @@ SpritesPage.defaultProps = {
 function mapStateToProps(state) {
   const { id } = state.navigation;
   const files = spriteSheetSelectors.selectAll(state);
+  const { filesSidebarWidth: sidebarWidth } = state.editor;
   return {
     files,
-    id
+    id,
+    sidebarWidth
   };
 }
 

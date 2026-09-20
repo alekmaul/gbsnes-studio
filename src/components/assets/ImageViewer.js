@@ -5,7 +5,6 @@ import Button from "../library/Button";
 import l10n from "../../lib/helpers/l10n";
 import { zoomForSection, assetFilename } from "../../lib/helpers/gbstudio";
 import BackgroundWarnings from "../world/BackgroundWarnings";
-import SpriteStatesEditor from "./SpriteStatesEditor";
 import editorActions from "../../store/features/editor/editorActions";
 import electronActions from "../../store/features/electron/electronActions";
 
@@ -57,11 +56,6 @@ class ImageViewer extends Component {
                   file
                 )}?_v=${file._v || 0}`}
               />
-            </div>
-          )}
-          {file && folder === "sprites" && (
-            <div className="ImageViewer__States">
-              <SpriteStatesEditor id={file.id} />
             </div>
           )}
         </div>

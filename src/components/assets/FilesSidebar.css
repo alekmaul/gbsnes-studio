@@ -9,8 +9,9 @@
 
 .FilesSidebarDragHandle {
   width: 16px;
-  height: 100vh;
   position: fixed;
+  top: 38px;
+  bottom: 0px;
   margin-left: -8px;
   cursor: ew-resize;
 }
@@ -102,4 +103,15 @@
 .FilesSidebar__ListItem--Active:hover,
 .FilesSidebar__ListItem--Active {
   background-color: var(--sidebar-selected-color);
+}
+
+.FilesSidebar__StatesDock {
+  position: fixed;
+  left: 0;
+  bottom: 0;
+  background-color: var(--sidebar-bg-color);
+  border-right: 1px solid var(--sidebar-edge-color);
+  border-top: 1px solid var(--sidebar-edge-color);
+  box-sizing: border-box;
+  overflow: auto;
 }
