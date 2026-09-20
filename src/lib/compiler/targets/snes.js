@@ -74,14 +74,20 @@ const snesTarget = {
   maxTilesetTiles: 256,
 
   // --- Per-scene entity limits ---
-  // PROVISIONAL - carried forward unrevised from v1.1.4 (which itself never
-  // revisited GB Studio 1.2.2's old 9/9 cap) - driven by the SNES engine's
-  // own scene/actor data layout (gbs_types.h), which hasn't been rebuilt to
-  // raise this yet (M5). Revisit then.
-  maxActors: 9,
-  maxTriggers: 9,
-  // No small/large-scene actor cap distinction exists on the SNES engine.
-  maxActorsSmall: null,
+  // v4 (user-found): raised to match GB Studio 3.2.1 exactly - these were a
+  // stale placeholder carried forward unrevised from v1.1.4 (itself never
+  // revisited from GB Studio 1.2.2's old 9/9 cap), not a real engine
+  // ceiling. gbs_types.h's MAX_ACTORS/MAX_TRIGGERS (the actual C array
+  // sizes) now match these; see that header's own comment for why raising
+  // them is safe (WRAM headroom, OAM ids already derive from MAX_ACTORS).
+  maxActors: 20,
+  maxTriggers: 30,
+  // Editor-only authoring guidance, same as B: a scene no bigger than one
+  // screen gets a lower recommended actor count (SceneInfo.js's
+  // getMaxActors() already implements this exact check, just previously
+  // inert since this was null) - the compiled ROM's real capacity is
+  // always MAX_ACTORS regardless of scene size, on both targets.
+  maxActorsSmall: 10,
   // No per-scene sprite-frame budget (fixed 256-tile OBJ sheet); the real
   // limit is the number of distinct actor sprite sheets loaded at once
   // (compileSnesData.js SPRITE_SLOTS, v1.1.4). Shown in the scene info bar

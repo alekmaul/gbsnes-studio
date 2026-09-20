@@ -11,8 +11,19 @@
  */
 #include <snes.h>
 
-#define MAX_ACTORS 9
-#define MAX_TRIGGERS 9
+/* v4 (user-found: counts felt low next to GB Studio 3.2.1's real MAX_ACTORS
+ * 20 / MAX_TRIGGERS 30). Both were carried forward unrevised from the
+ * original v1.1.4 SNES port and never actually revisited - a stale
+ * placeholder, not a real hardware ceiling: actors[]/triggers[] are plain
+ * static arrays (a few hundred extra WRAM bytes at these sizes, on a chip
+ * where WRAM sits at ~14% used per PERF.md), and every per-scene OAM id this
+ * engine hands out (EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID, scene.c/ui.c)
+ * is already derived from MAX_ACTORS via `<< 2`, so raising it shifts them
+ * automatically with zero risk of colliding with the 128-hardware-sprite
+ * OAM budget (20 actors + 1 emote + 4 projectiles + 1 avatar = 26 logical
+ * users, nowhere close to 128). Now matches B exactly. */
+#define MAX_ACTORS 20
+#define MAX_TRIGGERS 30
 /* Projectiles (v4). B (GB Studio 3.x) allows 5 concurrent projectiles per
  * scene; this port picks a smaller pool - real OAM headroom isn't the
  * constraint (actors use ~10 of 128 hardware sprites), it's just no reason
