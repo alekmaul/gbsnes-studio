@@ -300,6 +300,7 @@
   "FIELD_GRAVITY": "Gravity",
   "FIELD_GRAVITY_JUMP": "Gravity While Jumping",
   "FIELD_MAX_FALL_VEL": "Maximum Fall Velocity",
+  "FIELD_SCROLL_SPEED": "Scroll Speed",
   "FIELD_GRID_SIZE": "Grid Size",
   "FIELD_GRID_8PX": "8px Grid",
   "FIELD_GRID_16PX": "16px Grid",

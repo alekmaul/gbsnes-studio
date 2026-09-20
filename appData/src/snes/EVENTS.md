@@ -366,12 +366,69 @@ not silent holes; every one has a real table row, just no runtime behaviour yet.
 
 | Event | SNES | Notes |
 | --- | --- | --- |
-| Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist and are edited from Settings, but a script can't write one back at runtime yet. |
+| Engine Field: Update / Update Word / Update Variable / Update Variable Word / Store / Store Word | ➖ | Runtime Engine Field writes (the union-type "fixed value vs variable, byte vs word" family) — Engine Fields exist, have a real schema, and are edited from Settings (see "Engine Fields" below), but a script still can't write one back at runtime. |
 
 **Launch Projectile / Weapon: Attack / Player: Bounce shipped (v4, real Projectiles subsystem)** -
 see their own section below. **Actor: Start/Stop Update Script shipped (v4, real On Update
 subsystem)** - see its own section below. All 4 were listed here through M16; they're the opcode-
 audit gaps this doc has actually closed rather than just documented.
+
+## Engine Fields (v4, `appData/src/snes/engine.json`)
+
+Not a scripting event - a Settings-page mechanism (`useGroupedEngineFields.ts`/
+`EngineFieldsEditor.tsx`, one `SearchableCard` per genre group), matching GB Studio 3.2.1's own
+Engine Fields exactly in UI shape. **Real root cause found (user-found: "les engine fields ne
+sont pas modifiables dans settings" - no Scroll Speed for Shoot Em Up, unlike B)**: the entire
+UI chain (Settings page, the editor component, Redux state, per-project persistence, the
+script-event side) already existed and worked - `appData/src/snes/engine.json` itself existed
+too, but as `{"version": "2.0.0-e1", "fields": []}`, an empty catalog nobody had ever populated.
+Nothing was broken; there was just nothing to show.
+
+Populated with the 12 fields that have a real backing global on this engine, values copied
+verbatim from GB Studio 3.2.1's own `engine.json` (min/max/defaultValue) where a like-for-like
+global already existed:
+- **Top Down**: `topdown_grid` (8/16px movement grid) - was already a real (if hardcoded) global.
+- **Platformer**: the 10 fixed-point physics constants (`plat_min_vel` … `plat_max_fall_vel`) -
+  were already real (`static`) globals in `scene.c` with the exact same default values as B's own
+  schema (same 1/16px position, 1/4096px/frame velocity fixed-point scale as GB's `Platform.c`) -
+  just de-`static`'d so a generated definition elsewhere can supply the real value.
+- **Shoot Em Up**: `shooter_scroll_speed` - **a genuine engine fix, not just a Settings wire-up**.
+  This target's own `Update_Shmup` had no independent scroll-speed concept at all; its forced
+  auto-scroll just reused the player actor's own `move_speed`, conflating two things B keeps
+  separate (`shooter_scroll_speed` drives the auto-scroll; `PLAYER.move_speed` only drives the
+  player's own perpendicular dodge steering). Introduced as a real, separate global; the
+  auto-scroll advance now uses it, the perpendicular advance still uses `move_speed`, matching
+  B's real split exactly. Default `1` (this engine's own whole-pixel-per-frame movement scale,
+  not B's larger fixed-point one - chosen to match this target's previous *effective* default
+  speed, not B's raw number).
+
+Not ported: the 3 `cType: "define"` input-remapping fields (`INPUT_PLATFORM_JUMP`/`RUN`/
+`INTERACT`, `INPUT_TOPDOWN_INTERACT` - which physical button triggers jump vs. interact) - this
+engine's input handling is hardcoded per genre throughout `scene.c` (`joy & KEY_A`, …), not a
+per-action remappable table; wiring that up is a real, separate engine change, not attempted
+here. `fade_style` (white/black fade direction) - `fade.c` has no such option at all currently.
+`plat_climb_vel` (ladder speed) - no ladder/climb physics exist in `Update_Platform`.
+
+**Mechanism**: GB Studio 3.x's real engine writes a chosen value into these globals at boot, via
+a GBVM assembly routine generated from the schema (`compileBootstrap.ts`'s `_script_engine_init`).
+This engine has no such VM injection point (no GBVM - see the On Update section above for why),
+so `compileSnesData.js`'s new `compileEngineFields()` bakes the chosen value straight into a
+generated `src/engine_fields.c` initializer instead: one real `<cType> <key> = <value>;` per
+schema entry, value from the project's own `engineFieldValues` (Settings) or the schema's
+`defaultValue`. Same end result as B (a real, still-mutable global - a future Engine Field
+Update/Store implementation could still write to it at runtime), simpler mechanism for this
+target - no init call needed, 816-tcc just links the real value in. `engine_fields.h` is the
+`extern` declaration list every consumer (`scene.c`) includes instead of hardcoding its own
+default; `appData/src/snes/tools/gen-dummy-gfx.js` emits a matching committed dummy
+`engine_fields.c` (schema defaults) so a plain `make` against committed data still links.
+
+**Verified**: full test suite green (141/141, 2 new `compileSnesData.test.js` cases - default
+values, and a project override not disturbing an untouched field's own default), a real
+toolchain build compiles/links `engine_fields.c` cleanly. **Real Mesen run** (a throwaway
+fixture with `engineFieldValues: [{shooter_scroll_speed: 5}, {topdown_grid: 16}]`, no d-pad
+input needed): read both globals back from real WRAM as `16` and `5` - the project's own chosen
+values, not the schema's `8`/`1` defaults - confirming the whole pipeline (Settings value →
+`compileEngineFields` → `engine_fields.c` → linked into the ROM → real runtime value) end to end.
 
 ## On Update (v4, `appData/src/snes/src/update_script.c`)
 

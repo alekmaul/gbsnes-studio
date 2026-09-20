@@ -70,6 +70,10 @@ const buildProjectData = async (
   const snesData = await compileSnesData(data, { projectRoot, warnings });
   await fs.writeFile(`${outputRoot}/src/assets.h`, snesData.assetsH);
   await fs.writeFile(`${outputRoot}/src/assets.c`, snesData.assetsC);
+  // Engine Fields (v4) - real project-chosen values baked into a real C
+  // global per appData/src/snes/engine.json field (see compileSnesData.js's
+  // own compileEngineFields comment).
+  await fs.writeFile(`${outputRoot}/src/engine_fields.c`, snesData.engineFieldsC);
   // Graphic assets go in src/data/: one `<name>_data.as` (superfree section)
   // per background / font / OBJ sheet / OBJ palette, plus data.asm that
   // `.include`s them - so wla spreads them across banks instead of one atomic

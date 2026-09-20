@@ -102,8 +102,14 @@ test("Should get default fields when engine not ejected", async () => {
   expect(next).toHaveBeenCalledWith(action);
   expect(dispatch).toHaveBeenCalled();
   expect(dispatch.mock.calls[0][0].type).toBe("engine/setEngineFields");
-  // appData/src/snes/engine.json defines no EngineFields yet (unlike the
-  // old Game Boy engine's genre-tuning fields) - an empty default is the
-  // real, current behaviour, not a regression.
-  expect(dispatch.mock.calls[0][0].payload).toEqual([]);
+  // v4: appData/src/snes/engine.json is now populated (topdown_grid, the
+  // Platformer physics constants, Shmup's shooter_scroll_speed) - was an
+  // empty "fields": [] stub until this milestone. Check shape/count rather
+  // than the full 12-entry array, so this test doesn't need updating every
+  // time a field's min/max/defaultValue is tuned.
+  const fields = dispatch.mock.calls[0][0].payload;
+  expect(fields).toHaveLength(12);
+  expect(fields.map((f: { key: string }) => f.key)).toEqual(
+    expect.arrayContaining(["topdown_grid", "plat_jump_vel", "shooter_scroll_speed"])
+  );
 });

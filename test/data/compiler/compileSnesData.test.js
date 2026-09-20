@@ -480,3 +480,34 @@ describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
     expect(bytes[71] & 0x20).toBe(0x20);
   });
 });
+
+describe("compileSnesData - Engine Fields (v4)", () => {
+  test("an untouched field compiles to its engine.json defaultValue", async () => {
+    const project = loadProject();
+    project.engineFieldValues = [];
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    expect(out.engineFieldsC).toMatch(/\bu8 topdown_grid = 8;/);
+    expect(out.engineFieldsC).toMatch(/\bs16 plat_jump_vel = 16384;/);
+    expect(out.engineFieldsC).toMatch(/\bu8 shooter_scroll_speed = 1;/);
+  });
+
+  test("a project-chosen value overrides the default", async () => {
+    const project = loadProject();
+    project.engineFieldValues = [
+      { id: "shooter_scroll_speed", value: 4 },
+      { id: "topdown_grid", value: 16 },
+    ];
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    expect(out.engineFieldsC).toMatch(/\bu8 shooter_scroll_speed = 4;/);
+    expect(out.engineFieldsC).toMatch(/\bu8 topdown_grid = 16;/);
+    // an untouched field alongside the overridden ones still falls back to
+    // its own default, not some shared/reset value
+    expect(out.engineFieldsC).toMatch(/\bs16 plat_jump_vel = 16384;/);
+  });
+});

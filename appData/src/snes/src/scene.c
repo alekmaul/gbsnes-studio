@@ -20,6 +20,7 @@
 #include "parallax.h"
 #include "camera.h"
 #include "update_script.h"
+#include "engine_fields.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
@@ -54,13 +55,10 @@ static TRIGGER triggers[MAX_TRIGGERS];
 static u8 check_triggers = 1;
 static u8 scene_col[SCENE_COL_BYTES];
 
-/* v2 M5a: project-wide Engine Field (engine.json "topdown_grid",
- * defaultValue 8) - no real Engine Field data pipeline exists on this
- * target yet (M7 builds compileSnesData.js), so this is a plain global for
- * now rather than something a real project can actually set. 16 selects GB
- * Studio 2.0.0-beta5's coarser 16px movement grid; the default (8)
- * reproduces this engine's original per-tile movement exactly. */
-u8 topdown_grid = 8;
+/* v4: real Engine Field now (appData/src/snes/engine.json "topdown_grid") -
+ * see engine_fields.h. 16 selects GB Studio 2.0.0-beta5's coarser 16px
+ * movement grid; the default (8) reproduces this engine's original
+ * per-tile movement exactly. */
 
 /* Set while the player is partway through the first 8px leg of a 16px grid
  * move already validated as clear the whole way (Update_TopDown). */
@@ -1413,11 +1411,12 @@ void Update_Adventure(void)
  *
  * Fixed-point scale matches GB's own Platform.c exactly - position in
  * 1/16px, velocity in 1/4096px/frame, applied via `pos += vel >> 8` - so
- * the Engine Field defaults below (copied verbatim from engine.json; no
- * real Engine Field pipeline exists on this target yet, M7, same reasoning
- * as topdown_grid) produce the same real-world speeds GB Studio's own
- * field labels describe them as - a different scale would make these
- * numbers meaningless. Both axes safely fit a plain s16 at this scale:
+ * the Engine Fields these constants now are (v4, appData/src/snes/
+ * engine.json, see engine_fields.h - the defaults there are the same
+ * numbers, copied verbatim from GB Studio's own engine.json) produce the
+ * same real-world speeds GB Studio's own field labels describe them as - a
+ * different scale would make these numbers meaningless. Both axes safely
+ * fit a plain s16 at this scale:
  * this target's own max scene width (2040px, 255 tiles, matching GB's D2
  * decision) times 16 is 32640, within s16 range - no need for wider
  * (untested on this toolchain) 32-bit arithmetic anywhere.
@@ -1429,17 +1428,6 @@ void Update_Adventure(void)
  * call (keeping the accumulated fractional part) so a script repositioning
  * the player (e.g. ACTOR_MOVE_TO) is honoured, mirroring GB's own re-sync.
  */
-static s16 plat_min_vel = 304;
-static s16 plat_walk_vel = 6400;
-static s16 plat_run_vel = 10496;
-static s16 plat_walk_acc = 152;
-static s16 plat_run_acc = 228;
-static s16 plat_dec = 208;
-static s16 plat_jump_vel = 16384;
-static s16 plat_grav = 1792;
-static s16 plat_hold_grav = 512;
-static s16 plat_max_fall_vel = 20000;
-
 static s16 plat_x = 0;   /* 1/16px, sprite horizontal centre - see actors[].x */
 static s16 plat_y = 0;   /* 1/16px, sprite feet/bottom - see actors[].y */
 static s16 plat_vel_x = 0;
@@ -1743,6 +1731,17 @@ void Update_Platform(void)
  * mirrored here since those helpers are file-static to game.c) rather than
  * switched over to GB's own offset-relative threshold - a separate, later
  * cleanup, not required for the offset itself to work.
+ *
+ * v4 follow-up #3 (user-found comparing Settings to GB's real Engine
+ * Fields: "Scroll Speed" for Shoot Em Up didn't exist here at all).
+ * Previously the primary-axis auto-scroll below just reused the player
+ * actor's own move_speed - conflating two things GB keeps separate
+ * (shooter_scroll_speed drives the forced auto-scroll; PLAYER.move_speed
+ * only ever drives the player's own perpendicular dodge steering, see
+ * shmup.c). Now a real Engine Field (appData/src/snes/engine.json,
+ * engine_fields.h) - the primary-axis advance below uses
+ * shooter_scroll_speed, the perpendicular advance still uses
+ * actors[0].move_speed, matching GB's real split exactly.
  */
 // game.c's own SCREEN_W_HALF/SCREEN_H_HALF are file-static - redefined here
 // rather than exported, since they're plain screen-geometry constants
@@ -1868,7 +1867,7 @@ void Update_Shmup(void)
 
         if (!shmup_reached_end)
         {
-            actors[0].x += (s16)shmup_direction * actors[0].move_speed;
+            actors[0].x += (s16)shmup_direction * (s16)shooter_scroll_speed;
         }
         actors[0].y += (s16)actors[0].dir_y * actors[0].move_speed;
     }
@@ -1908,7 +1907,7 @@ void Update_Shmup(void)
 
         if (!shmup_reached_end)
         {
-            actors[0].y += (s16)shmup_direction * actors[0].move_speed;
+            actors[0].y += (s16)shmup_direction * (s16)shooter_scroll_speed;
         }
         actors[0].x += (s16)actors[0].dir_x * actors[0].move_speed;
     }
