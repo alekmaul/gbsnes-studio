@@ -41028,6 +41028,16 @@
             "_v": 1600011071075
         },
         {
+            "id": "b48f4eda-5654-4760-b8a9-4fd3f7e7ed5e",
+            "name": "parallax",
+            "width": 80,
+            "height": 18,
+            "imageWidth": 640,
+            "imageHeight": 144,
+            "filename": "parallax.png",
+            "_v": 1600011071075
+        },
+        {
             "id": "b50cefc6-72dc-44c0-947d-f5d4d533a97a",
             "name": "platform_path",
             "width": 161,
