@@ -51,9 +51,21 @@ const snesTarget = {
   screenTileHeight: 28,
 
   // --- Editor asset guidance ---
-  // compileSnesData.js (v1.1.4) caps a scene background at 32x32 tiles.
-  maxBackgroundWidth: 256,
-  maxBackgroundHeight: 256,
+  // user-found (v4): this used to say "compileSnesData.js (v1.1.4) caps a
+  // scene background at 32x32 tiles" and warned at 256px - but the engine
+  // itself has supported 64x64-tile backgrounds since the very first SNES
+  // commit (scene.c's SceneInit: `if (bg_map_w[bg_index] > 32) sc_size =
+  // SC_64x64;`), and the collision bitmap is sized to match
+  // (appData/src/snes/src/scene.h's SCENE_TILE_W/H are both 64,
+  // SCENE_COL_BYTES = 64*64/8). bg_maps_len[]/the DMA copying the map into
+  // VRAM are `unsigned short` (compileSnesData.js/assets.h), so no 8-bit
+  // truncation risk at the larger size either. The 256px warning threshold
+  // was simply never raised to match once SC_64x64 landed - real cap is 64
+  // tiles/512px per axis. VRAM headroom confirmed too: BG1's map lives at
+  // word 0x0000, BG1's tiles start at word 0x2000 (game.c), so a 64x64 map
+  // (0x1000 words) fits with room to spare before colliding with tile data.
+  maxBackgroundWidth: 512,
+  maxBackgroundHeight: 512,
   maxBackgroundPixels: null,
   // VRAM budget for one background layer's tiles (M6). v1.1.4 engine layout
   // (appData/src/snes/src/ui.c): BG1 map 0x0000-0x0FFF, BG3 UI map

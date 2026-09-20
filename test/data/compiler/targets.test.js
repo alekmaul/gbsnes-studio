@@ -19,8 +19,11 @@ describe("compile targets", () => {
     expect(snes.inputMaskBytes).toBe(2);
     expect(snes.romExt).toBe("sfc");
     expect(snes.engineDir).toBe("snes");
-    expect(snes.maxBackgroundWidth).toBe(256);
-    expect(snes.maxBackgroundHeight).toBe(256);
+    // v4: raised from 256 to match the engine's real 64x64-tile capacity
+    // (SC_64x64, present since the first SNES commit) - see targets/snes.js's
+    // own comment for the full reasoning.
+    expect(snes.maxBackgroundWidth).toBe(512);
+    expect(snes.maxBackgroundHeight).toBe(512);
     expect(snes.maxSpriteFrames).toBeNull();
     expect(snes.maxSpriteSheets).toBe(8);
     expect(snes.maxTextLineChars).toBe(27);
