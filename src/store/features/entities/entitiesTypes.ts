@@ -122,15 +122,6 @@ export type SpriteSheet = {
   inode: string;
   _v: number;
   states?: SpriteState[];
-  // Editor-only curation of which of this sheet's own frames (absolute
-  // index, 0..numFrames-1) belong to each named animation
-  // (spriteAnimations.js getSpriteAnimations) - keyed by that function's
-  // array index for the sheet's current type, not by name (animation names
-  // are localized/derived, not stable ids). Undefined/a missing index means
-  // "use the default frame list" - additive, no migration needed. Does not
-  // change compiled ROM behaviour (scene.c has no per-animation frame
-  // table) - see appData/src/snes/EVENTS.md.
-  animationFrames?: number[][];
 };
 
 // M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,

@@ -12,28 +12,11 @@
 }
 
 .SpriteFramesPanel__Frame {
-  position: relative;
   margin-right: 8px;
   margin-bottom: 8px;
-  cursor: pointer;
 }
 
 .SpriteFramesPanel__Frame canvas {
   display: block;
   background-color: #fff;
-}
-
-.SpriteFramesPanel__Frame svg {
-  display: none;
-  position: absolute;
-  top: 0;
-  right: 0;
-  width: 12px;
-  height: 12px;
-  background: rgba(255, 255, 255, 0.8);
-  fill: red;
-}
-
-.SpriteFramesPanel__Frame:hover svg {
-  display: block;
 }
