@@ -465,12 +465,13 @@ describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
     );
     const asFile = out.assetsData["scene_bgmap_0_data.as"];
     expect(asFile).toBeDefined();
-    // The override tilemap is sized to the background's own real width (w=20
-    // here), not a fixed 32 - v4 fix, this test used to hardcode the 32-wide
-    // stride even though its own fixture background is 20 tiles wide,
-    // enshrining the pre-fix bug instead of catching it. tile (3,1) -> byte
-    // offset (1*20+3)*2 = 46, high byte (offset 47) should have bit 0x20 set
-    // ((1<<13)>>8 - see compileSnesData.js's BG_TIL_PRIO_HI).
+    // A background at or under 32x32 (w=20 here) fits a single, always-
+    // 32-wide SC_32x32 hardware screen - real stride is 32 regardless of
+    // the background's own real width, not w itself (a background this
+    // small never needs the SC_64x64 four-screen layout at all). tile
+    // (3,1) -> byte offset (1*32+3)*2 = 70, high byte (offset 71) should
+    // have bit 0x20 set ((1<<13)>>8 - see compileSnesData.js's
+    // BG_TIL_PRIO_HI).
     const dbMatch = asFile.match(/scene_bgmap_0:\n([\s\S]*?)\n\.ends/);
     expect(dbMatch).not.toBeNull();
     const bytes = dbMatch[1]
@@ -480,7 +481,7 @@ describe("compileSnesData - BG-above-OBJ priority tiles (M7, v4)", () => {
       .join(",")
       .split(",")
       .map((v) => parseInt(v.trim(), 10));
-    expect(bytes[47] & 0x20).toBe(0x20);
+    expect(bytes[71] & 0x20).toBe(0x20);
   });
 });
 
@@ -563,6 +564,49 @@ describe("compileSnesData - oversized background warning (v4)", () => {
     expect(leavingEarth).toMatch(/255x28 tiles/);
     expect(leavingEarth).toMatch(/64x64 tiles/);
     expect(leavingEarth).not.toMatch(/32x32|32 tiles/);
+  });
+
+  // Horizontal background streaming (v4): a background over 64 tiles wide
+  // gets a second, complete (unclamped) flat tilemap in ROM
+  // (bg_fullmap_ptrs) for scene.c's SceneStreamBackground to stream new
+  // columns from as the camera scrolls past the initial 64-tile VRAM
+  // window - see the plan's real Mesen verification (Space Battle's
+  // starfield scrolling all the way to reveal the Earth/moon art far along
+  // the 255-tile background). A background within the cap gets a null (0)
+  // entry - nothing to stream, matching every other background.
+  test("a background over 64 tiles wide gets a real bg_fullmap_ptrs entry with its complete tilemap", async () => {
+    const project = JSON.parse(
+      fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
+    );
+    const leavingEarthIndex = project.backgrounds.findIndex(
+      (b) => b.filename === "leaving_earth.png"
+    );
+    const sampleTownIndex = project.backgrounds.findIndex(
+      (b) => b.filename === "sample_town.png"
+    );
+    expect(leavingEarthIndex).toBeGreaterThanOrEqual(0);
+    expect(sampleTownIndex).toBeGreaterThanOrEqual(0);
+    const out = await compileSnesData(project, {
+      projectRoot: SNESGBS2_DIR,
+      warnings: () => {},
+    });
+    const ptrsMatch = out.assetsC.match(
+      /const unsigned char \*const bg_fullmap_ptrs\[\d+\] = \{\n([\s\S]*?)\n\};/
+    );
+    expect(ptrsMatch).toBeTruthy();
+    const ptrs = ptrsMatch[1].split(",\n").map((s) => s.trim());
+    expect(ptrs[leavingEarthIndex]).toBe(`bg${leavingEarthIndex}_fullmap`);
+    expect(ptrs[sampleTownIndex]).toBe("0");
+
+    // the extern declaration in assets.h carries the real array size -
+    // confirms the fullmap is the *complete* 255x28 tilemap (14280 bytes),
+    // not clamped to the 64x64 VRAM window like bg<i>_map is.
+    expect(out.assetsH).toMatch(
+      new RegExp(`bg${leavingEarthIndex}_fullmap\\[${255 * 28 * 2}\\]`)
+    );
+    expect(out.assetsData[`bg${leavingEarthIndex}_data.as`]).toMatch(
+      new RegExp(`bg${leavingEarthIndex}_fullmap:`)
+    );
   });
 
   // v4 fix, found while scoping background streaming: the two tests above

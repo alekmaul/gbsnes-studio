@@ -954,8 +954,13 @@ const compileSnesData = async (
   // by the map builder below and the priority-tile override further down
   // so the two can't drift out of sync the way the old hardcoded-32 stride
   // did. -1 means "outside the four-screen 64x64 budget", not stored.
+  // Below 32x32, a real SC_32x32 hardware screen is ALWAYS a fixed 32-wide,
+  // 1024-word block regardless of how much of it the background actually
+  // uses - stride is QUADRANT_TILES (32), never the background's own w, so
+  // the untouched remainder is left zero-padded rather than reusing
+  // whatever was already in that VRAM region from a previous scene.
   const mapByteIndex = (tx, ty, w, h) => {
-    if (!usesQuadrants(w, h)) return (ty * w + tx) * 2;
+    if (!usesQuadrants(w, h)) return (ty * QUADRANT_TILES + tx) * 2;
     if (tx >= 64 || ty >= 64) return -1;
     const qx = tx >= QUADRANT_TILES ? 1 : 0;
     const qy = ty >= QUADRANT_TILES ? 1 : 0;
@@ -964,10 +969,21 @@ const compileSnesData = async (
     const quadrantWords = QUADRANT_TILES * QUADRANT_TILES;
     return ((qy * 2 + qx) * quadrantWords + ly * QUADRANT_TILES + lx) * 2;
   };
+  // A background wider than 64 tiles (the SC_64x64 VRAM budget - see
+  // above) can't fit its whole tilemap in VRAM at once; scene.c streams in
+  // new columns as the camera scrolls (horizontal only - no current scene
+  // exceeds 64 tiles tall). Streaming needs the *complete* source tilemap
+  // in ROM to stream from, not just the initial 64-wide VRAM window - a
+  // second, flat row-major w*h array (conv.tilemap as-is, not
+  // quadrant-shaped: it's a plain lookup table the engine indexes by
+  // row*w+col, never DMA'd wholesale to VRAM the way bg<i>_map is).
+  const NEEDS_STREAMING_TILES = 64;
   const bgTables = bgConverted.map((conv, i) => {
     const w = conv.tileW;
     const h = conv.tileH;
-    const mapLenBytes = usesQuadrants(w, h) ? 64 * 64 * 2 : w * h * 2;
+    const mapLenBytes = usesQuadrants(w, h)
+      ? 64 * 64 * 2
+      : QUADRANT_TILES * QUADRANT_TILES * 2;
     const map = new Array(mapLenBytes).fill(0);
     for (let ty = 0; ty < h; ty++) {
       for (let tx = 0; tx < w; tx++) {
@@ -980,10 +996,15 @@ const compileSnesData = async (
         }
       }
     }
+    const needsStreaming = w > NEEDS_STREAMING_TILES;
+    const fullMap = needsStreaming
+      ? [].concat(...conv.tilemap.map((e) => [e & 0xff, (e >> 8) & 0xff]))
+      : null;
     return {
       name: `bg${i}`,
       tiles: conv.tileBytes,
       map,
+      fullMap,
       pal: conv.paletteBytes,
       w,
       h,
@@ -1096,12 +1117,17 @@ extern const unsigned char ui_font[${fixed.uiFont.length}];
 extern const unsigned char ui_pal[${fixed.uiPaletteBytes.length}];
 
 ${bgTables
-  .map(
-    (b) =>
-      `extern const unsigned char ${b.name}_tiles[${b.tiles.length}];\n` +
-      `extern const unsigned char ${b.name}_pal[${b.pal.length}];\n` +
-      `extern const unsigned char ${b.name}_map[${b.map.length}];`
-  )
+  .map((b) => {
+    const lines = [
+      `extern const unsigned char ${b.name}_tiles[${b.tiles.length}];`,
+      `extern const unsigned char ${b.name}_pal[${b.pal.length}];`,
+      `extern const unsigned char ${b.name}_map[${b.map.length}];`,
+    ];
+    if (b.fullMap) {
+      lines.push(`extern const unsigned char ${b.name}_fullmap[${b.fullMap.length}];`);
+    }
+    return lines.join("\n");
+  })
   .join("\n")}
 extern const unsigned char *const bg_tiles_ptrs[${nBg}];
 extern const unsigned char *const bg_maps_ptrs[${nBg}];
@@ -1111,6 +1137,13 @@ extern const unsigned short bg_maps_len[${nBg}];
 extern const unsigned short bg_pals_len[${nBg}];
 extern const unsigned char bg_map_w[${nBg}];
 extern const unsigned char bg_map_h[${nBg}];
+/* Horizontal background streaming (v4): 0 for a background <= 64 tiles
+ * wide (the common case - VRAM already holds its whole tilemap, nothing
+ * to stream), a real pointer to the *complete* flat w*h tilemap in ROM
+ * (not quadrant-shaped - a plain row*w+col lookup table) for a wider one.
+ * SceneStreamBackground (scene.c) reads new columns from here as the
+ * camera scrolls past the initially-loaded 64-tile VRAM window. */
+extern const unsigned char *const bg_fullmap_ptrs[${nBg}];
 
 /* M7 (v4): per-scene priority-tile tilemap override - 0 (most scenes) means
  * "use bg_maps_ptrs[bg_index] unmodified", a real pointer means this scene
@@ -1184,11 +1217,13 @@ extern const unsigned char *const scenes[${scenes.length}];
 
   const assetsData = {};
   bgTables.forEach((b) => {
-    assetsData[`${b.name}_data.as`] = asmAsset(b.name, [
+    const parts = [
       { label: `${b.name}_tiles`, bytes: b.tiles },
       { label: `${b.name}_pal`, bytes: b.pal },
       { label: `${b.name}_map`, bytes: b.map },
-    ]);
+    ];
+    if (b.fullMap) parts.push({ label: `${b.name}_fullmap`, bytes: b.fullMap });
+    assetsData[`${b.name}_data.as`] = asmAsset(b.name, parts);
   });
   assetsData["uifont_data.as"] = asmAsset("uifont", [
     { label: "ui_font", bytes: fixed.uiFont },
@@ -1242,6 +1277,9 @@ const unsigned short bg_maps_len[${nBg}] = { ${bgTables.map((b) => b.map.length)
 const unsigned short bg_pals_len[${nBg}] = { ${bgTables.map((b) => b.pal.length).join(", ")} };
 const unsigned char bg_map_w[${nBg}] = { ${bgTables.map((b) => b.w).join(", ")} };
 const unsigned char bg_map_h[${nBg}] = { ${bgTables.map((b) => b.h).join(", ")} };
+const unsigned char *const bg_fullmap_ptrs[${nBg}] = {
+${bgTables.map((b) => (b.fullMap ? `    ${b.name}_fullmap` : "    0")).join(",\n")}
+};
 const unsigned char *const scene_bg_map_ptrs[${scenes.length}] = {
 ${scenePriorityMaps.map((e) => (e ? `    ${e.name}` : "    0")).join(",\n")}
 };

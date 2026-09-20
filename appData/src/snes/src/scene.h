@@ -89,6 +89,15 @@ void SceneHandleInput(void);
 void SceneUpdate(void);
 void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir);
 
+/* Horizontal background streaming (v4) - a background over 64 tiles wide
+ * (bg_map_w[bg_index] > 64, compileSnesData.js) can't fit its whole tilemap
+ * in VRAM at once; SceneInit loads the initial 64-tile window (tiles 0-63)
+ * same as always, and this streams in new columns as the camera scrolls
+ * past it - called once per frame, during vblank, right after bgSetScroll
+ * (game.c) so it sees this frame's already-applied scroll_x. A no-op for
+ * every scene whose background already fits in one VRAM load. */
+void SceneStreamBackground(void);
+
 /* actor's true tile (top-left), pixel pos is tile*8 + 8 like the GB engine */
 s16 SceneActorTileX(u8 i);
 s16 SceneActorTileY(u8 i);

@@ -63,6 +63,43 @@ ceiling: the **256-tile BG tileset budget** (a 32×32 scene whose art doesn't de
 256 unique tiles gets a compiler warning) and the **256-tile OBJ sheet** (the first name page is
 full after walk-cycle frames were added — more OBJ tiles would need the 2nd page).
 
+**Background streaming, for a scene wider than 64 tiles (v4, user-found — Space Battle/
+`leaving_earth.png`, 255 tiles wide).** The BG1 tilemap region above is a **hard 64×64-tile
+ceiling** (`SC_64x64`'s real VRAM capacity) — a wider background can't have its whole tilemap
+resident in VRAM at once. `compileSnesData.js` still loads the initial 64-tile window at
+`SceneInit` exactly as any other background does, but also emits the background's *complete*,
+unclamped tilemap as a second ROM array (`bg<i>_fullmap`, `bg_fullmap_ptrs[]` — null for every
+background that already fits). `scene.c`'s `SceneStreamBackground()` runs once per frame,
+during vblank right after `bgSetScroll`, and streams in new tile columns from that ROM array as
+the camera scrolls past the loaded window — one `dmaCopyVram` per row (a background's row data
+isn't contiguous column-to-column in either the ROM source or the quadrant-shaped VRAM
+destination — see `BgMapWordOffset`'s own comment), capped at
+`STREAM_MAX_COLUMNS_PER_FRAME` (4) so a worst-case jump (a scripted teleport landing far from
+the loaded window) can't blow one frame's vblank — the window just catches up over the next few
+frames instead. Horizontal only (no current scene exceeds 64 tiles tall); vertical streaming
+would follow the same principle if ever needed.
+
+Two real bugs were found and fixed on the way here, both worth remembering if this code is
+touched again: an **SC_64x64 tilemap is four separate 32×32-tile "screens"** (VRAM word offsets
+`0x000/0x400/0x800/0xC00`, not a flat row-major array) — the first version of the >32-tile-wide
+fix got this wrong and was caught only by a real Mesen spike (a background half blue/half red,
+seam on the real quadrant boundary at column 32; the flat version showed a scrambled horizontal
+band instead of a clean vertical split — `compileSnesData.js`'s `mapByteIndex`/`usesQuadrants`
+is the shared, since-fixed source of truth, reused by `scene.c`'s `BgMapWordOffset`). And doing
+this fix at all, without a VRAM-size clamp, silently turns a background's tilemap into a real
+`dmaCopyVram` overflow into BG3's tilemap/font — the `SceneInit` clamp to 8192 bytes stays in
+place as a harmless backstop even though the corrected quadrant layout can no longer produce a
+buffer that large to begin with.
+
+Verified in Mesen: `SceneStreamBackground`'s own WRAM state (`stream_window_left`) advances
+smoothly frame-by-frame while holding the d-pad right in Space Battle, and the screen scrolls
+cleanly from the starting starfield through to the Earth/moon art far along the 255-tile
+background — no corruption, no repeated/stale tiles, no crash. Not fps-profiled against
+PERF.md's own CPU-budget numbers above; the per-column DMA cost is real but only pays while the
+camera is actually crossing new ground on a scene already past the ordinary 64-tile budget, and
+column-shift events are infrequent at normal walking speed (see the log in the plan write-up:
+~1 column streamed roughly every 8-10 frames while continuously scrolling right).
+
 ## ARAM (SPC700, 64 KB)
 
 Managed by snesmod: one music module resident at a time, ~58 KB cap (PVSnesLib's own figure).

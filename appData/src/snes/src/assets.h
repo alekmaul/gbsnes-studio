@@ -28,6 +28,10 @@ extern const unsigned short bg_maps_len[2];
 extern const unsigned short bg_pals_len[2];
 extern const unsigned char bg_map_w[2];
 extern const unsigned char bg_map_h[2];
+// Horizontal background streaming (v4) - see compileSnesData.js. Neither
+// dummy background is over 64 tiles wide, so this is all-zero (no
+// streaming source data needed).
+extern const unsigned char *const bg_fullmap_ptrs[2];
 // M7 (v4): per-scene priority-tile tilemap override - see compileSnesData.js.
 // Both dummy scenes have no priority tiles painted, so this is all-zero
 // ("use bg_maps_ptrs[bg_index] unmodified" for every scene).

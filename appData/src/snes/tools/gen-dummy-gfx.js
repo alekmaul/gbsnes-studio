@@ -492,6 +492,10 @@ extern const unsigned short bg_maps_len[${bgs.length}];
 extern const unsigned short bg_pals_len[${bgs.length}];
 extern const unsigned char bg_map_w[${bgs.length}];
 extern const unsigned char bg_map_h[${bgs.length}];
+// Horizontal background streaming (v4) - see compileSnesData.js. Neither
+// dummy background is over 64 tiles wide, so this is all-zero (no
+// streaming source data needed).
+extern const unsigned char *const bg_fullmap_ptrs[${bgs.length}];
 // M7 (v4): per-scene priority-tile tilemap override - see compileSnesData.js.
 // Both dummy scenes have no priority tiles painted, so this is all-zero
 // ("use bg_maps_ptrs[bg_index] unmodified" for every scene).
@@ -605,6 +609,9 @@ const unsigned short bg_pals_len[${bgs.length}] = { ${bgs
     .join(", ")} };
 const unsigned char bg_map_w[${bgs.length}] = { ${bgs.map(b => b.w).join(", ")} };
 const unsigned char bg_map_h[${bgs.length}] = { ${bgs.map(b => b.h).join(", ")} };
+const unsigned char *const bg_fullmap_ptrs[${bgs.length}] = { ${bgs
+    .map(() => "0")
+    .join(", ")} };
 const unsigned char *const scene_bg_map_ptrs[2] = { 0, 0 };
 
 ${cArray("script_scene0", scriptScene0)}

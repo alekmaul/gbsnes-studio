@@ -37,6 +37,19 @@ u8 scene_num_triggers = 0;
 u8 scene_width = SCENE_TILE_W;
 u8 scene_height = SCENE_TILE_H;
 
+/* Horizontal background streaming (v4) - see SceneStreamBackground's own
+ * comment (scene.h). 0xff = no active streaming background (the common
+ * case - reset every SceneInit, only set when bg_map_w[bg_index] > 64). */
+static u8 stream_bg_index = 0xff;
+static u16 stream_bg_w = 0;
+static u8 stream_bg_h = 0;
+/* World tile-column currently occupying VRAM tile-column 0 of the 64-wide
+ * ring buffer - i.e. VRAM column (worldCol & 63) always holds world column
+ * worldCol, kept true by streaming a column in/out exactly as it crosses
+ * the loaded window's edge. Starts at 0 (SceneInit's own initial DMA
+ * already loads world columns 0-63 into VRAM columns 0-63 unchanged). */
+static u16 stream_window_left = 0;
+
 s16 map_next_x = 0;
 s16 map_next_y = 0;
 s8 map_next_dir_x = 0;
@@ -721,6 +734,24 @@ void SceneInit(void)
     bgSetMapPtr(0, 0x0000, sc_size);
     bgSetGfxPtr(0, 0x2000);
 
+    /* Horizontal background streaming (v4): only a background wider than
+     * the 64-tile VRAM window needs it - bg_fullmap_ptrs[bg_index] is a
+     * real pointer exactly when compileSnesData.js decided that (0
+     * otherwise, the common case). The initial DMA above already loaded
+     * world columns 0-63 into VRAM columns 0-63 unchanged, so the window
+     * starts at 0 with no extra work here. */
+    if (bg_fullmap_ptrs[bg_index])
+    {
+        stream_bg_index = bg_index;
+        stream_bg_w = bg_map_w[bg_index];
+        stream_bg_h = bg_map_h[bg_index];
+        stream_window_left = 0;
+    }
+    else
+    {
+        stream_bg_index = 0xff;
+    }
+
     actors[0].x = ((s16)map_next_x << 3) + 8;
     actors[0].y = ((s16)map_next_y << 3) + 8;
     actors[0].dir_x = map_next_dir_x;
@@ -873,6 +904,84 @@ void SceneInit(void)
     startFuncs[scene_type]();
 
     run_script(event_ptrs[scene_script_idx], 0);
+}
+
+/* Horizontal background streaming (v4). BgMapWordOffset mirrors
+ * compileSnesData.js's mapByteIndex exactly (word units here, that
+ * function returns bytes - dmaCopyVram's own destination argument is a
+ * word address, matching every other call in SceneInit above) - the same
+ * real SC_64x64 four-screen VRAM layout (see that function's own comment).
+ * col/row are always < 64 here (streaming only ever touches the loaded
+ * window), so no bounds check is needed the way the JS version has one. */
+static u16 BgMapWordOffset(u8 col, u8 row)
+{
+    u8 qx = (col >= 32) ? 1 : 0;
+    u8 qy = (row >= 32) ? 1 : 0;
+    u8 lx = col - (qx << 5);
+    u8 ly = row - (qy << 5);
+    return ((u16)(qy * 2 + qx) << 10) + ((u16)ly << 5) + lx;
+}
+
+/* Streams one world column's worth of tile data (every row, up to the
+ * background's real height or 64, whichever is smaller) from the full ROM
+ * tilemap (bg_fullmap_ptrs) into the VRAM ring-buffer slot worldCol&63 -
+ * see stream_window_left's own comment for the addressing scheme. One
+ * dmaCopyVram per row (2 bytes each): a background's real tile data isn't
+ * contiguous column-to-column in either the ROM source (row-major, w
+ * apart) or the VRAM destination (quadrant-shaped, 32 or 64 words apart
+ * depending on row) - see PERF.md for the CPU-budget context this was
+ * verified against. */
+static void StreamColumn(u16 worldCol)
+{
+    u8 vramCol = (u8)(worldCol & 63);
+    u8 maxRow = (stream_bg_h < 64) ? stream_bg_h : 64;
+    u8 row;
+    const u8 *full = bg_fullmap_ptrs[stream_bg_index];
+    for (row = 0; row < maxRow; row++)
+    {
+        u16 srcIdx = ((u16)row * stream_bg_w + worldCol) * 2;
+        u16 dstWord = BgMapWordOffset(vramCol, row);
+        dmaCopyVram((u8 *)(full + srcIdx), dstWord, 2);
+    }
+}
+
+/* Streams at most STREAM_MAX_COLUMNS_PER_FRAME columns per call - caps the
+ * worst case (a scripted teleport/SWITCH_SCENE-style jump far from the
+ * loaded window, or a single very fast frame) so one frame's vblank can't
+ * be blown by an unbounded catch-up; the window just catches up over the
+ * next few frames instead; ordinary walking speed never gets close to this
+ * limit (see the plan's own Mesen verification). */
+#define STREAM_MAX_COLUMNS_PER_FRAME 4
+void SceneStreamBackground(void)
+{
+    s16 target_col;
+    u8 n;
+
+    if (stream_bg_index == 0xff) return;
+
+    target_col = (s16)(scroll_x >> 3);
+    if (target_col < 0) target_col = 0;
+    if (target_col > (s16)(stream_bg_w - 64)) target_col = (s16)(stream_bg_w - 64);
+
+    n = STREAM_MAX_COLUMNS_PER_FRAME;
+    while ((u16)target_col > stream_window_left && n)
+    {
+        /* window slides right by 1: world column (stream_window_left+64)
+         * becomes newly visible on the right edge, reusing the VRAM slot
+         * world column stream_window_left just vacated on the left. */
+        StreamColumn(stream_window_left + 64);
+        stream_window_left++;
+        n--;
+    }
+    n = STREAM_MAX_COLUMNS_PER_FRAME;
+    while ((u16)target_col < stream_window_left && n)
+    {
+        /* window slides left by 1: symmetric case, world column
+         * (stream_window_left-1) becomes newly visible on the left edge. */
+        stream_window_left--;
+        StreamColumn(stream_window_left);
+        n--;
+    }
 }
 
 /*--------------------------------------------------------------------------- */

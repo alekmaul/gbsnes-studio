@@ -247,6 +247,12 @@ int main(void)
          * the camera is moving. Also keeps BG1 and the OAM sprite positions
          * (SceneRenderActors also reads scroll_x/y) in lockstep. */
         bgSetScroll(0, (u16)scroll_x, (u16)scroll_y);
+        // Horizontal background streaming (v4, scene.c) - a no-op unless
+        // this scene's background is wider than the 64-tile VRAM window.
+        // Must run here (during vblank, right after the scroll this frame
+        // is about to show), same VRAM-safety reasoning as bgSetScroll
+        // itself just above.
+        SceneStreamBackground();
         // M6 (v4): banded X-axis parallax (see parallax.c) - HDMA overrides
         // BG1HOFS per scanline band for the rest of this frame's active
         // picture; the plain bgSetScroll above still owns Y (and X for any
