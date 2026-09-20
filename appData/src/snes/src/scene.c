@@ -650,8 +650,20 @@ void SceneInit(void)
          * parallax scene for one with none would otherwise keep replaying
          * the previous scene's stale HDMA table over this one's BG1HOFS
          * forever (game.c only calls ParallaxUpdate() while parallax_active
-         * is set). */
-        setModeHdmaReset(HDMA_CHANNEL3);
+         * is set).
+         *
+         * PVSnesLib's setModeHdmaReset() does NOT disable a channel despite
+         * its name - traced at the register level (a real $420C write), it
+         * WRITES $420C=(1<<channel), i.e. it *enables* HDMA on that channel
+         * with a fresh but unconfigured B-bus target/table, which defaults
+         * to $2100 (INIDISP) - so calling it here was arming, every scene
+         * load, an HDMA channel that spends the rest of the game garbage-
+         * writing into the screen brightness/force-blank register once per
+         * scanline (the "flashing lines then black screen" bug). $420C is
+         * write-only on real hardware (no shadow to read-modify-write), and
+         * no other HDMA channel is used anywhere in this engine, so a flat
+         * clear is the correct, safe disable. */
+        REG_HDMAEN = 0;
     }
     p += MAX_PARALLAX_LAYERS * 2;
 
