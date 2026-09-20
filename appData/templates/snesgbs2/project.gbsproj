@@ -34610,7 +34610,7 @@
                                                     "command": "EVENT_ACTOR_SET_SPRITE",
                                                     "args": {
                                                         "actorId": "0",
-                                                        "spriteSheetId": "6f1e5757-a472-4531-8a65-aee22751e917"
+                                                        "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e"
                                                     }
                                                 },
                                                 {
@@ -35052,7 +35052,7 @@
                                                     "command": "EVENT_ACTOR_SET_SPRITE",
                                                     "args": {
                                                         "actorId": "0",
-                                                        "spriteSheetId": "6f1e5757-a472-4531-8a65-aee22751e917"
+                                                        "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e"
                                                     }
                                                 },
                                                 {
@@ -35339,7 +35339,7 @@
                                                     "command": "EVENT_ACTOR_SET_SPRITE",
                                                     "args": {
                                                         "actorId": "0",
-                                                        "spriteSheetId": "6f1e5757-a472-4531-8a65-aee22751e917"
+                                                        "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e"
                                                     }
                                                 },
                                                 {
@@ -41372,11 +41372,51 @@
             "_v": 1600011071080
         },
         {
-            "id": "6f1e5757-a472-4531-8a65-aee22751e917",
-            "name": "turnip_squash",
+            "id": "b98fb589-03b9-4c8b-949b-2d017c941752",
+            "name": "drumkit",
             "numFrames": 1,
             "type": "static",
-            "filename": "turnip_squash.png",
+            "filename": "drumkit.png",
+            "_v": 1600011071080
+        },
+        {
+            "id": "55561033-cbbb-4d7b-9961-4db33c1d596c",
+            "name": "elephant",
+            "numFrames": 7,
+            "type": "animated",
+            "filename": "elephant.png",
+            "_v": 1600011071080
+        },
+        {
+            "id": "a933db32-62f4-40a9-bf7c-bf44df85b1a4",
+            "name": "keyboard",
+            "numFrames": 1,
+            "type": "static",
+            "filename": "keyboard.png",
+            "_v": 1600011071080
+        },
+        {
+            "id": "a9ee1856-b62b-49d8-8eb3-cdf681fa2e76",
+            "name": "npc008",
+            "numFrames": 6,
+            "type": "actor_animated",
+            "filename": "npc008.png",
+            "_v": 1600011071080
+        },
+        {
+            "id": "b073d693-12e6-43bf-bb2b-d7e78641fed3",
+            "name": "npc_gardener",
+            "numFrames": 1,
+            "type": "static",
+            "filename": "npc_gardener.png",
+            "_v": 1600011071080
+        },
+        {
+            "id": "c0310735-3e7c-4ff1-bcff-b07d818d433b",
+            "name": "player_platform",
+            "numFrames": 9,
+            "type": "actor_animated",
+            "filename": "player_platform.png",
             "_v": 1600011071080
         },
         {
@@ -41962,7 +42002,7 @@
                                 "command": "EVENT_ACTOR_SET_SPRITE",
                                 "args": {
                                     "actorId": "0",
-                                    "spriteSheetId": "6f1e5757-a472-4531-8a65-aee22751e917"
+                                    "spriteSheetId": "f88eea80-c5b4-4e10-b49f-7a8aa8bd477e"
                                 }
                             },
                             {
@@ -42681,6 +42721,7 @@
         "playerSpriteSheetId": "ac1e8ef4-ffe6-47cd-b16f-9af5da77ec26",
         "defaultPlayerSprites": {
             "0": "ac1e8ef4-ffe6-47cd-b16f-9af5da77ec26",
+            "1": "c0310735-3e7c-4ff1-bcff-b07d818d433b",
             "2": "ac1e8ef4-ffe6-47cd-b16f-9af5da77ec26",
             "3": "2f2d492c-dba2-434c-93c9-d1301e88d5e9",
             "4": "a827b612-578f-4cb9-a2bf-fd54b197b83f"
