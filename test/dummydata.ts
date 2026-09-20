@@ -159,6 +159,8 @@ export const dummyProjectData: ProjectData = {
     customHead: "",
     navigatorSplitSizes: [300, 100, 100],
     showNavigator: true,
+    defaultPlayerSprites: {},
+    favoriteEvents: ["EVENT_TEXT", "EVENT_SWITCH_SCENE"],
   },
 };
 
