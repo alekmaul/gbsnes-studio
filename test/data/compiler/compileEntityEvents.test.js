@@ -373,3 +373,49 @@ test("should allow previously undefined variables to be added automatically", ()
   compileEntityEvents(input, { variables });
   expect(variables.length).toEqual(2);
 });
+
+// Named animation states (v4, Phase 3): EVENT_PLAYER_SET_STATE is meant to
+// be a pure compile-time layer over EVENT_PLAYER_SET_SPRITE - stateId
+// resolves to a real spriteSheetId, then calls the exact same
+// playerSetSprite() ScriptBuilder helper. Proving the two produce
+// byte-identical output through the *real* compileEntityEvents/
+// ScriptBuilder pipeline (not a mocked helpers object) is the strongest
+// evidence that the new event introduces zero new runtime behaviour - the
+// already-Mesen-verified Set Player Sprite Sheet opcode path is reused
+// unchanged.
+test("EVENT_PLAYER_SET_STATE compiles to the exact same bytecode as EVENT_PLAYER_SET_SPRITE for its resolved target", () => {
+  const sprites = [
+    { id: "base", numFrames: 3 },
+    { id: "jump-sheet", numFrames: 6, states: [] },
+  ];
+  const stateSprites = [
+    {
+      id: "base",
+      numFrames: 3,
+      states: [{ id: "state1", name: "Jump", spriteSheetId: "jump-sheet" }],
+    },
+    { id: "jump-sheet", numFrames: 6 },
+  ];
+
+  const directOutput = compileEntityEvents(
+    [
+      {
+        command: "EVENT_PLAYER_SET_SPRITE",
+        args: { spriteSheetId: "jump-sheet", persist: false },
+      },
+    ],
+    { sprites }
+  );
+
+  const stateOutput = compileEntityEvents(
+    [
+      {
+        command: "EVENT_PLAYER_SET_STATE",
+        args: { spriteSheetId: "base", stateId: "state1", persist: false },
+      },
+    ],
+    { sprites: stateSprites }
+  );
+
+  expect(stateOutput).toEqual(directOutput);
+});
