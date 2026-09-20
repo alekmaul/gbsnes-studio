@@ -4,24 +4,33 @@ import { connect } from "react-redux";
 import FilesSidebar from "../../components/assets/FilesSidebar";
 import ImageViewer from "../../components/assets/ImageViewer";
 import SpriteAnimationsPanel from "../../components/assets/SpriteAnimationsPanel";
-import SpriteStatesEditor from "../../components/assets/SpriteStatesEditor";
+import SpriteFramesPanel from "../../components/assets/SpriteFramesPanel";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import electronActions from "../../store/features/electron/electronActions";
+import getSpriteAnimations from "../../lib/helpers/spriteAnimations";
 
 // Height reserved at the bottom of the left-hand file list for the
-// Animations + States dock below (fixed budget, not measured - keeps
-// FilesSidebar's own bottomOffset simple and avoids a layout-thrashing
-// resize-observer for what the plan scoped as small, fixed-shape panels;
-// the dock itself scrolls internally if either section's content is
-// taller than this).
-const SPRITE_PANELS_DOCK_HEIGHT = 380;
+// Animations dock below (fixed budget, not measured - keeps FilesSidebar's
+// own bottomOffset simple and avoids a layout-thrashing resize-observer for
+// what the plan scoped as a small, fixed-shape panel; the dock itself
+// scrolls internally if the animation list is taller than this).
+const ANIMATIONS_DOCK_HEIGHT = 180;
 
 class SpritesPage extends Component {
   constructor(props) {
     super(props);
     this.state = {
-      query: ""
+      query: "",
+      animationIndex: 0
     };
+  }
+
+  componentDidUpdate(prevProps) {
+    const { id } = this.props;
+    if (id !== prevProps.id) {
+      // eslint-disable-next-line react/no-did-update-set-state
+      this.setState({ animationIndex: 0 });
+    }
   }
 
   onSearch = query => {
@@ -30,9 +39,13 @@ class SpritesPage extends Component {
     });
   };
 
+  onSelectAnimation = animationIndex => {
+    this.setState({ animationIndex });
+  };
+
   render() {
     const { files, id, openHelp, sidebarWidth } = this.props;
-    const { query } = this.state;
+    const { query, animationIndex } = this.state;
 
     const filesList = query
       ? files.filter(f => {
@@ -41,16 +54,28 @@ class SpritesPage extends Component {
       : files;
 
     const file = filesList.find(f => f.id === id) || filesList[0];
+    const animations = file
+      ? getSpriteAnimations(file.type, file.numFrames)
+      : [];
+    const selectedAnimation =
+      animations[Math.min(animationIndex, animations.length - 1)];
 
     return (
       <div>
         {file && <ImageViewer file={file} />}
+        {file && selectedAnimation && (
+          <SpriteFramesPanel
+            id={file.id}
+            animation={selectedAnimation}
+            sidebarWidth={sidebarWidth}
+          />
+        )}
         <FilesSidebar
           files={filesList}
           selectedFile={file}
           query={query}
           onSearch={this.onSearch}
-          bottomOffset={file ? SPRITE_PANELS_DOCK_HEIGHT : 0}
+          bottomOffset={file ? ANIMATIONS_DOCK_HEIGHT : 0}
           onAdd={() => {
             openHelp("sprites");
           }}
@@ -58,10 +83,13 @@ class SpritesPage extends Component {
         {file && (
           <div
             className="FilesSidebar__StatesDock"
-            style={{ height: SPRITE_PANELS_DOCK_HEIGHT, width: sidebarWidth }}
+            style={{ height: ANIMATIONS_DOCK_HEIGHT, width: sidebarWidth }}
           >
-            <SpriteAnimationsPanel id={file.id} />
-            <SpriteStatesEditor id={file.id} />
+            <SpriteAnimationsPanel
+              animations={animations}
+              selectedIndex={animationIndex}
+              onSelect={this.onSelectAnimation}
+            />
           </div>
         )}
       </div>

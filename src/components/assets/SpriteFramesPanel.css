@@ -1,0 +1,18 @@
+.SpriteFramesPanel {
+  position: fixed;
+  bottom: 20px;
+  right: 10px;
+  box-sizing: border-box;
+}
+
+.SpriteFramesPanel__Frames {
+  display: flex;
+  flex-wrap: wrap;
+  padding: 0 10px 10px;
+}
+
+.SpriteFramesPanel__Frames canvas {
+  margin-right: 8px;
+  margin-bottom: 8px;
+  background-color: #fff;
+}
