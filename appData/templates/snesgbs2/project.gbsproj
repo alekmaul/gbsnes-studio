@@ -41068,16 +41068,6 @@
             "_v": 1600011071075
         },
         {
-            "id": "33ae580b-d809-4804-a558-71c08a3ac495",
-            "name": "stars_wide",
-            "width": 255,
-            "height": 28,
-            "imageWidth": 2040,
-            "imageHeight": 224,
-            "filename": "stars_wide.png",
-            "_v": 1600011071075
-        },
-        {
             "id": "f047ff0e-58ad-49fc-bd2b-ec84fc1f7ab3",
             "name": "titlescreen",
             "width": 32,
