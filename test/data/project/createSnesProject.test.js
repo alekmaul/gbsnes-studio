@@ -4,6 +4,7 @@ import Path from "path";
 import createProject from "../../../src/lib/project/createProject";
 import loadProjectData from "../../../src/lib/project/loadProjectData";
 import compileSnesData from "../../../src/lib/compiler/compileSnesData";
+import loadAllEmoteData from "../../../src/lib/project/loadEmoteData";
 
 /*
  * M11 follow-up (user-found): the Splash "New Project" screen's template
@@ -34,6 +35,17 @@ describe.each(["sneshtml", "snesblank", "snesgbs2"])(
 
         expect(data.settings.target).toBe("snes");
         expect(data._version).toBe("2.0.0");
+
+        // User-found: every template shipped only the legacy
+        // assets/ui/emotes.png 8-wide grid, never assets/emotes/*.png (the
+        // real Emote entities EmoteSelect.tsx's Actor: Emote Bubble picker
+        // actually lists since M5) - so a brand-new project's Emote Bubble
+        // event had an unusably empty dropdown right out of the box, on
+        // every template. Fixed by slicing that grid into 8 named PNGs
+        // (exclamation/question/heart/pause/confused/sweat/music/sleep)
+        // per template.
+        const emotes = await loadAllEmoteData(projectRoot);
+        expect(emotes.length).toBe(8);
 
         if (templateId === "sneshtml" || templateId === "snesgbs2") {
           // The sample games: should compile cleanly, real scenes present.
