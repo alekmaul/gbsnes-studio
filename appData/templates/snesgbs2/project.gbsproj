@@ -42679,6 +42679,12 @@
         "startMapId": "cb5e225f-e996-4ca8-b068-09a12ec18b75",
         "startDirection": "right",
         "playerSpriteSheetId": "ac1e8ef4-ffe6-47cd-b16f-9af5da77ec26",
+        "defaultPlayerSprites": {
+            "0": "ac1e8ef4-ffe6-47cd-b16f-9af5da77ec26",
+            "2": "ac1e8ef4-ffe6-47cd-b16f-9af5da77ec26",
+            "3": "2f2d492c-dba2-434c-93c9-d1301e88d5e9",
+            "4": "a827b612-578f-4cb9-a2bf-fd54b197b83f"
+        },
         "target": "snes",
         "snesRegion": "ntsc",
         "snesSramSize": "03",
