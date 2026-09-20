@@ -2333,13 +2333,20 @@ static void SceneRenderActors(void)
             // actor's tile, matching the GB engine (actor pos = tile*8+8, GB
             // OAM shows at pos - {8,16}); -8 y put every sprite a tile too low
             // (an actor placed "on the stairs" rendered one row below them).
-            // M7 (v4): priority 0, not 2 - Mode 1's OBJ0 sits below a BG1
-            // "high priority" tile (BG_TIL_PRIO), so a painted priority tile
-            // now actually renders above the actor; a normal (non-priority)
-            // BG1 tile still sits below OBJ0, so ordinary scenes are
-            // unaffected. See EVENTS.md's Parallax/Priority sections for the
-            // full Mode 1 layer ordering this relies on.
-            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 16, 0,
+            // v4 fix (user-found: "the sprites are displayed behind the
+            // current BG"): priority 2, NOT 0. The M7 comment that used to
+            // sit here got Mode 1's real layer order backwards - the
+            // authoritative table (fullsnes' Background Priority Chart) is,
+            // front to back with BG3 kept "priority high" as this engine
+            // sets it: BG3.1 > OBJ3 > BG1.1 > BG2.1 > OBJ2 > BG1.0 > BG2.0 >
+            // OBJ1 > OBJ0 > BG3.0 > Backdrop. So OBJ0 sits BELOW BG1.0/
+            // BG2.0 (every ORDINARY tile, not just a painted priority one) -
+            // priority 0 hid every actor behind the plain scene background.
+            // Priority 2 sits below BG1.1/BG2.1 (still correctly occluded by
+            // a painted "priority" tile - see EVENTS.md) but above BG1.0/
+            // BG2.0, so ordinary tiles no longer cover the sprite. This is
+            // also just reverting to what this code did before M7 (v4).
+            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 16, 2,
                    flip, 0, tile, sprite_pal_for_slot[actors[i].frame_offset >> 1]);
             oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         }
@@ -2351,11 +2358,12 @@ static void SceneRenderActors(void)
 
     if (emote_time != 0)
     {
-        /* M7 (v4): priority 0, same reasoning as the actor oamSet above -
-         * the emote bubble is a world-space sprite (floats above the
-         * actor's head), so it should respect priority tiles the same way. */
+        /* v4 fix: priority 2, same reasoning/reversion as the actor oamSet
+         * above - the emote bubble is a world-space sprite (floats above
+         * the actor's head), so it should respect priority tiles the same
+         * way (and not be hidden behind ordinary BG1 tiles either). */
         oamSet(EMOTE_OID, actors[emote_actor].x - scroll_x - 8,
-               actors[emote_actor].y - scroll_y - 32, 0, 0, 0,
+               actors[emote_actor].y - scroll_y - 32, 2, 0, 0,
                EMOTE_TILE0 + emote_id * 2, 1);
         oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
     }
@@ -2503,7 +2511,9 @@ void ProjectilesUpdate(void)
          * it, and it can be added later without changing the wire format. */
         tile = projectiles[i].sprite_slot * 2;
         flip = projectiles[i].dir_x < 0 ? 1 : 0;
-        oamSet(oid, projectiles[i].x - scroll_x - 4, projectiles[i].y - scroll_y - 4, 0,
+        /* v4 fix: priority 2, same reasoning as the actor/emote oamSet
+         * above - a world-space sprite, same layer as actors. */
+        oamSet(oid, projectiles[i].x - scroll_x - 4, projectiles[i].y - scroll_y - 4, 2,
                flip, 0, tile, sprite_pal_for_slot[projectiles[i].sprite_slot]);
         oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
     }

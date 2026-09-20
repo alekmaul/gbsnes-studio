@@ -182,30 +182,28 @@ falling back to the shared `bg_maps_ptrs[bg_index]` otherwise - no other engine 
 make the *tilemap* bit itself take effect, since per-tile BG priority is a Mode 1 PPU hardware
 feature the tilemap format already fully supports once the bit is set correctly.
 
-**What *did* need an engine change**: every OAM sprite (actors, the emote bubble) used to render
-at OBJ priority 2. In Mode 1 (with BG3 kept in "priority high" mode for the dialogue box, as this
-engine already does), the layer order back-to-front is `BG1/BG2(low) < OBJ0 < BG1/BG2(high) <
-OBJ1 < OBJ2 < OBJ3 < BG3(high)` - so a BG1 "high priority" (painted) tile sits *below* OBJ1-3,
-meaning it would never actually render above the player at the old priority 2. Actors and the
-emote bubble (both world-space sprites a priority tile is meant to occlude) now render at OBJ
-priority 0 instead - below a painted priority tile, same as before above every *ordinary* BG1
-tile. The dialogue avatar portrait (`ui.c`, UI-space, unrelated to world priority tiles) is left
-at priority 2, unchanged.
+**What *did* need an engine change**: every OAM sprite (actors, the emote bubble, projectiles)
+renders at OBJ priority 2. In Mode 1 with BG3 kept in "priority high" mode for the dialogue box
+(as this engine already does), the real layer order - front to back, quoting fullsnes' own
+Background Priority Chart, the authoritative source, read literally rather than re-derived - is:
+`BG3.1 > OBJ3 > BG1.1 > BG2.1 > OBJ2 > BG1.0 > BG2.0 > OBJ1 > OBJ0 > BG3.0 > Backdrop`. A BG1/BG2
+"high priority" (painted) tile sits *above* OBJ1-3 (correctly occludes a sprite at any of those
+priorities), and OBJ0 sits *below* BG1.0/BG2.0 - i.e. below *every ordinary tile*, not just a
+painted one. Priority 2 is the correct choice: below BG1.1/BG2.1 (still occluded by a painted
+priority tile) but above BG1.0/BG2.0 (not hidden by ordinary ones). The dialogue avatar portrait
+(`ui.c`, UI-space, unrelated to world priority tiles) is also at priority 2.
 
-**Verified (M8, v4)**: a real Mesen run against a purpose-built fixture (BG1 tilemap base
-`bgSetMapPtr(0, 0x0000, SC_32x32)`) confirmed both halves directly, by reading real emulated
-state rather than trusting the source: the VRAM word at the painted tile's map index
-(`ty*32+tx`) read back `hi=0x20` (the `BG_TIL_PRIO` bit set, tile index 1 - the painted tile,
-not the shared background's tile 0), and a neighbouring unpainted tile in the same map read back
-`hi=0x00` (bit correctly scoped to only the painted tile). The player's real OAM attribute byte
-read back `0` (priority bits `00`), confirming the OBJ-priority-0 fix is actually in the compiled
-ROM, not just the source. Getting a literal rendered-pixel screenshot to confirm the visual
-occlusion hit a Mesen Lua tooling snag this session (`emu.getPixel` hung intermittently across
-repeated scripted relaunches, unrelated to ROM content - see Claude's memory `m8-verification-
-2026-09-19` for the full writeup), so the very last link (does Mode 1 hardware really composite
-the two exactly as documented) is still sourced from SNES hardware documentation rather than an
-independently observed frame - but both engine-side mechanisms M7 introduced are now confirmed
-correct against real hardware state, not just re-read source code.
+**M8's original verification (v4) got this backwards and briefly shipped priority 0**, which
+hid every actor/emote/projectile behind the plain scene background - not just a painted priority
+tile - reported by the user as "the sprites are displayed behind the current BG" (the Sample
+Project's Outside scene made it obvious immediately). Root cause: M8 sourced the layer order from
+SNES hardware documentation but transcribed it in reverse, and its own verification only checked
+that the *compiled ROM* carried the intended priority *value* (a real Mesen OAM-attribute read
+confirmed priority 0 reached VRAM) - it never got a rendered-pixel screenshot to confirm what that
+value actually *looks like* on screen (`emu.getPixel` tooling issues that session - see Claude's
+memory `m8-verification-2026-09-19`), so the mis-transcribed table went unchallenged. Re-fixed by
+reverting to priority 2 (also just restoring what this code did before M7) and re-deriving the
+table from fullsnes' raw HTML table directly instead of a re-derived summary.
 
 ## Projectiles (v4)
 
