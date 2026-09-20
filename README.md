@@ -26,6 +26,12 @@ $ npm start
 
 Package a distributable with `yarn make:win`, `yarn make:mac` or `yarn make:linux`.
 
+## Credits
+
+- The in-app Play button and web export use [SnesJs](https://github.com/angelo-wf/SnesJs)
+  (MIT) by [angelo-wf](https://github.com/angelo-wf) as the SNES emulation core.
+- Development assisted by [Claude Code](https://claude.com/claude-code) (Anthropic).
+
 ## Documentation
 
 - `appData/src/snes/README.md` — the SNES engine (architecture, milestones)
