@@ -339,7 +339,7 @@ export default () => {
           <SplashCredits>
             <SplashCreditsBackground />
             <SplashCreditsContent>
-              <SplashCreditsTitle>GB Studio</SplashCreditsTitle>
+              <SplashCreditsTitle>SNES Studio</SplashCreditsTitle>
               {contributors.map((contributor) => (
                 <SplashCreditsContributor
                   key={contributor.id}
