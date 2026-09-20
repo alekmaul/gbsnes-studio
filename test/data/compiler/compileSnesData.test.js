@@ -567,13 +567,16 @@ describe("compileSnesData - oversized background warning (v4)", () => {
 
   // v4 fix, found while scoping background streaming: the two tests above
   // only ever checked whether the *warning* fired - neither actually
-  // verified the tilemap DATA itself was complete. sample_town.png is 56x56
-  // tiles (comfortably between 32 and the 64-tile warning threshold, so it
-  // never warned) but bgTables' map-building loop was hardcoded to 32x32,
-  // silently dropping everything past that corner - a real, previously
-  // undetected content bug affecting any background over 32 tiles in either
-  // dimension, not just the two the user originally reported.
-  test("a background between 32 and 64 tiles wide compiles its full tilemap, not a 32x32 corner", async () => {
+  // verified the tilemap DATA itself was complete or correctly laid out.
+  // sample_town.png is 56x56 tiles (comfortably between 32 and the 64-tile
+  // warning threshold, so it never warned) but bgTables' map-building loop
+  // was hardcoded to 32x32, silently dropping everything past that corner.
+  // A background this size (over 32 in both dimensions) needs the real
+  // SC_64x64 four-screen VRAM layout (see mapByteIndex/usesQuadrants),
+  // which always allocates the full 64x64-tile buffer regardless of the
+  // source image's exact size - so the fixed expectation here is 8192
+  // bytes (64*64*2), not 56*56*2.
+  test("a background between 32 and 64 tiles wide compiles a full 64x64 (SC_64x64) tilemap, not a 32x32 corner", async () => {
     const project = JSON.parse(
       fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
     );
@@ -588,20 +591,78 @@ describe("compileSnesData - oversized background warning (v4)", () => {
     const lenMatch = out.assetsC.match(/bg_maps_len\[\d+\] = \{ ([^}]+) \};/);
     expect(lenMatch).toBeTruthy();
     const lens = lenMatch[1].split(",").map((s) => parseInt(s.trim(), 10));
-    // 56x56 tiles x 2 bytes/tile - was hardcoded to 2048 (32x32x2) before the fix.
-    expect(lens[bgIndex]).toBe(56 * 56 * 2);
+    // was hardcoded to 2048 (32x32x2) before the fix.
+    expect(lens[bgIndex]).toBe(64 * 64 * 2);
   });
 
-  // Same root cause, a second, independent hardcoded-32 stride in the
-  // priority-tile tilemap override (scenePriorityMaps) - a painted priority
-  // tile beyond column 32 used to write its BG_TIL_PRIO bit at the WRONG
-  // byte offset (computed with a 32-wide stride against a now-wider map).
-  test("a priority tile beyond the old 32-wide corner lands at the correct (not the old 32-stride) offset", async () => {
+  // The real SC_64x64 hardware layout (found via a real Mesen spike: a
+  // background half blue/half red with the seam on tile column 32 - the
+  // right half showed up scrambled into the wrong row instead of a clean
+  // vertical split). A BG tilemap over 32 tiles in either dimension is
+  // built from four 32x32-tile "screens" (TL/TR/BL/BR) at VRAM word
+  // offsets 0x000/0x400/0x800/0xC00 - NOT one flat w-wide row-major array.
+  // spike48.png is 48x2 tiles, solid blue for columns 0-31 (screen TL) and
+  // solid red for columns 32-47 (screen TR, real SNES word offset 0x400 =
+  // byte offset 2048) - this proves the actual quadrant jump, not just a
+  // stride number.
+  test("a background over 32 tiles wide places column 32 at the real SC_64x64 top-right-screen VRAM offset", async () => {
+    const project = {
+      _version: "2.0.0",
+      _release: "7",
+      settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+      backgrounds: [{ id: "bg", filename: "spike48.png", width: 48, height: 2 }],
+      spriteSheets: [],
+      variables: [],
+      scenes: [
+        {
+          id: "s0",
+          name: "spike",
+          backgroundId: "bg",
+          width: 48,
+          height: 2,
+          actors: [],
+          triggers: [],
+          script: [],
+        },
+      ],
+    };
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const text = out.assetsData["bg0_data.as"];
+    const body = text.match(/bg0_map:\n([\s\S]*?)\n\.ends/)[1];
+    const bytes = [];
+    body.split("\n").forEach((line) => {
+      const m = line.match(/^\.db (.+)$/);
+      if (m) m[1].split(",").forEach((n) => bytes.push(parseInt(n.trim(), 10)));
+    });
+    const tileAt = (byteOffset) => bytes[byteOffset] | (bytes[byteOffset + 1] << 8);
+    const blueTile = tileAt(0); // (tx=0,ty=0) - screen TL, byte 0
+    const blueTileEdge = tileAt(31 * 2); // (tx=31,ty=0) - still screen TL
+    const redTile = tileAt(2048); // (tx=32,ty=0) - screen TR starts at word 0x400 = byte 2048
+    const redTileEdge = tileAt(2048 + 15 * 2); // (tx=47,ty=0) - last real red column
+    expect(blueTile).toBe(blueTileEdge);
+    expect(redTile).toBe(redTileEdge);
+    expect(blueTile).not.toBe(redTile);
+    // The naive (wrong) flat-stride byte offset for (tx=32,ty=0) would be
+    // 32*2=64, not 2048 - assert the flat position is NOT where the red
+    // tile actually landed (still blue, since (tx=32,ty=1) in a flat
+    // layout - now genuinely part of screen TL's own row 1).
+    expect(tileAt(64)).not.toBe(redTile);
+  });
+
+  // Same root cause as the two tests above, a second, independent site
+  // that has now been wrong twice: first a hardcoded 32-wide stride, then
+  // (this test's own earlier version) a flat w-wide stride that didn't
+  // account for the real four-screen layout either - a priority tile in
+  // the TR screen used to land inside what hardware reads as TL's own data
+  // instead. Now shares mapByteIndex with the map builder (see
+  // compileSnesData.js) so the two can't drift apart again.
+  test("a priority tile in the top-right SC_64x64 screen lands at the real quadrant offset, not a flat stride", async () => {
     const collisions = new Array(40 * 4).fill(0);
-    // tx=5, ty=1: old (buggy) 32-wide stride offset (75) differs from the
-    // real 40-wide stride offset (91) - ty=0 would coincide with both and
-    // wouldn't prove anything.
-    collisions[1 * 40 + 5] = TILE_PROP_PRIORITY;
+    // tx=35 (screen TR, local x=3), ty=1 (still screen row 1, local y=1).
+    collisions[1 * 40 + 35] = TILE_PROP_PRIORITY;
     const project = {
       _version: "2.0.0",
       _release: "7",
@@ -635,8 +696,12 @@ describe("compileSnesData - oversized background warning (v4)", () => {
       const m = line.match(/^\.db (.+)$/);
       if (m) m[1].split(",").forEach((n) => bytes.push(parseInt(n.trim(), 10)));
     });
-    expect(bytes[91] & 0x20).toBe(0x20); // real 40-wide stride offset
-    expect(bytes[75] & 0x20).toBe(0); // old buggy 32-wide stride offset
+    // screen TR starts at word 0x400 (byte 2048); local (lx=3,ly=1) within
+    // it -> word 1*32+3=35 -> byte (1024+35)*2=2118, high byte 2119.
+    expect(bytes[2119] & 0x20).toBe(0x20);
+    // the old flat 40-wide-stride guess: (1*40+35)*2+1 = 151 - must NOT be
+    // where the bit actually landed.
+    expect(bytes[151] & 0x20).toBe(0);
   });
 });
 

@@ -921,27 +921,72 @@ const compileSnesData = async (
   // size (conv.tileW/tileH), so ANY background over 32 tiles in either
   // dimension silently lost everything past that corner at compile time -
   // with no warning below the unrelated 64-tile warning threshold
-  // (maxBackgroundWidth/Height in targets/snes.js). conv.tilemap is already
-  // exactly tileW*tileH entries (snesgfx.js imageToBGData), so there's no
-  // padding to do - just emit it as-is. No size cap here: background tile/
-  // map data is emitted as its own `.as` superfree section (see below), not
-  // packed into assets.c's atomic 32 KB .rodata section, so there's no ROM
-  // constraint forcing an artificial ceiling. scene.c's own VRAM budget
-  // (SC_64x64, up to 64x64 tiles in one DMA) is a separate, runtime concern -
-  // see the background-streaming work for scenes beyond that.
+  // (maxBackgroundWidth/Height in targets/snes.js).
+  //
+  // A first pass just emitted conv.tilemap as one flat, row-major w*h array
+  // - wrong for anything over 32 tiles in either dimension, caught by a
+  // real Mesen spike (a background half blue/half red, the seam placed
+  // exactly on tile column 32): real SNES hardware has no such thing as a
+  // "56-wide tilemap row" - a BG tilemap is always built from 32x32-tile
+  // "screens", and scene.c already selects SC_64x64 (four screens: TL/TR/
+  // BL/BR, at VRAM word offsets 0x000/0x400/0x800/0xC00, each internally
+  // row-major with a 32-word stride) whenever either dimension exceeds 32.
+  // A flat w-wide buffer DMA'd straight into that region does not line up
+  // with those four 1024-word blocks at all once w or h isn't a clean
+  // multiple of 32 - exactly the corruption the spike showed (row 0's
+  // right half landed inside what hardware reads as row 1 of the top-left
+  // screen). Below 32x32 the flat layout IS the correct (single-screen,
+  // SC_32x32) hardware layout - unchanged.
+  //
+  // No size cap on the *source* data read here: background tile/map data
+  // is emitted as its own `.as` superfree section (see below), not packed
+  // into assets.c's atomic 32 KB .rodata section, so there's no ROM
+  // constraint forcing one. The four-screen buffer itself is naturally
+  // capped at 64x64 tiles (SC_64x64's real VRAM budget) - real streaming
+  // for scenes wider/taller than that is separate, still-to-do work.
+  const QUADRANT_TILES = 32;
+  // usesQuadrants(w,h): does this background's VRAM tilemap need the real
+  // SC_64x64 four-screen layout, or does it fit the single SC_32x32 screen
+  // (plain row-major, w-wide stride) that's always been correct?
+  const usesQuadrants = (w, h) => w > QUADRANT_TILES || h > QUADRANT_TILES;
+  // mapByteIndex(tx,ty,w,h): the byte offset (word index * 2) a given tile
+  // position lands at in bgTables[i].map / the DMA'd VRAM buffer - shared
+  // by the map builder below and the priority-tile override further down
+  // so the two can't drift out of sync the way the old hardcoded-32 stride
+  // did. -1 means "outside the four-screen 64x64 budget", not stored.
+  const mapByteIndex = (tx, ty, w, h) => {
+    if (!usesQuadrants(w, h)) return (ty * w + tx) * 2;
+    if (tx >= 64 || ty >= 64) return -1;
+    const qx = tx >= QUADRANT_TILES ? 1 : 0;
+    const qy = ty >= QUADRANT_TILES ? 1 : 0;
+    const lx = tx - qx * QUADRANT_TILES;
+    const ly = ty - qy * QUADRANT_TILES;
+    const quadrantWords = QUADRANT_TILES * QUADRANT_TILES;
+    return ((qy * 2 + qx) * quadrantWords + ly * QUADRANT_TILES + lx) * 2;
+  };
   const bgTables = bgConverted.map((conv, i) => {
-    const map = [];
-    for (let i2 = 0; i2 < conv.tilemap.length; i2++) {
-      const e = conv.tilemap[i2];
-      map.push(e & 0xff, (e >> 8) & 0xff);
+    const w = conv.tileW;
+    const h = conv.tileH;
+    const mapLenBytes = usesQuadrants(w, h) ? 64 * 64 * 2 : w * h * 2;
+    const map = new Array(mapLenBytes).fill(0);
+    for (let ty = 0; ty < h; ty++) {
+      for (let tx = 0; tx < w; tx++) {
+        const idx = mapByteIndex(tx, ty, w, h);
+        // idx === -1 -> beyond the 64x64 VRAM budget - streaming territory
+        if (idx !== -1) {
+          const e = conv.tilemap[ty * w + tx];
+          map[idx] = e & 0xff;
+          map[idx + 1] = (e >> 8) & 0xff;
+        }
+      }
     }
     return {
       name: `bg${i}`,
       tiles: conv.tileBytes,
       map,
       pal: conv.paletteBytes,
-      w: conv.tileW,
-      h: conv.tileH,
+      w,
+      h,
     };
   });
 
@@ -972,10 +1017,14 @@ const compileSnesData = async (
     for (let ty = 0; ty < bg.h; ty++) {
       for (let tx = 0; tx < bg.w; tx++) {
         if (collisions[ty * bg.w + tx] & TILE_PROP_PRIORITY) {
-          // v4 fix (same truncation bug as bgTables above): was a
-          // hardcoded 32-wide stride, wrong for any background that isn't
-          // exactly 32 tiles wide - now matches bg.map's real stride.
-          map[(ty * bg.w + tx) * 2 + 1] |= BG_TIL_PRIO_HI;
+          // v4 fix (same bug class as bgTables above, twice now: first a
+          // hardcoded 32-wide stride, then a flat w-wide stride that didn't
+          // account for the real SC_64x64 four-screen VRAM layout - now
+          // shares mapByteIndex with the map builder so the two can't
+          // drift apart again).
+          const idx = mapByteIndex(tx, ty, bg.w, bg.h);
+          // idx === -1 -> beyond the 64x64 VRAM budget
+          if (idx !== -1) map[idx + 1] |= BG_TIL_PRIO_HI;
         }
       }
     }
