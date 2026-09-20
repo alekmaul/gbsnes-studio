@@ -242,10 +242,20 @@ const compileSnesData = async (
       { maxTiles: snesTarget.maxTilesetTiles }
     );
     conv.warnings.forEach(warnings);
-    if (conv.tileW > 32 || conv.tileH > 32) {
+    // v4 fix (user-found: this fired even for a background well within the
+    // real cap): was hardcoded to the old pre-SC_64x64 32-tile limit,
+    // duplicating (and disagreeing with) the editor-side check that already
+    // uses the engine's real capacity (targets/snes.js's maxBackgroundWidth/
+    // Height, in pixels - divide by 8 for tiles, same SC_64x64 ceiling
+    // scene.c's SceneInit actually enforces). Derived from the target
+    // descriptor rather than a second hardcoded number, so the two checks
+    // can't drift apart again.
+    const maxBgTileW = snesTarget.maxBackgroundWidth / 8;
+    const maxBgTileH = snesTarget.maxBackgroundHeight / 8;
+    if (conv.tileW > maxBgTileW || conv.tileH > maxBgTileH) {
       warnings(
         `Background '${bg.filename}' is ${conv.tileW}x${conv.tileH} tiles; ` +
-          `SNES scenes wider/taller than 32 tiles are not supported yet.`
+          `SNES scenes wider/taller than ${maxBgTileW}x${maxBgTileH} tiles are not supported.`
       );
     }
     bgConverted.push(conv);

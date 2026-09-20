@@ -516,3 +516,49 @@ describe("compileSnesData - Engine Fields (v4)", () => {
     expect(out.engineFieldsC).toMatch(/plat_jump_vel @13 = 16384/);
   });
 });
+
+describe("compileSnesData - oversized background warning (v4)", () => {
+  // user-found: this warning still fired for sample_town (56x56 tiles) even
+  // after targets/snes.js's maxBackgroundWidth/Height was raised to 512px -
+  // it turned out to be a second, independent check hardcoded to the old
+  // pre-SC_64x64 32-tile limit. Uses the real snesgbs2 template (its own
+  // real PNG files on disk), not a synthetic fixture, since the bug is
+  // specifically about real background dimensions.
+  const SNESGBS2_DIR = Path.join(
+    __dirname,
+    "..",
+    "..",
+    "..",
+    "appData",
+    "templates",
+    "snesgbs2"
+  );
+
+  test("a background within the real 64-tile cap does not warn", async () => {
+    const project = JSON.parse(
+      fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
+    );
+    const warnings = [];
+    await compileSnesData(project, {
+      projectRoot: SNESGBS2_DIR,
+      warnings: (w) => warnings.push(w),
+    });
+    expect(warnings.some((w) => w.includes("sample_town"))).toBe(false);
+  });
+
+  test("a background beyond the real 64-tile cap still warns, with the real limit in the message", async () => {
+    const project = JSON.parse(
+      fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
+    );
+    const warnings = [];
+    await compileSnesData(project, {
+      projectRoot: SNESGBS2_DIR,
+      warnings: (w) => warnings.push(w),
+    });
+    const leavingEarth = warnings.find((w) => w.includes("leaving_earth"));
+    expect(leavingEarth).toBeDefined();
+    expect(leavingEarth).toMatch(/255x28 tiles/);
+    expect(leavingEarth).toMatch(/64x64 tiles/);
+    expect(leavingEarth).not.toMatch(/32x32|32 tiles/);
+  });
+});
