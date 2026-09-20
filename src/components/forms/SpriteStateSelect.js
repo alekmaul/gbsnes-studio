@@ -4,6 +4,7 @@ import { connect } from "react-redux";
 import Select from "react-select";
 import l10n from "../../lib/helpers/l10n";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
+import { SpriteShape } from "../../store/stateShape";
 
 class SpriteStateSelect extends Component {
   render() {
@@ -44,6 +45,7 @@ SpriteStateSelect.propTypes = {
   value: PropTypes.string,
   spriteSheetId: PropTypes.string,
   onChange: PropTypes.func.isRequired,
+  spriteSheets: PropTypes.arrayOf(SpriteShape).isRequired,
 };
 
 SpriteStateSelect.defaultProps = {
