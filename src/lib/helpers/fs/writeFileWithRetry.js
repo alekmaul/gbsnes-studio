@@ -15,6 +15,28 @@ export const RETRYABLE_CODES = ["EPERM", "EBUSY", "EACCES"];
 
 const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// Upstream GB Studio (this project's own ancestor) has had this exact class
+// of bug in its own issue tracker for years, across many releases, with no
+// code-level fix ever shipped there either - it's long-standing Windows
+// antivirus/indexer interference with a build's temp-file writes, not
+// something specific to this app, and not something a build pipeline can
+// 100% engineer around. When we still end up giving up, say so plainly
+// instead of surfacing a bare, unexplained "EPERM" to the user.
+const AV_HINT =
+  "\n\nThis is a known Windows antivirus/Search Indexer interference issue " +
+  "(GB Studio itself has hit the same class of bug for years) - it can " +
+  "briefly lock a build file right after it's created. If it keeps " +
+  "happening, try adding a Windows Defender/antivirus exclusion for your " +
+  "Temp folder (%LOCALAPPDATA%\\Temp) or this app's install folder, then " +
+  "Build ROM again.";
+
+const withHintIfRetryable = e => {
+  if (RETRYABLE_CODES.includes(e.code) && !String(e.message).includes(AV_HINT)) {
+    e.message += AV_HINT;
+  }
+  return e;
+};
+
 // Generic retry-with-exponential-backoff around any fs operation that can
 // hit the transient-lock codes above. Shared by writeFileWithRetry (below)
 // and writeFileAtomic.js (which retries both the temp-file write and the
@@ -33,14 +55,14 @@ export const retryOnTransientFsError = async (
     } catch (e) {
       lastError = e;
       if (!RETRYABLE_CODES.includes(e.code) || i === attempts - 1) {
-        throw e;
+        throw withHintIfRetryable(e);
       }
       const waitMs = Math.min(baseDelayMs * 2 ** i, maxDelayMs);
       // eslint-disable-next-line no-await-in-loop
       await delay(waitMs);
     }
   }
-  throw lastError;
+  throw withHintIfRetryable(lastError);
 };
 
 // NOTE: kept for existing call sites, but writeFileAtomic.js (which writes

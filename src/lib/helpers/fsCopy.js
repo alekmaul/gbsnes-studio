@@ -1,13 +1,21 @@
 /* eslint-disable no-await-in-loop */
 import fs from "fs-extra";
 
-const copyDir = async (src, dest, options = {}) => {
+// `relPath` accumulates the path so far, relative to the original copy()
+// root - lets `options.exclude` (a list of root-relative paths, files or
+// whole directories) skip an entry without ever descending into it.
+const copyDir = async (src, dest, options = {}, relPath = "") => {
+  const { exclude = [] } = options;
   const filePaths = await fs.readdir(src);
   await fs.ensureDir(dest);
   for (const fileName of filePaths) {
+    const entryRelPath = relPath ? `${relPath}/${fileName}` : fileName;
+    if (exclude.includes(entryRelPath)) {
+      continue;
+    }
     const fileStat = await fs.lstat(`${src}/${fileName}`);
     if (fileStat.isDirectory()) {
-      await copyDir(`${src}/${fileName}`, `${dest}/${fileName}`, options);
+      await copyDir(`${src}/${fileName}`, `${dest}/${fileName}`, options, entryRelPath);
     } else {
       await copyFile(`${src}/${fileName}`, `${dest}/${fileName}`, options);
     }

@@ -48,6 +48,68 @@ describe("fsCopy - pathExists", () => {
   });
 });
 
+// exclude: lets a caller skip copying specific root-relative paths (files
+// or whole directories) - added so ejectBuild.js can skip the SNES engine
+// core's committed dummy src/assets.{c,h}/src/data/*, which
+// buildProjectSnes() always immediately overwrites anyway (see
+// ejectBuild.js's own comment for why re-touching a path copy() just wrote
+// caused a Windows EPERM no retry budget could reliably clear).
+describe("fsCopy - exclude option", () => {
+  test("skips an excluded file", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-copyexclude-"));
+    try {
+      const src = Path.join(dir, "src");
+      const dest = Path.join(dir, "dest");
+      fs.ensureDirSync(src);
+      fs.writeFileSync(Path.join(src, "keep.txt"), "keep");
+      fs.writeFileSync(Path.join(src, "skip.txt"), "skip");
+
+      await copy(src, dest, { exclude: ["skip.txt"] });
+
+      expect(fs.existsSync(Path.join(dest, "keep.txt"))).toBe(true);
+      expect(fs.existsSync(Path.join(dest, "skip.txt"))).toBe(false);
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
+
+  test("skips an excluded directory without descending into it", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-copyexclude-dir-"));
+    try {
+      const src = Path.join(dir, "src");
+      const dest = Path.join(dir, "dest");
+      fs.ensureDirSync(Path.join(src, "data"));
+      fs.writeFileSync(Path.join(src, "data", "dummy.as"), "dummy");
+      fs.writeFileSync(Path.join(src, "keep.txt"), "keep");
+
+      await copy(src, dest, { exclude: ["data"] });
+
+      expect(fs.existsSync(Path.join(dest, "keep.txt"))).toBe(true);
+      expect(fs.existsSync(Path.join(dest, "data"))).toBe(false);
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
+
+  test("only matches the exact root-relative path, not same-named files deeper in the tree", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-copyexclude-nested-"));
+    try {
+      const src = Path.join(dir, "src");
+      const dest = Path.join(dir, "dest");
+      fs.ensureDirSync(Path.join(src, "nested"));
+      fs.writeFileSync(Path.join(src, "assets.h"), "root");
+      fs.writeFileSync(Path.join(src, "nested", "assets.h"), "nested");
+
+      await copy(src, dest, { exclude: ["assets.h"] });
+
+      expect(fs.existsSync(Path.join(dest, "assets.h"))).toBe(false);
+      expect(fs.existsSync(Path.join(dest, "nested", "assets.h"))).toBe(true);
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
+});
+
 // Regression: a real packaged Linux build's "Build ROM" failed with
 // "spawn .../smconv EACCES" - copyFile() wrote the destination with Node's
 // default stream mode (0o666, no executable bit) regardless of the source

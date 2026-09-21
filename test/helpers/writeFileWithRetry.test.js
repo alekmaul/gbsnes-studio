@@ -102,6 +102,24 @@ describe("writeFileWithRetry", () => {
     }
   });
 
+  test("appends an actionable AV-exclusion hint when a retryable error ultimately gives up", async () => {
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-writeretry-"));
+    try {
+      const file = Path.join(dir, "out.txt");
+      const spy = jest.spyOn(fs, "writeFile").mockImplementation(() => {
+        const err = new Error("EPERM: operation not permitted, open");
+        err.code = "EPERM";
+        return Promise.reject(err);
+      });
+      await expect(
+        writeFileWithRetry(file, "hello", undefined, 2, 1)
+      ).rejects.toThrow(/Windows Defender/);
+      spy.mockRestore();
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
+
   test("does not retry a non-transient error", async () => {
     const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-writeretry-"));
     try {

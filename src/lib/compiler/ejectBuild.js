@@ -20,7 +20,22 @@ const ejectBuild = async ({
   await fs.ensureDir(outputRoot);
   progress("Copy core");
 
-  await copy(corePath, outputRoot);
+  // The SNES engine core ships committed dummy src/assets.{c,h} + src/data/*
+  // (appData/src/snes/tools/gen-dummy-gfx.js) so the raw tree is buildable
+  // on its own via plain `make` - but buildProjectSnes() always immediately
+  // overwrites every one of those paths with the real compiled content right
+  // after this call returns, so copying the dummy versions here is pure
+  // throwaway work. Worse, on Windows it also creates the exact race that
+  // caused a genuinely unfixable-by-retry EPERM (v1.1.6-v1.1.8 - see
+  // writeFileAtomic.js's header comment): re-touching a path something else
+  // *just* wrote can hit a persistent antivirus lock no backoff clears.
+  // Skipping the copy here removes that specific double-touch entirely
+  // instead of trying to survive it - the GB engine's own ejected files
+  // never had this problem in the first place, since its generated
+  // filenames are never part of the copied core to begin with.
+  const exclude =
+    projectType === "snes" ? ["src/assets.h", "src/assets.c", "src/data"] : [];
+  await copy(corePath, outputRoot, { exclude });
   await fs.ensureDir(`${outputRoot}/src/data`);
   await fs.ensureDir(`${outputRoot}/node_modules`);
   await fs.ensureDir(`${outputRoot}/obj`);
