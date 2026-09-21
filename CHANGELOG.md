@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.10] - 2026-09-21
+
+### Fixed
+- SNES: **the same class of Windows EPERM build error from 1.1.6-1.1.9 could still happen on a
+  project with its own music** — user-confirmed on a real Windows 8 VM (with no antivirus
+  running at all, ruling out antivirus as the sole cause of this bug class): 1.1.9 eliminated
+  the `assets.h`/`assets.c` error entirely, but the identical error then hit
+  `src\res\soundbank.asm` instead — a file 1.1.9 didn't touch. Same root cause: the soundbank
+  files (`res/soundbank.bnk`/`.h`/`_banks.h`, `src/res/soundbank.asm`) are also committed
+  placeholders that the eject step copied, immediately overwritten by the real compiled
+  soundbank whenever a project has music. Extended the same fix: eject no longer copies these
+  either, and the build now restores the committed default soundbank itself for a project
+  without music, instead of relying on eject to have left it there.
+
 ## [1.1.9] - 2026-09-21
 
 ### Fixed
