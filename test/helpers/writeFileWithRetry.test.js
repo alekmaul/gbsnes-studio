@@ -66,6 +66,42 @@ describe("writeFileWithRetry", () => {
     }
   });
 
+  test("default budget backs off exponentially and gives real Windows AV scans room to clear", async () => {
+    // A first version of this helper (5 attempts, flat 150ms) still
+    // reproduced the real bug against the packaged v1.1.6 Windows build -
+    // 600ms total wasn't enough for a real-time AV scan of the whole
+    // freshly-copied engine tree. Pin the actual default schedule so a
+    // future change can't silently shrink the retry budget back down.
+    const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-writeretry-"));
+    try {
+      const file = Path.join(dir, "out.txt");
+      const realWriteFile = fs.writeFile;
+      const waits = [];
+      const realSetTimeout = global.setTimeout;
+      jest.spyOn(global, "setTimeout").mockImplementation((fn, ms) => {
+        waits.push(ms);
+        return realSetTimeout(fn, 0);
+      });
+      let calls = 0;
+      const spy = jest.spyOn(fs, "writeFile").mockImplementation((...args) => {
+        calls += 1;
+        if (calls < 6) {
+          const err = new Error("EPERM: operation not permitted, open");
+          err.code = "EPERM";
+          return Promise.reject(err);
+        }
+        return realWriteFile(...args);
+      });
+      await writeFileWithRetry(file, "hello");
+      expect(calls).toBe(6);
+      expect(waits).toEqual([200, 400, 800, 1600, 2000]);
+      spy.mockRestore();
+      global.setTimeout.mockRestore();
+    } finally {
+      fs.removeSync(dir);
+    }
+  });
+
   test("does not retry a non-transient error", async () => {
     const dir = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-writeretry-"));
     try {
