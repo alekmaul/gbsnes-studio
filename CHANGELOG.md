@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.6] - 2026-09-21
+
+### Fixed
+- SNES: **"Build ROM" could fail on Windows with "EPERM: operation not permitted, open
+  '...\src\assets.h'"** — the build writes `assets.h`/`assets.c`/the graphic asset files right
+  after ejecting (wiping, recreating and re-copying) the engine tree into the same output
+  directory; on Windows, antivirus/Search Indexer can briefly hold a lock on a file immediately
+  after it's created, and a plain write landing in that window failed outright instead of
+  retrying. Those writes now retry a few times with a short backoff before giving up, which
+  absorbs this class of transient lock. No effect on Linux/macOS, where this race doesn't occur.
+
 ## [1.1.5] - 2026-09-16
 
 ### Fixed
