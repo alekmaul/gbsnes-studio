@@ -2447,11 +2447,32 @@ static void SceneRenderActors(void)
 {
     u8 i, flip, tile;
     u16 oid;
+    s16 x_rel, y_rel;
     /* Only the used slots - SceneInit hid slots > scene_num_actors once. */
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
         oid = (u16)i << 2;
-        if (actors[i].enabled && !sprites_hidden)
+        x_rel = actors[i].x - scroll_x - 8;
+        y_rel = actors[i].y - scroll_y - 16;
+        /* v4 fix (user-found, No$sns: "the rock and duck [show up] at the
+         * bottom of the screen" while scrolling Sample Town, a 448x448px
+         * scene - far bigger than this ever got exercised on before).
+         * oamSet's x/y are u16; this engine used to hand it x_rel/y_rel
+         * (s16, can go negative) with no range check at all, relying
+         * entirely on OAM hardware coordinate wraparound (Y is 8 bits -
+         * period 256; X is 9 bits - period 512) to hide off-screen actors.
+         * That only works within one wrap period of the screen edge - an
+         * actor further away than that (any scene bigger than ~256x256px,
+         * not just Sample Town) wraps back into a visible-looking position
+         * instead of disappearing, exactly what the user saw. Now an
+         * explicit distance check gates whether this actor is drawn at
+         * all - genuinely off-screen actors are hidden outright rather
+         * than trusted to wrap correctly. The bounds are the screen
+         * (256x224) plus one 16px sprite's worth of margin on every side,
+         * generous enough that nothing visible is ever clipped early. */
+        if (actors[i].enabled && !sprites_hidden &&
+            x_rel > -32 && x_rel < 288 &&
+            y_rel > -32 && y_rel < 256)
         {
             tile = actor_render_tile(i, &flip);
             // oamSet(id, x, y, priority, hflip, vflip, gfxoffset, pal)
@@ -2474,7 +2495,7 @@ static void SceneRenderActors(void)
             // a painted "priority" tile - see EVENTS.md) but above BG1.0/
             // BG2.0, so ordinary tiles no longer cover the sprite. This is
             // also just reverting to what this code did before M7 (v4).
-            oamSet(oid, actors[i].x - scroll_x - 8, actors[i].y - scroll_y - 16, 2,
+            oamSet(oid, (u16)x_rel, (u16)y_rel, 2,
                    flip, 0, tile, sprite_pal_for_slot[actors[i].frame_offset >> 1]);
             oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         }
