@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-09-21
+
+### Fixed
+- SNES: **the Windows "EPERM: operation not permitted, open '...\src\assets.h'" build error
+  still happened on 1.1.7** — user-confirmed against the real packaged 1.1.7 Windows zip, same
+  file, same error, even after 1.1.7's ~20s exponential-backoff retry budget. Repeatedly
+  re-opening the exact path the engine eject step had just written never cleared, no matter how
+  long we waited — most likely a real-time antivirus livelock (a minifilter re-flagging the path
+  on every open attempt it observes, including our own retries), not a one-off timing window.
+  Switched approach: instead of retrying the same overwrite, the build now writes the real
+  content to a brand-new temp file and renames it over the destination — a directory-entry move,
+  not a content open-for-write, so it isn't subject to the same per-open scan hook.
+
 ## [1.1.7] - 2026-09-21
 
 ### Fixed
