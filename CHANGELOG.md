@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.11] - 2026-09-21
+
+### Fixed
+- **Game Boy target: a build could hang forever with no error shown at all** — user-found on a
+  real Windows VM: the build froze right after compiling the project's music, 0% CPU/disk, no
+  dialog, nothing. This is separate from the SNES pipeline (unaffected - already confirmed
+  working end to end). Root cause: two spots (`makeBuild.js`, and `compileMusic.js`'s track
+  converter) treated a spawned process's `'error'` event as a mere warning instead of rejecting
+  the build - and `makeBuild.js`'s own `new Promise(async ...)` had no top-level error handling
+  either, so *any* failure before the build even started spawning (e.g. a transient error
+  extracting the GBDK toolchain, more likely on a slow/constrained VM) left the build silently
+  stuck rather than showing an error. Both now surface the real error instead of hanging - if a
+  build still fails on a given machine, you'll now see why instead of a frozen screen.
+
 ## [1.1.10] - 2026-09-21
 
 ### Fixed
