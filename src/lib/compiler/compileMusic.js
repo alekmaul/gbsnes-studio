@@ -255,13 +255,19 @@ const compileTrack = async (
     shell: true,
   };
 
-  await new Promise(async (resolve, reject) => {
+  // Same `new Promise(async ...)` shape as makeBuild.js (see its own long
+  // comment): the async executor itself has no throw points here, but
+  // 'error' on the child (spawn failed - mod2gbt.exe not found/launchable)
+  // must still reject, not just warn, or 'close' never fires and this
+  // Promise - and the whole build - hangs forever with no error shown.
+  await new Promise((resolve, reject) => {
     const child = childProcess.spawn(command, args, options, {
       encoding: "utf8",
     });
 
     child.on("error", (err) => {
       warnings(err.toString());
+      reject(err);
     });
 
     child.stdout.on("data", (data) => {

@@ -66,7 +66,16 @@ const makeBuild = ({
   progress = () => {},
   warnings = () => {}
 } = {}) => {
-  return new Promise(async (resolve, reject) => {
+  // `new Promise(async (resolve, reject) => {...})` is a well-known trap: if
+  // the async executor throws before calling resolve/reject, that rejection
+  // has nowhere to go - the outer Promise just never settles. That's exactly
+  // what happened here (user-found: a real Windows VM build sat frozen with
+  // 0% CPU/disk forever, no error ever shown, right after this function's
+  // first line of work). Wrapping the whole body in an IIFE and routing any
+  // throw through `.catch(reject)` guarantees this Promise always settles
+  // one way or the other.
+  return new Promise((resolve, reject) => {
+    (async () => {
     const env = Object.create(process.env);
     const { settings } = data;
 
@@ -169,8 +178,13 @@ const makeBuild = ({
       encoding: "utf8"
     });
 
+    // 'error' means the child never spawned at all (e.g. make.bat couldn't
+    // be launched) - 'close' will never fire in that case, so this MUST
+    // reject too, not just warn, or the build hangs forever with no error
+    // ever shown (see the comment above this Promise for the full story).
     child.on("error", err => {
       warnings(err.toString());
+      reject(err);
     });
 
     child.stdout.on("data", childData => {
@@ -196,6 +210,7 @@ const makeBuild = ({
         resolve();
       } else reject(code);
     });
+    })().catch(reject);
   });
 };
 
