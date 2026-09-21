@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-09-21
+
+### Fixed
+- SNES: **removed a genuinely avoidable double-write in the build pipeline** — ejecting the
+  engine core was copying its committed placeholder `src/assets.h`/`assets.c`/`src/data/*`
+  (kept so the raw engine tree is buildable standalone via plain `make`), which the build then
+  always immediately overwrote with the real compiled content anyway. That was the exact
+  double-touch behind the Windows EPERM error from 1.1.6-1.1.8. The eject step now skips
+  copying those specific placeholder files, since they're never used. Checked both this
+  project's own Game Boy target and upstream GB Studio (including its current `develop`
+  branch): this class of Windows antivirus/indexer interference with build temp files has been
+  open in GB Studio's own issue tracker for years with no code-level fix — it isn't fully
+  solvable in-process, so if it still happens, the build error itself now explains it's a known
+  Windows AV/indexer issue and suggests adding a Defender exclusion for your Temp folder or
+  this app's install folder.
+
 ## [1.1.8] - 2026-09-21
 
 ### Fixed
