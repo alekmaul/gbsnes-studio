@@ -8,6 +8,7 @@ import compileMusic from "./compileMusic";
 import compileSnesMusic from "./compileSnesMusic";
 import { emulatorRoot, snesEmulatorRoot } from "../../consts";
 import copy from "../helpers/fsCopy";
+import writeFileWithRetry from "../helpers/fs/writeFileWithRetry";
 
 const MAX_BANKS = 512; // GBDK supports max of 512 banks
 
@@ -57,7 +58,7 @@ const buildWebPlayer = async ({ outputRoot, data, emulatorDir, romFilename }) =>
     .replace(/___COLORS_HEAD___/g, colorsHead)
     .replace(/___PROJECT_HEAD___/g, customHead)
     .replace(/___CUSTOM_CONTROLS___/g, customControls);
-  await fs.writeFile(`${outputRoot}/build/web/index.html`, html);
+  await writeFileWithRetry(`${outputRoot}/build/web/index.html`, html);
 };
 
 // SNES path: eject the appData/src/snes engine, compile the project's scenes /
@@ -77,8 +78,14 @@ const buildProjectSnes = async (
   });
   progress("Compiling SNES data");
   const snesData = await compileSnesData(data, { projectRoot, warnings });
-  await fs.writeFile(`${outputRoot}/src/assets.h`, snesData.assetsH);
-  await fs.writeFile(`${outputRoot}/src/assets.c`, snesData.assetsC);
+  // ejectBuild() just wiped+recreated outputRoot and copied the whole engine
+  // tree into it (including a dummy assets.h/.c); on Windows a plain
+  // fs.writeFile() overwriting those same paths again microseconds later can
+  // transiently fail with EPERM (antivirus/Search Indexer briefly locking the
+  // file it was just notified about) - writeFileWithRetry absorbs that (see
+  // its header comment; user-found: "EPERM ... open '...\\src\\assets.h'").
+  await writeFileWithRetry(`${outputRoot}/src/assets.h`, snesData.assetsH);
+  await writeFileWithRetry(`${outputRoot}/src/assets.c`, snesData.assetsC);
   // Graphic assets go in src/data/: one `<name>_data.as` (superfree section)
   // per background / font / OBJ sheet / OBJ palette, plus data.asm that
   // `.include`s them - so wla spreads them across banks instead of one atomic
@@ -87,7 +94,7 @@ const buildProjectSnes = async (
   await fs.remove(`${outputRoot}/src/assets_spr.asm`);
   await fs.ensureDir(`${outputRoot}/src/data`);
   for (const [name, content] of Object.entries(snesData.assetsData)) {
-    await fs.writeFile(`${outputRoot}/src/data/${name}`, content);
+    await writeFileWithRetry(`${outputRoot}/src/data/${name}`, content);
   }
   await compileSnesMusic({
     music: data.music || [],
