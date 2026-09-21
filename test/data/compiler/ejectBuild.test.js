@@ -33,6 +33,27 @@ describe("ejectBuild", () => {
     }
   });
 
+  test("SNES: does not copy the committed default soundbank either (compileSnesMusic.js owns it now)", async () => {
+    const outputRoot = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-ejectbuild-snes-sb-"));
+    try {
+      await ejectBuild({
+        projectType: "snes",
+        outputRoot,
+        compiledData: { files: {} }
+      });
+      expect(fs.existsSync(Path.join(outputRoot, "res", "soundbank.bnk"))).toBe(false);
+      expect(fs.existsSync(Path.join(outputRoot, "res", "soundbank.h"))).toBe(false);
+      expect(fs.existsSync(Path.join(outputRoot, "res", "soundbank_banks.h"))).toBe(false);
+      expect(fs.existsSync(Path.join(outputRoot, "src", "res", "soundbank.asm"))).toBe(false);
+      // Sibling files in the same directories that aren't overwritten by a
+      // build still copy through normally.
+      expect(fs.existsSync(Path.join(outputRoot, "res", "effectssfx.it"))).toBe(true);
+      expect(fs.existsSync(Path.join(outputRoot, "src", "res", "sfx.asm"))).toBe(true);
+    } finally {
+      fs.removeSync(outputRoot);
+    }
+  });
+
   test("GB: engine core copies through unaffected (no exclude applies)", async () => {
     const outputRoot = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-ejectbuild-gb-"));
     try {

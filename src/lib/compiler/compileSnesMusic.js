@@ -17,9 +17,34 @@ import childProcess from "child_process";
 import fs from "fs-extra";
 import Path from "path";
 import { assetFilename } from "../helpers/gbstudio";
-import { pathExists } from "../helpers/fsCopy";
+import copy, { pathExists } from "../helpers/fsCopy";
+import { engineRoot } from "../../consts";
 import { resolvePvsHome } from "./buildSnesRom";
 import { modToIt } from "./mod2it";
+
+// The 4 soundbank files (a real smconv output, committed once as a
+// proof-of-concept default) used to be copied in by ejectBuild.js as part of
+// the whole engine-core copy; ejectBuild.js now excludes them (see its own
+// comment for why - a real, AV-independent Windows EPERM re-touching a path
+// something else just wrote), so this module owns making sure they exist
+// either way: the real compiled ones below when a project has music, or a
+// copy of the committed defaults here when it doesn't.
+const SOUNDBANK_FILES = [
+  ["res", "soundbank.bnk"],
+  ["res", "soundbank.h"],
+  ["res", "soundbank_banks.h"],
+  ["src", "res", "soundbank.asm"]
+];
+
+const copyDefaultSoundbank = async buildRoot => {
+  const corePath = `${engineRoot}/snes`;
+  await fs.ensureDir(Path.join(buildRoot, "res"));
+  await fs.ensureDir(Path.join(buildRoot, "src", "res"));
+  for (const parts of SOUNDBANK_FILES) {
+    // eslint-disable-next-line no-await-in-loop
+    await copy(Path.join(corePath, ...parts), Path.join(buildRoot, ...parts));
+  }
+};
 
 const run = (cmd, args, cwd) =>
   new Promise((resolve, reject) => {
@@ -94,7 +119,10 @@ const compileSnesMusic = async ({
   warnings = () => {}
 } = {}) => {
   if (music.length === 0) {
-    return; // keep the committed proof-of-concept soundbank
+    // ejectBuild.js no longer copies these (see its own comment) - restore
+    // the committed proof-of-concept soundbank ourselves.
+    await copyDefaultSoundbank(buildRoot);
+    return;
   }
 
   const pvsHome = await resolvePvsHome({ progress });

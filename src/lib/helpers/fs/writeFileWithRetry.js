@@ -18,21 +18,23 @@ const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
 // Upstream GB Studio (this project's own ancestor) has had this exact class
 // of bug in its own issue tracker for years, across many releases, with no
 // code-level fix ever shipped there either - it's long-standing Windows
-// antivirus/indexer interference with a build's temp-file writes, not
-// something specific to this app, and not something a build pipeline can
-// 100% engineer around. When we still end up giving up, say so plainly
-// instead of surfacing a bare, unexplained "EPERM" to the user.
-const AV_HINT =
-  "\n\nThis is a known Windows antivirus/Search Indexer interference issue " +
-  "(GB Studio itself has hit the same class of bug for years) - it can " +
-  "briefly lock a build file right after it's created. If it keeps " +
-  "happening, try adding a Windows Defender/antivirus exclusion for your " +
-  "Temp folder (%LOCALAPPDATA%\\Temp) or this app's install folder, then " +
+// file-locking interference with a build's temp-file writes, not something
+// specific to this app, and not something a build pipeline can 100% engineer
+// around. Antivirus is one cause, but not the only one: reproduced on a real
+// Windows 8 VM with no antivirus running at all, so the hint below no longer
+// names antivirus specifically. When we still end up giving up, say so
+// plainly instead of surfacing a bare, unexplained "EPERM" to the user.
+const WINDOWS_LOCK_HINT =
+  "\n\nThis is a known class of Windows file-locking issue (GB Studio itself " +
+  "has hit it for years) - something else (antivirus, Search Indexer, or " +
+  "Windows itself) briefly held a lock on a build file right after it was " +
+  "created. If it keeps happening, try adding a Windows Defender/antivirus " +
+  "exclusion for your Temp folder or this app's install folder, then " +
   "Build ROM again.";
 
 const withHintIfRetryable = e => {
-  if (RETRYABLE_CODES.includes(e.code) && !String(e.message).includes(AV_HINT)) {
-    e.message += AV_HINT;
+  if (RETRYABLE_CODES.includes(e.code) && !String(e.message).includes(WINDOWS_LOCK_HINT)) {
+    e.message += WINDOWS_LOCK_HINT;
   }
   return e;
 };

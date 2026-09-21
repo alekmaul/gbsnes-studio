@@ -167,7 +167,12 @@ maybe("compileSnesMusic (smconv) + buildProject", () => {
     180000
   );
 
-  test("no project music is a no-op (keeps the committed soundbank)", async () => {
+  test("no project music restores the committed default soundbank (ejectBuild.js no longer copies it)", async () => {
+    // ejectBuild.js excludes the soundbank files from its engine-core copy
+    // (see its own comment - the same real, AV-independent Windows EPERM
+    // class that hit assets.h also hit these), so compileSnesMusic() must
+    // now put the committed default there itself when a project has no
+    // music of its own, on a bare directory ejectBuild never touched.
     const outputRoot = await fs.mkdtemp(
       Path.join(os.tmpdir(), "gbs-snes-nomusic-")
     );
@@ -179,10 +184,17 @@ maybe("compileSnesMusic (smconv) + buildProject", () => {
         progress: () => {},
         warnings: () => {}
       });
-      // nothing was written
-      expect(fs.existsSync(Path.join(outputRoot, "res", "soundbank.bnk"))).toBe(
-        false
-      );
+      const committedDir = Path.join(__dirname, "..", "..", "..", "appData", "src", "snes");
+      for (const parts of [
+        ["res", "soundbank.bnk"],
+        ["res", "soundbank.h"],
+        ["res", "soundbank_banks.h"],
+        ["src", "res", "soundbank.asm"]
+      ]) {
+        const written = await fs.readFile(Path.join(outputRoot, ...parts));
+        const committed = await fs.readFile(Path.join(committedDir, ...parts));
+        expect(written.equals(committed)).toBe(true);
+      }
     } finally {
       await fs.remove(outputRoot);
     }
