@@ -50,20 +50,37 @@ const copyFile = async (src, dest, options = {}) => {
   await new Promise((resolve, reject) => {
     const inputStream = fs.createReadStream(src);
     const outputStream = fs.createWriteStream(dest, { mode: destMode });
-    inputStream.once('error', (err) => {
+    let settled = false;
+    const fail = () => {
+      if (settled) return;
+      settled = true;
+      reject(new Error(`Could not write file ${dest}`));
+    };
+    inputStream.once('error', () => {
       outputStream.close();
-      reject(new Error(`Could not write file ${dest}`));
+      fail();
     });
-    outputStream.once('error', (err) => {
-      reject(new Error(`Could not write file ${dest}`));
+    outputStream.once('error', fail);
+    // Wait for the *output* stream's 'close', not its 'finish' (which this
+    // helper used to wait on) or the input stream's 'end' (an earlier,
+    // already-fixed instance of the same class of bug - see git history).
+    // 'finish' only means all data has been flushed to the write stream;
+    // fs.WriteStream still closes the underlying OS file handle as a
+    // separate async step afterwards, and 'close' is what actually signals
+    // that has completed. On fast local storage that gap is microseconds
+    // and invisible, but on a slow/virtualized disk it can be wide enough
+    // that code re-touching this exact path moments later (e.g.
+    // makeBuild.js reading+rewriting game.h right after this function
+    // copies the whole engine tree) collides with a handle copyFile()
+    // itself hadn't fully released yet - a real Windows EPERM, user-
+    // confirmed reproducible on a Windows 8 VM with no antivirus involved,
+    // so not an AV/indexer lock as earlier fixes here assumed.
+    outputStream.once('close', () => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
     });
-    // Wait for the *output* stream to actually finish (all data flushed,
-    // file descriptor ready), not the input stream's 'end' - that fires as
-    // soon as reading is done, which can race ahead of the write still in
-    // flight. Harmless before this helper did anything else afterwards, but
-    // the chmod() below needs the file to genuinely exist first (caught by
-    // a real ENOENT on this exact race while testing the permission fix).
-    outputStream.once('finish', () => { resolve(); });
     inputStream.pipe(outputStream);
   });
   await fs.chmod(dest, destMode);

@@ -23,7 +23,11 @@ const setROMTitle = async (filename, title) => {
     const charCode = title.charCodeAt(i) < 256 ? title.charCodeAt(i) || 0 : 0;
     romData[HEADER_TITLE + i] = charCode;
   }
-  await fs.writeFile(filename, await patchROM(romData));
+  // Same shape as game.h/data_ptrs.c (see makeBuild.js's own comment on
+  // game.h): game.gb was just written moments earlier, this time by the
+  // make.bat subprocess exiting rather than ejectBuild's copy - re-opening
+  // it for writing again right away is the same class of risk.
+  await writeFileAtomic(filename, await patchROM(romData));
 };
 
 const convertHexTo15BitRGB = hex => {

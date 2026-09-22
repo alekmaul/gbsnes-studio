@@ -1,10 +1,18 @@
 import fs from "fs-extra";
-import os from "os";
 import Path from "path";
 
 jest.mock("electron", () => {
   const app = { getPath: () => require("os").tmpdir(), getLocale: () => "en" };
   return { app, remote: { app } };
+});
+// User-found: real failures always land under C:\tmp\<guid>\... (getTmp.js's
+// own fallback path, used when the real Electron temp path has a space,
+// contains ".itch", or - on win32 - is too long), not the default per-user
+// AppData\Local\Temp. Force the exact same base path here to reproduce
+// faithfully, rather than the default os.tmpdir() this test used before.
+jest.mock("../../../src/lib/helpers/getTmp", () => () => {
+  require("fs-extra").ensureDirSync("C:\\tmp");
+  return "C:\\tmp";
 });
 
 // eslint-disable-next-line import/first
@@ -39,7 +47,9 @@ maybe("buildProject (gb) - real toolchain end to end", () => {
       data.name = "GBBUILDTEST";
       // GB target is the default (no settings.target override).
 
-      const outputRoot = await fs.mkdtemp(Path.join(os.tmpdir(), "gbs-gb-build-"));
+      // Match buildGame.js's real construction exactly: Path.normalize(`${getTmp()}/${buildUUID}`)
+      const uuid = require("crypto").randomBytes(16).toString("hex");
+      const outputRoot = Path.normalize(`C:\\tmp/${uuid}`);
       const warnings = [];
       try {
         await buildProject(data, {
