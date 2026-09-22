@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.7] - 2026-09-22
+
+### Changed
+- **SNES-only for now.** Game Boy builds proved unreliable on Windows across several real test
+  machines despite a long series of attempted fixes, while SNES has been consistently reliable.
+  Rather than keep shipping GB-side fixes that don't hold up, the Game Boy target is hidden from
+  the New Project screen's template list and the Settings page's Target Platform picker - only
+  SNES options remain selectable. The GB engine and build code are untouched and still present;
+  a project that already has its target explicitly set to Game Boy keeps building as one, it's
+  just no longer offered as a starting choice.
+
 ## [1.1.5] - 2026-09-16
 
 ### Fixed
