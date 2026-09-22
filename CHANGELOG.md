@@ -5,6 +5,25 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.13] - 2026-09-22
+
+### Fixed
+- **Applied upstream GB Studio's actual v4.2.1 Windows build fix.** Their real fix wasn't about
+  antivirus: extracting a vendored toolchain into a shared, persistent temp cache directory had
+  no guard against a second call trying to delete/recreate that same directory while a previous
+  extraction - or a previous build's still-running compiler process - still had files under it
+  open, a genuine Windows "can't delete what's still open" race. We had the identical shape of
+  bug in two places (the GB and SNES toolchain caches), plus a real, independent bug in GB's own
+  cache check (`fs.fstat()` was called with a path instead of a file descriptor, so it always
+  failed and silently re-copied the whole toolchain on every single call). Both now share one
+  fixed, de-duplicated extraction path, matching GB Studio's fix, for GB and SNES alike.
+- **Two more real GB-only Windows build bugs**, found by writing the project's first-ever real
+  end-to-end GB build test: `lcc` (the GBDK compiler) was invoked through a stale hardcoded
+  relative path that never followed a past toolchain-cache rename, so it was never actually
+  found; and `make.bat` was spawned by bare name, which only works when Windows searches the
+  current directory for it - disabled by a documented security-hardening setting some Windows
+  installs have on. Both fixed; GB builds now succeed end to end in real testing.
+
 ## [1.1.12] - 2026-09-22
 
 ### Fixed
