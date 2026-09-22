@@ -5,14 +5,24 @@ jest.mock("electron", () => {
   const app = { getPath: () => require("os").tmpdir(), getLocale: () => "en" };
   return { app, remote: { app } };
 });
-// User-found: real failures always land under C:\tmp\<guid>\... (getTmp.js's
-// own fallback path, used when the real Electron temp path has a space,
-// contains ".itch", or - on win32 - is too long), not the default per-user
-// AppData\Local\Temp. Force the exact same base path here to reproduce
-// faithfully, rather than the default os.tmpdir() this test used before.
+// User-found: on Windows, real failures always land under C:\tmp\<guid>\...
+// (getTmp.js's own fallback path, used when the real Electron temp path has
+// a space, contains ".itch", or is too long), not the default per-user
+// AppData\Local\Temp. Force that same base path here to reproduce
+// faithfully - but only on win32: C:\tmp isn't a valid/portable path on
+// Linux/macOS, and this test's own toolchain gate (`maybe`, below) means it
+// genuinely runs on every platform that has a vendored GBDK toolchain, not
+// Windows only - hardcoding C:\tmp unconditionally broke CI's Linux test
+// job outright (exit 127 - a real regression from this test itself, not
+// from the code it's testing).
+// jest.mock()'s factory can't reference an outer-scope const
+// (babel-plugin-jest-hoist forbids it), so the platform check is inlined
+// here rather than factored into a shared TMP_BASE constant.
 jest.mock("../../../src/lib/helpers/getTmp", () => () => {
-  require("fs-extra").ensureDirSync("C:\\tmp");
-  return "C:\\tmp";
+  const base =
+    global.process.platform === "win32" ? "C:\\tmp" : require("os").tmpdir();
+  require("fs-extra").ensureDirSync(base);
+  return base;
 });
 
 // eslint-disable-next-line import/first
@@ -49,7 +59,8 @@ maybe("buildProject (gb) - real toolchain end to end", () => {
 
       // Match buildGame.js's real construction exactly: Path.normalize(`${getTmp()}/${buildUUID}`)
       const uuid = require("crypto").randomBytes(16).toString("hex");
-      const outputRoot = Path.normalize(`C:\\tmp/${uuid}`);
+      const tmpBase = process.platform === "win32" ? "C:\\tmp" : require("os").tmpdir();
+      const outputRoot = Path.normalize(`${tmpBase}/${uuid}`);
       const warnings = [];
       try {
         await buildProject(data, {
