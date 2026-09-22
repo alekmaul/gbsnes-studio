@@ -1,7 +1,9 @@
 import fs from "fs-extra";
+import Path from "path";
 import { buildToolsRoot } from "../../consts";
-import copy from "../helpers/fsCopy";
+import copy, { pathExists } from "../helpers/fsCopy";
 import getTmp from "../helpers/getTmp";
+import dedupeByKey from "../helpers/dedupeByKey";
 
 const ensureBuildTools = async () => {
   const buildToolsPath = `${buildToolsRoot}/${process.platform}-${
@@ -9,30 +11,37 @@ const ensureBuildTools = async () => {
   }`;
 
   const tmpPath = getTmp();
-  // Same path (and the same "-v3" rename) as makeBuild.js's own copy of
-  // this logic - both extract the same buildToolsPath and are meant to
-  // share one cached copy. See the long comment there for why the rename is
-  // needed (invalidates stale pre-fix extractions with broken executable
-  // permissions on Linux/macOS, which a plain existence check can't tell
-  // apart from a good one) - this function already forced `mode: 0o755`
-  // explicitly from the start, so it was never affected by the second bug
-  // (source-mode preservation from inside app.asar) makeBuild.js's own copy
-  // call just picked up, but it shares the destination path so it needs the
-  // same bump to stay in sync.
+  // Same path (and the same "-v3" rename) as makeBuild.js used to have its
+  // own separate copy of this logic - both extracted the same
+  // buildToolsPath into the same shared cache, redundantly, on every GB
+  // build; makeBuild.js now just calls this function instead. See the long
+  // comment history in CLAUDE.md for why the rename is needed (invalidates
+  // stale pre-fix extractions with broken executable permissions on
+  // Linux/macOS, which a plain existence check can't tell apart from a good
+  // one).
   const tmpBuildToolsPath = `${tmpPath}/_gbs-v3`;
+  // Written only after a copy fully completes - guards against a
+  // partial/interrupted extraction (crashed mid-copy, or another build
+  // still spawning it) looking like a valid one. This function previously
+  // checked `fs.fstat(tmpBuildToolsPath)` - fstat takes a file descriptor,
+  // not a path, so that call always threw and this function silently
+  // re-copied the whole toolchain on *every single call*, not just the
+  // first - wasteful, and (see dedupeByKey.js) a real source of the exact
+  // Windows EPERM class GB Studio's own v4.2.1 fixed.
+  const doneMarker = Path.join(tmpBuildToolsPath, ".extracted-ok");
 
-  // Symlink build tools so that path doesn't contain any spaces
-  // GBDKDIR doesn't work if path has spaces :-(
-  try {
-    await fs.fstat(tmpBuildToolsPath);
-  } catch (e) {
+  return dedupeByKey(tmpBuildToolsPath, async () => {
+    if (await pathExists(doneMarker)) {
+      return tmpBuildToolsPath;
+    }
+    await fs.remove(tmpBuildToolsPath);
     await copy(buildToolsPath, tmpBuildToolsPath, {
-      overwrite: false,
+      overwrite: true,
       mode: 0o755
     });
-  }
-
-  return tmpBuildToolsPath;
+    await fs.writeFile(doneMarker, "");
+    return tmpBuildToolsPath;
+  });
 };
 
 export default ensureBuildTools;

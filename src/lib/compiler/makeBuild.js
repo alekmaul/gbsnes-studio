@@ -1,13 +1,13 @@
 import childProcess from "child_process";
 import { remote } from "electron";
 import fs from "fs-extra";
-import { buildToolsRoot } from "../../consts";
-import copy from "../helpers/fsCopy";
+import Path from "path";
 import buildMakeBat from "./buildMakeBat";
 import { hexDec } from "../helpers/8bit";
 import getTmp from "../helpers/getTmp";
 import { isMBC1 } from "./helpers"
 import writeFileAtomic from "../helpers/fs/writeFileAtomic";
+import ensureBuildTools from "./ensureBuildTools";
 
 const HEADER_TITLE = 0x134;
 const HEADER_CHECKSUM = 0x14d;
@@ -57,8 +57,6 @@ const patchROM = romData => {
   return romData;
 };
 
-let firstBuild = true;
-
 const makeBuild = ({
   buildType = "rom",
   buildRoot = "/tmp",
@@ -80,47 +78,20 @@ const makeBuild = ({
     const env = Object.create(process.env);
     const { settings } = data;
 
-    const buildToolsPath = `${buildToolsRoot}/${process.platform}-${
-      process.arch
-    }`;
-
-    const tmpPath = getTmp();
-    // "-v3": bumped twice now, same reasoning as resolvePvsHome() in
-    // buildSnesRom.js (see its own long comment) - "-v2" invalidated caches
-    // from the first bug (no chmod at all), this bump invalidates caches
-    // from the second bug (source-mode preservation isn't trustworthy for a
-    // path inside app.asar - see the explicit `mode: 0o755` below). The
-    // symlink branch just below is effectively unreachable in practice
-    // (fs.unlink() throws for both "doesn't exist yet" and "already a real
-    // directory", landing in the copy() catch either time - see CLAUDE.md),
-    // so once a bad extraction exists at a given path it's never refreshed -
-    // confirmed twice now: user-found, "make: lcc: Permission non accordée"
-    // persisted after each of the last two fixes.
-    const tmpBuildToolsPath = `${tmpPath}/_gbs-v3`;
-
-    // Symlink build tools so that path doesn't contain any spaces
-    // GBDKDIR doesn't work if path has spaces :-(
-    try {
-      await fs.unlink(tmpBuildToolsPath);
-      await fs.ensureSymlink(buildToolsPath, tmpBuildToolsPath);
-    } catch (e) {
-      // mode: 0o755, not left to fsCopy.js's own "preserve the source
-      // file's mode" default - buildToolsPath is a path *inside* app.asar,
-      // and this old asar format (0.11.0, matching this project's pinned
-      // Electron 4) only stores a boolean "executable" flag per file, not
-      // real POSIX permission bits; whether Electron's own asar-transparent
-      // fs.lstat() reconstructs a mode reflecting that flag isn't something
-      // to trust blindly - forcing every extracted file executable
-      // sidesteps the question entirely (harmless on the non-binary files
-      // in this tree - headers, examples, docs - matching the same
-      // explicit override ensureBuildTools.js already uses).
-      await copy(buildToolsPath, tmpBuildToolsPath, {
-        overwrite: firstBuild,
-        mode: 0o755
-      });
-    }
-    
-    firstBuild = false;
+    // Used to extract its own separate (redundant) copy of the exact same
+    // shared toolchain cache ensureBuildTools.js already manages for
+    // compileMusic.js's mod2gbt - two independent, unguarded extractions of
+    // the same destination directory in the same build, neither checking
+    // whether the other had already finished. Upstream GB Studio hit and
+    // fixed this exact class of bug in v4.2.1 ("Fix for issue where Windows
+    // would attempt to remove tmp _gbsbuild while still keeping file
+    // handles open") by consolidating to one guarded extraction path -
+    // ensureBuildTools.js now has the same in-flight-dedup guard (see
+    // dedupeByKey.js), so this just calls it instead of duplicating the
+    // extraction logic. Also drops the "symlink to dodge spaces in the
+    // path" dance entirely - getTmp() already guarantees its own return
+    // value has no spaces, so the destination here never had any to dodge.
+    const tmpBuildToolsPath = await ensureBuildTools();
 
     env.PATH = [`${tmpBuildToolsPath}/gbdk/bin`, env.PATH].join(":");
     env.GBDKDIR = `${tmpBuildToolsPath}/gbdk/`;
@@ -171,11 +142,21 @@ const makeBuild = ({
       CART_TYPE: env.CART_TYPE,
       CART_SIZE: env.CART_SIZE,
       customColorsEnabled: settings.customColorsEnabled,
-      gbcFastCPUEnabled: settings.gbcFastCPUEnabled
+      gbcFastCPUEnabled: settings.gbcFastCPUEnabled,
+      lccPath: Path.join(tmpBuildToolsPath, "gbdk", "bin", "lcc")
     });
-    await fs.writeFile(`${buildRoot}/make.bat`, makeBat);
+    const makeBatPath = Path.join(buildRoot, "make.bat");
+    await fs.writeFile(makeBatPath, makeBat);
 
-    const command = process.platform === "win32" ? "make.bat" : "make";
+    // An absolute path, not a bare "make.bat" - Windows only searches cwd
+    // for an unqualified command name when NoDefaultCurrentDirectoryInExePath
+    // isn't set (a documented Microsoft security-hardening setting, real and
+    // confirmed set on a real test machine here: "'make.bat' n'est pas
+    // reconnu..." even though it's genuinely sitting in cwd right after
+    // being written). buildSnesRom.js's own tool invocations already always
+    // use absolute paths for exactly this reason and never had this problem
+    // - matches that same, already-proven pattern.
+    const command = process.platform === "win32" ? makeBatPath : "make";
     const args = ["rom"];
 
     const options = {
