@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.12] - 2026-09-22
+
+### Fixed
+- **Game Boy target: "EPERM: operation not permitted, open '...\include\game.h'"** — the
+  1.1.11 fix converted the silent build hang into a real error, which surfaced this: the same
+  Windows file-locking class of bug already fixed on the SNES side (assets.h/c, the soundbank),
+  now on `include/game.h` and `src/data/data_ptrs.c` — both edited in place right after
+  `ejectBuild` writes them. Confirmed this code is unchanged since v1.1.4 - not a new
+  regression, a pre-existing latent race most likely surfaced by v1.1.5's toolchain-cache
+  rename, which forces a full GBDK toolchain re-extraction on every fresh app launch. Since
+  these files are genuinely edited in place (not throwaway placeholders that can be excluded
+  from the copy, unlike the SNES ones), both now write through a temp file + rename instead of
+  a direct overwrite.
+
 ## [1.1.11] - 2026-09-21
 
 ### Fixed
