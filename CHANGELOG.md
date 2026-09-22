@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.14] - 2026-09-22
+
+### Fixed
+- SNES/GB: **narrowed (not yet confirmed fully closed) a real timing gap in the file-copy
+  helper used to eject the engine tree.** It resolved as soon as a copied file's data was
+  flushed, not once the file was actually closed at the OS level - those are two different
+  moments, and on a slow/virtualized disk the gap between them could plausibly be wide enough
+  for code that edits a just-copied file moments later (game.h, data_ptrs.c, ...) to collide
+  with a handle that hadn't been released yet. This is the most concrete, principled cause
+  found so far for the still-recurring Windows EPERM on `game.h` - not a confirmed fix like the
+  others in this run, since it wasn't reproducible outside the affected VM even after
+  targeted attempts.
+  Also fixed, found by auditing every remaining write in the GB pipeline for the same shape of
+  risk: `setROMTitle()` re-opened `game.gb` for writing immediately after the compiler process
+  that had just created it exited - now goes through the same safe write path.
+
 ## [1.1.13] - 2026-09-22
 
 ### Fixed
