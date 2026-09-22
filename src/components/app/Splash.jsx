@@ -30,7 +30,10 @@ class Splash extends Component {
       blur: false,
       tab: "new",
       name: l10n("SPLASH_DEFAULT_PROJECT_NAME"),
-      target: "gbhtml",
+      // GB templates are hidden below (Windows build reliability - see
+      // CLAUDE.md) - default to the SNES sample instead of a GB one that's
+      // no longer even selectable.
+      target: "sneshtml",
       path: getLastUsedPath(),
       nameError: null,
       pathError: null,
@@ -223,13 +226,12 @@ class Splash extends Component {
                   value={target}
                   onChange={this.onChange("target")}
                 >
-                  <option value="gbhtml">
-                    {l10n("SPLASH_SAMPLE_PROJECT")}
-                  </option>
+                  {/* GB templates (gbhtml/blank) hidden - Windows GB build
+                      reliability (see CLAUDE.md); code/templates stay in
+                      place, just not offered here. */}
                   <option value="sneshtml">
                     {l10n("SPLASH_SNES_SAMPLE_PROJECT")}
                   </option>
-                  <option value="blank">{l10n("SPLASH_BLANK_PROJECT")}</option>
                   <option value="snesblank">
                     {l10n("SPLASH_SNES_BLANK_PROJECT")}
                   </option>

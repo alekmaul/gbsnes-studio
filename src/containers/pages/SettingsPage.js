@@ -88,10 +88,14 @@ class SettingsPage extends Component {
                 {l10n("FIELD_TARGET_PLATFORM")}
                 <select
                   id="targetPlatform"
-                  value={target || "gb"}
+                  value={target || "snes"}
                   onChange={this.onEditSetting("target")}
                 >
-                  <option value="gb">{l10n("FIELD_TARGET_GB")}</option>
+                  {/* Game Boy hidden - Windows GB build reliability (see
+                      CLAUDE.md); the target/build code itself is untouched,
+                      just not selectable here. A project whose saved
+                      target is still explicitly "gb" keeps that setting
+                      (this dropdown just can't be used to pick it again). */}
                   <option value="snes">{l10n("FIELD_TARGET_SNES")}</option>
                 </select>
               </label>
