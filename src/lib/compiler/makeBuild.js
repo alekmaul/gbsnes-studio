@@ -7,6 +7,7 @@ import buildMakeBat from "./buildMakeBat";
 import { hexDec } from "../helpers/8bit";
 import getTmp from "../helpers/getTmp";
 import { isMBC1 } from "./helpers"
+import writeFileAtomic from "../helpers/fs/writeFileAtomic";
 
 const HEADER_TITLE = 0x134;
 const HEADER_CHECKSUM = 0x14d;
@@ -147,14 +148,23 @@ const makeBuild = ({
     if(isMBC1(settings.cartType)) {
       gameHeader = gameHeader.replace(/_MBC5/g, '_MBC1');
     }
-    await fs.writeFile(`${buildRoot}/include/game.h`, gameHeader, "utf8");
+    // game.h is a real committed file ejectBuild's copy just wrote moments
+    // earlier, edited in place (not a throwaway placeholder that can just be
+    // excluded from the copy, unlike the SNES committed dummy assets - see
+    // ejectBuild.js's own comment on that fix) - so a plain fs.writeFile()
+    // overwriting that same just-copied path can hit the identical Windows
+    // EPERM class of bug (user-found: "EPERM ... open '...\\include\\game.h'",
+    // on the same real VM that had already confirmed the SNES-side fixes).
+    // writeFileAtomic (write to a fresh temp path, then rename over the
+    // destination) sidesteps it the same way it does for SNES's assets.h/c.
+    await writeFileAtomic(`${buildRoot}/include/game.h`, gameHeader, "utf8");
 
     // Remove GBC Rombyte Offset from Makefile (OSX/Linux) if custom colors and fast CPU are not enabled
     if (process.platform !== "win32" && !settings.customColorsEnabled && !settings.gbcFastCPUEnabled)
     {
       let makeFile = await fs.readFile(`${buildRoot}/Makefile`, "utf8");
       makeFile = makeFile.replace("-Wl-yp0x143=0x80", "");
-      await fs.writeFile(`${buildRoot}/Makefile`, makeFile, "utf8");
+      await writeFileAtomic(`${buildRoot}/Makefile`, makeFile, "utf8");
     }
 
     const makeBat = await buildMakeBat(buildRoot, {

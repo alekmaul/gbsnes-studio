@@ -4,6 +4,7 @@ import ensureBuildTools from "./ensureBuildTools";
 import { assetFilename } from "../helpers/gbstudio";
 import { GB_MAX_BANK_SIZE } from "./bankedData";
 import { decHex16 } from "../helpers/8bit";
+import writeFileAtomic from "../helpers/fs/writeFileAtomic";
 
 const filterLogs = (str) => {
   return str.replace(/.*[/|\\]([^/|\\]*.mod)/g, "$1");
@@ -176,7 +177,12 @@ const compileMusic = async ({
     }, 0\n}`
   );
 
-  await fs.writeFile(`${buildRoot}/src/data/data_ptrs.c`, dataptrTemp, "utf8");
+  // data_ptrs.c was just written moments earlier by ejectBuild.js's own
+  // compiledData.files loop (a real generated file, not a placeholder) -
+  // re-opening that exact just-written path for writing again can hit the
+  // same Windows EPERM class of bug as game.h/the SNES committed dummies
+  // (see makeBuild.js's own comment on the game.h fix).
+  await writeFileAtomic(`${buildRoot}/src/data/data_ptrs.c`, dataptrTemp, "utf8");
 
   // Great for debugging build errors
   progress("Approximate Music bank sizes: " + bankedData.length);
