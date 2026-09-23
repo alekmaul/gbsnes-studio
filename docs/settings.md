@@ -1,8 +1,8 @@
 ---
-title: Réglages
+title: Settings
 nav_order: 8
 ---
 
-# Réglages
+# Settings
 
-<!-- TODO: Target Platform, SNES Options (région, taille SRAM, banques ROM), contrôles -->
+<!-- TODO: Target Platform, SNES Options (region, SRAM size, ROM banks), controls -->

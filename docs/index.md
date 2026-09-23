@@ -1,18 +1,22 @@
 ---
-title: Accueil
+title: Home
 nav_order: 1
 ---
 
 # GBSNES Studio
 
-GBSNES Studio est un créateur de jeux SNES visuel, basé sur [GB Studio](https://www.gbstudio.dev/).
-Il permet de créer des jeux Super Nintendo par glisser-déposer, sans connaissances en programmation,
-tout en restant accessible aux utilisateurs avancés (scripting, moteur C).
+GBSNES Studio is a drag-and-drop game creator for the Super Nintendo, based on
+[GB Studio](https://www.gbstudio.dev/). It's designed to be usable with little to no
+programming knowledge, while still staying accessible to advanced users through scripting
+and direct access to the underlying C engine.
 
-## Téléchargement
+You can build real, bootable `.sfc` ROM files that run in an emulator, on a web page, or on
+real SNES hardware.
 
-La dernière version est disponible sur [itch.io](https://portabledev.itch.io/gbsnes-studio).
+## Download
 
-## Code source
+Get the latest version from the [itch.io download page](https://portabledev.itch.io/gbsnes-studio).
 
-Le code source est disponible sur [GitHub](https://github.com/alekmaul/gbsnes-studio).
+## Source code
+
+The source code is available on [GitHub](https://github.com/alekmaul/gbsnes-studio).

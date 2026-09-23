@@ -1,9 +1,9 @@
 ---
-title: Événements de script
+title: Scripting Events
 nav_order: 6
 has_children: true
 ---
 
-# Événements de script
+# Scripting Events
 
-<!-- TODO: liste des événements, référencer appData/src/snes/EVENTS.md pour le support SNES -->
+<!-- TODO: list of events; reference appData/src/snes/EVENTS.md for SNES support -->

@@ -4,18 +4,46 @@ theme: just-the-docs
 url: "https://alekmaul.github.io"
 baseurl: "/gbsnes-studio"
 
+# Without this, no page actually uses the theme's HTML template - it just
+# renders the raw converted Markdown with no CSS/JS/sidebar at all (exactly
+# what showed up on the first real deploy). Applies `layout: default` to
+# every page unless a page's own frontmatter overrides it.
+defaults:
+  - scope:
+      path: ""
+    values:
+      layout: default
+
 search_enabled: true
+enable_copy_code_button: true
+heading_anchors: true
+back_to_top: true
+back_to_top_text: "Back to top"
+
+logo: "/assets/images/logo.png"
+favicon_ico: "/assets/images/favicon.ico"
+
+footer_content: "Copyright &copy; GBSNES Studio contributors. Distributed under an <a href=\"https://github.com/alekmaul/gbsnes-studio/blob/main/LICENSE\">MIT license</a>."
 
 aux_links:
-  "Code source":
+  "GBSNES Studio on GitHub":
     - "https://github.com/alekmaul/gbsnes-studio"
 
 nav_external_links:
-  - title: Télécharger sur itch.io
+  - title: Download on itch.io
     url: https://portabledev.itch.io/gbsnes-studio
 
-# just-the-docs's own plugins (jekyll-seo-tag, jekyll-include-cache) are
-# activated automatically via the Gemfile/gem theme mechanism - no need to
-# list them here too (unlike the remote_theme approach this replaced).
+# Colored callout boxes usable in any page as > note / > important / etc.
+callouts:
+  note:
+    title: Note
+    color: blue
+  important:
+    title: Important
+    color: yellow
+  warning:
+    title: Warning
+    color: red
+
 plugins:
   - jekyll-sitemap

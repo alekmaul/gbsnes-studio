@@ -1,9 +1,9 @@
 ---
-title: Éditeur de projet
+title: Project Editor
 nav_order: 4
 has_children: true
 ---
 
-# Éditeur de projet
+# Project Editor
 
-<!-- TODO: scènes, acteurs, déclencheurs, caméra -->
+<!-- TODO: scenes, actors, triggers, camera -->

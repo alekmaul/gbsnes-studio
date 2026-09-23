@@ -1,17 +1,17 @@
 ---
-title: Migrer un projet GB vers SNES
+title: Migrating a GB project to SNES
 nav_order: 9
 ---
 
-# Migrer un projet Game Boy vers SNES
+# Migrating a Game Boy project to SNES
 
-GBSNES Studio se concentre désormais sur la cible SNES. Si vous avez un ancien projet
-ciblant Game Boy, voici comment le faire pointer vers SNES.
+GBSNES Studio is now focused on the SNES target. If you have an older project that still
+targets Game Boy, here's how to point it at SNES instead.
 
-## Changer la cible
+## Changing the target
 
-Ouvrez le fichier `.gbsproj` du projet (un fichier JSON) et ajoutez, ou modifiez, dans
-l'objet `settings` :
+Open the project's `.gbsproj` file (a JSON file) and add, or change, this inside the
+`settings` object:
 
 ```json
 "settings": {
@@ -19,22 +19,25 @@ l'objet `settings` :
 }
 ```
 
-L'absence de ce champ équivaut à `"gb"` (comportement par défaut historique).
+If this field is missing entirely, it's treated as `"gb"` (the historical default).
 
-Les réglages spécifiques à SNES (`snesRegion`, `snesSramSize`, `snesRomBanks`) sont
-optionnels — des valeurs par défaut raisonnables sont appliquées si absents, et ils
-apparaissent dans Settings une fois le projet rouvert avec la cible SNES.
+The SNES-specific settings (`snesRegion`, `snesSramSize`, `snesRomBanks`) are optional -
+sensible defaults are applied if they're absent, and they'll show up under Settings once the
+project is reopened with the SNES target.
 
-## Ce qui ne se convertit pas automatiquement
+## What doesn't convert automatically
 
-Changer ce seul champ permet de *tenter* la compilation en SNES, mais ne garantit pas un
-résultat visuel ou fonctionnel identique sans retouche :
+Changing this one field lets you *attempt* an SNES build, but it doesn't guarantee an
+identical visual or functional result without further work:
 
-- **Taille des fonds** — la Game Boy affiche en 160×144px, la SNES attend au minimum
-  256×224px. Un fond trop petit compile toujours (juste un avertissement dans l'éditeur),
-  mais s'affichera plus petit que l'écran SNES.
-- **Compatibilité des événements de script** — certains événements Game Boy n'ont pas
-  d'équivalent, ou sont inertes, sur SNES. Voir la liste complète (à jour) dans le dépôt du
-  moteur : `appData/src/snes/EVENTS.md`.
+{: .warning }
+> **Background size** - Game Boy renders at 160x144px, while SNES expects at least
+> 256x224px. An undersized background still compiles (you'll just get a warning in the
+> editor), but it will display smaller than the SNES screen.
 
-<!-- TODO: étoffer avec des captures d'écran / exemples concrets -->
+{: .warning }
+> **Scripting event compatibility** - some Game Boy events have no SNES equivalent, or are
+> inert on SNES. See the full, up-to-date list in the engine repository:
+> `appData/src/snes/EVENTS.md`.
+
+<!-- TODO: flesh out with screenshots / concrete examples -->

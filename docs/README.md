@@ -1,15 +1,15 @@
 # Documentation
 
-Source de la documentation publiée sur https://alekmaul.github.io/gbsnes-studio/,
-construite par le workflow `.github/workflows/build-docs.yml` (job **BuildDocs**) à chaque
-push sur `main` qui touche ce dossier.
+Source for the documentation published at https://alekmaul.github.io/gbsnes-studio/, built by
+the `.github/workflows/build-docs.yml` workflow (job **BuildDocs**) on every push to `main`
+that touches this folder.
 
-Basée sur Jekyll + le thème [just-the-docs](https://github.com/just-the-docs/just-the-docs)
-(déclaré comme une vraie gem dans le `Gemfile`, pas en "remote theme" - BuildDocs fait son
-propre build via Actions, donc pas besoin du contournement que `remote_theme` fournit pour le
-builder natif de GitHub Pages).
+Built with Jekyll + the [just-the-docs](https://github.com/just-the-docs/just-the-docs) theme,
+declared as a real gem in `Gemfile` (not `remote_theme` - BuildDocs does its own build via
+Actions, so none of the workaround `remote_theme` provides for GitHub Pages' native builder is
+needed, and Bundler resolves the theme's own dependencies automatically).
 
-## Aperçu local
+## Local preview
 
 ```bash
 cd docs
@@ -18,31 +18,37 @@ bundle install
 bundle exec jekyll serve
 ```
 
-Puis ouvrir http://localhost:4000/gbsnes-studio/
+Then open http://localhost:4000/gbsnes-studio/
 
-## Ajouter une page
+## Adding a page
 
-Chaque page est un fichier `.md` avec un frontmatter YAML qui pilote la navigation :
+Each page is a `.md` file with YAML frontmatter that drives navigation:
 
 ```markdown
 ---
-title: Titre de la page
+title: Page title
 nav_order: 10
 ---
 ```
 
-Pour une page avec des sous-pages, ajouter `has_children: true` sur la page parente, et sur
-chaque enfant :
+For a page with sub-pages, add `has_children: true` to the parent page, and on each child:
 
 ```markdown
 ---
-title: Sous-page
-parent: Titre de la page parente
+title: Sub-page
+parent: Parent page title
 nav_order: 1
 ---
 ```
 
-## Configuration GitHub Pages requise (une fois)
+Colored callout boxes (see `_config.yml`'s `callouts:`) are available in any page:
 
-Repo Settings → Pages → Source = **"GitHub Actions"** (pas "Deploy from a branch" - le
-workflow BuildDocs gère le déploiement lui-même).
+```markdown
+{: .warning }
+> This is a warning callout.
+```
+
+## Required GitHub Pages configuration (one-time)
+
+Repo Settings → Pages → Source = **"GitHub Actions"** (not "Deploy from a branch" - the
+BuildDocs workflow handles deployment itself).

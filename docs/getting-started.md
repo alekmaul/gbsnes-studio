@@ -1,8 +1,8 @@
 ---
-title: Premiers pas
+title: Getting Started
 nav_order: 3
 ---
 
-# Premiers pas
+# Getting Started
 
-<!-- TODO: créer un nouveau projet, présentation rapide de l'éditeur -->
+<!-- TODO: creating a new project, a quick tour of the editor -->

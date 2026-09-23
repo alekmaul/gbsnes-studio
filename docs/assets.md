@@ -6,4 +6,4 @@ has_children: true
 
 # Assets
 
-<!-- TODO: fonds (256x224px min pour SNES), sprites, musique, UI (ascii/frame/cursor/emotes) -->
+<!-- TODO: backgrounds (256x224px min for SNES), sprites, music, UI (ascii/frame/cursor/emotes) -->
