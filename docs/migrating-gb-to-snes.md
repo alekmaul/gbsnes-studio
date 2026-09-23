@@ -1,12 +1,25 @@
 ---
 title: Migrating a GB project to SNES
-nav_order: 10
+nav_order: 9
 ---
 
 # Migrating a Game Boy project to SNES
 
-GBSNES Studio is now focused on the SNES target. If you have an older project that still
-targets Game Boy, here's how to point it at SNES instead.
+GBSNES Studio is now focused on the SNES target. This covers both cases: an existing
+GBSNES Studio project that still targets Game Boy, and a project brought in from
+[GB Studio](https://www.gbstudio.dev/) itself.
+
+## Coming from GB Studio
+
+If your `.gbsproj` was made with GB Studio (not GBSNES Studio), open it like any other
+project - the app runs its usual project migration on load, the same way GB Studio itself
+upgrades an older project when you open it in a newer version.
+
+{: .important }
+> GBSNES Studio is based on **GB Studio 1.2.2**. A `.gbsproj` created or last opened with a
+> much newer GB Studio version (3.x/4.x) may use project features or a file format that
+> didn't exist yet in 1.2.2, and might not open cleanly, or at all. Projects from GB Studio
+> 1.2.2 (or close to it) are the safest bet.
 
 ## Changing the target
 
