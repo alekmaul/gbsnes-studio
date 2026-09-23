@@ -15,9 +15,13 @@ Branding: everything user-facing says **GBSNES Studio** — `productName`, `forg
 names, the splash/About windows, and every "GB Studio" string in `src/lang/*.json` (all
 locales). The npm `name`, `executableName`, Squirrel/Store names and CI artifact names
 are `gbsnes-studio` / `gbsnes_studio` / `gbsnesstudio`. Still `gbstudio`-flavoured (not renamed
-on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
-`src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
-upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
+on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier) and the
+`src/lib/helpers/gbstudio.js` module. The Help menu's "Documentation" / "Learn More" items
+used to point at the upstream `gbstudio.dev` site (with a "(GB Studio)" suffix making that
+explicit) - now that a real GBSNES Studio docs site exists (`docs/`, published to
+https://alekmaul.github.io/gbsnes-studio/ by the BuildDocs workflow), "Documentation" opens
+that site and "Learn More" opens the itch.io page instead, and the "(GB Studio)" suffix is
+gone from both. `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
 the latest release version (`github.repos.getLatestRelease`, unchanged) — but the "Download"
 button in both the update-available dialog (`updateChecker.js`) and the
 project-from-a-newer-version dialog (`migrateWarning.js`) opens

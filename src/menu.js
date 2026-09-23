@@ -287,18 +287,18 @@ const buildMenu = async (plugins = []) => {
       role: "help",
       submenu: [
         {
-          // These stay on the original gbstudio.dev site (unchanged GB engine,
-          // no GBSNES-specific doc site) - the "(GB Studio)" suffix makes clear
-          // to the user they're leaving GBSNES Studio's own docs/site.
-          label: `${l10n("MENU_DOCUMENTATION")} (GB Studio)`,
+          // GBSNES Studio's own docs site now exists (docs/, published via
+          // the BuildDocs workflow) - no longer sends users to the original
+          // gbstudio.dev site, so the "(GB Studio)" suffix is gone too.
+          label: l10n("MENU_DOCUMENTATION"),
           click() {
-            shell.openExternal("https://www.gbstudio.dev/docs/");
+            shell.openExternal("https://alekmaul.github.io/gbsnes-studio/");
           }
         },
         {
-          label: `${l10n("MENU_LEARN_MORE")} (GB Studio)`,
+          label: l10n("MENU_LEARN_MORE"),
           click() {
-            shell.openExternal("https://www.gbstudio.dev");
+            shell.openExternal("https://portabledev.itch.io/gbsnes-studio");
           }
         }
       ]
