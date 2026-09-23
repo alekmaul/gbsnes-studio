@@ -59,11 +59,24 @@ set (no Apple identity on CI). **macOS can't block the release**: `build-macos` 
 `continue-on-error` + `timeout-minutes: 120`, and `build-linux` runs `if: always() &&
 needs.build-windows.result == 'success'` (so a macOS runner hiccup delays Linux by at most
 GitHub's queue give-up, never fails the run). The repo is public → macOS runner minutes free.
-`release` (`needs: [build-windows, build-macos, build-linux]`, `if: always() && …windows &&
-linux succeeded`) fires on Windows + Linux alone and attaches the macOS `.zip` only if that job
-produced one. On a `v*` tag `release` attaches the artifacts to the GitHub Release
-(`softprops/action-gh-release`, `fail_on_unmatched_files: false`). Lint is not gated (large
-inherited eslint debt).
+**No automatic GitHub Release**: `build.yml` only builds + packages each platform and uploads
+the results as workflow artifacts (`actions/upload-artifact`, 14-day retention) — a `v*` tag
+still triggers the same build/package/upload, nothing more. Publishing a release is a separate,
+deliberate manual step now (previously a `release` job auto-published on every `v*` tag via
+`softprops/action-gh-release`; removed after the long, ultimately-inconclusive Windows EPERM
+build-error saga made "every tag auto-publishes a Release" a liability rather than a
+convenience — see the SNES EPERM history further down). Lint is not gated (large inherited
+eslint debt).
+
+**Docs site** (`docs/`, published to https://alekmaul.github.io/gbsnes-studio/) — Jekyll +
+the `just-the-docs` theme (loaded as a `remote_theme`, not vendored), built and deployed by a
+second, separate workflow, `.github/workflows/build-docs.yml` (**BuildDocs**), on every push to
+`main` that touches `docs/**`. Uses the modern Actions-based Pages deployment
+(`actions/upload-pages-artifact` + `actions/deploy-pages`), which requires the repo's Settings
+→ Pages → Source to be set to "GitHub Actions" (a one-time manual step, not something a
+workflow file can set). Page navigation is driven entirely by each Markdown file's own
+frontmatter (`nav_order`, `has_children`, `parent`) — no separate sidebar config file. See
+`docs/README.md` for how to add a page and preview locally.
 Node-16 pin: the 2021 `yarn.lock` is never regenerated, so a clean CI resolve pulls a few
 modern transitive deps that declare `engines.node >=18` (e.g. `node-releases` via browserslist).
 `--ignore-engines` is on the CLI install, plus `YARN_IGNORE_ENGINES=true` in the workflow `env`

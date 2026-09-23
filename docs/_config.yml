@@ -1,0 +1,18 @@
+title: GBSNES Studio
+description: Documentation for GBSNES Studio
+remote_theme: just-the-docs/just-the-docs
+url: "https://alekmaul.github.io"
+baseurl: "/gbsnes-studio"
+
+search_enabled: true
+
+aux_links:
+  "Code source":
+    - "https://github.com/alekmaul/gbsnes-studio"
+
+nav_external_links:
+  - title: Télécharger sur itch.io
+    url: https://portabledev.itch.io/gbsnes-studio
+
+plugins:
+  - jekyll-remote-theme

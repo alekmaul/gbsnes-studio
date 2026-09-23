@@ -28,3 +28,10 @@ appData/src/snes/build
 appData/src/snes/src/data/*.obj
 appData/src/snes/src/data/*.ps
 appData/src/snes/src/data/*.dbg
+
+# docs/ - Jekyll build output (built by the BuildDocs workflow, not committed)
+docs/_site
+docs/.jekyll-cache
+docs/.jekyll-metadata
+docs/.bundle
+docs/vendor
