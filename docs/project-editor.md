@@ -1,6 +1,7 @@
 ---
 title: Project Editor
 nav_order: 4
+has_children: true
 ---
 
 # The Project Editor
