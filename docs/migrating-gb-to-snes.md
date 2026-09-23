@@ -1,6 +1,6 @@
 ---
 title: Migrating a GB project to SNES
-nav_order: 9
+nav_order: 10
 ---
 
 # Migrating a Game Boy project to SNES
