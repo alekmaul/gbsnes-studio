@@ -1,6 +1,6 @@
 title: GBSNES Studio
 description: Documentation for GBSNES Studio
-remote_theme: just-the-docs/just-the-docs
+theme: just-the-docs
 url: "https://alekmaul.github.io"
 baseurl: "/gbsnes-studio"
 
@@ -14,7 +14,8 @@ nav_external_links:
   - title: Télécharger sur itch.io
     url: https://portabledev.itch.io/gbsnes-studio
 
+# just-the-docs's own plugins (jekyll-seo-tag, jekyll-include-cache) are
+# activated automatically via the Gemfile/gem theme mechanism - no need to
+# list them here too (unlike the remote_theme approach this replaced).
 plugins:
-  - jekyll-remote-theme
-  - jekyll-seo-tag
   - jekyll-sitemap

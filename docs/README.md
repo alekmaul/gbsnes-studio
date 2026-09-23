@@ -5,7 +5,9 @@ construite par le workflow `.github/workflows/build-docs.yml` (job **BuildDocs**
 push sur `main` qui touche ce dossier.
 
 Basée sur Jekyll + le thème [just-the-docs](https://github.com/just-the-docs/just-the-docs)
-(chargé en "remote theme", aucun fichier du thème n'est vendu ici).
+(déclaré comme une vraie gem dans le `Gemfile`, pas en "remote theme" - BuildDocs fait son
+propre build via Actions, donc pas besoin du contournement que `remote_theme` fournit pour le
+builder natif de GitHub Pages).
 
 ## Aperçu local
 

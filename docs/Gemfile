@@ -1,9 +1,12 @@
 source "https://rubygems.org"
 gem "jekyll", "~> 4.3"
-gem "jekyll-remote-theme"
-# just-the-docs's own runtime dependencies - not pulled in automatically by
-# remote_theme (unlike a normal bundled `gem "just-the-docs"` theme, which
-# declares these itself). Must be listed here *and* in _config.yml's
-# `plugins:` for Jekyll to actually load them.
-gem "jekyll-seo-tag"
+# A real gem, not remote_theme - remote_theme exists specifically to work
+# around GitHub Pages' native "Deploy from a branch" Jekyll builder, which
+# can't bundle-install an arbitrary theme gem. Since BuildDocs runs its own
+# `bundle exec jekyll build` with full Bundler access, a real gem dependency
+# is simpler and correct: Bundler resolves just-the-docs's own runtime
+# dependencies (jekyll-seo-tag, jekyll-include-cache, ...) transitively,
+# instead of each one having to be tracked down and added here by hand one
+# build failure at a time (as happened using remote_theme).
+gem "just-the-docs"
 gem "jekyll-sitemap"

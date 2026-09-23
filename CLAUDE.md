@@ -69,9 +69,16 @@ convenience — see the SNES EPERM history further down). Lint is not gated (lar
 eslint debt).
 
 **Docs site** (`docs/`, published to https://alekmaul.github.io/gbsnes-studio/) — Jekyll +
-the `just-the-docs` theme (loaded as a `remote_theme`, not vendored), built and deployed by a
-second, separate workflow, `.github/workflows/build-docs.yml` (**BuildDocs**), on every push to
-`main` that touches `docs/**`. Uses the modern Actions-based Pages deployment
+the `just-the-docs` theme, declared as a real gem in `docs/Gemfile` (`theme: just-the-docs` in
+`_config.yml`) rather than a `remote_theme` — that mechanism only exists to work around GitHub
+Pages' native "Deploy from a branch" Jekyll builder (which can't `bundle install` an arbitrary
+theme gem); BuildDocs runs its own `bundle exec jekyll build` with full Bundler access, so a
+real gem is simpler and lets Bundler resolve the theme's own runtime dependencies
+(`jekyll-seo-tag`, `jekyll-include-cache`) transitively instead of each one needing to be
+listed by hand (which is what `remote_theme` required, and which took 2 broken BuildDocs runs
+to fully discover — see the git history on `docs/Gemfile` for the exact errors). Built and
+deployed by a second, separate workflow, `.github/workflows/build-docs.yml` (**BuildDocs**), on
+every push to `main` that touches `docs/**`. Uses the modern Actions-based Pages deployment
 (`actions/upload-pages-artifact` + `actions/deploy-pages`), which requires the repo's Settings
 → Pages → Source to be set to "GitHub Actions" (a one-time manual step, not something a
 workflow file can set). Page navigation is driven entirely by each Markdown file's own
