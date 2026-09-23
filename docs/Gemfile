@@ -1,3 +1,9 @@
 source "https://rubygems.org"
 gem "jekyll", "~> 4.3"
 gem "jekyll-remote-theme"
+# just-the-docs's own runtime dependencies - not pulled in automatically by
+# remote_theme (unlike a normal bundled `gem "just-the-docs"` theme, which
+# declares these itself). Must be listed here *and* in _config.yml's
+# `plugins:` for Jekyll to actually load them.
+gem "jekyll-seo-tag"
+gem "jekyll-sitemap"

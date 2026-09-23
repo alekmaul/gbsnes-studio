@@ -16,3 +16,5 @@ nav_external_links:
 
 plugins:
   - jekyll-remote-theme
+  - jekyll-seo-tag
+  - jekyll-sitemap
