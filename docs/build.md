@@ -25,6 +25,10 @@ The _Build & Run_ page (left navigation) gives you full control over building yo
   also includes on-screen touch controls.
 - **Clear** clears the build log.
 
+<!-- TODO: add screenshot here - docs/assets/images/screenshots/build-and-run.png
+<img src="/gbsnes-studio/assets/images/screenshots/build-and-run.png" alt="Build & Run page" width="900" />
+-->
+
 If you zip the `build/web` folder you can upload it to [itch.io](https://itch.io) as an HTML
 game. The recommended viewport size to use is `512px` x `480px`.
 
