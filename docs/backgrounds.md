@@ -32,6 +32,4 @@ A background can contain no more than **256** unique 8px x 8px tiles at once, du
 limits (versus 192 on Game Boy). Reusing tiles across an image helps stay under this limit on
 more detailed backgrounds.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/background-example.png
 <img src="/gbsnes-studio/assets/images/screenshots/background-example.png" alt="Background example" width="512" />
--->

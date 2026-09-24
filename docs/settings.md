@@ -21,9 +21,7 @@ Shown once the target platform is SNES (the default):
 - **SRAM Size** - the battery-backed save memory size available to `Save Data` /
   `Load Data` script events: None, 2 KB, 8 KB (default), or 32 KB.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/snes-options.png
 <img src="/gbsnes-studio/assets/images/screenshots/snes-options.png" alt="SNES Options" width="600" />
--->
 
 ## Controls
 
@@ -32,9 +30,7 @@ window. Click an input box, then press the key you want to assign it. In additio
 D-Pad, A, B, Start and Select, SNES also has X, Y, L (left shoulder) and R (right shoulder)
 buttons, each with their own binding.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/controls.png
 <img src="/gbsnes-studio/assets/images/screenshots/controls.png" alt="Controls" width="600" />
--->
 
 ## Custom HTML Header
 
