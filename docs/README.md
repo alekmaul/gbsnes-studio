@@ -48,6 +48,12 @@ Colored callout boxes (see `_config.yml`'s `callouts:`) are available in any pag
 > This is a warning callout.
 ```
 
+## Custom styling
+
+`_sass/custom/custom.scss` is a just-the-docs override point - the theme loads it last, after
+its own styles, so rules here win without needing `!important`. Currently just a drop shadow
+on every in-page image (`.main-content img`).
+
 ## Required GitHub Pages configuration (one-time)
 
 Repo Settings → Pages → Source = **"GitHub Actions"** (not "Deploy from a branch" - the

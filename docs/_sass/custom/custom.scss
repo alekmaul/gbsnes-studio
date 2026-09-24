@@ -1,0 +1,8 @@
+// just-the-docs loads this file last, after its own styles - see docs/README.md.
+
+// Soft drop shadow around every screenshot in the page body, so images read
+// as distinct panels rather than bleeding into the surrounding text.
+.main-content img {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  border-radius: 4px;
+}
