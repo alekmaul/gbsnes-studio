@@ -1,0 +1,17 @@
+<!--
+  just-the-docs' documented custom-<head> injection point (_includes/head_custom.html,
+  included unconditionally at the end of the theme's own head.html) - used here instead of
+  the Sass override point (_sass/custom/custom.scss) because that one didn't take effect:
+  the theme gem ships its own placeholder at the same relative path, and it appears to win
+  over the site's copy in Jekyll's Sass load-path order rather than the other way round.
+  A plain <style> block here has no such ambiguity - it's just HTML, always emitted, and
+  comes after the theme's own stylesheet <link> in source order so no !important is needed.
+-->
+<style>
+  /* Soft drop shadow around every screenshot in the page body, so images read as
+     distinct panels rather than bleeding into the surrounding text. */
+  .main-content img {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    border-radius: 4px;
+  }
+</style>

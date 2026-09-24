@@ -50,9 +50,12 @@ Colored callout boxes (see `_config.yml`'s `callouts:`) are available in any pag
 
 ## Custom styling
 
-`_sass/custom/custom.scss` is a just-the-docs override point - the theme loads it last, after
-its own styles, so rules here win without needing `!important`. Currently just a drop shadow
-on every in-page image (`.main-content img`).
+`_includes/head_custom.html` is just-the-docs' documented custom-`<head>` injection point -
+included unconditionally at the end of the theme's own `head.html`. Currently holds a
+`<style>` block giving every in-page image (`.main-content img`) a drop shadow. (A Sass
+override at `_sass/custom/custom.scss` - the theme's *other* documented customization point -
+was tried first and didn't take effect: the theme gem ships its own placeholder file at that
+same relative path, and it won over the site's copy in Jekyll's Sass load-path order.)
 
 ## Required GitHub Pages configuration (one-time)
 
