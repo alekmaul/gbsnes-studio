@@ -9,9 +9,9 @@ const gitRevisionPlugin = new GitRevisionPlugin({
   commithashCommand: "rev-list --max-count=1 --no-merges --abbrev-commit HEAD",
 });
 
-const docsUrl = pkg.version.includes("beta")
-  ? "https://develop.gbstudio.dev/docs/"
-  : "https://www.gbstudio.dev/docs/";
+// SNES Studio's own docs site (docs/, published via the BuildDocs workflow) -
+// replaces the inherited gbstudio.dev links now that it exists.
+const docsUrl = "https://alekmaul.github.io/gbsnes-studio/";
 
 const plugins = [
   new webpack.DefinePlugin({

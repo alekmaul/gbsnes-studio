@@ -362,21 +362,18 @@ const buildMenu = async (plugins = []) => {
           // A real SNES Studio docs site now exists (docs/, published via
           // the BuildDocs workflow) - no longer sends users to the original
           // gbstudio.dev site, so the "(GB Studio)" suffix is gone too
-          // (ported from main's identical fix). "Learn More" opens the
-          // GitHub repo rather than an itch.io page - unlike main/GBSNES
-          // Studio, this branch has no itch.io presence anywhere in the
-          // codebase to point at (verified: no "itch.io" match in src/),
-          // and no dedicated homepage either (package.json's own
-          // "homepage" still points at the old gbstudio.dev site).
+          // (ported from main's identical fix).
           label: l10n("MENU_DOCUMENTATION"),
           click() {
             shell.openExternal("https://alekmaul.github.io/gbsnes-studio/");
           }
         },
         {
+          // Same itch.io page as main/GBSNES Studio (user-confirmed it
+          // exists for this branch too).
           label: l10n("MENU_LEARN_MORE"),
           click() {
-            shell.openExternal("https://github.com/alekmaul/gbsnes-studio");
+            shell.openExternal("https://portabledev.itch.io/gbsnes-studio");
           }
         }
       ]
