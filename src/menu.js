@@ -359,19 +359,24 @@ const buildMenu = async (plugins = []) => {
       role: "help",
       submenu: [
         {
-          // Both intentionally still open the original GB Studio site (no
-          // GBSNES-specific doc site) - the "(GB Studio)" suffix makes clear
-          // you're leaving SNES Studio's own app when you click them.
-          // Ported from main's identical v1.1.4 fix.
-          label: `${l10n("MENU_DOCUMENTATION")} (GB Studio)`,
+          // A real SNES Studio docs site now exists (docs/, published via
+          // the BuildDocs workflow) - no longer sends users to the original
+          // gbstudio.dev site, so the "(GB Studio)" suffix is gone too
+          // (ported from main's identical fix). "Learn More" opens the
+          // GitHub repo rather than an itch.io page - unlike main/GBSNES
+          // Studio, this branch has no itch.io presence anywhere in the
+          // codebase to point at (verified: no "itch.io" match in src/),
+          // and no dedicated homepage either (package.json's own
+          // "homepage" still points at the old gbstudio.dev site).
+          label: l10n("MENU_DOCUMENTATION"),
           click() {
-            shell.openExternal("https://www.gbstudio.dev/docs/");
+            shell.openExternal("https://alekmaul.github.io/gbsnes-studio/");
           }
         },
         {
-          label: `${l10n("MENU_LEARN_MORE")} (GB Studio)`,
+          label: l10n("MENU_LEARN_MORE"),
           click() {
-            shell.openExternal("https://www.gbstudio.dev");
+            shell.openExternal("https://github.com/alekmaul/gbsnes-studio");
           }
         }
       ]

@@ -35,9 +35,16 @@ env:
 # then Linux - via the `needs` chain below. `build-macos` is still kept
 # `continue-on-error` and `build-linux` runs with `if: always()`, so a macOS
 # runner hiccup (the retired `macos-13` label used to hang here forever) delays
-# Linux by no more than GitHub's queue give-up and never fails the run or the
-# release. `release` gates on Windows + Linux only; the macOS .zip is attached
-# if present. The repo is public, so macOS runner minutes are free.
+# Linux by no more than GitHub's queue give-up and never fails the run. The repo
+# is public, so macOS runner minutes are free.
+#
+# No automatic GitHub Release: this workflow only builds + packages each
+# platform and uploads the results as workflow artifacts (see each
+# `actions/upload-artifact` step) - publishing a release is now a separate,
+# deliberate manual step, not something a tag push triggers on its own.
+# Ported from main's identical change, made after a long, ultimately-
+# inconclusive Windows EPERM build-error saga made "every tag auto-publishes
+# a Release" a liability rather than a convenience there.
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -140,31 +147,3 @@ jobs:
           path: out/make/**
           if-no-files-found: error
           retention-days: 14
-
-  # On a v* tag: collect whatever per-platform builds are available and attach
-  # them to the release. Fires as soon as Windows + Linux succeed; macOS is
-  # optional - `always()` lets this run even when that job failed, was
-  # cancelled, or never got a runner, and download-artifact +
-  # fail_on_unmatched_files: false tolerate the missing macOS asset.
-  release:
-    needs: [build-windows, build-macos, build-linux]
-    if: >-
-      ${{ always()
-      && startsWith(github.ref, 'refs/tags/v')
-      && needs.build-windows.result == 'success'
-      && needs.build-linux.result == 'success' }}
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          path: dist
-          merge-multiple: true
-      - name: List assets
-        run: find dist -type f | sort
-      - uses: softprops/action-gh-release@v2
-        with:
-          files: dist/**/*
-          generate_release_notes: true
-          fail_on_unmatched_files: false
