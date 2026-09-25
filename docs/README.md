@@ -1,18 +1,19 @@
 # Documentation
 
-Source for the documentation published at https://alekmaul.github.io/gbsnes-studio/, built by
-the `.github/workflows/build-docs.yml` workflow (job **BuildDocs**) on every push to `v4`
-that touches this folder.
-
-> This same GitHub Pages deployment is also targeted by `main`'s own BuildDocs workflow
-> (a separate, still-GBSNES-Studio-branded `docs/`) - a known, accepted risk of both
-> branches sharing one repo's Pages site. Whichever branch pushes to `docs/**` last wins
-> until the two docs sites are actually reconciled.
+Source for this branch's documentation. **Not currently deployed** - `.github/workflows/
+build-docs.yml` (job **BuildDocs**) was removed from `v4` on purpose: `main`'s own copy of
+that workflow is the only one allowed to publish to https://alekmaul.github.io/gbsnes-studio/
+(the repo's single GitHub Pages site). Both branches deploying there was tried briefly and
+reverted - whichever branch pushed to `docs/**` last silently won, overwriting the other's
+site, which isn't an acceptable state long-term. This `docs/` tree stays as source (and can
+still be previewed locally, see below) until the two docs sites are properly reconciled into
+one deployed site.
 
 Built with Jekyll + the [just-the-docs](https://github.com/just-the-docs/just-the-docs) theme,
-declared as a real gem in `Gemfile` (not `remote_theme` - BuildDocs does its own build via
-Actions, so none of the workaround `remote_theme` provides for GitHub Pages' native builder is
-needed, and Bundler resolves the theme's own dependencies automatically).
+declared as a real gem in `Gemfile` (not `remote_theme` - kept for when BuildDocs is
+reinstated here, since Actions-based builds don't need the workaround `remote_theme` provides
+for GitHub Pages' native builder, and Bundler resolves the theme's own dependencies
+automatically).
 
 ## Local preview
 
@@ -61,8 +62,3 @@ included unconditionally at the end of the theme's own `head.html`. Currently ho
 override at `_sass/custom/custom.scss` - the theme's *other* documented customization point -
 was tried first on `main` and didn't take effect: the theme gem ships its own placeholder file
 at that same relative path, and it won over the site's copy in Jekyll's Sass load-path order.)
-
-## Required GitHub Pages configuration (one-time)
-
-Repo Settings → Pages → Source = **"GitHub Actions"** (not "Deploy from a branch" - the
-BuildDocs workflow handles deployment itself).
