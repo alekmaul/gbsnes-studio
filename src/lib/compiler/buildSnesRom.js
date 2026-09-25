@@ -5,7 +5,6 @@ import Path from "path";
 import { pvsneslibVendorDir } from "../../consts";
 import copy, { pathExists } from "../helpers/fsCopy";
 import dedupeByKey from "../helpers/dedupeByKey";
-import writeFileAtomic from "../helpers/fs/writeFileAtomic";
 
 /*
  * SNES build orchestration (PVSnesLib).
@@ -193,13 +192,7 @@ const generateHeader = async (pvsHome, buildRoot, opts) => {
   Object.keys(subs).forEach(key => {
     out = out.split(key).join(subs[key]);
   });
-  // writeFileAtomic (write to a fresh temp path, then rename over the
-  // destination) - this file used to be a plain fs.writeFile, the exact
-  // "freshly-created file, immediately opened again" shape that caused the
-  // rest of the EPERM saga elsewhere (makeBuild.js's game.h, buildProject.js's
-  // assets.h/c, ...); this one was simply missed at the time. User-found:
-  // "Error: EPERM: operation not permitted, open '...\\hdr.asm'".
-  await writeFileAtomic(Path.join(buildRoot, "hdr.asm"), out, "utf8");
+  await fs.writeFile(Path.join(buildRoot, "hdr.asm"), out, "utf8");
 };
 
 // Collect *.c / *.asm the way snes_rules does: project root + up to 3 levels
@@ -392,8 +385,7 @@ const buildSnesRom = async ({
     .concat(objFiles)
     .concat(libObjs)
     .join("\n");
-  // Same reasoning as hdr.asm above - wlalink opens this immediately after.
-  await writeFileAtomic(Path.join(buildRoot, "linkfile"), `${linkfile}\n`, "utf8");
+  await fs.writeFile(Path.join(buildRoot, "linkfile"), `${linkfile}\n`, "utf8");
 
   // wlalink writes <name>.sfc and <name>.sym next to its output; snes_rules
   // runs it from the project root, so do the same and move the results.
@@ -415,7 +407,7 @@ const buildSnesRom = async ({
   const symSrc = Path.join(buildRoot, "game.sym");
   if (await pathExists(symSrc)) {
     const sym = await fs.readFile(symSrc, "utf8");
-    await writeFileAtomic(symOut, sym.replace(/:/g, ""), "utf8");
+    await fs.writeFile(symOut, sym.replace(/:/g, ""), "utf8");
     await fs.remove(symSrc);
   }
 
