@@ -13,7 +13,7 @@ between scenes to select it, then use the sidebar to set the starting scene, pos
 direction and sprite sheet. You can also drag the icon directly, including onto a different
 scene.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/player-start-position.png -->
+<img src="docs/assets/images/screenshots/player-start-position.gif" alt="Player Start position" width="600" />
 
 ## Scripting
 

@@ -53,7 +53,4 @@ identical visual or functional result without further work:
 > inert on SNES. See the full, up-to-date list in the engine repository:
 > `appData/src/snes/EVENTS.md`.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/target-platform-setting.png
 <img src="/gbsnes-studio/assets/images/screenshots/target-platform-setting.png" alt="Target Platform setting" width="600" />
--->
-<!-- TODO: add a before/after screenshot pair showing a background resized for SNES here -->

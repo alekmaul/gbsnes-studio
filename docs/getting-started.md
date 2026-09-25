@@ -7,7 +7,7 @@ nav_order: 3
 
 When you first open GBSNES Studio you will see the _New Project_ window.
 
-<img src="/gbsnes-studio/assets/images/screenshots/new-project.png" alt="New Project window" width="752" />
+<img src="/gbsnes-studio/assets/images/screenshots/new-project.png" alt="New Project window" width="652" />
 
 {: .note }
 > It's recommended to start with the _Sample Project (SNES)_ template, as it contains
@@ -24,7 +24,7 @@ the best starting point - it contains a few example scenes and scripts already s
 can get a small idea of what's possible. Click _Create Project_ and you'll be taken to the
 _Project Editor_.
 
-<img src="/gbsnes-studio/assets/images/screenshots/project-editor.png" alt="Project Editor" width="1258" />
+<img src="/gbsnes-studio/assets/images/screenshots/project-editor.png" alt="Project Editor" width="1158" />
 
 As soon as you see this screen you can click the Play button (&#9654;) in the top right,
 which will build and run the project.
