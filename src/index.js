@@ -319,27 +319,6 @@ ipcMain.on("open-play", async (event, url, platform) => {
   createPlay(url, platform);
 });
 
-// A web build/export reuses the same per-session outputRoot (buildGame.js's
-// buildUUID is created once, not per-build), so if the Play window is still
-// showing a previous file://.../build/web/index.html when a new "Export Web"
-// (or another Play) tries to overwrite those exact files, Chromium can still
-// hold a lock on them on Windows - the writeFileAtomic() rename in
-// buildProject.js then fails with EPERM no matter how many times it retries,
-// since nothing ever releases the handle. Navigating the window away first
-// releases it. Reported by the user: "Export ROM works fine... Export Web
-// hangs with EPERM" - ROM builds never open a BrowserWindow on their own
-// output, so they were never affected by this.
-ipcMain.on("release-play", event => {
-  if (playWindow && !playWindow.isDestroyed()) {
-    playWindow.webContents.once("did-stop-loading", () => {
-      event.sender.send("release-play-complete");
-    });
-    playWindow.loadURL("about:blank");
-  } else {
-    event.sender.send("release-play-complete");
-  }
-});
-
 ipcMain.on("document-modified", () => {
   mainWindow.setDocumentEdited(true);
   mainWindow.documentEdited = true; // For Windows

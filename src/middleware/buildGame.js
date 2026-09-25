@@ -16,24 +16,6 @@ import getTmp from "../lib/helpers/getTmp";
 
 const buildUUID = uuid();
 
-// See index.js's "release-play" handler: a web build reuses the same
-// per-session outputRoot every time, so an already-open Play window can
-// still be holding a lock on the exact files a new web build is about to
-// overwrite (Windows-only EPERM, user-reported: "Export ROM works fine...
-// Export Web hangs"). Ask the main process to navigate it away first.
-// Bounded with a timeout fallback so a main-process hiccup (event never
-// fires) can't hang the build forever - worst case, the original EPERM
-// retry logic in writeFileAtomic.js is still the safety net underneath.
-const releasePlayWindow = () =>
-  new Promise(resolve => {
-    const timeout = setTimeout(resolve, 2000);
-    ipcRenderer.once("release-play-complete", () => {
-      clearTimeout(timeout);
-      resolve();
-    });
-    ipcRenderer.send("release-play");
-  });
-
 export default store => next => async action => {
   if (action.type === BUILD_GAME) {
     const { buildType, exportBuild, ejectBuild } = action;
@@ -50,10 +32,6 @@ export default store => next => async action => {
         (project.settings && project.settings.target) ||
         "gb";
       const romName = target === "snes" ? "game.sfc" : "game.gb";
-
-      if (buildType === "web") {
-        await releasePlayWindow();
-      }
 
       await buildProject(project, {
         projectRoot,
