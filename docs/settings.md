@@ -26,9 +26,7 @@ This card also lists a few fixed per-scene resource limits worth knowing up fron
 - Up to 4 projectiles (`Launch Projectile` / `Weapon Attack`) in flight at once per scene.
 - Up to 4 actors with a running `On Update` script at once per scene.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/snes-options.png
 <img src="/gbsnes-studio/assets/images/screenshots/snes-options.png" alt="SNES Options" width="600" />
--->
 
 ## Default Player Sprites
 
@@ -48,9 +46,7 @@ window. Click an input box, then press the key you want to assign it. In additio
 D-Pad, A, B, Start and Select, SNES also has X, Y, L (left shoulder) and R (right shoulder)
 buttons, each with their own binding.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/controls.png
 <img src="/gbsnes-studio/assets/images/screenshots/controls.png" alt="Controls" width="600" />
--->
 
 ## Custom HTML Header
 

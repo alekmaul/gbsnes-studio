@@ -7,9 +7,7 @@ nav_order: 3
 
 When you first open SNES Studio you will see the _New Project_ window.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/new-project.png
 <img src="/gbsnes-studio/assets/images/screenshots/new-project.png" alt="New Project window" width="752" />
--->
 
 {: .note }
 > It's recommended to start with one of the sample templates, as they contain
@@ -32,9 +30,7 @@ If you're new to SNES Studio, one of the sample templates is the best starting p
 contain example scenes and scripts already set up so you can get a small idea of what's
 possible. Click _Create Project_ and you'll be taken to the _Project Editor_.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/project-editor.png
 <img src="/gbsnes-studio/assets/images/screenshots/project-editor.png" alt="Project Editor" width="1258" />
--->
 
 As soon as you see this screen you can click the Play button (&#9654;) in the top right,
 which will build and run the project.

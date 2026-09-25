@@ -53,6 +53,15 @@ Colored callout boxes (see `_config.yml`'s `callouts:`) are available in any pag
 > This is a warning callout.
 ```
 
+## Custom styling
+
+`_includes/head_custom.html` is just-the-docs' documented custom-`<head>` injection point -
+included unconditionally at the end of the theme's own `head.html`. Currently holds a
+`<style>` block giving every in-page image (`.main-content img`) a drop shadow. (A Sass
+override at `_sass/custom/custom.scss` - the theme's *other* documented customization point -
+was tried first on `main` and didn't take effect: the theme gem ships its own placeholder file
+at that same relative path, and it won over the site's copy in Jekyll's Sass load-path order.)
+
 ## Required GitHub Pages configuration (one-time)
 
 Repo Settings → Pages → Source = **"GitHub Actions"** (not "Deploy from a branch" - the

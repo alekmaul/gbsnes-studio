@@ -15,9 +15,7 @@ Super Nintendo only.
 You can build real, bootable `.sfc` ROM files that run in an emulator, on a web page, or on
 real SNES hardware.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/hero.png
 <img src="/gbsnes-studio/assets/images/screenshots/hero.png" alt="SNES Studio" width="900" />
--->
 
 ## Download
 

@@ -40,7 +40,6 @@ version.
 
 {: .warning }
 > **Scripting event compatibility** - some Game Boy events have no SNES equivalent, or are
-> inert on SNES. See the full, up-to-date list in the engine repository:
-> `appData/src/snes/EVENTS.md`.
+> inert on SNES. See the full, up-to-date list of [Scripting Events](scripting-events.html).
 
 <!-- TODO: add a before/after screenshot pair showing a background resized for SNES here -->

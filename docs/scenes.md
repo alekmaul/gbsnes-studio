@@ -44,7 +44,7 @@ block actor and player movement.
 > GB Studio's Colorizing tool doesn't apply here - see [Project Editor](project-editor.html)
 > for why.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/scene-collisions.png -->
+<img src="/gbsnes-studio/assets/images/screenshots/scene-collisions.gif" alt="Scene Collision" width="600" />
 
 ## Scene limits
 
