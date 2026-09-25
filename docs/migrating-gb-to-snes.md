@@ -50,7 +50,6 @@ identical visual or functional result without further work:
 
 {: .warning }
 > **Scripting event compatibility** - some Game Boy events have no SNES equivalent, or are
-> inert on SNES. See the full, up-to-date list in the engine repository:
-> `appData/src/snes/EVENTS.md`.
+> inert on SNES. See the full, up-to-date list of [Scripting Events](scripting-events.html).
 
 <img src="/gbsnes-studio/assets/images/screenshots/target-platform-setting.png" alt="Target Platform setting" width="600" />

@@ -14,13 +14,6 @@ GBSNES Studio's visual scripting is attached to scenes, actors and triggers:
 
 ## Event categories
 
-Events below are listed where SNES support is **Full** - they behave exactly like the Game
-Boy target. A handful of other events work too, but only with a noted limitation, and a few
-are still inert placeholders; see
-[`appData/src/snes/EVENTS.md`](https://github.com/alekmaul/gbsnes-studio/blob/main/appData/src/snes/EVENTS.md)
-for those and their exact caveats - it's the authoritative, up-to-date per-event breakdown,
-kept in sync whenever an opcode's behavior changes.
-
 ### Text
 
 - **Display Text** (single or multi-page) - typewriter effect, `$NN$` variable substitution,

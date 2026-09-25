@@ -37,6 +37,3 @@ buttons, each with their own binding.
 Add content to the HTML `<head>` element used by web builds - useful for custom CSS or
 JavaScript.
 
-{: .note }
-> GB Color Options and Cartridge Type, which GB Studio shows here, don't apply to the SNES
-> target and are hidden.

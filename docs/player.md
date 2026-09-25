@@ -26,7 +26,7 @@ switch it back manually if it should only be temporary.
 > somewhere else in the project (used by another actor, or already the player's own sheet).
 > Unlike Game Boy, the SNES engine pre-loads a fixed set of sprite sheets per scene at build
 > time rather than streaming new graphics into VRAM at runtime - switching to a sheet that's
-> never used anywhere is a silent no-op. See `appData/src/snes/EVENTS.md`.
+> never used anywhere is a silent no-op. 
 
 When switching scenes, the player always becomes visible at the new scene's start position,
 regardless of any earlier _Actor: Hide_. To keep the player hidden going into a scene (for a
