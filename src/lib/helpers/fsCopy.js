@@ -83,7 +83,20 @@ const copyFile = async (src, dest, options = {}) => {
     });
     inputStream.pipe(outputStream);
   });
-  await fs.chmod(dest, destMode);
+  // Windows has no POSIX executable-bit concept at all - this chmod exists
+  // purely to fix a real Linux/macOS bug (a copied binary losing its
+  // executable bit, causing EACCES spawning it later). Bisected regression,
+  // user-confirmed real build tests (v1.1.4 works, v1.1.5 - which added this
+  // chmod call - doesn't): on Windows, this extra fs.chmod() on every copied
+  // file left just enough of a handle/timing gap that the very next open of
+  // that same path (e.g. buildProject.js's writeFileAtomic immediately
+  // overwriting a just-copied placeholder like src/assets.h, or hdr.asm's
+  // build directory right after the whole toolchain was extracted) could
+  // hit EPERM. Skipping it here removes an operation that was never needed
+  // on this platform in the first place.
+  if (process.platform !== "win32") {
+    await fs.chmod(dest, destMode);
+  }
 };
 
 const copy = async (src, dest, options) => {
