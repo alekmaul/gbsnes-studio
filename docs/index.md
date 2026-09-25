@@ -13,7 +13,7 @@ and direct access to the underlying C engine.
 You can build real, bootable `.sfc` ROM files that run in an emulator, on a web page, or on
 real SNES hardware.
 
-<img src="/gbsnes-studio/assets/images/screenshots/hero.png" alt="GBSNES Studio" width="900" />
+<img src="/gbsnes-studio/assets/images/screenshots/hero.png" alt="GBSNES Studio" width="800" />
 
 ## Download
 
