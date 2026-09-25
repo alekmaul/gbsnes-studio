@@ -22,9 +22,7 @@ combining scenes, adding actors and triggers, then attaching scripting events to
 > palette extracted automatically from each PNG (see [Assets](assets.html)), so there's
 > nothing to paint by hand.
 
-<!-- TODO: add screenshot here - docs/assets/images/screenshots/editor-tools.png
 <img src="/gbsnes-studio/assets/images/screenshots/editor-tools.png" alt="Editor tools" width="600" />
--->
 
 ## The Asset Viewer
 
