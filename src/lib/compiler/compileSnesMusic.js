@@ -21,6 +21,7 @@ import copy, { pathExists } from "../helpers/fsCopy";
 import { engineRoot } from "../../consts";
 import { resolvePvsHome } from "./buildSnesRom";
 import { modToIt } from "./mod2it";
+import writeFileAtomic from "../helpers/fs/writeFileAtomic";
 
 // The 4 soundbank files (a real smconv output, committed once as a
 // proof-of-concept default) used to be copied in by ejectBuild.js as part of
@@ -157,7 +158,9 @@ const compileSnesMusic = async ({
     }
     try {
       const itPath = Path.join(workDir, `mus${i}.it`);
-      await fs.writeFile(itPath, modToIt(modBuf));
+      // writeFileAtomic - smconv opens this again moments later; same class
+      // of Windows EPERM as hdr.asm/linkfile in buildSnesRom.js.
+      await writeFileAtomic(itPath, modToIt(modBuf));
       progress(`Converted music ${track.name || track.filename}`);
       return itPath;
     } catch (e) {
@@ -192,8 +195,8 @@ const compileSnesMusic = async ({
   const { asm, bankCount } = normaliseSoundbankAsm(
     await fs.readFile(Path.join(workDir, "soundbank.asm"), "utf8")
   );
-  await fs.writeFile(Path.join(buildRoot, "src", "res", "soundbank.asm"), asm);
-  await fs.writeFile(
+  await writeFileAtomic(Path.join(buildRoot, "src", "res", "soundbank.asm"), asm);
+  await writeFileAtomic(
     Path.join(buildRoot, "res", "soundbank_banks.h"),
     soundbankBanksHeader(bankCount)
   );
