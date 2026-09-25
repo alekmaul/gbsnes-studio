@@ -23,25 +23,25 @@ warning.
 
 A single, non-animated frame. Size: 16px x 16px.
 
-<img src="/docs/assets/images/screenshots/sprite-static.png" alt="Static sprite" width="48" />
+<img src="/gbsnes-studio/assets/images/screenshots/sprite-static.png" alt="Static sprite" width="48" />
 
 ## Animated sprites
 
 Multiple frames that cycle automatically, for things like a torch or a flag - not tied to a
 direction. Supported frame counts: 2, 4, 5 or 6, at 16px height (so 32px to 96px wide).
 
-<img src="/docs/assets/images/screenshots/sprite-animated.png" alt="Animated sprite" width="192" />
+<img src="/gbsnes-studio/assets/images/screenshots/sprite-animated.png" alt="Animated sprite" width="192" />
 
 ## Actor
 
 A directional sprite: 3 frames at 48px x 16px, showing the character facing down, up and to
 the side. Facing left is generated automatically by flipping the "side" frame.
 
-<img src="/docs/assets/images/screenshots/sprite-actor.png" alt="Actor" width="288" />
+<img src="/gbsnes-studio/assets/images/screenshots/sprite-actor.png" alt="Actor" width="288" />
 
 ## Animated Actor
 
 A directional, walking sprite: 6 frames at 96px x 16px - two poses per direction (down,
 up, side), which alternate while the actor is moving and settle to the first pose when idle.
 
-<img src="/docs/assets/images/screenshots/sprite-actor-animated.png" alt="Animated Actor" width="288" />
+<img src="/gbsnes-studio/assets/images/screenshots/sprite-actor-animated.png" alt="Animated Actor" width="288" />
