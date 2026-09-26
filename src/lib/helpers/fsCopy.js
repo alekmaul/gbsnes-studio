@@ -58,7 +58,22 @@ const copyFile = async (src, dest, options = {}) => {
   // it's scoped to non-Windows only, where it's both needed and safe.
   if (process.platform !== "win32") {
     const destMode = mode !== undefined ? mode : (await fs.lstat(src)).mode;
-    await fs.chmod(dest, destMode);
+    try {
+      await fs.chmod(dest, destMode);
+    } catch (e) {
+      // Resolving on the *input* stream's 'end' (see above, kept exactly as
+      // it was in the Windows-proven-good version) only means reading
+      // finished - the output stream can still be flushing to disk a moment
+      // later, so on a fast copy of many small files this chmod can race
+      // ahead of the destination actually existing yet (real CI failure,
+      // Linux: "ENOENT ... chmod '.../cursor.gbr'", a GB toolchain example
+      // asset, not a binary - losing its executable bit here is harmless).
+      // Swallow only that specific race rather than crash the whole copy;
+      // anything else (a real permission problem) still surfaces normally.
+      if (e.code !== "ENOENT") {
+        throw e;
+      }
+    }
   }
 };
 
