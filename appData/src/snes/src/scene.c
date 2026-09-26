@@ -2301,6 +2301,9 @@ static void SceneUpdateAi(void)
 // while it is moving (a real walk cycle) or has the "animate" flag (a
 // decorative always-cycling sprite, e.g. a torch). An idle walk sprite settles
 // back to pose 0. anim_speed: 4 fastest (every 8 frames) .. 0 slowest (128).
+// Perf: local pointer, same table[i]-vs-pointer fix as the other actor-loop
+// functions in this file - actors[i] was re-indexed up to 8 times per actor
+// here.
 static void SceneAnimateActors(void)
 {
     u8 i, thr, do_anim;
@@ -2309,37 +2312,38 @@ static void SceneAnimateActors(void)
 
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
-        if (!actors[i].enabled) continue;
-        if (actors[i].frames_len <= 1) continue;
+        ACTOR *a = &actors[i];
+        if (!a->enabled) continue;
+        if (a->frames_len <= 1) continue;
 
         thr = 7;
-        if (actors[i].anim_speed == 3) thr = 15;
-        if (actors[i].anim_speed == 2) thr = 31;
-        if (actors[i].anim_speed == 1) thr = 63;
-        if (actors[i].anim_speed == 0) thr = 127;
+        if (a->anim_speed == 3) thr = 15;
+        if (a->anim_speed == 2) thr = 31;
+        if (a->anim_speed == 1) thr = 63;
+        if (a->anim_speed == 0) thr = 127;
         if ((time & thr) != 0) continue;
 
         do_anim = 0;
-        if (actors[i].animate) do_anim = 1;
+        if (a->animate) do_anim = 1;
         /* anim_hold bridges the 1-frame `moving`=0 dips at tile boundaries so a
          * continuously-walking actor keeps cycling. */
-        if (actors[i].moving || actors[i].anim_hold)
+        if (a->moving || a->anim_hold)
         {
-            if (actors[i].sprite_type != SPRITE_STATIC) do_anim = 1;
+            if (a->sprite_type != SPRITE_STATIC) do_anim = 1;
         }
 
         if (!do_anim)
         {
             /* settled idle (anim_hold ran out) -> back to the standing pose */
-            if (actors[i].sprite_type == SPRITE_ACTOR_ANIMATED && actors[i].anim_hold == 0)
+            if (a->sprite_type == SPRITE_ACTOR_ANIMATED && a->anim_hold == 0)
             {
-                actors[i].frame = 0;
+                a->frame = 0;
             }
             continue;
         }
 
-        if (actors[i].frame + 1 >= actors[i].frames_len) actors[i].frame = 0;
-        else actors[i].frame++;
+        if (a->frame + 1 >= a->frames_len) a->frame = 0;
+        else a->frame++;
     }
 }
 
@@ -2361,28 +2365,29 @@ static void SceneUpdateActors(void)
     if (scripting && actor_on_tile(script_actor))
     {
         u8 a = script_actor;
+        ACTOR *sa = &actors[a];
         u8 arrived = 0;
-        if (actors[a].x == actor_move_dest_x)
+        if (sa->x == actor_move_dest_x)
         {
-            if (actors[a].y == actor_move_dest_y) arrived = 1;
+            if (sa->y == actor_move_dest_y) arrived = 1;
         }
         if (arrived)
         {
             actor_move_settings &= ~ACTOR_MOVE_ENABLED;
-            actors[a].moving = 0;
+            sa->moving = 0;
             script_action_complete = 1;
             scripting = 0;
         }
         else
         {
             s8 dx = 0, dy = 0;
-            if (actors[a].x > actor_move_dest_x)      dx = -1;
-            else if (actors[a].x < actor_move_dest_x) dx = 1;
-            else if (actors[a].y > actor_move_dest_y) dy = -1;
-            else if (actors[a].y < actor_move_dest_y) dy = 1;
+            if (sa->x > actor_move_dest_x)      dx = -1;
+            else if (sa->x < actor_move_dest_x) dx = 1;
+            else if (sa->y > actor_move_dest_y) dy = -1;
+            else if (sa->y < actor_move_dest_y) dy = 1;
 
             actor_try_move(a, dx, dy);
-            if (!actors[a].moving)
+            if (!sa->moving)
             {
                 // Blocked - abandon the move and let the script continue.
                 actor_move_settings &= ~ACTOR_MOVE_ENABLED;
@@ -2394,14 +2399,18 @@ static void SceneUpdateActors(void)
 
     // Step every moving actor. A scripted actor keeps its `moving` flag between
     // tiles (only the aim block or arrival clears it).
+    // Perf: local pointer, same table[i]-vs-pointer fix as npc_blocking/
+    // actor_try_move/Update_TopDown/actor_render_tile - this loop runs
+    // over every actor, every frame, uncapped.
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
+        ACTOR *a = &actors[i];
         u8 is_cmd = 0;
         if (scripting)
         {
             if (i == script_actor) is_cmd = 1;
         }
-        if (!actors[i].enabled)
+        if (!a->enabled)
         {
             continue;
         }
@@ -2417,29 +2426,29 @@ static void SceneUpdateActors(void)
         {
             continue;
         }
-        if (!actors[i].moving && !is_cmd)
+        if (!a->moving && !is_cmd)
         {
-            if (actors[i].anim_hold) actors[i].anim_hold--;
+            if (a->anim_hold) a->anim_hold--;
             continue;
         }
-        actors[i].anim_hold = 4; /* moved this frame - see gbs_types.h */
-        if (actors[i].move_speed == 0)
+        a->anim_hold = 4; /* moved this frame - see gbs_types.h */
+        if (a->move_speed == 0)
         {
             if ((time & 1) == 0)
             {
-                actors[i].x += actors[i].dir_x;
-                actors[i].y += actors[i].dir_y;
+                a->x += a->dir_x;
+                a->y += a->dir_y;
             }
         }
         else
         {
-            actors[i].x += (s16)actors[i].dir_x * actors[i].move_speed;
-            actors[i].y += (s16)actors[i].dir_y * actors[i].move_speed;
+            a->x += (s16)a->dir_x * a->move_speed;
+            a->y += (s16)a->dir_y * a->move_speed;
         }
 
         if (ACTOR_ON_TILE(i) && !is_cmd)
         {
-            actors[i].moving = 0;
+            a->moving = 0;
         }
     }
 
@@ -2479,38 +2488,46 @@ static void SceneUpdateEmote(void)
 // the sheet frame directly, in the order down-A, down-B, up-A, up-B, side-A,
 // side-B. Facing for the ACTOR/ANIMATED cases is derived from dir_x/dir_y fresh
 // every call, matching the GB engine's SceneRenderActor_b.
-static u8 actor_render_tile(u8 i, u8 *flip_out)
+// Perf: takes the caller's already-computed ACTOR* directly (its one call
+// site, in SceneRenderActors, already has one) instead of an index it
+// would have to re-derive `actors[i]` from all over again - same
+// table[i]-vs-pointer fix as npc_blocking/actor_try_move/Update_TopDown,
+// applied here since `frame` alone was re-indexed up to 5 times in the
+// SPRITE_STATIC cycle below. Runs for every actor, every frame,
+// uncapped - unlike SceneAnimateActors (throttled to 1-in-8 frames).
+static u8 actor_render_tile(ACTOR *a, u8 *flip_out)
 {
-    u8 fo = actors[i].frame_offset;
-    u8 st = actors[i].sprite_type;
+    u8 fo = a->frame_offset;
+    u8 st = a->sprite_type;
     u8 pose_b = 0;
+    u8 frame = a->frame;
 
     if (st == SPRITE_STATIC)
     {
-        *flip_out = actors[i].flip;
-        if (actors[i].frames_len <= 1) return fo;
+        *flip_out = a->flip;
+        if (a->frames_len <= 1) return fo;
         /* 6-frame manual/auto cycle */
-        if (actors[i].frame == 1) return fo + ACTOR_DOWN_B_TILE0;
-        if (actors[i].frame == 2) return fo + ACTOR_UP_TILE0;
-        if (actors[i].frame == 3) return fo + ACTOR_UP_B_TILE0;
-        if (actors[i].frame == 4) return fo + ACTOR_SIDE_TILE0;
-        if (actors[i].frame == 5) return fo + ACTOR_SIDE_B_TILE0;
+        if (frame == 1) return fo + ACTOR_DOWN_B_TILE0;
+        if (frame == 2) return fo + ACTOR_UP_TILE0;
+        if (frame == 3) return fo + ACTOR_UP_B_TILE0;
+        if (frame == 4) return fo + ACTOR_SIDE_TILE0;
+        if (frame == 5) return fo + ACTOR_SIDE_B_TILE0;
         return fo;
     }
 
     if (st == SPRITE_ACTOR_ANIMATED)
     {
-        if (actors[i].frame & 1) pose_b = 1;
+        if (frame & 1) pose_b = 1;
     }
 
-    if (actors[i].dir_y < 0) /* up */
+    if (a->dir_y < 0) /* up */
     {
         *flip_out = 0;
         return fo + (pose_b ? ACTOR_UP_B_TILE0 : ACTOR_UP_TILE0);
     }
-    if (actors[i].dir_x != 0) /* side */
+    if (a->dir_x != 0) /* side */
     {
-        *flip_out = actors[i].dir_x < 0 ? 1 : 0;
+        *flip_out = a->dir_x < 0 ? 1 : 0;
         return fo + (pose_b ? ACTOR_SIDE_B_TILE0 : ACTOR_SIDE_TILE0);
     }
     /* down / idle */
@@ -2526,9 +2543,10 @@ static void SceneRenderActors(void)
     /* Only the used slots - SceneInit hid slots > scene_num_actors once. */
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
+        ACTOR *a = &actors[i];
         oid = (u16)i << 2;
-        x_rel = actors[i].x - scroll_x - 8;
-        y_rel = actors[i].y - scroll_y - 16;
+        x_rel = a->x - scroll_x - 8;
+        y_rel = a->y - scroll_y - 16;
         /* v4 fix (user-found, No$sns: "the rock and duck [show up] at the
          * bottom of the screen" while scrolling Sample Town, a 448x448px
          * scene - far bigger than this ever got exercised on before).
@@ -2562,11 +2580,11 @@ static void SceneRenderActors(void)
          * screen width, no margin. Y has no equivalent hardware ambiguity
          * within this range (its own 256 upper bound was already correct),
          * so it's unchanged. */
-        if (actors[i].enabled && !sprites_hidden &&
+        if (a->enabled && !sprites_hidden &&
             x_rel > -32 && x_rel < 256 &&
             y_rel > -32 && y_rel < 256)
         {
-            tile = actor_render_tile(i, &flip);
+            tile = actor_render_tile(a, &flip);
             // oamSet(id, x, y, priority, hflip, vflip, gfxoffset, pal)
             // frame_offset is always slot*2 (SceneInit / PLAYER_SET_SPRITE), so
             // frame_offset>>1 is the sprite slot -> its per-sheet OBJ palette.
@@ -2588,7 +2606,7 @@ static void SceneRenderActors(void)
             // BG2.0, so ordinary tiles no longer cover the sprite. This is
             // also just reverting to what this code did before M7 (v4).
             oamSet(oid, (u16)x_rel, (u16)y_rel, 2,
-                   flip, 0, tile, sprite_pal_for_slot[actors[i].frame_offset >> 1]);
+                   flip, 0, tile, sprite_pal_for_slot[a->frame_offset >> 1]);
             oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         }
         else
@@ -2603,8 +2621,9 @@ static void SceneRenderActors(void)
          * above - the emote bubble is a world-space sprite (floats above
          * the actor's head), so it should respect priority tiles the same
          * way (and not be hidden behind ordinary BG1 tiles either). */
-        oamSet(EMOTE_OID, actors[emote_actor].x - scroll_x - 8,
-               actors[emote_actor].y - scroll_y - 32, 2, 0, 0,
+        ACTOR *ea = &actors[emote_actor];
+        oamSet(EMOTE_OID, ea->x - scroll_x - 8,
+               ea->y - scroll_y - 32, 2, 0, 0,
                EMOTE_TILE0 + emote_id * 2, 1);
         oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
     }
