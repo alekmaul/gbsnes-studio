@@ -2475,6 +2475,19 @@ static void SceneRenderActors(void)
             y_rel > -32 && y_rel < 256)
         {
             tile = actor_render_tile(i, &flip);
+            // 816-tcc trap (user-found, No$sns: an actor's OAM X snapping to
+            // 0 on some frames but not others at the *same* scroll_x/actor
+            // position - not reproducible from the math, which is exactly
+            // the signature of this compiler failing to preserve a local
+            // across a real function call. x_rel/y_rel were computed above,
+            // then actor_render_tile() (a real call) ran, then the stale
+            // locals were handed to oamSet() below - the same "value
+            // computed before a call, consumed after it" shape already
+            // hit and worked around elsewhere in this file (see the
+            // 816-tcc traps list in CLAUDE.md). Re-derive fresh right here
+            // instead of trusting the pre-call copies to have survived.
+            x_rel = actors[i].x - scroll_x - 8;
+            y_rel = actors[i].y - scroll_y - 16;
             // oamSet(id, x, y, priority, hflip, vflip, gfxoffset, pal)
             // frame_offset is always slot*2 (SceneInit / PLAYER_SET_SPRITE), so
             // frame_offset>>1 is the sprite slot -> its per-sheet OBJ palette.
