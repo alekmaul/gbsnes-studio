@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.9] - 2026-09-26
+
+### Fixed
+- CI: `v1.1.8`'s Linux test run failed (`fsCopy.test.js`'s executable-bit-preservation suite,
+  skipped on Windows so not caught on the machine the actual fix was verified on), which blocked
+  all three platform builds from running at all - no `v1.1.8` release artifacts exist. Restored
+  the default "preserve the source file's own permissions" behavior on non-Windows with no change
+  to Windows behavior. `v1.1.8` is superseded by this release; don't use it.
+
 ## [1.1.8] - 2026-09-26
 
 ### Fixed
