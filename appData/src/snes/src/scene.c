@@ -473,18 +473,30 @@ static u8 col_solid_row2(s16 tx0, s16 tx1, s16 ty)
 // move attempt (up to O(N) calls per mover, O(N^2) on a frame where several
 // actors' AI ticks land together - see SceneUpdateAi's per-actor time offset),
 // and 816-tcc never inlines a real function call itself.
+// Perf note (found investigating a real, much bigger slowdown than
+// col_solid's own - see [[snes-map-object-engine-investigation]] in
+// memory): 816-tcc has no CSE, so `actors[j].field` repeated for several
+// fields on the same j each independently re-derives the array element's
+// address from scratch. A local pointer, taken once per iteration and
+// dereferenced for every field after that, is the fix the user asked for
+// here - table[i] used often in a loop should become a pointer to
+// table[i], used after. Measured: this loop alone (called every frame
+// during player movement, uncapped - see actor_try_move/Update_TopDown)
+// accounted for the whole real-gameplay slowdown found in the sneshtml
+// sample's Outside scene.
 static u8 npc_blocking(u16 skip, s16 tx, s16 ty)
 {
     u8 j;
     for (j = 0; j <= scene_num_actors && j < MAX_ACTORS; j++)
     {
+        ACTOR *a = &actors[j];
         s16 jx, jy;
         if (j == skip) continue;
-        if (!actors[j].enabled) continue;
-        if (!actors[j].active) continue;
-        if (!actors[j].collisions_enabled) continue;
-        jx = (actors[j].x - 8) >> 3;
-        jy = (actors[j].y - 8) >> 3;
+        if (!a->enabled) continue;
+        if (!a->active) continue;
+        if (!a->collisions_enabled) continue;
+        jx = (a->x - 8) >> 3;
+        jy = (a->y - 8) >> 3;
         if (tx > jx + 1) continue;
         if (tx + 1 < jx) continue;
         if (ty > jy + 1) continue;
@@ -517,13 +529,19 @@ static void actor_face(u16 i, s16 dx, s16 dy)
 }
 
 // Try to start a tile-aligned step. Sets actors[i].moving.
+// Perf: a local pointer replaces every actors[i] re-index below (see the
+// perf note on npc_blocking) - including SceneActorTileX/Y(i), which
+// existed purely to re-derive actors[i].x/y through a real function call;
+// with the pointer already in hand, computing tx/ty directly is both the
+// table->pointer fix and two fewer function calls per move attempt.
 static void actor_try_move(u16 i, s16 dx, s16 dy)
 {
+    ACTOR *a = &actors[i];
     actor_face(i, dx, dy);
 
     if (dx == 0 && dy == 0)
     {
-        actors[i].moving = 0;
+        a->moving = 0;
         return;
     }
 
@@ -532,33 +550,31 @@ static void actor_try_move(u16 i, s16 dx, s16 dy)
     {
         if (i == script_actor && script_ptr)
         {
-            actors[i].moving = 1;
+            a->moving = 1;
             if (i == 0) check_triggers = 1;
             return;
         }
     }
 
-    if (actors[i].collisions_enabled)
+    if (a->collisions_enabled)
     {
-        // Destination tile, computed once and shared by npc_blocking/can_step
-        // below instead of each re-deriving it via SceneActorTileX/Y(i) - see
-        // the comment on npc_blocking.
-        s16 tx = SceneActorTileX(i) + dx;
-        s16 ty = SceneActorTileY(i) + dy;
+        // Destination tile, computed once and shared by npc_blocking/can_step.
+        s16 tx = ((a->x - 8) >> 3) + dx;
+        s16 ty = ((a->y - 8) >> 3) + dy;
         if (npc_blocking(i, tx, ty) != 0xFF)
         {
-            actors[i].moving = 0;
+            a->moving = 0;
             return;
         }
         if (!can_step(tx, ty))
         {
-            actors[i].moving = 0;
+            a->moving = 0;
             return;
         }
     }
 
     if (i == 0) check_triggers = 1;
-    actors[i].moving = 1;
+    a->moving = 1;
 }
 
 /*--------------------------------------------------------------------------- */
@@ -1157,10 +1173,17 @@ void Start_TopDown(void)
 // mid-cell, breaking the "always 16px-aligned at rest" invariant GB's mode
 // guarantees. topdown_grid == 8 (the default - engine.json's own
 // defaultValue) reproduces the original single-leg behaviour byte-for-byte.
+// Perf: a local pointer replaces every actors[0] re-index below, same as
+// actor_try_move/npc_blocking - including the two SceneActorTileX/Y(0)
+// calls, which existed purely to re-derive actors[0].x/y through a real
+// function call each. This runs every single frame the player holds a
+// direction, uncapped (unlike NPC AI's own 1-in-64-frame throttling) - see
+// [[snes-map-object-engine-investigation]] in memory for the measured cost.
 void Update_TopDown(void)
 {
-    s16 tile_x = SceneActorTileX(0);
-    s16 tile_y = SceneActorTileY(0);
+    ACTOR *player = &actors[0];
+    s16 tile_x = (player->x - 8) >> 3;
+    s16 tile_y = (player->y - 8) >> 3;
     s8 dx = 0, dy = 0;
 
     if (topdown_move_pending)
@@ -1176,7 +1199,7 @@ void Update_TopDown(void)
         SceneTryInteract();
         if (script_ptr)
         {
-            actors[0].moving = 0;
+            player->moving = 0;
             return;
         }
     }
@@ -1188,7 +1211,7 @@ void Update_TopDown(void)
 
     if (!dx && !dy)
     {
-        actors[0].moving = 0;
+        player->moving = 0;
         return;
     }
 
@@ -1198,11 +1221,11 @@ void Update_TopDown(void)
         s16 destTy = tile_y + 2 * dy;
         if (npc_blocking(0, destTx, destTy) != 0xFF || !can_step(destTx, destTy))
         {
-            actors[0].moving = 0;
+            player->moving = 0;
             return;
         }
         actor_try_move(0, dx, dy);
-        if (actors[0].moving)
+        if (player->moving)
         {
             topdown_move_pending = 1;
             topdown_move_dx = dx;
