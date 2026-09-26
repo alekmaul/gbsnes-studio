@@ -2467,11 +2467,28 @@ static void SceneRenderActors(void)
          * instead of disappearing, exactly what the user saw. Now an
          * explicit distance check gates whether this actor is drawn at
          * all - genuinely off-screen actors are hidden outright rather
-         * than trusted to wrap correctly. The bounds are the screen
-         * (256x224) plus one 16px sprite's worth of margin on every side,
-         * generous enough that nothing visible is ever clipped early. */
+         * than trusted to wrap correctly.
+         *
+         * v4 follow-up fix (user-found, No$sns: an actor's OAM X snapping
+         * to 0 at a specific, exactly-reproducible scroll position - not
+         * the original bug's random-looking wraparound). The original
+         * +32px margin on the right edge (x_rel < 288) was itself wrong:
+         * SNES OAM X is a 9-bit *signed* field - 0..255 are real on-screen
+         * positions (naturally clipped by the PPU past column 255, no
+         * special handling needed for a sprite hanging off the right
+         * edge), but 256..511 are the *negative* half (256 = -256, not
+         * "256"). x_rel in [256, 287] fell straight into that negative
+         * half - 256 cast to u16 and handed to oamSet came back out as
+         * raw X 0 (confirmed on real hardware: OAM low byte 0x00), i.e.
+         * the sprite rendered pinned to the *left* screen edge instead of
+         * being invisible off the right one. There is no legitimate use
+         * for x_rel > 255 here - a sprite past the right edge just needs
+         * to be culled, not encoded - so the upper X bound is exactly the
+         * screen width, no margin. Y has no equivalent hardware ambiguity
+         * within this range (its own 256 upper bound was already correct),
+         * so it's unchanged. */
         if (actors[i].enabled && !sprites_hidden &&
-            x_rel > -32 && x_rel < 288 &&
+            x_rel > -32 && x_rel < 256 &&
             y_rel > -32 && y_rel < 256)
         {
             tile = actor_render_tile(i, &flip);
