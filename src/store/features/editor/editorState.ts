@@ -78,7 +78,6 @@ export interface EditorState {
   navigatorSidebarWidth: number;
   filesSidebarWidth: number;
   navigatorSplitSizes: number[];
-  profile: boolean;
   focusSceneId: string;
 }
 
@@ -118,7 +117,6 @@ export const initialState: EditorState = {
   lastScriptTabScene: "",
   lastScriptTabSecondary: "",
   lockScriptEditor: false,
-  profile: false,
   worldSidebarWidth: 300,
   navigatorSidebarWidth: 200,
   filesSidebarWidth: 300,
@@ -419,10 +417,6 @@ const editorSlice = createSlice({
 
     setLockScriptEditor: (state, action: PayloadAction<boolean>) => {
       state.lockScriptEditor = action.payload;
-    },
-
-    setProfiling: (state, action: PayloadAction<boolean>) => {
-      state.profile = action.payload;
     },
 
     setActorDefaults: (state, action: PayloadAction<Partial<Actor>>) => {

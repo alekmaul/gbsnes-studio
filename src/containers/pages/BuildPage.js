@@ -8,7 +8,6 @@ import Button, {
 } from "../../components/library/Button";
 import PageContent from "../../components/library/PageContent";
 import l10n from "../../lib/helpers/l10n";
-import editorActions from "../../store/features/editor/editorActions";
 import consoleActions from "../../store/features/console/consoleActions";
 import buildGameActions from "../../store/features/buildGame/buildGameActions";
 
@@ -46,18 +45,13 @@ class BuildPage extends Component {
     deleteBuildCache();
   }
 
-  onToggleProfiling = () => {
-    const { setProfiling, profile } = this.props;
-    setProfiling(!profile);
-  }
-
   scrollToBottom = () => {
     const scrollEl = this.scrollRef.current;
     scrollEl.scrollTop = scrollEl.scrollHeight;
   };
 
   render() {
-    const { output, warnings, status, profile } = this.props;
+    const { output, warnings, status } = this.props;
 
     // Only show the latest 100 lines during build
     // show full output on complete
@@ -122,20 +116,6 @@ class BuildPage extends Component {
             <Button onClick={this.onDeleteCache}>
               {l10n("BUILD_EMPTY_BUILD_CACHE")}
             </Button>
-            {process.env.NODE_ENV !== "production" && (
-              <>
-                <ButtonToolbarFixedSpacer style={{ width: 10 }} />
-                <label htmlFor="enableProfile">
-                  <input
-                    id="enableProfile"
-                    type="checkbox"
-                    checked={profile}
-                    onChange={this.onToggleProfiling}
-                  />{" "}
-                  Enable BGB Profiling
-                </label>
-              </>
-            )}
             <ButtonToolbarSpacer />
             <Button onClick={this.onClear}>{l10n("BUILD_CLEAR")}</Button>
           </ButtonToolbar>
@@ -146,7 +126,6 @@ class BuildPage extends Component {
 }
 
 BuildPage.propTypes = {
-  profile: PropTypes.bool.isRequired,
   status: PropTypes.string.isRequired,
   output: PropTypes.arrayOf(
     PropTypes.shape({
@@ -163,7 +142,6 @@ BuildPage.propTypes = {
   buildGame: PropTypes.func.isRequired,
   clearConsole: PropTypes.func.isRequired,
   deleteBuildCache: PropTypes.func.isRequired,
-  setProfiling: PropTypes.func.isRequired,
 };
 
 function mapStateToProps(state) {
@@ -171,7 +149,6 @@ function mapStateToProps(state) {
     status: state.console.status,
     output: state.console.output,
     warnings: state.console.warnings,
-    profile: state.editor.profile
   };
 }
 
@@ -179,7 +156,6 @@ const mapDispatchToProps = {
   clearConsole: consoleActions.clearConsole,
   buildGame: buildGameActions.buildGame,
   deleteBuildCache: buildGameActions.deleteBuildCache,
-  setProfiling: editorActions.setProfiling,
 };
 
 export default connect(
