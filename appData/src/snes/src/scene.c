@@ -404,6 +404,26 @@ static u8 in_box(s16 px, s16 py, s16 bx, s16 by, s16 bw, s16 bh)
     return 1;
 }
 
+// col_solid()/col_solid_row2() perf note (found investigating the Map/Object
+// Engine milestone's M3 - see the roadmap artifact, and [[snes-map-object-
+// engine-investigation]] in memory): this tiny-looking bitmap bit-test does
+// NOT compile to a tiny-looking routine. Checked the real 816-tcc/816-opt
+// output: `>> (idx & 7)` alone became a ~7-iteration runtime rotate loop
+// (`ror`/`dey`/`bne`), and `ty * scene_width` a genuine `jsr.l tcc__mul`
+// subroutine call - for what should be a couple of instructions each. This
+// is called twice per move attempt (can_step) and in the movement/collision
+// path PERF.md's own profiling already names as this engine's one measured
+// slowdown. Two independent, low-risk fixes, both plain C, no hand-asm:
+//   - a static lookup table turns the variable-shift rotate loop into one
+//     table read + one AND, for every caller.
+//   - col_solid_row2() hoists the ty*scene_width multiply for the two real
+//     call patterns that test two x-positions at the same y (can_step,
+//     ground/ceiling collision) - one multiply instead of two. The other
+//     col_solid() call sites (different y each time, or mutually exclusive
+//     if/else branches that only ever run one of the two per frame) have no
+//     shared multiply to hoist, so they keep calling col_solid() directly.
+static const u8 col_bit_mask[8] = { 1, 2, 4, 8, 16, 32, 64, 128 };
+
 // Solid at (tx, ty)? Out of bounds counts as solid.
 static u8 col_solid(s16 tx, s16 ty)
 {
@@ -414,7 +434,32 @@ static u8 col_solid(s16 tx, s16 ty)
     if (tx >= scene_width) return 1;
     if (ty >= scene_height) return 1;
     idx = (u16)ty * scene_width + (u16)tx;
-    return (scene_col[idx >> 3] >> (idx & 7)) & 1;
+    if (scene_col[idx >> 3] & col_bit_mask[idx & 7]) return 1;
+    return 0;
+}
+
+// Solid at (tx0, ty) or (tx1, ty)? Same bounds/bitmap semantics as
+// col_solid(), but the ty*scene_width row multiply runs once for both tests
+// instead of once per col_solid() call - see the perf note above.
+static u8 col_solid_row2(s16 tx0, s16 tx1, s16 ty)
+{
+    u16 row;
+    u16 idx;
+    if (ty < 0) return 1;
+    if (ty >= scene_height) return 1;
+    row = (u16)ty * scene_width;
+
+    if (tx0 < 0) return 1;
+    if (tx0 >= scene_width) return 1;
+    idx = row + (u16)tx0;
+    if (scene_col[idx >> 3] & col_bit_mask[idx & 7]) return 1;
+
+    if (tx1 < 0) return 1;
+    if (tx1 >= scene_width) return 1;
+    idx = row + (u16)tx1;
+    if (scene_col[idx >> 3] & col_bit_mask[idx & 7]) return 1;
+
+    return 0;
 }
 
 // The 16px sprite of actor `skip` occupies tiles [tx, tx+1] x [ty, ty+1] at
@@ -458,8 +503,7 @@ static u8 npc_blocking(u16 skip, s16 tx, s16 ty)
 // (tx, ty) is the caller's already-computed destination tile - see npc_blocking.
 static u8 can_step(s16 tx, s16 ty)
 {
-    if (col_solid(tx, ty)) return 0;
-    if (col_solid(tx + 1, ty)) return 0;
+    if (col_solid_row2(tx, tx + 1, ty)) return 0;
     return 1;
 }
 
@@ -534,12 +578,20 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
 }
 
 /*
- * Scene blob:
- *   [0] bg_pal_idx  [1] num_actors  [2] num_triggers  [3] scene_script_idx
- *   [4] width       [5] height
- *   actors   (9 bytes): tile_x, tile_y, dir, movement_type, sprite_idx,
- *                       script_idx, sprite_type, anim_speed, animate
- *   triggers (6 bytes): tile_x, tile_y, w, h, type, script_idx
+ * Scene blob (see SceneInit and compileSnesData.js's sceneBlobs builder -
+ * this comment had drifted out of sync with both as fields were added on
+ * top over time; re-derived from the real byte offsets, not assumed):
+ *   [0] bg_index  [1] num_actors  [2] num_triggers  [3] scene_script_idx
+ *   [4] width     [5] height      [6] scene_type (genre dispatch byte)
+ *   [7..30]  (24 bytes) per-scene OBJ slot table: sprite_type[8],
+ *            sprite_frames[8], sprite_pal[8]
+ *   [31..36] (6 bytes) up to 3 banded parallax layers: {lines, shift} each
+ *   [37..39] (3 bytes) On Player Hit script indices (collision group 1/2/3)
+ *   actors   (14 bytes each): tile_x, tile_y, dir, movement_type,
+ *                       sprite_idx, script_idx, sprite_type, anim_speed,
+ *                       animate, collision_group, hit1_idx, hit2_idx,
+ *                       hit3_idx, update_idx
+ *   triggers (6 bytes each): tile_x, tile_y, w, h, type, script_idx
  *   collision bitmap: ceil(width * height / 8) bytes, row-major, bit set = solid
  */
 
@@ -1755,7 +1807,7 @@ void Update_Platform(void)
         s16 row = py >> 3;
         s16 col_l = (px - 8) >> 3;
         s16 col_r = (px + 7) >> 3;
-        if (col_solid(col_l, row) || col_solid(col_r, row))
+        if (col_solid_row2(col_l, col_r, row))
         {
             plat_grounded = 1;
             plat_vel_y = 0;
@@ -1772,7 +1824,7 @@ void Update_Platform(void)
         s16 row = (py - 16) >> 3;
         s16 col_l = (px - 8) >> 3;
         s16 col_r = (px + 7) >> 3;
-        if (col_solid(col_l, row) || col_solid(col_r, row))
+        if (col_solid_row2(col_l, col_r, row))
         {
             plat_vel_y = 0;
             py = ((row + 1) << 3) + 16;
