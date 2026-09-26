@@ -38,6 +38,12 @@ let hasCheckedForUpdate = false;
 
 const isDevMode = !!process.execPath.match(/[\\/]electron/);
 
+// Preferences.tsx's "UI Elements Scaling" (ported from GB Studio 3.2.1) -
+// a Chromium page zoom *level* (webContents.setZoomLevel), applied to every
+// app-UI window (splash/preferences/main editor - not the Play window,
+// which should stay pixel-accurate for the game canvas).
+const getSavedZoomLevel = () => Number(settings.get("UIScale") || 0);
+
 const validProjectExt = [".json", ".gbsproj"];
 
 // Allow images and json outside of application package to be loaded in production build
@@ -80,6 +86,7 @@ const createSplash = async (forceTab?: SplashTab) => {
   });
 
   splashWindow.setMenu(null);
+  splashWindow.webContents.setZoomLevel(getSavedZoomLevel());
   splashWindow.loadURL(
     `${SPLASH_WINDOW_WEBPACK_ENTRY}?tab=${forceTab || ""}`
   );
@@ -120,6 +127,7 @@ const createPreferences = async (forceTab?: SplashTab) => {
   });
 
   preferencesWindow.setMenu(null);
+  preferencesWindow.webContents.setZoomLevel(getSavedZoomLevel());
   preferencesWindow.loadURL(PREFERENCES_WINDOW_WEBPACK_ENTRY);
 
   preferencesWindow.webContents.on("did-finish-load", () => {
@@ -169,6 +177,8 @@ const createWindow = async (projectPath: string) => {
   });
 
   mainWindowState.manage(mainWindow);
+
+  mainWindow.webContents.setZoomLevel(getSavedZoomLevel());
 
   mainWindow.loadURL(
     `${MAIN_WINDOW_WEBPACK_ENTRY}?path=${encodeURIComponent(
@@ -382,6 +392,19 @@ ipcMain.on("project-loaded", (event, settings) => {
 
 ipcMain.on("set-show-navigator", (event, showNavigator) => {
   menu.ref().getMenuItemById("showNavigator").checked = showNavigator;
+});
+
+// Preferences.tsx already persists the new level to electron-settings itself
+// (read back by getSavedZoomLevel() on the next window a user opens) - this
+// just applies it live to every app-UI window already open, so changing it
+// doesn't need an app restart. The Play window is deliberately excluded -
+// scaling the game canvas would blur/distort it, not just resize UI chrome.
+ipcMain.on("set-ui-scale", (event, zoomLevel: number) => {
+  [splashWindow, preferencesWindow, mainWindow].forEach(win => {
+    if (win) {
+      win.webContents.setZoomLevel(zoomLevel);
+    }
+  });
 });
 
 ipcMain.on("set-menu-plugins", (event, plugins) => {
