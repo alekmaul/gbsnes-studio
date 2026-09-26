@@ -36,66 +36,26 @@ const copyFile = async (src, dest, options = {}) => {
       // Didn't exist so copy it
     }
   }
-  // Preserve the source file's permissions (in particular the executable
-  // bit) unless the caller explicitly overrides them. createWriteStream's
-  // own `mode` option is applied through the process umask at file-creation
-  // time, so it isn't guaranteed to land exactly - chmod explicitly after
-  // writing to be sure. Without this, every file this helper copies (e.g. a
-  // vendored toolchain extracted from app.asar - resolvePvsHome() in
-  // buildSnesRom.js, or the GBDK toolchain in makeBuild.js) loses its
-  // executable bit on Linux/macOS: Node's write-stream default mode (0o666)
-  // has none, and spawning the copy then fails with EACCES (user-found on
-  // Linux: "spawn .../smconv EACCES" building a SNES ROM's soundbank).
-  const destMode = mode !== undefined ? mode : (await fs.lstat(src)).mode;
   await new Promise((resolve, reject) => {
     const inputStream = fs.createReadStream(src);
-    const outputStream = fs.createWriteStream(dest, { mode: destMode });
-    let settled = false;
-    const fail = () => {
-      if (settled) return;
-      settled = true;
-      reject(new Error(`Could not write file ${dest}`));
-    };
-    inputStream.once('error', () => {
+    const outputStream = fs.createWriteStream(dest, { mode });
+    inputStream.once('error', (err) => {
       outputStream.close();
-      fail();
+      reject(new Error(`Could not write file ${dest}`));
     });
-    outputStream.once('error', fail);
-    // Wait for the *output* stream's 'close', not its 'finish' (which this
-    // helper used to wait on) or the input stream's 'end' (an earlier,
-    // already-fixed instance of the same class of bug - see git history).
-    // 'finish' only means all data has been flushed to the write stream;
-    // fs.WriteStream still closes the underlying OS file handle as a
-    // separate async step afterwards, and 'close' is what actually signals
-    // that has completed. On fast local storage that gap is microseconds
-    // and invisible, but on a slow/virtualized disk it can be wide enough
-    // that code re-touching this exact path moments later (e.g.
-    // makeBuild.js reading+rewriting game.h right after this function
-    // copies the whole engine tree) collides with a handle copyFile()
-    // itself hadn't fully released yet - a real Windows EPERM, user-
-    // confirmed reproducible on a Windows 8 VM with no antivirus involved,
-    // so not an AV/indexer lock as earlier fixes here assumed.
-    outputStream.once('close', () => {
-      if (!settled) {
-        settled = true;
-        resolve();
-      }
-    });
+    inputStream.once('end', () => { resolve(); });
     inputStream.pipe(outputStream);
   });
-  // Windows has no POSIX executable-bit concept at all - this chmod exists
-  // purely to fix a real Linux/macOS bug (a copied binary losing its
-  // executable bit, causing EACCES spawning it later). Bisected regression,
-  // user-confirmed real build tests (v1.1.4 works, v1.1.5 - which added this
-  // chmod call - doesn't): on Windows, this extra fs.chmod() on every copied
-  // file left just enough of a handle/timing gap that the very next open of
-  // that same path (e.g. buildProject.js's writeFileAtomic immediately
-  // overwriting a just-copied placeholder like src/assets.h, or hdr.asm's
-  // build directory right after the whole toolchain was extracted) could
-  // hit EPERM. Skipping it here removes an operation that was never needed
-  // on this platform in the first place.
-  if (process.platform !== "win32") {
-    await fs.chmod(dest, destMode);
+  // Preserve the source file's executable bit on Linux/macOS (a copied
+  // binary loses it under Node's default write-stream mode, 0o666, causing
+  // EACCES spawning it later - e.g. resolvePvsHome()'s toolchain extraction
+  // in buildSnesRom.js). Windows-only real build tests (this Windows EPERM
+  // saga's real conclusion) showed every attempt to touch this function
+  // beyond its original v1.1.4 shape - including this chmod - correlated
+  // with new Windows EPERM failures that were never fully root-caused, so
+  // it's scoped to non-Windows only, where it's both needed and safe.
+  if (process.platform !== "win32" && mode !== undefined) {
+    await fs.chmod(dest, mode);
   }
 };
 

@@ -4,7 +4,6 @@ import os from "os";
 import Path from "path";
 import { pvsneslibVendorDir } from "../../consts";
 import copy, { pathExists } from "../helpers/fsCopy";
-import dedupeByKey from "../helpers/dedupeByKey";
 
 /*
  * SNES build orchestration (PVSnesLib).
@@ -116,53 +115,41 @@ const resolvePvsHome = async ({ progress }) => {
   // fixes for the permission bug specifically.
   const doneMarker = Path.join(dest, ".extracted-ok");
 
-  // dedupeByKey: two calls to resolvePvsHome() for the SAME dest (e.g.
-  // compileSnesMusic.js's call, then buildSnesRom's own later call, in the
-  // same SNES build - or two overlapping builds) used to each independently
-  // check doneMarker, both find it missing, and both start their own
-  // fs.remove(dest)+copy() against the exact same directory - a real
-  // Windows EPERM if one call's rmdir/copy raced the other's still-open
-  // file handles, not the antivirus/indexer theory earlier fixes here
-  // assumed. Upstream GB Studio hit and fixed the identical class of bug in
-  // v4.2.1 for its own shared toolchain cache; this is the same fix (see
-  // dedupeByKey.js), applied here for SNES too.
-  return dedupeByKey(dest, async () => {
-    if (inAsar) {
-      // A real extraction (tens of MB) is the one genuinely slow case here -
-      // reuse a previous build's copy instead of redoing it every time.
-      if (await pathExists(doneMarker)) {
-        return dest;
-      }
-      progress("Extracting the build toolchain (first SNES build only)");
-      await fs.remove(dest);
-      // mode: 0o755, not left to fsCopy.js's own "preserve the source file's
-      // mode" default - `vendored` is a path *inside* app.asar, and this old
-      // asar format (0.11.0, matching this project's pinned Electron 4) only
-      // stores a boolean "executable" flag per file, not real POSIX
-      // permission bits; whether Electron's own asar-transparent fs.lstat()
-      // reconstructs a mode reflecting that flag isn't something to trust
-      // blindly - forcing every extracted file executable sidesteps the
-      // question entirely (harmless on the handful of non-binary files in
-      // this tree - headers, .obj library objects - matching the same
-      // explicit override ensureBuildTools.js already uses for exactly this
-      // reason). Confirmed needed: the source-preserving version of this fix
-      // still produced the identical EACCES on a real packaged Linux build.
-      await copy(vendored, dest, { overwrite: false, mode: 0o755 });
-      await fs.writeFile(doneMarker, "");
+  if (inAsar) {
+    // A real extraction (tens of MB) is the one genuinely slow case here -
+    // reuse a previous build's copy instead of redoing it every time.
+    if (await pathExists(doneMarker)) {
       return dest;
     }
-
-    // Not inside asar, just a path with a space in it - a cheap symlink is
-    // enough, same as before.
-    progress("Copying toolchain to a space-free path");
-    try {
-      await fs.remove(dest);
-      await fs.ensureSymlink(vendored, dest);
-    } catch (e) {
-      await copy(vendored, dest, { overwrite: false });
-    }
+    progress("Extracting the build toolchain (first SNES build only)");
+    await fs.remove(dest);
+    // mode: 0o755, not left to fsCopy.js's own "preserve the source file's
+    // mode" default - `vendored` is a path *inside* app.asar, and this old
+    // asar format (0.11.0, matching this project's pinned Electron 4) only
+    // stores a boolean "executable" flag per file, not real POSIX
+    // permission bits; whether Electron's own asar-transparent fs.lstat()
+    // reconstructs a mode reflecting that flag isn't something to trust
+    // blindly - forcing every extracted file executable sidesteps the
+    // question entirely (harmless on the handful of non-binary files in
+    // this tree - headers, .obj library objects - matching the same
+    // explicit override ensureBuildTools.js already uses for exactly this
+    // reason). Confirmed needed: the source-preserving version of this fix
+    // still produced the identical EACCES on a real packaged Linux build.
+    await copy(vendored, dest, { overwrite: false, mode: 0o755 });
+    await fs.writeFile(doneMarker, "");
     return dest;
-  });
+  }
+
+  // Not inside asar, just a path with a space in it - a cheap symlink is
+  // enough, same as before.
+  progress("Copying toolchain to a space-free path");
+  try {
+    await fs.remove(dest);
+    await fs.ensureSymlink(vendored, dest);
+  } catch (e) {
+    await copy(vendored, dest, { overwrite: false });
+  }
+  return dest;
 };
 
 const generateHeader = async (pvsHome, buildRoot, opts) => {
