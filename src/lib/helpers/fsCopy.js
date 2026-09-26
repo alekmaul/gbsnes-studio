@@ -46,16 +46,19 @@ const copyFile = async (src, dest, options = {}) => {
     inputStream.once('end', () => { resolve(); });
     inputStream.pipe(outputStream);
   });
-  // Preserve the source file's executable bit on Linux/macOS (a copied
-  // binary loses it under Node's default write-stream mode, 0o666, causing
-  // EACCES spawning it later - e.g. resolvePvsHome()'s toolchain extraction
-  // in buildSnesRom.js). Windows-only real build tests (this Windows EPERM
+  // Preserve the source file's permissions (in particular the executable
+  // bit) unless the caller explicitly overrides them - by default (no
+  // explicit `mode`) on Linux/macOS a copied binary loses its executable bit
+  // under Node's default write-stream mode (0o666), causing EACCES spawning
+  // it later (e.g. resolvePvsHome()'s toolchain extraction in
+  // buildSnesRom.js). Windows-only real build tests (this Windows EPERM
   // saga's real conclusion) showed every attempt to touch this function
   // beyond its original v1.1.4 shape - including this chmod - correlated
   // with new Windows EPERM failures that were never fully root-caused, so
   // it's scoped to non-Windows only, where it's both needed and safe.
-  if (process.platform !== "win32" && mode !== undefined) {
-    await fs.chmod(dest, mode);
+  if (process.platform !== "win32") {
+    const destMode = mode !== undefined ? mode : (await fs.lstat(src)).mode;
+    await fs.chmod(dest, destMode);
   }
 };
 
