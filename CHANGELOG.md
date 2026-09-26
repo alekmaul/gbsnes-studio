@@ -5,6 +5,20 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.8] - 2026-09-26
+
+### Fixed
+- SNES: **"Build ROM"/"Export Web" could fail on Windows with `EPERM: operation not permitted`**
+  on `hdr.asm` (or `assets.h`, depending on version) — a real regression introduced across the
+  v1.1.5-v1.1.7 line while chasing this exact class of bug, found by bisecting real packaged
+  builds rather than guessing: `fsCopy.js`'s file-copy helper gained an `fs.chmod()` call and a
+  changed completion-timing check (to fix a genuine, separate Linux/macOS bug), and
+  `buildSnesRom.js`'s toolchain-extraction cache logic changed alongside it. On Windows, that
+  combination left just enough of a handle/timing gap for the very next build step to fail
+  reopening a just-written file. Rolled both back to the version confirmed reliable on real
+  Windows hardware (repeated Export ROM/Export Web runs, no failures); the Linux/macOS
+  executable-bit fix is kept, now scoped to non-Windows only.
+
 ## [1.1.7] - 2026-09-22
 
 ### Changed
