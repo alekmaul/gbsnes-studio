@@ -28,37 +28,46 @@ const copyFile = async (src, dest, options = {}) => {
       // Didn't exist so copy it
     }
   }
-  // Preserve the source file's permissions (in particular the executable
-  // bit) unless the caller explicitly overrides them. createWriteStream's
-  // own `mode` option is applied through the process umask at file-creation
-  // time, so it isn't guaranteed to land exactly - chmod explicitly after
-  // writing to be sure. Without this, every file this helper copies (e.g. a
-  // vendored toolchain extracted from app.asar - resolvePvsHome() in
-  // buildSnesRom.js, or the GBDK toolchain in makeBuild.js) loses its
-  // executable bit on Linux/macOS: Node's write-stream default mode (0o666)
-  // has none, and spawning the copy then fails with EACCES (ported from the
-  // same fix on `main`, user-found there: "spawn .../smconv EACCES" building
-  // a SNES ROM's soundbank on a packaged Linux build).
-  const destMode = mode !== undefined ? mode : (await fs.lstat(src)).mode;
   await new Promise((resolve, reject) => {
     const inputStream = fs.createReadStream(src);
-    const outputStream = fs.createWriteStream(dest, { mode: destMode });
+    const outputStream = fs.createWriteStream(dest, { mode });
     inputStream.once('error', (err) => {
       outputStream.close();
       reject(new Error(`Could not write file ${dest}`));
     });
-    outputStream.once('error', (err) => {
-      reject(new Error(`Could not write file ${dest}`));
-    });
-    // Wait for the *output* stream to actually finish (all data flushed,
-    // file descriptor ready), not the input stream's 'end' - that fires as
-    // soon as reading is done, which can race ahead of the write still in
-    // flight, so a chmod() right after could hit a file that doesn't fully
-    // exist yet (a real ENOENT hit verifying this fix on `main`).
-    outputStream.once('finish', () => { resolve(); });
+    inputStream.once('end', () => { resolve(); });
     inputStream.pipe(outputStream);
   });
-  await fs.chmod(dest, destMode);
+  // Preserve the source file's permissions (in particular the executable
+  // bit) unless the caller explicitly overrides them - by default (no
+  // explicit `mode`) on Linux/macOS a copied binary loses its executable bit
+  // under Node's default write-stream mode (0o666), causing EACCES spawning
+  // it later (e.g. resolvePvsHome()'s toolchain extraction in
+  // buildSnesRom.js). Ported from the same fix on `main`, found there by a
+  // real-machine bisection (v1.1.4 works reliably on Windows; every later
+  // version that added this chmod call and/or resolved the copy's
+  // completion on the output stream's 'finish' instead of the input
+  // stream's 'end' failed with a Windows EPERM reopening the exact file
+  // this helper had just written, on a real packaged build) - scoped to
+  // non-Windows only, where it's both needed and safe.
+  if (process.platform !== "win32") {
+    const destMode = mode !== undefined ? mode : (await fs.lstat(src)).mode;
+    try {
+      await fs.chmod(dest, destMode);
+    } catch (e) {
+      // Resolving on the *input* stream's 'end' only means reading
+      // finished - the output stream can still be flushing to disk a
+      // moment later, so on a fast copy of many small files this chmod can
+      // race ahead of the destination actually existing yet (real CI
+      // failure on `main`, Linux: "ENOENT ... chmod '.../cursor.gbr'", a
+      // GB toolchain example asset, not a binary - losing its executable
+      // bit here is harmless). Swallow only that specific race rather than
+      // crash the whole copy; anything else still surfaces normally.
+      if (e.code !== "ENOENT") {
+        throw e;
+      }
+    }
+  }
 };
 
 const copy = async (src, dest, options) => {
