@@ -108,6 +108,19 @@ const ensureSnesUiAssets = async (projectRoot, warnings) => {
 
 const clampByte = (n) => Math.max(0, Math.min(255, n | 0));
 
+// A per-scene/actor/trigger script reference (event_ptrs[] index) is a
+// project-wide index shared across every scene's scripts, cumulatively
+// pushed as compilation proceeds scene by scene - so it routinely exceeds
+// 255 well before the end of a multi-scene project (v4 fix, user-found:
+// "the triggers are not working when I press A" in a real 8-scene sample -
+// traced to a later scene's trigger/actor script indices already being in
+// the 300s). Storing it as a single byte silently wrapped it mod 256
+// (cArray's own `& 0xff`), pointing every such reference at a random wrong
+// script once the project-wide count passed 256 - not just triggers: the
+// same index space feeds scene/player-hit/actor/hit/update script slots
+// too, so every one of them needed the same 2-byte (little-endian) width.
+const u16b = (n) => [n & 0xff, (n >> 8) & 0xff];
+
 // __REPLACE:STRING_BANK/HI/LO:<n>  ->  0 / hi(n) / lo(n)   (n = string index)
 const resolvePlaceholders = (bytes, where, warnings) =>
   bytes.map((b) => {
@@ -827,7 +840,7 @@ const compileSnesData = async (
         dirDec(actor.direction),
         moveDec(actor.movementType),
         slotForActor(sceneIndex, actor.spriteSheetId),
-        actorScriptIdx[i],
+        ...u16b(actorScriptIdx[i]),
         spriteTypeForActor(actor.spriteSheetId, actor.spriteType),
         animSpeedDec(actor.animSpeed),
         actor.animate ? 1 : 0,
@@ -835,11 +848,11 @@ const compileSnesData = async (
         // hit1ScriptIdx/2/3 above. collisionGroupDec("") === 0 (COLLISION_GROUP_NONE)
         // for an actor that never opted in, matching B's own default.
         collisionGroupDec(actor.collisionGroup),
-        hit1ScriptIdx[i],
-        hit2ScriptIdx[i],
-        hit3ScriptIdx[i],
+        ...u16b(hit1ScriptIdx[i]),
+        ...u16b(hit2ScriptIdx[i]),
+        ...u16b(hit3ScriptIdx[i]),
         // On Update subsystem (v4): see updateScriptIdx above.
-        updateScriptIdx[i]
+        ...u16b(updateScriptIdx[i])
       );
     });
 
@@ -889,7 +902,7 @@ const compileSnesData = async (
         clampByte(trigger.width || 1),
         clampByte(trigger.height || 1),
         trigger.trigger === "action" ? 1 : 0,
-        triggerScriptIdx[i]
+        ...u16b(triggerScriptIdx[i])
       );
     });
 
@@ -897,17 +910,17 @@ const compileSnesData = async (
       bgIndex,
       (scene.actors || []).length,
       (scene.triggers || []).length,
-      sceneScriptIdx,
+      u16b(sceneScriptIdx),
       w,
       h,
       sceneTypeDec(scene.type), // v2 M5a: genre dispatch byte
       sprSlotBytes, // [24] sprite_type[8], sprite_frames[8], sprite_pal[8]
       parallaxBytes, // [6] M6 (v4): up to 3 {lines, shift} parallax bands
-      // [3] Projectiles (v4, follow-up): On Player Hit script indices,
+      // [6] Projectiles (v4, follow-up): On Player Hit script indices,
       // collision group 1/2/3 - see playerHit1/2/3ScriptIdx above.
-      playerHit1ScriptIdx,
-      playerHit2ScriptIdx,
-      playerHit3ScriptIdx,
+      u16b(playerHit1ScriptIdx),
+      u16b(playerHit2ScriptIdx),
+      u16b(playerHit3ScriptIdx),
       actorEntries,
       triggerEntries,
       collisions

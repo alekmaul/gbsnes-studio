@@ -62,23 +62,31 @@ describe("compileSnesData - Test_Math fixture", () => {
   // height in the old (v1.1.4) layout shifts by +1 here. M6 (v4): a further
   // [6]-byte parallax table follows the [24] sprite-slot table, shifting
   // every offset past it by +6 on top of that. Projectiles follow-up (v4): a
-  // further [3]-byte playerHit1/2/3ScriptIdx table follows *that*, shifting
-  // every offset past it by +3 more on top of both.
-  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [24] sprite table + [6] parallax table + [3] playerHit table", () => {
+  // further [6]-byte playerHit1/2/3ScriptIdx table follows *that*, shifting
+  // every offset past it by +6 more on top of both. v4 fix (user-found: "the
+  // triggers are not working when I press A"): every event_ptrs[] script
+  // index (scene/playerHit/actor/hit/update/trigger) widened from 1 to 2
+  // bytes (little-endian) - a 1-byte index silently wrapped mod 256 once a
+  // real multi-scene project's cumulative script count passed 255. This
+  // shifts sceneScriptIdx (+1) and playerHit1/2/3ScriptIdx (+3) in the
+  // header, and every actor/trigger entry (+5/+1 bytes respectively).
+  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [24] sprite table + [6] parallax table + [6] playerHit table", () => {
     const blob = out.stats.sceneBlobs[0];
-    expect(blob.slice(0, 6)).toEqual([0, 1, 0, 0, 20, 18]);
-    expect(blob[6]).toBe(0); // scene.type undefined -> defaults to 0 (Top Down)
-    // [7..30] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
-    expect(blob.slice(23, 31)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]); // pal numbers
-    // [31..36] parallax table (MAX_PARALLAX_LAYERS*2): no parallax on this fixture
-    expect(blob.slice(31, 37)).toEqual([0, 0, 0, 0, 0, 0]);
-    // [37..39] playerHit1/2/3ScriptIdx: none authored on this fixture, but
-    // still real (nonzero, since index 0 is the scene's own start script)
-    // event_ptrs[] indices pointing at trivially-empty compiled scripts.
-    expect(blob.slice(37, 40)).toEqual([1, 2, 3]);
-    // first actor entry (9 bytes) starts right after the playerHit table (at 40)
-    // x, y, dir(down=1), move(static=1), spriteSlot, scriptIdx, ...
-    expect(blob.slice(40, 46)).toEqual([9, 7, 1, 1, 0, 4]);
+    expect(blob.slice(0, 3)).toEqual([0, 1, 0]); // bgIndex, numActors, numTriggers
+    expect(blob.slice(5, 7)).toEqual([20, 18]); // w, h
+    expect(blob[7]).toBe(0); // scene.type undefined -> defaults to 0 (Top Down)
+    // [8..31] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
+    expect(blob.slice(24, 32)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]); // pal numbers
+    // [32..37] parallax table (MAX_PARALLAX_LAYERS*2): no parallax on this fixture
+    expect(blob.slice(32, 38)).toEqual([0, 0, 0, 0, 0, 0]);
+    // [38..43] playerHit1/2/3ScriptIdx (2 bytes each, little-endian): none
+    // authored on this fixture, but still real (nonzero, since index 0 is
+    // the scene's own start script) event_ptrs[] indices pointing at
+    // trivially-empty compiled scripts.
+    expect(blob.slice(38, 44)).toEqual([1, 0, 2, 0, 3, 0]);
+    // first actor entry starts right after the playerHit table (at 44)
+    // x, y, dir(down=1), move(static=1), spriteSlot, scriptIdx (2 bytes), ...
+    expect(blob.slice(44, 51)).toEqual([9, 7, 1, 1, 0, 4, 0]);
   });
 
   test("the actor's first TEXT resolves to a string index", () => {
@@ -159,12 +167,12 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
       warnings: () => {},
     });
     const blob = out.stats.sceneBlobs[0];
-    // header(7) + sprite-slot table(24) + parallax table(6) + playerHit
-    // table(3) + 0 actors + 0 triggers = 40 bytes before the ceil(w*h/8) =
+    // header(8) + sprite-slot table(24) + parallax table(6) + playerHit
+    // table(6) + 0 actors + 0 triggers = 44 bytes before the ceil(w*h/8) =
     // 45-byte collision bitmap.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(40 + colLen);
-    const colByte = blob[40];
+    expect(blob.length).toBe(44 + colLen);
+    const colByte = blob[44];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).
     expect(colByte & (1 << 0)).toBeTruthy(); // tile 0: COLLISION_ALL
@@ -180,7 +188,7 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // so most of the "bitmap" ended up reading whatever raw per-tile bytes
     // happened to land within the first colLen indices (mostly garbage
     // relative to real tile positions), not real per-tile solidity.
-    expect(blob.slice(41, 40 + colLen)).toEqual(new Array(colLen - 1).fill(0));
+    expect(blob.slice(45, 44 + colLen)).toEqual(new Array(colLen - 1).fill(0));
   });
 });
 
@@ -198,12 +206,12 @@ describe("compileSnesData - scene_type (v2 M5a genre dispatch)", () => {
     ],
   };
 
-  test("each scene's type string becomes the scene blob's byte 6", async () => {
+  test("each scene's type string becomes the scene blob's byte 7", async () => {
     const out = await compileSnesData(baseProject, {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    expect(out.stats.sceneBlobs.map((b) => b[6])).toEqual([0, 1, 2, 3, 4]);
+    expect(out.stats.sceneBlobs.map((b) => b[7])).toEqual([0, 1, 2, 3, 4]);
   });
 
   test("a scene with no type field defaults to 0 (Top Down)", async () => {
@@ -215,7 +223,7 @@ describe("compileSnesData - scene_type (v2 M5a genre dispatch)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    expect(out.stats.sceneBlobs[0][6]).toBe(0);
+    expect(out.stats.sceneBlobs[0][7]).toBe(0);
   });
 });
 
@@ -255,10 +263,10 @@ describe("compileSnesData - actor.spriteType (v2, replaces movementType inferenc
       projectRoot: PROJECT_ROOT,
       warnings: () => {},
     });
-    // actor entry starts right after [7]+[24]+[6]+[3]=[40]; spriteType is
-    // byte 6 of the 9-byte actor entry (x,y,dir,move,slot,scriptIdx,spriteType,...)
-    const actorEntry = out.stats.sceneBlobs[0].slice(40, 49);
-    expect(actorEntry[6]).toBe(0); // SPRITE_STATIC despite movementType=randomWalk
+    // actor entry starts right after [8]+[24]+[6]+[6]=[44]; spriteType is
+    // byte 7 of the 10-byte prefix (x,y,dir,move,slot,scriptIdx(2B),spriteType,...)
+    const actorEntry = out.stats.sceneBlobs[0].slice(44, 54);
+    expect(actorEntry[7]).toBe(0); // SPRITE_STATIC despite movementType=randomWalk
   });
 });
 
@@ -293,7 +301,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    expect(out.stats.sceneBlobs[0].slice(31, 37)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(out.stats.sceneBlobs[0].slice(32, 38)).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   test("layer heights convert to scanlines and the last layer fills the rest of the screen", async () => {
@@ -307,7 +315,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
         warnings: () => {},
       }
     );
-    const table = out.stats.sceneBlobs[0].slice(31, 37);
+    const table = out.stats.sceneBlobs[0].slice(32, 38);
     // layer 0: 4 tiles * 8 = 32 lines, shift 2
     // layer 1 (last): auto-extends to 224 - 32 = 192 lines, shift 1
     expect(table).toEqual([32, 2, 192, 1, 0, 0]);
@@ -318,7 +326,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    const table = out.stats.sceneBlobs[0].slice(31, 37);
+    const table = out.stats.sceneBlobs[0].slice(32, 38);
     // Single layer auto-extends to the full screen (224 lines); -1 as an
     // unsigned byte is 0xff (255), matching the engine's (s8) reinterpret.
     expect(table).toEqual([224, 255, 0, 0, 0, 0]);
@@ -398,13 +406,13 @@ describe("compileSnesData - per-scene Player Sprite Sheet override (v4)", () => 
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    // scene blob layout: [7]-byte header, then types[8] at offset 7..14,
-    // frames[8] at offset 15..22 (see the M6 describe block above).
+    // scene blob layout: [8]-byte header, then types[8] at offset 8..15,
+    // frames[8] at offset 16..23 (see the M6 describe block above).
     const overriddenBlob = out.stats.sceneBlobs[0];
     const defaultBlob = out.stats.sceneBlobs[1];
-    expect(overriddenBlob[15]).toBe(1); // static.png -> 1 frame
-    expect(defaultBlob[15]).toBe(6); // actor_animated.png -> 6 frames
-    expect(overriddenBlob[7]).not.toBe(defaultBlob[7]); // distinct sprite types too
+    expect(overriddenBlob[16]).toBe(1); // static.png -> 1 frame
+    expect(defaultBlob[16]).toBe(6); // actor_animated.png -> 6 frames
+    expect(overriddenBlob[8]).not.toBe(defaultBlob[8]); // distinct sprite types too
   });
 
   test("no scene falls back to the removed PLAYER_SPRITE_TYPE/_PAL compile-time constants", async () => {

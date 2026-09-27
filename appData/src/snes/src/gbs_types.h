@@ -96,11 +96,14 @@ typedef struct
      * hit1/2/3_idx are event_ptrs[] indices (like events_ptr's own source
      * index) for this actor's Hit (Group 1/2/3) scripts - resolved to a real
      * BANK_PTR only at the moment a hit fires, not pre-resolved like
-     * events_ptr, since most actors never get hit at all in a given scene. */
+     * events_ptr, since most actors never get hit at all in a given scene.
+     * u16, not u8 (v4 fix): this is a project-wide event_ptrs[] index that
+     * cumulatively grows scene by scene, routinely exceeding 255 well before
+     * a real game's last scene - see scene.c's scene-blob-layout comment. */
     u8 collision_group;
-    u8 hit1_idx;
-    u8 hit2_idx;
-    u8 hit3_idx;
+    u16 hit1_idx;
+    u16 hit2_idx;
+    u16 hit3_idx;
     /* On Update subsystem (v4). update_idx is an event_ptrs[] index for this
      * actor's Actor.updateScript (like hit1/2/3_idx, always compiled even
      * empty - the "is it really empty" check is 0xFF or the compiled-script
@@ -108,8 +111,9 @@ typedef struct
      * is which UPDATE_CTX pool slot (update_script.h) currently owns this
      * actor's persistent script, or UPDATE_CTX_NONE if it isn't running -
      * runtime-only, never compiled. See update_script.h for why this needs
-     * its own saved VM state instead of just reusing script_ptr. */
-    u8 update_idx;
+     * its own saved VM state instead of just reusing script_ptr. u16, not
+     * u8, for the same project-wide-index reason as hit1/2/3_idx above. */
+    u16 update_idx;
     u8 update_ctx;
 } ACTOR;
 

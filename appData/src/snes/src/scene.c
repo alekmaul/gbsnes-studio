@@ -143,7 +143,7 @@ static PROJECTILE projectiles[MAX_PROJECTILES];
 /* On Player Hit script indices (collision group 1/2/3), read from the scene
  * blob by SceneInit right after the parallax table - see that code and
  * ProjectilesUpdate() below. */
-static u8 player_hit_idx[3];
+static u16 player_hit_idx[3];
 
 /* Contact damage follow-up (v4): walking into a hostile actor. See
  * PlayerContactUpdate()'s own comment for the full design. */
@@ -597,18 +597,27 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  * Scene blob (see SceneInit and compileSnesData.js's sceneBlobs builder -
  * this comment had drifted out of sync with both as fields were added on
  * top over time; re-derived from the real byte offsets, not assumed):
- *   [0] bg_index  [1] num_actors  [2] num_triggers  [3] scene_script_idx
- *   [4] width     [5] height      [6] scene_type (genre dispatch byte)
- *   [7..30]  (24 bytes) per-scene OBJ slot table: sprite_type[8],
+ *   [0] bg_index  [1] num_actors  [2] num_triggers  [3..4] scene_script_idx
+ *   [5] width     [6] height      [7] scene_type (genre dispatch byte)
+ *   [8..31]  (24 bytes) per-scene OBJ slot table: sprite_type[8],
  *            sprite_frames[8], sprite_pal[8]
- *   [31..36] (6 bytes) up to 3 banded parallax layers: {lines, shift} each
- *   [37..39] (3 bytes) On Player Hit script indices (collision group 1/2/3)
- *   actors   (14 bytes each): tile_x, tile_y, dir, movement_type,
- *                       sprite_idx, script_idx, sprite_type, anim_speed,
- *                       animate, collision_group, hit1_idx, hit2_idx,
- *                       hit3_idx, update_idx
- *   triggers (6 bytes each): tile_x, tile_y, w, h, type, script_idx
+ *   [32..37] (6 bytes) up to 3 banded parallax layers: {lines, shift} each
+ *   [38..43] (6 bytes) On Player Hit script indices (collision group 1/2/3)
+ *   actors   (19 bytes each): tile_x, tile_y, dir, movement_type,
+ *                       sprite_idx, script_idx (2B), sprite_type, anim_speed,
+ *                       animate, collision_group, hit1_idx (2B), hit2_idx (2B),
+ *                       hit3_idx (2B), update_idx (2B)
+ *   triggers (7 bytes each): tile_x, tile_y, w, h, type, script_idx (2B)
  *   collision bitmap: ceil(width * height / 8) bytes, row-major, bit set = solid
+ *
+ * Every *_idx/script_idx field is a 2-byte little-endian event_ptrs[] index
+ * (v4 fix, user-found: "the triggers are not working when I press A" in a
+ * real multi-scene project) - it's a project-wide index shared across every
+ * scene's scripts, cumulatively growing as compileSnesData.js compiles scene
+ * after scene, so it routinely exceeds 255 well before the last scene of a
+ * real game. A 1-byte field silently wrapped mod 256, making a later scene's
+ * actor/trigger/hit/update script reference a random wrong script - not
+ * just triggers, every one of these fields shares the same index space.
  */
 
 /* frames_len from the per-actor sprite_type + the sheet's frame count:
@@ -683,7 +692,7 @@ void SceneInit(void)
 {
     const unsigned char *s = scenes[scene_index];
     u8 bg_index = s[0];
-    u8 scene_script_idx = s[3];
+    u16 scene_script_idx = s[3] | ((u16)s[4] << 8);
     u8 sc_size = SC_32x32;
     const unsigned char *p;
     u16 col_bytes;
@@ -693,14 +702,14 @@ void SceneInit(void)
 
     scene_num_actors = s[1];
     scene_num_triggers = s[2];
-    scene_width = s[4] ? s[4] : SCENE_TILE_W;
-    scene_height = s[5] ? s[5] : SCENE_TILE_H;
+    scene_width = s[5] ? s[5] : SCENE_TILE_W;
+    scene_height = s[6] ? s[6] : SCENE_TILE_H;
     /* v2 M5a: new header byte, see states.h. Existing dummy fixtures/
      * gen-dummy-gfx.js were updated to emit it - this is the only consumer
      * of this exact byte layout today (compileSnesData.js doesn't exist on
      * this branch yet, see M7). */
-    scene_type = s[6];
-    p = s + 7;
+    scene_type = s[7];
+    p = s + 8;
 
     /* [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
      * sprite_pal[8] - see compileSnesData.js. */
@@ -749,14 +758,14 @@ void SceneInit(void)
     }
     p += MAX_PARALLAX_LAYERS * 2;
 
-    /* Projectiles (v4, follow-up): [3] On Player Hit script indices
-     * (collision group 1/2/3) - see compileSnesData.js's
+    /* Projectiles (v4, follow-up): [6] On Player Hit script indices
+     * (collision group 1/2/3, 2 bytes each) - see compileSnesData.js's
      * playerHit1/2/3ScriptIdx and ProjectilesUpdate()'s own comment for how
      * they're picked. */
-    player_hit_idx[0] = p[0];
-    player_hit_idx[1] = p[1];
-    player_hit_idx[2] = p[2];
-    p += 3;
+    player_hit_idx[0] = p[0] | ((u16)p[1] << 8);
+    player_hit_idx[1] = p[2] | ((u16)p[3] << 8);
+    player_hit_idx[2] = p[4] | ((u16)p[5] << 8);
+    p += 6;
 
     /* pick the tilemap size from the BG dimensions (one 2-term test per if) */
     if (bg_map_w[bg_index] > 32) sc_size = SC_64x64;
@@ -866,27 +875,28 @@ void SceneInit(void)
         actors[i].active = 1;
         actors[i].move_speed = 1;
         actors[i].collisions_enabled = 1;
-        actors[i].sprite_type = p[6];
-        actors[i].anim_speed = p[7];
-        actors[i].animate = p[8];
-        actors[i].frames_len = frames_len_for(p[6], p[4]);
-        actors[i].events_ptr = event_ptrs[p[5]];
-        /* Projectiles (v4): [9]=collision_group, [10..12]=hit1/2/3_idx - see
-         * compileSnesData.js actorEntries and gbs_types.h's ACTOR comment. */
-        actors[i].collision_group = p[9];
-        actors[i].hit1_idx = p[10];
-        actors[i].hit2_idx = p[11];
-        actors[i].hit3_idx = p[12];
-        /* On Update subsystem (v4): [13]=update_idx. update_ctx is runtime-
-         * only (which UPDATE_CTX pool slot owns this actor, or
+        actors[i].sprite_type = p[7];
+        actors[i].anim_speed = p[8];
+        actors[i].animate = p[9];
+        actors[i].frames_len = frames_len_for(p[7], p[4]);
+        actors[i].events_ptr = event_ptrs[p[5] | ((u16)p[6] << 8)];
+        /* Projectiles (v4): [10]=collision_group, [11..16]=hit1/2/3_idx (2
+         * bytes each) - see compileSnesData.js actorEntries and
+         * gbs_types.h's ACTOR comment. */
+        actors[i].collision_group = p[10];
+        actors[i].hit1_idx = p[11] | ((u16)p[12] << 8);
+        actors[i].hit2_idx = p[13] | ((u16)p[14] << 8);
+        actors[i].hit3_idx = p[15] | ((u16)p[16] << 8);
+        /* On Update subsystem (v4): [17..18]=update_idx (2 bytes). update_ctx
+         * is runtime-only (which UPDATE_CTX pool slot owns this actor, or
          * UPDATE_CTX_NONE) - reset here so a previous scene's slot index
          * left over in this ACTOR struct entry (actors[] isn't cleared
          * between scenes) never gets misread as "already running"; the
          * actual pool reset + auto-launch happens in the loop below, once
          * every actor's update_idx is known. */
-        actors[i].update_idx = p[13];
+        actors[i].update_idx = p[17] | ((u16)p[18] << 8);
         actors[i].update_ctx = UPDATE_CTX_NONE;
-        p += 14;
+        p += 19;
     }
     for (; i < MAX_ACTORS; i++)
     {
@@ -929,8 +939,8 @@ void SceneInit(void)
         triggers[i].w = p[2] < 1 ? 1 : p[2];
         triggers[i].h = p[3] < 1 ? 1 : p[3];
         triggers[i].type = p[4];
-        triggers[i].events_ptr = event_ptrs[p[5]];
-        p += 6;
+        triggers[i].events_ptr = event_ptrs[p[5] | ((u16)p[6] << 8)];
+        p += 7;
     }
 
     col_bytes = ((u16)scene_width * scene_height + 7) >> 3;
