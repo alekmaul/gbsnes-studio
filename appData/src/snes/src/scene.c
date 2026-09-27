@@ -2587,12 +2587,29 @@ static void SceneRenderActors(void)
          * being invisible off the right one. There is no legitimate use
          * for x_rel > 255 here - a sprite past the right edge just needs
          * to be culled, not encoded - so the upper X bound is exactly the
-         * screen width, no margin. Y has no equivalent hardware ambiguity
-         * within this range (its own 256 upper bound was already correct),
-         * so it's unchanged. */
+         * screen width, no margin.
+         *
+         * v4 fix (user-found, No$sns OAM viewer: a sprite with OAM Y=0xF8
+         * showing a sliver at the TOP of the screen instead of staying
+         * fully hidden below the bottom edge). The claim just above this -
+         * "Y has no equivalent hardware ambiguity, its own 256 upper bound
+         * was already correct" - was wrong: unlike X (9-bit, wraps at 512,
+         * far past the 256px screen width, so the exact-256 cutoff above
+         * has no wrap risk at all), Y is only 8-bit and wraps at 256, which
+         * is *close* to the real 224px visible height. A 16px-tall sprite
+         * (OBJ_LARGE) at y_rel in (224, 240] is safely invisible (rows
+         * 224-255, entirely below row 223, no wrap) - but y_rel in
+         * (240, 255] wraps: e.g. y_rel=248 spans OAM rows 248-263, and
+         * 256-263 wrap to rows 0-7, showing the sprite's own bottom 8 rows
+         * as a phantom sliver at the top of the screen. Matching X's own
+         * treatment exactly (cull at the real visible boundary, not the
+         * hardware wrap period) removes the unsafe window entirely: 224 is
+         * this target's real NTSC visible height (also used verbatim by
+         * cam_max_y two lines below/game.c's cam_max_y - no named constant
+         * exists for it here). */
         if (a->enabled && !sprites_hidden &&
             x_rel > -32 && x_rel < 256 &&
-            y_rel > -32 && y_rel < 256)
+            y_rel > -32 && y_rel < 224)
         {
             tile = actor_render_tile(a, &flip);
             // oamSet(id, x, y, priority, hflip, vflip, gfxoffset, pal)
