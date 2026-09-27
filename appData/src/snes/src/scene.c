@@ -66,6 +66,15 @@ u8 emote_time = 0;
 
 static TRIGGER triggers[MAX_TRIGGERS];
 static u8 check_triggers = 1;
+/* v4 perf fix (user-found: "top down 2D is slow, even with only 4/5
+ * actors"; traced to a scene with several walk-triggers where the player
+ * gets blocked against a wall while still holding a direction). See
+ * SceneCheckTriggers's own comment for the full story - this pair mirrors
+ * Adventure's own already-proven `adv_last_trigger_tx/ty` (real GB
+ * behaviour: "compares against a remembered last checked tile"), which Top
+ * Down never adopted. */
+static s16 td_last_trigger_tx = -1;
+static s16 td_last_trigger_ty = -1;
 static u8 scene_col[SCENE_COL_BYTES];
 
 /* v4: real Engine Field now (appData/src/snes/engine.json "topdown_grid") -
@@ -964,6 +973,11 @@ void SceneInit(void)
 
     actor_move_settings = 0;
     check_triggers = 1;
+    /* A fresh scene's own starting tile must always be re-checked, even if
+     * it numerically matches wherever the player happened to last check a
+     * trigger in the *previous* scene. */
+    td_last_trigger_tx = -1;
+    td_last_trigger_ty = -1;
     scene_loaded = 1;
     emote_time = 0;
     for (j = 0; j < NUM_TIMER_CONTEXTS; j++)
@@ -2207,11 +2221,12 @@ void SceneHandleInput(void)
 // hook). Scans type-0 (walk-over) triggers at tile (tx,ty) and runs the
 // first match's script. Returns 1 if a trigger fired. Callers own their own
 // debounce (GB's own ActivateTriggerAt compares against a remembered last
-// checked tile; this engine's two callers below use different, already-
-// proven debounce styles - Top Down's movement-armed `check_triggers` flag,
-// Adventure's tile-compare - rather than being unified, since both already
-// work and unifying them risks regressing Top Down's proven behaviour for
-// no behavioural gain).
+// checked tile) - this engine's two callers below both now do that same
+// tile-compare (Top Down via td_last_trigger_tx/ty, added v4 as a perf fix;
+// Adventure via adv_last_trigger_tx/ty, already had it) on top of their own
+// separate per-genre gating, rather than being merged into one call site -
+// see SceneCheckTriggers's own comment for why Top Down needed the
+// tile-compare added.
 static u8 SceneActivateTriggerAt(s16 tx, s16 ty)
 {
     u8 i;
@@ -2259,6 +2274,27 @@ static void SceneCheckTriggers(void)
 
     tx = SceneActorTileX(0);
     ty = SceneActorTileY(0);
+
+    // v4 perf fix (user-found: "top down 2D is slow, even with only 4/5
+    // actors" - traced to a scene with several walk-triggers). check_triggers
+    // alone only ever gets cleared by a *successful match* (below) - so a
+    // player blocked against a wall while still holding a direction (the
+    // player is trivially "on tile" every frame while stationary) re-ran
+    // this whole scan, including the SceneActivateTriggerAt loop over every
+    // trigger, on *every single engine iteration* for as long as they stayed
+    // blocked, even though the tile being checked never changed and the
+    // result could never change either. Measured on a real 14-trigger scene:
+    // this one function accounted for essentially the entire gap between a
+    // stuck player and locked 60fps (tick/frame ratio 0.48 -> 0.935 with
+    // just this call disabled). Adding the same "already checked this exact
+    // tile" short-circuit Adventure's own trigger check already uses
+    // (`adv_last_trigger_tx/ty` above - itself matching GB's real
+    // ActivateTriggerAt, "compares against a remembered last checked tile")
+    // makes the scan run at most once per distinct tile, regardless of how
+    // long the player dwells there - moving through it or stuck against it.
+    if (tx == td_last_trigger_tx && ty == td_last_trigger_ty) return;
+    td_last_trigger_tx = tx;
+    td_last_trigger_ty = ty;
 
     if (SceneActivateTriggerAt(tx, ty))
     {
