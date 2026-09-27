@@ -115,6 +115,11 @@ static u8 ui_menu_cols;   /* 1 or 2 (M5e "menu" layout) */
 static u8 ui_avatar_active;
 static u8 ui_avatar_tile;
 static u8 ui_xoff; /* text column offset (0, or past the avatar) */
+/* Perf: ui_render_avatar()'s own hidden/shown state, so it can skip the
+ * oamSetVisible(HIDE) call once already hidden instead of re-issuing it
+ * every single frame - the overwhelmingly common case (most frames show no
+ * avatar at all). See that function's own comment. */
+static u8 ui_avatar_shown;
 
 /* overlay (M5d, M5e row targeting) */
 static u8 ui_overlay;
@@ -215,6 +220,7 @@ void UIInit(void)
     ui_slide_off = 0;
     ui_menu_cols = 1;
     ui_avatar_active = 0;
+    ui_avatar_shown = 0;
     ui_xoff = 0;
     ui_blink = 0;
     ui_overlay = 0;
@@ -542,6 +548,12 @@ static void ui_reveal_char(void)
     }
 }
 
+// Perf: called unconditionally every frame from UIUpdate (before its own
+// ui_state==0 early return), so on the overwhelmingly common frame (no
+// avatar dialogue showing at all) this used to still issue a real
+// oamSetVisible(HIDE) call - a full PVSnesLib OAM high-table read-modify-
+// write - every single frame for no reason, since the avatar was already
+// hidden. Now only touches OAM on an actual show<->hide transition.
 static void ui_render_avatar(void)
 {
     u8 show = 0;
@@ -552,6 +564,11 @@ static void ui_render_avatar(void)
             if (ui_state == 1 || ui_state == 2) show = 1;
         }
     }
+    /* No transition since last frame - either still hidden (the common
+     * case) or still shown (position/tile can't change without a state
+     * transition, so no need to re-issue oamSet either). */
+    if (show == ui_avatar_shown) return;
+    ui_avatar_shown = show;
     if (show)
     {
         /* box top-left: TXT_COL0*8, TXT_ROW0*8 */

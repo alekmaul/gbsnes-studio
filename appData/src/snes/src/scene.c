@@ -180,13 +180,17 @@ extern u8 time;
 // A function, not a macro: 816-tcc miscompiles the `a && b && c` chain this
 // feeds when it is inlined into a compound `if` (the false branch fell through
 // into the block), so keep the &&-chains short and out of conditionals.
-static u8 actor_on_tile(u8 i)
+// Perf: takes a pointer, not an index (table[i]-vs-pointer fix, same class as
+// npc_blocking/actor_try_move/SceneRenderActors/SceneAnimateActors - see
+// PERF.md) - every call site either already has actors[i]'s pointer in hand
+// or is a compile-time-constant index (actors[0]), so this only ever removes
+// redundant re-indexing, never adds any.
+static u8 actor_on_tile(ACTOR *a)
 {
-    if ((actors[i].x & 7) != 0) return 0;
-    if ((actors[i].y & 7) != 0) return 0;
+    if ((a->x & 7) != 0) return 0;
+    if ((a->y & 7) != 0) return 0;
     return 1;
 }
-#define ACTOR_ON_TILE(i) actor_on_tile(i)
 
 s16 SceneActorTileX(u8 i) { return (actors[i].x - 8) >> 3; }
 s16 SceneActorTileY(u8 i) { return (actors[i].y - 8) >> 3; }
@@ -377,7 +381,7 @@ void SceneUpdateTimerScript(void)
         if (timer_script_time[i] == 0)
         {
             // Don't start the script while the player is mid-step, like GB.
-            if (!actor_on_tile(0)) return;
+            if (!actor_on_tile(&actors[0])) return;
             run_script(timer_script_ptr[i], 0);
             timer_script_time[i] = timer_script_duration[i];
             return;
@@ -519,10 +523,11 @@ static u8 can_step(s16 tx, s16 ty)
     return 1;
 }
 
-static void actor_face(u16 i, s16 dx, s16 dy)
+// Perf: pointer, not index - table[i]-vs-pointer fix, see actor_on_tile above.
+static void actor_face(ACTOR *a, s16 dx, s16 dy)
 {
-    actors[i].dir_x = (s8)dx;
-    actors[i].dir_y = (s8)dy;
+    a->dir_x = (s8)dx;
+    a->dir_y = (s8)dy;
     // flip/tile for a directional sprite are derived from dir_x/dir_y fresh
     // every render call (see actor_render_tile in SceneRenderActors below),
     // not persisted here - matches the GB engine's own SceneRenderActor_b.
@@ -537,7 +542,7 @@ static void actor_face(u16 i, s16 dx, s16 dy)
 static void actor_try_move(u16 i, s16 dx, s16 dy)
 {
     ACTOR *a = &actors[i];
-    actor_face(i, dx, dy);
+    actor_face(a, dx, dy);
 
     if (dx == 0 && dy == 0)
     {
@@ -1110,7 +1115,7 @@ static void SceneTryInteract(void)
             // Face the player and stop - matches B's real topdown.c, which
             // does this unconditionally even for a scriptless actor (only
             // the script_execute call itself is gated on script.bank).
-            actor_face(i, -actors[0].dir_x, -actors[0].dir_y);
+            actor_face(&actors[i], -actors[0].dir_x, -actors[0].dir_y);
             actors[i].moving = 0;
             // GB found+extended: B gates the actual script run on
             // hit_actor->script.bank; a compiled script is never truly
@@ -2165,7 +2170,7 @@ void SceneHandleInput(void)
     // without ever actually re-running past the first aligned frame either.
     if (scene_type == SCENE_TYPE_TOPDOWN)
     {
-        if (!ACTOR_ON_TILE(0))
+        if (!actor_on_tile(&actors[0]))
         {
             return; // mid-step
         }
@@ -2250,7 +2255,7 @@ static void SceneCheckTriggers(void)
     if (scene_type != SCENE_TYPE_TOPDOWN) return;
     if (!check_triggers) return;
     if (script_ptr) return;
-    if (!actor_on_tile(0)) return;
+    if (!actor_on_tile(&actors[0])) return;
 
     tx = SceneActorTileX(0);
     ty = SceneActorTileY(0);
@@ -2271,6 +2276,13 @@ static void SceneCheckTriggers(void)
 // not 64, but no two actors' decisions ever pile up on the same frame. Ported
 // that striping here (the SNES port previously touched every actor every 64
 // frames, twice as often as GB and with no such spread).
+// Perf: local pointer, same table[i]-vs-pointer fix as the other actor-loop
+// functions in this file (see PERF.md) - actors[i] was re-indexed up to 6
+// times per actor here (enabled, active, moving, x, movement_type, plus
+// actor_face/actor_on_tile each re-indexing again internally before their
+// own recent pointer fixes) - missed by the original movement/collision
+// cleanup pass, which covered actor_try_move/npc_blocking/Update_TopDown
+// but not this function.
 static void SceneUpdateAi(void)
 {
     u8 i, first;
@@ -2283,20 +2295,21 @@ static void SceneUpdateAi(void)
     first = (u8)(time == 0 || time == 128);
     for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
+        ACTOR *a = &actors[i];
         if (script_ptr) return;
         if ((i & 1) != first) continue;
-        if (!actors[i].enabled) continue;
-        if (!actors[i].active) continue;
-        if (actors[i].moving) continue;
+        if (!a->enabled) continue;
+        if (!a->active) continue;
+        if (a->moving) continue;
         {
-            u8 r = ((time >> 6) + i + actors[i].x) & 3;
-            if (actors[i].movement_type == MOVE_AI_RANDOM_FACE)
+            u8 r = ((time >> 6) + i + a->x) & 3;
+            if (a->movement_type == MOVE_AI_RANDOM_FACE)
             {
-                actor_face(i, dirs[r][0], dirs[r][1]);
+                actor_face(a, dirs[r][0], dirs[r][1]);
             }
-            else if (actors[i].movement_type == MOVE_AI_RANDOM_WALK)
+            else if (a->movement_type == MOVE_AI_RANDOM_WALK)
             {
-                if (ACTOR_ON_TILE(i))
+                if (actor_on_tile(a))
                 {
                     actor_try_move(i, dirs[r][0], dirs[r][1]);
                 }
@@ -2372,7 +2385,7 @@ static void SceneUpdateActors(void)
     }
 
     // Script-commanded walk: re-aim the actor on each tile boundary.
-    if (scripting && actor_on_tile(script_actor))
+    if (scripting && actor_on_tile(&actors[script_actor]))
     {
         u8 a = script_actor;
         ACTOR *sa = &actors[a];
@@ -2456,7 +2469,7 @@ static void SceneUpdateActors(void)
             a->y += (s16)a->dir_y * a->move_speed;
         }
 
-        if (ACTOR_ON_TILE(i) && !is_cmd)
+        if (actor_on_tile(a) && !is_cmd)
         {
             a->moving = 0;
         }
