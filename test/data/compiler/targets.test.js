@@ -24,9 +24,11 @@ describe("compile targets", () => {
     expect(snes.romExt).toBe("sfc");
     expect(snes.engineDir).toBe("snes");
     // v4: raised from 256 to match the engine's real 64x64-tile capacity
-    // (SC_64x64, present since the first SNES commit) - see targets/snes.js's
-    // own comment for the full reasoning.
-    expect(snes.maxBackgroundWidth).toBe(512);
+    // (SC_64x64, present since the first SNES commit), then width raised
+    // again to 2040 (255 tiles) to match real horizontal background
+    // streaming - width and height have different real ceilings now, see
+    // targets/snes.js's own comment for the full reasoning.
+    expect(snes.maxBackgroundWidth).toBe(2040);
     expect(snes.maxBackgroundHeight).toBe(512);
     expect(snes.maxSpriteFrames).toBeNull();
     expect(snes.maxSpriteSheets).toBe(8);

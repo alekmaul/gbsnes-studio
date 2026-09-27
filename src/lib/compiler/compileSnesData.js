@@ -93,7 +93,11 @@ const ensureSnesUiAssets = async (projectRoot, warnings) => {
     if (!fs.existsSync(dest)) {
       // eslint-disable-next-line no-await-in-loop
       await fs.copy(
-        Path.join(projectTemplatesRoot, "gbhtml", "assets", "ui", name),
+        // user-found (2026-09-27): "gbhtml" hasn't existed since the GB
+        // target was removed (v3) - this fallback silently pointed at a
+        // nonexistent template the whole time, only never hit because
+        // every real/test project already had its own assets/ui/*.
+        Path.join(projectTemplatesRoot, "sneshtml", "assets", "ui", name),
         dest
       );
       warnings(`assets/ui/${name} was missing, copied the default in`);
@@ -942,8 +946,14 @@ const compileSnesData = async (
   // is emitted as its own `.as` superfree section (see below), not packed
   // into assets.c's atomic 32 KB .rodata section, so there's no ROM
   // constraint forcing one. The four-screen buffer itself is naturally
-  // capped at 64x64 tiles (SC_64x64's real VRAM budget) - real streaming
-  // for scenes wider/taller than that is separate, still-to-do work.
+  // capped at 64x64 tiles (SC_64x64's real VRAM budget) - real horizontal
+  // streaming for backgrounds wider than that (up to 255 tiles) is done,
+  // not still-to-do (this comment used to say otherwise - see
+  // scene.c's SceneStreamBackground and PERF.md); it reads the background's
+  // complete, unclamped tilemap (bg_fullmap_ptrs[], emitted below) as a
+  // second ROM array and streams new columns in as the camera scrolls past
+  // the initial 64-tile window loaded here. Vertical streaming genuinely
+  // doesn't exist - a background over 64 tiles tall is still unsupported.
   const QUADRANT_TILES = 32;
   // usesQuadrants(w,h): does this background's VRAM tilemap need the real
   // SC_64x64 four-screen layout, or does it fit the single SC_32x32 screen

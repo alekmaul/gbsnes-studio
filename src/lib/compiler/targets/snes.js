@@ -55,16 +55,24 @@ const snesTarget = {
   // scene background at 32x32 tiles" and warned at 256px - but the engine
   // itself has supported 64x64-tile backgrounds since the very first SNES
   // commit (scene.c's SceneInit: `if (bg_map_w[bg_index] > 32) sc_size =
-  // SC_64x64;`), and the collision bitmap is sized to match
-  // (appData/src/snes/src/scene.h's SCENE_TILE_W/H are both 64,
-  // SCENE_COL_BYTES = 64*64/8). bg_maps_len[]/the DMA copying the map into
-  // VRAM are `unsigned short` (compileSnesData.js/assets.h), so no 8-bit
-  // truncation risk at the larger size either. The 256px warning threshold
-  // was simply never raised to match once SC_64x64 landed - real cap is 64
-  // tiles/512px per axis. VRAM headroom confirmed too: BG1's map lives at
-  // word 0x0000, BG1's tiles start at word 0x2000 (game.c), so a 64x64 map
-  // (0x1000 words) fits with room to spare before colliding with tile data.
-  maxBackgroundWidth: 512,
+  // SC_64x64;`). The 256px threshold was simply never raised to match once
+  // SC_64x64 landed.
+  //
+  // user-found again (2026-09-27, real projects: leaving_earth.png 255
+  // tiles, platform_path.png 161, parallax.png 80, all wider than the
+  // 64-tile ceiling above): width and height no longer share one real
+  // ceiling. Width now goes up to 255 tiles - this engine's real horizontal
+  // background streaming (scene.c's SceneStreamBackground, see PERF.md)
+  // genuinely supports anything beyond 64 tiles wide, up to 255 (bg_map_w[]
+  // is `u8` - compileSnesData.js/assets.h - the real hard ceiling, not a
+  // guess). Height stays at the old 64-tile/512px limit - there is no
+  // vertical streaming, so SC_64x64's own VRAM ceiling is still the real
+  // wall on that axis. appData/src/snes/src/scene.h's collision bitmap
+  // (SCENE_COL_BYTES) was raised from a symmetric 64x64 to a real
+  // 255x64 to match - it used to silently truncate collision data for any
+  // scene needing more than 4096 tile-cells, independent of whether the
+  // *tilemap* itself (what this warning threshold actually gates) fit.
+  maxBackgroundWidth: 2040,
   maxBackgroundHeight: 512,
   maxBackgroundPixels: null,
   // VRAM budget for one background layer's tiles (M6). v1.1.4 engine layout

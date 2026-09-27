@@ -32,11 +32,34 @@ extern const unsigned char *sprite_slot_for_index;
  * place. */
 u8 frames_len_for(u8 sprite_type, u8 slot);
 
-/* Dummy scenes reuse the M3 64x64 map. The real limit comes from the target
- * descriptor + collision bitmap size. */
+/* Dummy scenes reuse the M3 64x64 map (SceneInit's fallback when a scene
+ * blob's width/height byte is 0 - dummy/test fixtures only, a real project
+ * always populates both via compileSnesData.js). Left at 64x64 on purpose,
+ * not tied to the collision buffer's own real ceiling below - this is a
+ * "no size given" default, not a size cap. */
 #define SCENE_TILE_W 64
 #define SCENE_TILE_H 64
-#define SCENE_COL_BYTES ((SCENE_TILE_W * SCENE_TILE_H + 7) / 8)
+
+/* Real per-axis ceiling the collision bitmap is sized for - must match
+ * targets/snes.js's maxBackgroundWidth/Height (in tiles, i.e. /8). Width
+ * (255) is this engine's real horizontal-streaming ceiling (bg_map_w[] is
+ * u8 - see compileSnesData.js/PERF.md); height (64) is SC_64x64's real
+ * VRAM ceiling - there is no vertical streaming, so a background taller
+ * than 64 tiles genuinely isn't supported today, unlike width. Product
+ * (not W*W) since the two axes now have different real limits - user-found
+ * (2026-09-27): the old symmetric 64x64 sizing here silently truncated
+ * collision data for any real project scene needing more than 4096 tile-
+ * cells (e.g. a 161x28 or 255x28 streaming background, both well over
+ * 4096, regardless of the *tilemap*'s own real 255-wide support) - SceneInit
+ * clamped the copy at the old SCENE_COL_BYTES with no warning, so those
+ * scenes' collision was silently missing data at the tail (row-major, so
+ * the last several rows) with no error, not even the misleading "too wide"
+ * compiler warning this fix also addresses (that warning was purely about
+ * the *tilemap*, which streaming already handled - collision was the
+ * actually-still-broken part the warning's wording never named). */
+#define SCENE_COL_MAX_W 255
+#define SCENE_COL_MAX_H 64
+#define SCENE_COL_BYTES ((SCENE_COL_MAX_W * SCENE_COL_MAX_H + 7) / 8)
 
 /* actor_move_settings bits (Scene.h on GB) */
 #define ACTOR_MOVE_ENABLED 0x80

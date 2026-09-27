@@ -1,5 +1,7 @@
 import fs from "fs-extra";
+import os from "os";
 import Path from "path";
+import { PNG } from "pngjs";
 import compileSnesData, {
   resolvePlaceholders,
 } from "../../../src/lib/compiler/compileSnesData";
@@ -550,7 +552,14 @@ describe("compileSnesData - oversized background warning (v4)", () => {
     expect(warnings.some((w) => w.includes("sample_town"))).toBe(false);
   });
 
-  test("a background beyond the real 64-tile cap still warns, with the real limit in the message", async () => {
+  // v4 fix (user-found: real projects using real horizontal streaming -
+  // leaving_earth.png 255 tiles, platform_path.png 161, parallax.png 80 -
+  // still got a "not supported" warning that was simply wrong once
+  // streaming existed to genuinely support them). Width's real ceiling is
+  // now 255 tiles (bg_map_w[]'s own u8 storage limit, not a guess) -
+  // nothing at or under that should warn, regardless of how wide the
+  // *screen* is.
+  test("a background over 64 tiles wide no longer warns, now that streaming supports it", async () => {
     const project = JSON.parse(
       fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
     );
@@ -559,11 +568,50 @@ describe("compileSnesData - oversized background warning (v4)", () => {
       projectRoot: SNESGBS2_DIR,
       warnings: (w) => warnings.push(w),
     });
-    const leavingEarth = warnings.find((w) => w.includes("leaving_earth"));
-    expect(leavingEarth).toBeDefined();
-    expect(leavingEarth).toMatch(/255x28 tiles/);
-    expect(leavingEarth).toMatch(/64x64 tiles/);
-    expect(leavingEarth).not.toMatch(/32x32|32 tiles/);
+    expect(warnings.some((w) => w.includes("leaving_earth"))).toBe(false);
+    expect(warnings.some((w) => w.includes("platform_path"))).toBe(false);
+    expect(warnings.some((w) => w.includes("parallax"))).toBe(false);
+  });
+
+  // Height has no streaming equivalent - SC_64x64's own VRAM ceiling is
+  // still a real, unaddressed wall on that axis, so the warning should
+  // still fire there. Synthetic fixture (no real 65-tile-tall PNG exists
+  // in this project) - matches this file's own established pattern for
+  // dimension-focused tests elsewhere.
+  test("a background over 64 tiles tall still warns - no vertical streaming exists", async () => {
+    const projectRoot = fs.mkdtempSync(Path.join(os.tmpdir(), "gbs-tallbg-"));
+    fs.ensureDirSync(Path.join(projectRoot, "assets", "backgrounds"));
+    const png = new PNG({ width: 32 * 8, height: 65 * 8 });
+    png.data.fill(255);
+    fs.writeFileSync(
+      Path.join(projectRoot, "assets", "backgrounds", "tall.png"),
+      PNG.sync.write(png)
+    );
+
+    const project = {
+      settings: { target: "snes", startSceneId: "s", startX: 0, startY: 0 },
+      backgrounds: [{ id: "bg", filename: "tall.png", width: 32, height: 65 }],
+      variables: [],
+      scenes: [
+        {
+          id: "s",
+          name: "s",
+          backgroundId: "bg",
+          width: 32,
+          height: 65,
+          actors: [],
+          triggers: [],
+          script: [],
+        },
+      ],
+    };
+    const warnings = [];
+    await compileSnesData(project, {
+      projectRoot,
+      warnings: (w) => warnings.push(w),
+    });
+    fs.removeSync(projectRoot);
+    expect(warnings.some((w) => w.includes("not supported"))).toBe(true);
   });
 
   // Horizontal background streaming (v4): a background over 64 tiles wide
