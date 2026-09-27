@@ -527,7 +527,13 @@ const off = (event, fn) => {
 const openAbout = () => {
   return openAboutWindow({
     icon_path: `${assetsRoot}/app/icon/app_icon.png`,
-    bug_link_text: `Report bug (git: ${COMMITHASH})`
+    bug_link_text: `Report bug (git: ${COMMITHASH})`,
+    // user-found: with no override, about-window falls back to
+    // package.json's own "homepage" field (still gbstudio.dev, the
+    // upstream GB Studio site - left as-is on purpose, see CLAUDE.md) for
+    // the logo/version click - same itch.io page as MENU_LEARN_MORE above
+    // and the update/migrate-warning Download buttons, not the docs site.
+    homepage: "https://portabledev.itch.io/gbsnes-studio"
   });
 };
 
