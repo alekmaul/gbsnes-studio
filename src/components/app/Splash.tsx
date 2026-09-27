@@ -67,18 +67,18 @@ type SplashTab = typeof splashTabs[number];
 
 const templates: TemplateInfo[] = [
   {
-    id: "sneshtml",
-    name: l10n("SPLASH_SAMPLE_PROJECT"),
-    preview: sneshtmlPreview,
-    videoPreview: false,
-    description: l10n("SPLASH_SNES_SAMPLE_PROJECT_DESCRIPTION"),
-  },
-  {
     id: "snesgbs2",
     name: `${l10n("SPLASH_SAMPLE_PROJECT")} (all genres)`,
     preview: snesgbs2Preview,
     videoPreview: false,
     description: l10n("SPLASH_SNES_GBS2_DESCRIPTION"),
+  },
+  {
+    id: "sneshtml",
+    name: l10n("SPLASH_SAMPLE_PROJECT"),
+    preview: sneshtmlPreview,
+    videoPreview: false,
+    description: l10n("SPLASH_SNES_SAMPLE_PROJECT_DESCRIPTION"),
   },
   {
     id: "snesblank",
