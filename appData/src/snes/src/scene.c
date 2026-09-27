@@ -2615,9 +2615,27 @@ static void SceneRenderActors(void)
             // a painted "priority" tile - see EVENTS.md) but above BG1.0/
             // BG2.0, so ordinary tiles no longer cover the sprite. This is
             // also just reverting to what this code did before M7 (v4).
+            //
+            // v4 fix (user-found, No$sns OAM viewer: a duck actor scrolled
+            // just past the left edge - x_rel a small negative number -
+            // rendered pinned near the RIGHT edge instead, at the wrapped
+            // low byte of x_rel). oamSetEx MUST run before oamSet, not
+            // after: PVSnesLib's oamSetEx (sprites.asm) unconditionally
+            // clears this sprite's OAM high-table X-MSB bit on its
+            // OBJ_SHOW path (`and.l oamHideand,x` on the show branch) -
+            // it doesn't know or care about X, it's just resetting
+            // whatever oamSetVisible's own hide path leaves behind. oamSet
+            // is the one that correctly computes and writes that same bit
+            // from x_rel's sign (a real read-modify-write, verified in the
+            // upstream pvsneslib/pvsneslib/source/sprites.asm). Calling
+            // oamSetEx after oamSet silently zeroed the bit oamSet had just
+            // set, so any sprite with a negative x_rel (already handled by
+            // the -32..256 cull check above) had its OAM X reinterpreted as
+            // a small *positive* value near the right edge instead of the
+            // correct near-left-edge/off-screen position.
+            oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
             oamSet(oid, (u16)x_rel, (u16)y_rel, 2,
                    flip, 0, tile, sprite_pal_for_slot[a->frame_offset >> 1]);
-            oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         }
         else
         {
@@ -2632,10 +2650,12 @@ static void SceneRenderActors(void)
          * the actor's head), so it should respect priority tiles the same
          * way (and not be hidden behind ordinary BG1 tiles either). */
         ACTOR *ea = &actors[emote_actor];
+        // v4 fix: oamSetEx before oamSet - same X-MSB-clobbering reasoning
+        // as the actor oamSet above.
+        oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
         oamSet(EMOTE_OID, ea->x - scroll_x - 8,
                ea->y - scroll_y - 32, 2, 0, 0,
                EMOTE_TILE0 + emote_id * 2, 1);
-        oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
     }
     else
     {
@@ -2782,10 +2802,12 @@ void ProjectilesUpdate(void)
         tile = projectiles[i].sprite_slot * 2;
         flip = projectiles[i].dir_x < 0 ? 1 : 0;
         /* v4 fix: priority 2, same reasoning as the actor/emote oamSet
-         * above - a world-space sprite, same layer as actors. */
+         * above - a world-space sprite, same layer as actors. oamSetEx
+         * before oamSet - same X-MSB-clobbering reasoning as the actor
+         * oamSet above. */
+        oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
         oamSet(oid, projectiles[i].x - scroll_x - 4, projectiles[i].y - scroll_y - 4, 2,
                flip, 0, tile, sprite_pal_for_slot[projectiles[i].sprite_slot]);
-        oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
     }
 }
 
