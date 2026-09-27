@@ -16,7 +16,7 @@ describe("compile targets", () => {
     // v4: raised from 9/9 to match GB Studio 3.2.1 exactly (a stale
     // placeholder, not a real engine ceiling) - gbs_types.h's MAX_ACTORS/
     // MAX_TRIGGERS were raised to match.
-    expect(snes.maxActors).toBe(20);
+    expect(snes.maxActors).toBe(19);
     expect(snes.maxTriggers).toBe(30);
     expect(snes.maxActorsSmall).toBe(10);
     expect(snes.maxScriptSize).toBe(32768);

@@ -736,6 +736,22 @@ const compileSnesData = async (
   const pushScript = (bytes) => pushRaw(bytes);
 
   const sceneBlobs = scenes.map((scene, sceneIndex) => {
+    // v4 fix (user-found, code review: "can scene_num_actors be >=
+    // MAX_ACTORS?"): this byte is otherwise written unclamped below
+    // (scene.actors.length, straight into the blob) - nothing here ever
+    // stopped a scene from compiling with more actors than the engine can
+    // load. SceneInit's own i < MAX_ACTORS guard (scene.c) silently drops
+    // any actor past the limit rather than corrupting memory, but that's a
+    // silent, easy-to-miss failure mode - warn here so it surfaces in the
+    // actual build log, not only in the World editor's per-scene hover
+    // tooltip (SceneInfo.js, editor-time only - never seen at all if this
+    // scene isn't the one currently open when a build happens).
+    // snesTarget.maxActors is already -1'd for the player's reserved slot.
+    if ((scene.actors || []).length > snesTarget.maxActors) {
+      warnings(
+        `Scene "${scene.name || sceneIndex}" has ${scene.actors.length} actors, but only the first ${snesTarget.maxActors} will be included - the rest are silently dropped.`
+      );
+    }
     const bgIndex = bgIndexById[scene.backgroundId] || 0;
     const conv = bgConverted[bgIndex];
     const w = conv.tileW;

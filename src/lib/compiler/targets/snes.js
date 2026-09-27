@@ -88,7 +88,20 @@ const snesTarget = {
   // ceiling. gbs_types.h's MAX_ACTORS/MAX_TRIGGERS (the actual C array
   // sizes) now match these; see that header's own comment for why raising
   // them is safe (WRAM headroom, OAM ids already derive from MAX_ACTORS).
-  maxActors: 20,
+  //
+  // v4 fix (user-found, code review: "can scene_num_actors be >=
+  // MAX_ACTORS?"): maxActors was 20, matching gbs_types.h's MAX_ACTORS
+  // verbatim - but that C array's slot 0 is always the player
+  // (SceneInit's own actor-loading loop starts at i=1, scene.c), so a
+  // scene's own authored actors only ever fit in the remaining 19 slots.
+  // A scene with exactly 20 actors passed this check with no warning
+  // (20 > 20 is false) while the engine could only load 19 of them - the
+  // 20th was silently dropped by SceneInit's own i < MAX_ACTORS guard
+  // (kept deliberately; scene_num_actors is otherwise unclamped at
+  // compile time - see compileSnesData.js's own new warning next to
+  // where it writes this byte). maxTriggers doesn't need this -1: unlike
+  // actors[], triggers[] has no reserved player slot.
+  maxActors: 19,
   maxTriggers: 30,
   // Editor-only authoring guidance, same as B: a scene no bigger than one
   // screen gets a lower recommended actor count (SceneInfo.js's

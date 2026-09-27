@@ -6,6 +6,7 @@ import compileSnesData, {
   resolvePlaceholders,
 } from "../../../src/lib/compiler/compileSnesData";
 import { COLLISION_ALL, COLLISION_TOP, TILE_PROP_PRIORITY } from "../../../src/consts";
+import snesTarget from "../../../src/lib/compiler/targets/snes";
 
 const PROJECT_DIR = Path.join(__dirname, "..", "..", "projects", "Test_Math");
 const loadProject = () => {
@@ -267,6 +268,65 @@ describe("compileSnesData - actor.spriteType (v2, replaces movementType inferenc
     // byte 7 of the 10-byte prefix (x,y,dir,move,slot,scriptIdx(2B),spriteType,...)
     const actorEntry = out.stats.sceneBlobs[0].slice(44, 54);
     expect(actorEntry[7]).toBe(0); // SPRITE_STATIC despite movementType=randomWalk
+  });
+});
+
+describe("compileSnesData - too many actors in one scene (v4 fix)", () => {
+  // v4 fix (user-found, code review: "can scene_num_actors be >=
+  // MAX_ACTORS?"): scene.actors.length is written into the scene blob
+  // unclamped - nothing here ever stopped a scene compiling with more
+  // actors than the engine can load (SceneInit's own i < MAX_ACTORS guard,
+  // scene.c, silently drops the rest rather than corrupting memory, which
+  // is worse for being silent). This warning is the only thing that
+  // surfaces the problem during an actual build - the World editor's own
+  // per-scene hint (SceneInfo.js) is editor-time only, never seen if this
+  // scene isn't the one open when a build happens.
+  const PROJECT_ROOT = Path.join(__dirname, "..", "..", "projects", "Test_ActorInvoke");
+  const makeProject = (actorCount) => ({
+    settings: { target: "snes", startSceneId: "s", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+    spriteSheets: [{ id: "npc", filename: "signpost.png", numFrames: 1 }],
+    variables: [],
+    scenes: [
+      {
+        id: "s",
+        name: "Too Many Actors",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: Array.from({ length: actorCount }, (_, i) => ({
+          id: `a${i}`,
+          x: 1,
+          y: 1,
+          spriteSheetId: "npc",
+          script: [],
+        })),
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("exactly at the real capacity (maxActors) does not warn", async () => {
+    const warnings = [];
+    await compileSnesData(makeProject(snesTarget.maxActors), {
+      projectRoot: PROJECT_ROOT,
+      warnings: (m) => warnings.push(m),
+    });
+    expect(warnings.some((w) => w.includes("actors"))).toBe(false);
+  });
+
+  test("one over the real capacity warns, naming the scene and the real limit", async () => {
+    const warnings = [];
+    await compileSnesData(makeProject(snesTarget.maxActors + 1), {
+      projectRoot: PROJECT_ROOT,
+      warnings: (m) => warnings.push(m),
+    });
+    expect(
+      warnings.some(
+        (w) => w.includes("Too Many Actors") && w.includes(String(snesTarget.maxActors))
+      )
+    ).toBe(true);
   });
 });
 
