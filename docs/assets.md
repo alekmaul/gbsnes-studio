@@ -9,7 +9,7 @@ has_children: true
 Every project includes an `assets` folder, with subfolders for the different asset types
 (`backgrounds`, `sprites`, `music`, `ui`, ...).
 
-SNES Studio doesn't currently contain any ability to edit graphics or music directly -
+GB2SNES Studio doesn't currently contain any ability to edit graphics or music directly -
 instead you create assets in an external application, save them into the right `assets`
 subfolder, and they'll appear ready to use in the Project Editor.
 

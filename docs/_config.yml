@@ -1,5 +1,5 @@
-title: SNES Studio
-description: Documentation for SNES Studio
+title: GB2SNES Studio
+description: Documentation for GB2SNES Studio
 theme: just-the-docs
 url: "https://alekmaul.github.io"
 baseurl: "/gbsnes-studio"
@@ -23,10 +23,10 @@ back_to_top_text: "Back to top"
 logo: "/assets/images/logo.png"
 favicon_ico: "/assets/images/favicon.ico"
 
-footer_content: "Copyright &copy; SNES Studio contributors. Distributed under an <a href=\"https://github.com/alekmaul/gbsnes-studio/blob/v4/LICENSE\">MIT license</a>."
+footer_content: "Copyright &copy; GB2SNES Studio contributors. Distributed under an <a href=\"https://github.com/alekmaul/gbsnes-studio/blob/v4/LICENSE\">MIT license</a>."
 
 aux_links:
-  "SNES Studio on GitHub":
+  "GB2SNES Studio on GitHub":
     - "https://github.com/alekmaul/gbsnes-studio/tree/v4"
 
 # Colored callout boxes usable in any page as > note / > important / etc.

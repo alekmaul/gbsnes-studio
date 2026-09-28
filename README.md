@@ -1,6 +1,6 @@
-# SNES Studio
+# GB2SNES Studio
 
-**SNES Studio** is a free and easy to use retro adventure game creator for the
+**GB2SNES Studio** is a free and easy to use retro adventure game creator for the
 Super Nintendo, for Mac, Linux and Windows — built on [GB Studio](https://www.gbstudio.dev/)'s
 editor with a [PVSnesLib](https://github.com/alekmaul/pvsneslib) game engine.
 
@@ -9,9 +9,9 @@ released under the [MIT license](https://opensource.org/licenses/MIT).
 
 ----
 
-![SNES Studio](gbstudio.gif)
+![GB2SNES Studio](gbstudio.gif)
 
-SNES Studio consists of an [Electron](https://electronjs.org/) game-builder
+GB2SNES Studio consists of an [Electron](https://electronjs.org/) game-builder
 application and a C game engine built with
 [PVSnesLib](https://github.com/alekmaul/pvsneslib), music and sound via snesmod.
 

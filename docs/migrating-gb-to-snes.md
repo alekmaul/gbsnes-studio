@@ -5,15 +5,15 @@ nav_order: 9
 
 # Migrating from GB Studio
 
-SNES Studio (`v4`) always targets the Super Nintendo - there's no "target" setting to
+GB2SNES Studio (`v4`) always targets the Super Nintendo - there's no "target" setting to
 change (see [Settings](settings.html)). Bringing a project over from
 [GB Studio](https://www.gbstudio.dev/) itself is a matter of opening the `.gbsproj` and then
 resizing/reworking assets for the bigger SNES screen, not flipping a flag.
 
 {: .note }
-> If you have an older project from this project's `main` branch (GBSNES Studio, which
+> If you have an older project from this project's `main` branch (GBGB2SNES Studio, which
 > still keeps a `"target": "gb"` / `"target": "snes"` setting), it opens the same way - the
-> `target` field itself is simply ignored, since SNES Studio only ever compiles to SNES.
+> `target` field itself is simply ignored, since GB2SNES Studio only ever compiles to SNES.
 
 ## Opening the project
 

@@ -11,7 +11,7 @@ or build it yourself from source (`yarn make:win` / `yarn make:mac` / `yarn make
 
 ## Windows
 
-Two versions of SNES Studio are available for Windows. The _Setup_ (Squirrel installer)
+Two versions of GB2SNES Studio are available for Windows. The _Setup_ (Squirrel installer)
 version just requires you to unzip, double click and then wait a few seconds while the
 application installs. Once installed a shortcut will be added to your desktop automatically
 and the application will start. The application will be installed to
@@ -23,7 +23,7 @@ unzipped, double click `snes-studio.exe` to start.
 
 ## macOS
 
-Unzip the downloaded file and move `SNES Studio.app` to your _Applications_ folder. Double
+Unzip the downloaded file and move `GB2SNES Studio.app` to your _Applications_ folder. Double
 click to start.
 
 {: .note }
@@ -60,7 +60,7 @@ snes-studio
 
 ## Troubleshooting
 
-If on Linux you see graphical glitches, or SNES Studio fails to start, try running it with:
+If on Linux you see graphical glitches, or GB2SNES Studio fails to start, try running it with:
 
 ```
 snes-studio --disable-gpu-sandbox

@@ -6,7 +6,7 @@ nav_order: 8
 # Settings
 
 Access the project's settings by clicking _Settings_ in the left navigation. Unlike GB
-Studio (and the `main`/GBSNES Studio branch of this project), SNES Studio has no "Target
+Studio (and the `main`/GBGB2SNES Studio branch of this project), GB2SNES Studio has no "Target
 Platform" selector at all - every project targets the Super Nintendo.
 
 ## SNES Options

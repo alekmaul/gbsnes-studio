@@ -5,7 +5,7 @@ nav_order: 6
 
 # Scripting Events
 
-SNES Studio's visual scripting is attached to scenes, actors and triggers:
+GB2SNES Studio's visual scripting is attached to scenes, actors and triggers:
 
 - **Scene scripts** - On Init (runs once when the scene loads), On Player Hit.
 - **Actor scripts** - On Init, On Interact (player presses the action button facing the

@@ -18,7 +18,7 @@ combining scenes, adding actors and triggers, then attaching scripting events to
 - **Collisions** - draw collision tiles onto a scene.
 
 {: .note }
-> GB Studio's Colorize tool doesn't apply here - SNES Studio backgrounds and sprites use a
+> GB Studio's Colorize tool doesn't apply here - GB2SNES Studio backgrounds and sprites use a
 > real palette extracted automatically from each PNG (see [Assets](assets.html)), so
 > there's nothing to paint by hand.
 

@@ -533,7 +533,13 @@ const openAbout = () => {
     // upstream GB Studio site - left as-is on purpose, see CLAUDE.md) for
     // the logo/version click - same itch.io page as MENU_LEARN_MORE above
     // and the update/migrate-warning Download buttons, not the docs site.
-    homepage: "https://portabledev.itch.io/gbsnes-studio"
+    homepage: "https://portabledev.itch.io/gbsnes-studio",
+    // Display-name rebrand (GB2SNES Studio, user-requested) - without this,
+    // the About window's own title falls back to package.json's "name"/
+    // "productName", which stays untouched on purpose (npm package name,
+    // installer/CI artifact naming - a separate, not-yet-made decision from
+    // the display brand).
+    product_name: "GB2SNES Studio"
   });
 };
 

@@ -121,7 +121,7 @@ export default () => {
   const forceTab = urlParams.get("tab");
   const initialTab = toSplashTab(forceTab || getLastUsedTab());
 
-  const [templateId, setTemplateId] = useState("sneshtml");
+  const [templateId, setTemplateId] = useState("snesgbs2");
   const [section, setSection] = useState<SplashTab>(initialTab);
   const [openCredits, setOpenCredits] = useState(false);
   const [recentProjects, setRecentProjects] = useState<ProjectInfo[]>([]);
@@ -339,7 +339,7 @@ export default () => {
           <SplashCredits>
             <SplashCreditsBackground />
             <SplashCreditsContent>
-              <SplashCreditsTitle>SNES Studio</SplashCreditsTitle>
+              <SplashCreditsTitle>GB2SNES Studio</SplashCreditsTitle>
               {contributors.map((contributor) => (
                 <SplashCreditsContributor
                   key={contributor.id}

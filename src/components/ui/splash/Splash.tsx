@@ -120,7 +120,7 @@ export const SplashAppTitle = () => {
           {VERSION} ({COMMITHASH})
         </div>
       ) : (
-        `SNES Studio ${VERSION}`
+        `GB2SNES Studio ${VERSION}`
       )}
     </SplashAppTitleWrapper>
   );

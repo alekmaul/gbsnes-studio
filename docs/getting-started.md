@@ -5,13 +5,13 @@ nav_order: 3
 
 # Getting Started
 
-When you first open SNES Studio you will see the _New Project_ window.
+When you first open GB2SNES Studio you will see the _New Project_ window.
 
 <img src="/gbsnes-studio/assets/images/screenshots/new-project.png" alt="New Project window" width="752" />
 
 {: .note }
 > It's recommended to start with one of the sample templates, as they contain
-> examples of lots of the functionality SNES Studio provides.
+> examples of lots of the functionality GB2SNES Studio provides.
 
 If you have an existing project you can open it from here by clicking _Open_ and navigating
 to its `.gbsproj` file.
@@ -26,7 +26,7 @@ a project template:
   shooter scenes.
 - **Blank Project** - a completely blank canvas.
 
-If you're new to SNES Studio, one of the sample templates is the best starting point - they
+If you're new to GB2SNES Studio, one of the sample templates is the best starting point - they
 contain example scenes and scripts already set up so you can get a small idea of what's
 possible. Click _Create Project_ and you'll be taken to the _Project Editor_.
 

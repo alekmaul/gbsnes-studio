@@ -4,25 +4,38 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-**SNES Studio** — a visual retro game maker for the Super Nintendo, built with PVSnesLib. It
+**GB2SNES Studio** — a visual retro game maker for the Super Nintendo, built with PVSnesLib. It
 is an Electron desktop app (the editor: React/Redux Toolkit, webpack + TypeScript) plus a C
 game engine (`appData/src/snes/`) cross-compiled with the PVSnesLib toolchain (816-tcc/
 wla-65816/wlalink). The working copy lives under a `gbsnes-studio` directory (see *History*
 below for why). SNES is the only compile target this app builds for — there is no Game Boy
 engine, toolchain, or target-selection concept left anywhere in the tree.
 
-Branding: everything user-facing says **SNES Studio** — `productName`, `forge.config.js`
-names, the splash/About windows, and every "GB Studio" string in `src/lang/*.json` (all
-locales). The npm `name`, `executableName`, Squirrel/Store names and CI artifact names
-are `snes-studio` / `snes_studio` / `snesstudio`. Still `gbstudio`-flavoured (not renamed
-on purpose): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
+Branding: **GB2SNES Studio** (v4, renamed from "SNES Studio" — that name turned out to already
+be used by another, unrelated project) is the display name a user actually sees: the splash
+screen, the About window, the app toolbar's window title, `src/*.html`'s `<title>`s, and every
+locale string in `src/lang/*.json` (all locales — the name isn't translated, it's embedded
+verbatim in every language's sentences). This rename was deliberately scoped to display text
+only — nothing else changed. `productName`, `forge.config.js` names, the npm `name`,
+`executableName`, Squirrel/Store names and CI artifact names are still `SNES Studio` /
+`snes-studio` / `snes_studio` / `snesstudio` (not yet renamed — a separate decision from the
+display brand, left alone since it touches installer/CI naming rather than anything a user
+reads). `src/hooks/notarize.js`'s packaged-app path (`"SNES Studio.app"` etc.) and
+`src/bin/snes-studio-cli.ts`'s own usage text correctly still say `SNES Studio`/`snes-studio` -
+they reference the *actual* packaged/binary names, not display text, so they must keep matching
+whatever `productName`/the CLI's own filename really are until (if ever) those are renamed too.
+`menu.js`'s `openAbout()` sets `product_name: "GB2SNES Studio"` explicitly for exactly this
+reason - without it, the About window would fall back to `package.json`'s own unrenamed name.
+Still `gbstudio`-flavoured (not renamed on purpose, unrelated to the "SNES Studio"→"GB2SNES
+Studio" rename above): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
 `src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
 upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
 the latest release version (`github.repos.getLatestRelease`, unchanged) — but the "Download"
 button in both the update-available dialog (`updateChecker.js`) and the
 project-from-a-newer-version dialog (`migrateWarning.js`) opens
 `https://portabledev.itch.io/gbsnes-studio`, not a GitHub releases page: GitHub is the version
-source of truth, itch.io is where a user actually gets the binary.
+source of truth, itch.io is where a user actually gets the binary. Neither the git repo name
+nor the itch.io URL changed as part of the GB2SNES Studio rename (explicitly out of scope).
 Icons/artwork under `src/assets/app/` are GBSNES-branded: `icon/app_icon.{png,ico,icns}` (a
 GB/SNES hybrid handheld), `icon/gbsproj.{png,ico,icns}` (a "SNES Studio Project" cartridge,
 the `.gbsproj` file-type icon) and `dmg/background.{png,tiff}` (the macOS installer window).
