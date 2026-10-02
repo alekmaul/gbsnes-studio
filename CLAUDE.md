@@ -627,6 +627,20 @@ by target, `undefined` target still falls back to gb).
   `res/effectssfx.it` (always soundbank module 0) + one converted `.it` per project song
   (modules 1..N, in `getMusicIndex` order → `MUSIC_PLAY` track N loads `spcLoad(1+N)`), and
   writes `res/soundbank.{bnk,h}` + `src/res/soundbank.asm` + generated `res/soundbank_banks.h`.
+  **v4 follow-up (user-asked: "musics can be only mod or can be also it?")**: a project track
+  can now also be a `.it` file directly - `loadMusicData.js`'s asset glob picks up `*.it`/`*.IT`
+  alongside `*.mod`/`*.MOD`, and `compileSnesMusic.js`'s `convertTrack` passes a `.it` track to
+  `smconv` byte-for-byte instead of running it through `mod2it.js` (that converter only knows
+  how to *re-derive* IT from a 4-channel `.mod`; it isn't a general IT normaliser, so an `.it`
+  input skips it entirely - smconv itself still gets the final say on whether it can read it,
+  same fallback-to-effects-module-with-a-warning as an unconvertable `.mod`). **Not done**: the
+  in-editor music preview player (`src/lib/vendor/scriptracker/`, `musicMiddleware.ts`) declares
+  `Module.Types.IT` in `module.js` but its loader dispatch (`scriptracker.js` `loadRaw`'s switch)
+  only implements `mod`/`s3m`/`xm` - there's no `it_module.js` at all, unlike the sibling
+  `mod_module.js`/`s3m_module.js`/`xm_module.js`. An `.it` track builds into the ROM correctly
+  but the editor's own "Play" preview button silently no-ops for it (falls through to `default:
+  return;`) - writing a real IT-format parser for this vendored library would be a substantial,
+  separate undertaking, deliberately not attempted here.
   A soundbank > 32 KB is split by smconv into `SOUNDBANK__0/1/...` on consecutive banks (5,6,…);
   `soundbank_banks.h`'s `MUSIC_SET_BANKS()` macro `spcSetBank()`s each chunk reverse-order
   (`music.c` `MusicInit` calls it). A track that can't be read/converted falls back to the

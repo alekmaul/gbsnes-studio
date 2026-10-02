@@ -127,4 +127,70 @@ maybe("compileSnesMusic (smconv) + buildProject", () => {
     },
     180000
   );
+
+  test(
+    "project .it music is passed to smconv as-is, not re-run through mod2it",
+    async () => {
+      const fixtureDir = Path.join(PROJECTS, "Test_SoundEffects");
+      const p = loadProject(fixtureDir);
+      p.name = "SNESMUSICITTEST";
+      p.settings = { ...p.settings, target: "snes" };
+
+      // A temp project root with its own assets/music/*.it - keeps a real
+      // binary fixture out of the repo (modToIt() is already independently
+      // tested above; reused here only as a convenient, real way to get
+      // valid IT bytes, not re-testing that conversion itself).
+      const projectRoot = await fs.mkdtemp(Path.join(os.tmpdir(), "gbs-it-proj-"));
+      await fs.copy(Path.join(fixtureDir, "assets"), Path.join(projectRoot, "assets"));
+      const modBuf = await fs.readFile(
+        Path.join(fixtureDir, "assets", "music", "template.mod")
+      );
+      const itBytes = modToIt(modBuf);
+      await fs.writeFile(
+        Path.join(projectRoot, "assets", "music", "template.it"),
+        itBytes
+      );
+      p.music[0].filename = "template.it";
+
+      p.scenes[0].script = [
+        {
+          command: "EVENT_MUSIC_PLAY",
+          args: { musicId: p.music[0].id, loop: true },
+        },
+        { command: "EVENT_END" },
+      ];
+
+      const outputRoot = await fs.mkdtemp(
+        Path.join(os.tmpdir(), "gbs-snes-music-it-")
+      );
+      const warnings = [];
+      try {
+        await buildProject(p, {
+          projectRoot,
+          outputRoot,
+          progress: () => {},
+          warnings: (m) => warnings.push(m),
+        });
+
+        const rom = await fs.readFile(
+          Path.join(outputRoot, "build", "rom", "game.sfc")
+        );
+        expect(rom[0x7fd5]).toBe(0x30); // LoROM | FastROM
+
+        // passed through byte-identical, not re-converted.
+        const compiledIt = await fs.readFile(
+          Path.join(outputRoot, "obj", "music", "mus0.it")
+        );
+        expect(compiledIt.equals(itBytes)).toBe(true);
+
+        expect(
+          warnings.filter((w) => /could not (convert|read)|not found/i.test(w))
+        ).toEqual([]);
+      } finally {
+        await fs.remove(projectRoot);
+        await fs.remove(outputRoot);
+      }
+    },
+    180000
+  );
 });

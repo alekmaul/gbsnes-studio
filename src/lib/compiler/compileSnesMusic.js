@@ -1,14 +1,16 @@
 /*
- * compileSnesMusic.js - M8 phase 2: a project's own `.mod` songs -> the SNES
- * snesmod soundbank the engine plays.
+ * compileSnesMusic.js - M8 phase 2: a project's own `.mod`/`.it` songs -> the
+ * SNES snesmod soundbank the engine plays.
  *
- * Pipeline: each project `.mod` -> `mod2it.js` -> a temp `.it` -> `smconv -s`
- * builds one soundbank from the vendored effect module (`res/effectssfx.it`,
- * always soundbank module 0) followed by the project songs (modules 1..N). The
- * resulting `.bnk` replaces the ejected tree's `res/soundbank.bnk`; a
- * hand-written `src/res/soundbank.asm` `.incbin`s it (same layout as the M8
- * phase 1 committed one - see appData/src/snes/README.md for why the `.asm`
- * lives under `src/`). `music.c` plays song `track` via `spcLoad(1 + track)`.
+ * Pipeline: each project track -> (for `.mod`: `mod2it.js` -> a temp `.it`;
+ * for `.it`: used as-is, already in the format smconv wants - see
+ * convertTrack's own comment) -> `smconv -s` builds one soundbank from the
+ * vendored effect module (`res/effectssfx.it`, always soundbank module 0)
+ * followed by the project songs (modules 1..N). The resulting `.bnk` replaces
+ * the ejected tree's `res/soundbank.bnk`; a hand-written
+ * `src/res/soundbank.asm` `.incbin`s it (same layout as the M8 phase 1
+ * committed one - see appData/src/snes/README.md for why the `.asm` lives
+ * under `src/`). `music.c` plays song `track` via `spcLoad(1 + track)`.
  *
  * No project music -> this is a no-op and the ejected tree keeps its committed
  * proof-of-concept soundbank (effects + one demo track).
@@ -112,29 +114,36 @@ const compileSnesMusic = async ({
     return;
   }
 
-  // .mod -> .it for one track. smconv assigns soundbank module numbers by
-  // argument position and the engine plays track N as module (1 + N), so the
-  // list must stay 1:1 with project order: a track that can't be read/converted
-  // falls back to the (valid) effects module rather than shifting every later
-  // track's index.
+  // One track -> a .it smconv can read. smconv assigns soundbank module
+  // numbers by argument position and the engine plays track N as module
+  // (1 + N), so the list must stay 1:1 with project order: a track that
+  // can't be read/converted falls back to the (valid) effects module rather
+  // than shifting every later track's index.
   const convertTrack = async (track, i) => {
-    let modBuf;
+    let buf;
     try {
-      modBuf = await fs.readFile(assetFilename(projectRoot, "music", track));
+      buf = await fs.readFile(assetFilename(projectRoot, "music", track));
     } catch (e) {
       warnings(
         `Music track "${track.filename}" not found - it will be silent in-game`
       );
       return effectsIt;
     }
+    // A project .it is already in the format smconv wants - pass it through
+    // untouched rather than running it through mod2it.js (that conversion
+    // only knows how to re-derive IT from a 4-channel M.K. .mod; it isn't a
+    // general IT normaliser). smconv itself still gets the final say: an .it
+    // file smconv can't read (outside whatever subset it supports) fails the
+    // same way an unconvertable .mod does, same fallback below.
+    const isIt = /\.it$/i.test(track.filename);
     try {
       const itPath = Path.join(workDir, `mus${i}.it`);
-      await fs.writeFile(itPath, modToIt(modBuf));
-      progress(`Converted music ${track.name || track.filename}`);
+      await fs.writeFile(itPath, isIt ? buf : modToIt(buf));
+      progress(`${isIt ? "Copied" : "Converted"} music ${track.name || track.filename}`);
       return itPath;
     } catch (e) {
       warnings(
-        `Could not convert "${track.filename}" to .it (${e.message}) - it will be silent in-game`
+        `Could not ${isIt ? "read" : "convert"} "${track.filename}"${isIt ? "" : " to .it"} (${e.message}) - it will be silent in-game`
       );
       return effectsIt;
     }
