@@ -4,6 +4,7 @@ var Channel = require("./channel");
 var ModModule = require("./mod_module");
 var S3mModule = require("./s3m_module");
 var XmModule = require("./xm_module");
+var ItModule = require("./it_module");
 var Sample = require("./sample");
 var Effects = require("./effects");
 
@@ -522,6 +523,9 @@ ScripTracker.prototype.loadRaw = function(data, fileExt) {
       break;
     case "xm":
       this.module = new XmModule(data);
+      break;
+    case "it":
+      this.module = new ItModule(data);
       break;
     default:
       return;

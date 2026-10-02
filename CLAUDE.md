@@ -640,6 +640,36 @@ by target, `undefined` target still falls back to gb).
   but the editor's own "Play" preview button silently no-ops for it (falls through to `default:
   return;`) - writing a real IT-format parser for this vendored library would be a substantial,
   separate undertaking, deliberately not attempted here.
+  **Done (user asked for it once the build-side fixes above landed):** `src/lib/vendor/
+  scriptracker/it_module.js`, a real IT loader matching the sibling loaders' style, wired into
+  `scriptracker.js`'s `loadRaw` (`case "it": this.module = new ItModule(data);`). Byte offsets
+  are cross-checked against smconv's own real upstream source (`itloader.cpp`), not just the
+  IT spec, since that's the parser a project `.it` ultimately has to satisfy to build at all -
+  same fetch-the-real-source discipline as the crash fix above. Two shapes smconv itself can't
+  handle are handled fine here, since the preview never touches smconv: a sample-direct/
+  "old"-mode `.it` (`InstrumentCount` 0) gets one synthetic pass-through instrument per sample
+  (same technique the existing S3M loader already uses, since S3M never had an instrument
+  concept either); a compressed sample is left silent (empty `sample.sample`) rather than
+  decoded (IT214 decompression isn't implemented) or crashed on. Effect-letter mapping reuses
+  the existing `Effects.*` objects by closest available slot - this player's `VOLUME_SLIDE`/
+  `SET_VOLUME_AND_SLIDE` handlers are themselves a GB-era "GBT" reinterpretation specific to
+  `mod_module.js`'s own authoring convention (Game Boy APU envelope curves, not standard
+  tracker volume slide math - see that file's own hardcoded 15-waveform GB instrument table,
+  a legacy carryover this SNES-only app no longer needs but hasn't been asked to remove), so
+  IT's `D`/`N` (real volume/channel-volume slide) land on the same slot for lack of a better
+  one, documented inline rather than silently assumed correct. Found and fixed one real format
+  detail by cross-referencing `itloader.cpp` directly: IT's envelope `FLG` byte (bit0 Enabled,
+  bit1 Loop, bit2 Sustain) does **not** line up with the generic `Envelope.EnvelopeType` bits
+  (bit0 ON, bit1 SUSTAIN, bit2 LOOP) - bits 1 and 2 are swapped between the two, remapped
+  explicitly rather than copied through. Verified against three real files: `modToIt()`'s own
+  output (31 real instruments/samples, real non-silent decoded PCM, sample-key-map resolves
+  correctly), PVSnesLib's own `pollen8.it` example (17 instruments, all with real audio data),
+  and the user's own now-fixed `ITRulz_Outside.it` (32 instruments, all non-empty) - all parse
+  without crashing and produce genuine audio data. Tests: `test/lib/vendor/scriptracker/
+  it_module.test.js` (a real `modToIt()`-produced `.it`; a hand-built minimal sample-direct
+  fixture exercising pattern unpacking + note/instrument resolution; a compressed-sample
+  fixture confirming silent-not-crashed; a zero pattern-pointer fixture confirming the
+  "blank pattern" shorthand doesn't crash).
   **`smconv` crashes outright on a compressed `.it` sample, it does not fail cleanly
   (user-found: a real downloaded `.it` dropped into a project crashed "Build ROM" with
   `exit 3221225477` = `0xC0000005` = `STATUS_ACCESS_VIOLATION` on Windows).** The paragraph
