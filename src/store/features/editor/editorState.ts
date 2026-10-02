@@ -2,6 +2,7 @@ import { createSlice, PayloadAction, AnyAction } from "@reduxjs/toolkit";
 import {
   BRUSH_8PX,
   COLLISION_ALL,
+  TILE_PROP_PRIORITY,
   DRAG_ACTOR,
   DRAG_TRIGGER,
   DRAG_DESTINATION,
@@ -18,6 +19,7 @@ export type Tool =
   | "triggers"
   | "actors"
   | "collisions"
+  | "colors"
   | "scene"
   | "eraser"
   | "select";
@@ -134,6 +136,18 @@ const editorSlice = createSlice({
       state.actorDefaults = undefined;
       state.triggerDefaults = undefined;
       state.sceneDefaults = undefined;
+      // The "colors" tool only ever paints the priority bit (no palette
+      // picker on this SNES-only fork), so arm it automatically rather than
+      // showing a single pre-existing swatch the user has to click first.
+      // Switching back to "collisions" resets to its own default (solid) so
+      // a stale TILE_PROP_PRIORITY selectedTileType can't silently make the
+      // Collisions brush paint priority bits instead of what it visually
+      // shows as selected.
+      if (action.payload.tool === "colors") {
+        state.selectedTileType = TILE_PROP_PRIORITY;
+      } else if (action.payload.tool === "collisions") {
+        state.selectedTileType = COLLISION_ALL;
+      }
     },
 
     setBrush: (state, action: PayloadAction<{ brush: Brush }>) => {

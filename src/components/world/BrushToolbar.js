@@ -10,9 +10,11 @@ import {
   SquareIconSmall,
   EyeOpenIcon,
   EyeClosedIcon,
+  PriorityTileIcon,
 } from "../library/Icons";
 import {
   TOOL_COLLISIONS,
+  TOOL_COLORS,
   TOOL_ERASER,
   BRUSH_8PX,
   BRUSH_16PX,
@@ -28,7 +30,7 @@ import {
 } from "../../consts";
 import editorActions from "../../store/features/editor/editorActions";
 
-const validTools = [TOOL_COLLISIONS, TOOL_ERASER];
+const validTools = [TOOL_COLLISIONS, TOOL_COLORS, TOOL_ERASER];
 const tileTypes = [{
   key: "solid",
   name: "Solid",
@@ -53,10 +55,6 @@ const tileTypes = [{
   key: "ladder",
   name: "Ladder",
   flag: TILE_PROP_LADDER
-},{
-  key: "priority",
-  name: "Priority (renders above sprites)",
-  flag: TILE_PROP_PRIORITY
 }];
 
 const collisionDirectionFlags = [COLLISION_TOP, COLLISION_BOTTOM, COLLISION_LEFT, COLLISION_RIGHT];
@@ -130,12 +128,19 @@ class BrushToolbar extends Component {
     setShowLayers({showLayers: !showLayers});
   };
 
+  setPriority = (e) => {
+    e.stopPropagation();
+    const { setSelectedTileType } = this.props;
+    setSelectedTileType({ tileType: TILE_PROP_PRIORITY });
+  };
+
   render() {
     const {
       selectedTileType,
       selectedBrush,
       visible,
       showTileTypes,
+      showPriority,
       showLayers,
     } = this.props;
 
@@ -216,6 +221,20 @@ class BrushToolbar extends Component {
             <div className="BrushToolbar__Divider" />
           </>
         }
+        {showPriority &&
+          <>
+            <div
+              onClick={this.setPriority}
+              className={cx("BrushToolbar__Item", {
+                "BrushToolbar__Item--Selected": !!(selectedTileType & TILE_PROP_PRIORITY),
+              })}
+              title={l10n("TOOL_TILE_PRIORITY")}
+            >
+              <PriorityTileIcon />
+            </div>
+            <div className="BrushToolbar__Divider" />
+          </>
+        }
         <div
           onClick={this.toggleShowLayers}
           className={cx("BrushToolbar__Item", {
@@ -238,6 +257,7 @@ BrushToolbar.propTypes = {
     .isRequired,
   showLayers: PropTypes.bool.isRequired,
   showTileTypes: PropTypes.bool.isRequired,
+  showPriority: PropTypes.bool.isRequired,
   selectedTileType: PropTypes.number.isRequired,
   setSelectedTileType: PropTypes.func.isRequired,
   setBrush: PropTypes.func.isRequired,
@@ -249,12 +269,14 @@ function mapStateToProps(state) {
   const selectedTool = state.editor.tool;
   const visible = validTools.includes(selectedTool);
   const showTileTypes = selectedTool === TOOL_COLLISIONS;
+  const showPriority = selectedTool === TOOL_COLORS;
 
   return {
     selectedTileType,
     selectedBrush,
     visible,
     showTileTypes,
+    showPriority,
     showLayers,
   };
 }

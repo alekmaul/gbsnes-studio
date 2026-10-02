@@ -1087,6 +1087,41 @@ script events (`Palette: Set Background` / `Set UI`) are gone from the picker to
 opcodes stay reserved, still-Noop rows in `script_cmds.c` so nothing downstream renumbers.
 See `appData/src/snes/EVENTS.md` for the updated matrix rows.
 
+**Priority tile painting moved to its own tool, matching GB Studio 3.2.1's real UI (user-asked,
+pointing directly at B's actual "Palette" page: an icon behind Collisions that hosts palette
+*or* priority painting).** The underlying feature (data, compiler, engine) already shipped
+whole in `v4`'s M7 - `TILE_PROP_PRIORITY` (`consts.js`), `compileSnesData.js`'s per-scene
+priority-tilemap override, `scene.c`'s DMA of it, the real `BG_TIL_PRIO` bit - this was purely
+an editor UI gap: priority was buried as the 7th swatch inside the Collisions brush, not its
+own page the way B's real `TOOL_COLORS`/`BrushToolbar.tsx` presents it. Checked B's actual
+source (`gb-studio-3.2.1`, not just the audit's memory of it) rather than guess the naming:
+`TOOL_COLORS = "colors"` (key shortcut `z`), `PaintIcon` for the `ToolPicker` button, a
+`PriorityTileIcon` (a diamond with a vertical bar) for the priority toggle itself - all ported
+verbatim (same tool id/shortcut/icons), but the *page* is scoped way down from B's real one:
+B's `showPalettes` section also renders 8 clickable `PaletteBlock` swatches (`selectedPalette`,
+a whole separate piece of state) for its real multi-palette editing - none of that applies
+here (no `Palette` entity exists on this fork, see the removal note above), so our
+`showPriority` section is just the one diamond-icon toggle, nothing else. It still writes
+through the *existing* `selectedTileType`/`paintCollision` mechanism the Collisions tool
+already uses (not B's unrelated `selectedPalette` one) - `TILE_PROP_PRIORITY` was always just
+another bit in the same collision byte, so the new tool only had to stop sharing a toolbar with
+collision-flag painting, not change how a painted tile is stored. `editorState.ts`'s `setTool`
+reducer now arms `selectedTileType` to a tool-appropriate default on switch (`TILE_PROP_PRIORITY`
+entering "colors", `COLLISION_ALL` entering "collisions") - without this a stale
+`TILE_PROP_PRIORITY` left over from the Colors tool would silently make the Collisions brush
+paint priority bits instead of whatever collision swatch it visually shows selected, since the
+paint logic in `SceneCursor.js` only looks at the bit pattern of `selectedTileType`, not which
+tool is active. `Scene.js`'s `showCollisions`/`showEntities` and `World.js`'s `showConnections`
+all gained `TOOL_COLORS` alongside their existing `TOOL_COLLISIONS` checks - without this the
+priority overlay (gold corner markers, already implemented in `SceneCollisions.js`) would stay
+invisible while using the new tool unless the project's own "show collisions" setting happened
+to also be on, making the tool unusable blind. The old 7th "priority" swatch is removed from
+`BrushToolbar.js`'s `tileTypes` (and its now-dead `.BrushToolbar__Tile--priority` CSS deleted)
+to match B's real list, which never included it there either. Verified: full test suite
+(150 suites, 698 tests, no existing coverage touches these UI files so none needed updating),
+a real `npm start` webpack + `fork-ts-checker` build with no TS errors (confirms
+`editorState.ts`/`ToolPicker.tsx`).
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

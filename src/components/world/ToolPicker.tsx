@@ -6,6 +6,7 @@ import {
   BrickIcon,
   EraserIcon,
   PlusIcon,
+  PaintIcon,
 } from "../library/Icons";
 import { Menu, MenuItem, MenuOverlay } from "../library/Menu";
 import l10n from "../../lib/helpers/l10n";
@@ -51,6 +52,8 @@ class ToolPicker extends Component<ToolPickerProps & ToolPickerActionProps, Tool
       this.setTool("actors")(e);
     } else if (e.code === "KeyC") {
       this.setTool("collisions")(e);
+    } else if (e.code === "KeyZ") {
+      this.setTool("colors")(e);
     } else if (e.code === "KeyS") {
       this.setTool("scene")(e);
     } else if (e.code === "KeyE") {
@@ -159,6 +162,15 @@ class ToolPicker extends Component<ToolPickerProps & ToolPickerActionProps, Tool
           title={`${l10n("TOOL_COLLISIONS_LABEL")} (c)`}
         >
           <BrickIcon />
+        </div>
+        <div
+          onClick={this.setTool("colors")}
+          className={cx("ToolPicker__Item", {
+            "ToolPicker__Item--Selected": selected === "colors",
+          })}
+          title={`${l10n("TOOL_COLORS_LABEL")} (z)`}
+        >
+          <PaintIcon />
         </div>
       </div>
     );

@@ -17,6 +17,7 @@ import { assetFilename } from "../../lib/helpers/gbstudio";
 import SceneCursor from "./SceneCursor";
 import {
   TOOL_COLLISIONS,
+  TOOL_COLORS,
   TOOL_ERASER,
 } from "../../consts";
 import SceneInfo from "./SceneInfo";
@@ -331,9 +332,9 @@ function mapStateToProps(state, props) {
     false;
 
   const showEntities =
-    (tool !== TOOL_COLLISIONS && tool !== TOOL_ERASER) || showLayers;
+    (tool !== TOOL_COLLISIONS && tool !== TOOL_COLORS && tool !== TOOL_ERASER) || showLayers;
   const showCollisions =
-    settings.showCollisions || tool === TOOL_COLLISIONS;
+    settings.showCollisions || tool === TOOL_COLLISIONS || tool === TOOL_COLORS;
 
   return {
     scene,

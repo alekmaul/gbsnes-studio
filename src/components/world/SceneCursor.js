@@ -2,14 +2,14 @@ import React, { Component } from "react";
 import PropTypes from "prop-types";
 import cx from "classnames";
 import { connect } from "react-redux";
-import { PlusIcon, ResizeIcon, CloseIcon, BrickIcon } from "../library/Icons";
+import { PlusIcon, ResizeIcon, CloseIcon, BrickIcon, PriorityTileIcon } from "../library/Icons";
 import { sceneSelectors, backgroundSelectors } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
 import settingsActions from "../../store/features/settings/settingsActions";
 import entitiesActions from "../../store/features/entities/entitiesActions";
 
 import { SceneShape, VariableShape } from "../../store/stateShape";
-import { TOOL_COLLISIONS, TOOL_ERASER, TOOL_TRIGGERS, TOOL_ACTORS, BRUSH_FILL, BRUSH_16PX, BRUSH_MAGIC, TOOL_SELECT, COLLISION_ALL, TILE_PROPS } from "../../consts";
+import { TOOL_COLLISIONS, TOOL_COLORS, TOOL_ERASER, TOOL_TRIGGERS, TOOL_ACTORS, BRUSH_FILL, BRUSH_16PX, BRUSH_MAGIC, TOOL_SELECT, COLLISION_ALL, TILE_PROPS } from "../../consts";
 
 class SceneCursor extends Component {
   constructor() {
@@ -105,7 +105,7 @@ class SceneCursor extends Component {
       this.setState({ resize: true });
       window.addEventListener("mousemove", this.onResizeTrigger);
       window.addEventListener("mouseup", this.onResizeTriggerStop);
-    } else if (tool === "collisions") {
+    } else if (tool === "collisions" || tool === "colors") {
       if(!this.drawLine || this.startX === undefined || this.startY === undefined) {
         const brushSize = selectedBrush === BRUSH_16PX ? 2 : 1;
         this.drawTile = 0;
@@ -272,7 +272,8 @@ class SceneCursor extends Component {
           "SceneCursor--AddTrigger": tool === TOOL_TRIGGERS,
           "SceneCursor--Eraser": tool === TOOL_ERASER,
           "SceneCursor--Collisions": tool === TOOL_COLLISIONS,
-          "SceneCursor--Size16px": (tool === TOOL_COLLISIONS || tool === TOOL_ERASER) && selectedBrush === BRUSH_16PX
+          "SceneCursor--Colors": tool === TOOL_COLORS,
+          "SceneCursor--Size16px": (tool === TOOL_COLLISIONS || tool === TOOL_COLORS || tool === TOOL_ERASER) && selectedBrush === BRUSH_16PX
         })}
         onMouseDown={this.onMouseDown}
         style={{
@@ -283,12 +284,14 @@ class SceneCursor extends Component {
         {(tool === TOOL_ACTORS ||
           tool === TOOL_TRIGGERS ||
           tool === TOOL_ERASER ||
-          tool === TOOL_COLLISIONS) && (
+          tool === TOOL_COLLISIONS ||
+          tool === TOOL_COLORS) && (
           <div className="SceneCursor__AddBubble">
             {tool === TOOL_ACTORS && <PlusIcon />}
             {tool === TOOL_TRIGGERS && (resize ? <ResizeIcon /> : <PlusIcon />)}
             {tool === TOOL_ERASER && <CloseIcon />}
             {tool === TOOL_COLLISIONS && <BrickIcon />}
+            {tool === TOOL_COLORS && <PriorityTileIcon />}
           </div>
         )}
       </div>
