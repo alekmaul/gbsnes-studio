@@ -111,8 +111,8 @@ describe("ItModule", () => {
     expect(mod.patterns).toHaveLength(1);
     const pattern = mod.patterns[0];
     expect(pattern.rows).toBe(1);
-    // IT raw note 59 -> generic 1-based note 60.
-    expect(pattern.note[0][0]).toBe(60);
+    // IT raw note 59 -> generic 1-based note 24 (raw - NOTE_OCTAVE_SHIFT(36) + 1).
+    expect(pattern.note[0][0]).toBe(24);
     expect(pattern.instrument[0][0]).toBe(1);
   });
 
@@ -135,5 +135,25 @@ describe("ItModule", () => {
     const mod = new ItModule(buf);
     expect(mod.patterns[0].rows).toBe(64);
     expect(mod.patterns[0].note[0][0]).toBe(0);
+  });
+
+  describe("decodeNote (v4 fix: NOTE_OCTAVE_SHIFT is purely empirical, tuned by ear - see its own comment)", () => {
+    const mod = new ItModule(buildNoInstrumentIt());
+
+    test("shifts a raw note down by three octaves (36 semitones)", () => {
+      expect(mod.decodeNote(59)).toBe(24); // 59 - 36 + 1
+      expect(mod.decodeNote(71)).toBe(36); // 71 - 36 + 1
+    });
+
+    test("note-off (255) and note-cut (254) still map to the shared 97 sentinel, unaffected by the shift", () => {
+      expect(mod.decodeNote(255)).toBe(97);
+      expect(mod.decodeNote(254)).toBe(97);
+    });
+
+    test("a very low raw note clamps to 1 rather than colliding with the 0 'no note' sentinel", () => {
+      expect(mod.decodeNote(0)).toBe(1); // 0 - 36 + 1 = -35, clamped
+      expect(mod.decodeNote(35)).toBe(1); // 35 - 36 + 1 = 0, clamped (would otherwise be dropped as empty)
+      expect(mod.decodeNote(36)).toBe(1); // 36 - 36 + 1 = 1, the first non-clamped value
+    });
   });
 });

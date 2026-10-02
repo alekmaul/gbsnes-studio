@@ -705,6 +705,63 @@ by target, `undefined` target still falls back to gb).
   the regression) returns a finite, non-NaN value; the boundary is continuous (no pitch jump
   between index 71 and 72, a full 12-semitone step is almost exactly a frequency doubling);
   pitch rises monotonically well past the old ceiling (tested through note 96).
+  **Audible but too high, by two octaves total - found across two rounds (same user: "ok, i can
+  hear audio but notes are too high" → first guess "about 1 octave" → after that fix landed,
+  "arg, still one octave too high i think", confirmed-reloaded).** The pitch engine fix above
+  made every note *finite*, but `it_module.js`'s own raw-IT-note -> generic-pattern-note
+  mapping (`noteByte + 1`) still assumed the generic note scheme was a real, absolute pitch
+  reference matching IT's own octave numbering - it isn't (confirmed investigating this very
+  bug: `notePeriodsGB`'s achievable frequency range, ~118-7149 Hz via `getPeriodForNote`, never
+  even reaches the standard 8363 Hz tracker C-5 reference, so there's no principled formula -
+  C5Speed-based or otherwise - to derive the right offset purely from note names; the table's
+  own "C3 to B8" comment isn't a real absolute reference either). Asked the user how far off by
+  ear rather than guess blind. Their first answer (1 octave) was real and correct as far as it
+  went - applying a `-12` shift measurably changed the sound (confirmed by asking explicitly:
+  "reloaded, it's better but still ~1 octave too high") - it just wasn't the *whole* gap, so the
+  true total was `-24` (2 octaves), confirmed once that residual itself also measured as almost
+  exactly 1 octave. Landed on a single named constant, `NOTE_OCTAVE_SHIFT = 24`, subtracted from
+  the raw note before the existing `+1`: an empirically-confirmed correction (found by
+  iterating with the user's own ears, since this environment can't play or judge audio itself),
+  documented as such rather than presented as derived. Clamped at the low end
+  (`Math.max(1, generic)`) so a very low raw note (now shifted further down) can't go negative
+  into `getPeriodForNote`'s untested range or - worse - land on exactly 0, which would silently
+  collide with the shared "no note" sentinel and drop a real note instead of just playing it
+  low. Verified across all three states: the real `ITRulz_Outside.it`'s note range moved from
+  61-79 (half past the table, the original "no sound" bug) → unshifted-but-finite 61-79 (loud
+  but 2 octaves too high) → 49-67 with `-12` (audibly better, confirmed, but still 1 octave
+  short) → a fully in-range 37-55 with `-24` (comfortably mid-table, no clamping triggered for
+  this file). Tests: `it_module.test.js`'s `decodeNote` describe block (the exact `-24`
+  arithmetic; note-off/cut unaffected by the shift; low-note clamping doesn't collide with the
+  empty-note sentinel).
+  **Still too high at `-24` (same user: "arg, still one octave too high i think").** Rather than
+  guess a fourth time, confirmed two things first: (1) ruled out an instrument/timbre bug - the
+  user confirmed the *sound itself* was right, only pitch was off, so the shift direction/
+  mechanism was correct, just not the magnitude; (2) discovered the file's own sample names are
+  literally "Chans. 1&2 - 25% Duty" / "Channel 3 - Waveform 1" etc. - the exact names
+  `mod_module.js` hardcodes for its own GB-APU waveform instruments - confirming this file really
+  is GB Studio-authored content exported to `.it`, not generic external tracker content, which
+  matters for which pitch convention should apply. Tried to derive the exact offset
+  mathematically from `mod2it.js`'s own proven `PT_PERIODS[0]=856 -> IT note 48` anchor, cross-
+  referenced against `notePeriodsGB` - landed on `-36` and believed it rigorously derived, but
+  the derivation had a real bug: it compared `notePeriodsGB[p]` (the GB-pulse-register table
+  `getPeriodForNote` reads) against `mod_module.js`'s *separate* `notePeriods[p]` (an Amiga
+  period table) as if they were the same values at the same index - they aren't even close
+  (index 0: `notePeriodsGB[0]=44` implies ~118 Hz by the GB formula; `notePeriods[0]=1712`
+  implies ~2072 Hz by the standard Amiga formula - not an octave apart, unrelated). The real
+  conclusion this led to: `notePeriods` is not a real pitch reference either - it's an arbitrary
+  lookup key matching whatever period GB Studio's own `.mod` export tool happened to write for
+  "GB note i", with no inherent acoustic meaning preserved. There is no formula here, from either
+  direction tried (C5Speed-anchored real-pitch math, or cross-referencing the Amiga tables) -
+  `NOTE_OCTAVE_SHIFT` is documented in its own comment as purely empirical, not derived, to avoid
+  a future reader (or session) trusting a justification that looks rigorous but isn't. Landed on
+  `36` (another full octave down from `24`, since every round so far had said "too high" in the
+  same direction, never overshot to "too low") - **confirmed correct by the user** ("perect!")
+  on the very next try. Four rounds total to converge (`0` → `-12` → `-24` → `-36`), each a real,
+  consistent step in the same direction - not noise. If a future session needs to retune this
+  (e.g. a differently-authored `.it` sounds off again): don't re-attempt a mathematical
+  derivation, both honest attempts here failed for this table (`notePeriodsGB` has no real
+  acoustic meaning at any index, confirmed above) - iterate by ear with the user again, or add a
+  way to A/B against the known-correct real ROM/smconv playback directly.
   **`smconv` crashes outright on a compressed `.it` sample, it does not fail cleanly
   (user-found: a real downloaded `.it` dropped into a project crashed "Build ROM" with
   `exit 3221225477` = `0xC0000005` = `STATUS_ACCESS_VIOLATION` on Windows).** The paragraph

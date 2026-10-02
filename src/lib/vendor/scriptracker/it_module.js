@@ -291,6 +291,21 @@ ItModule.prototype.loadPattern = function(fileData, ptr, channels) {
 };
 
 
+// Purely empirical (v4 fix) - there is no formula to derive this from. Two candidate derivations
+// were tried and both turned out unreliable: (1) C5Speed-anchored real-pitch math predicted the
+// opposite direction from what ear-testing confirmed; (2) comparing mod_module.js's own Amiga
+// `notePeriods` table against mod2it.js's `PT_PERIODS` table looked promising (matching period
+// values at a shared index) but doesn't actually hold - `notePeriods[p]` and `notePeriodsGB[p]`
+// (the table getPeriodForNote reads) are NOT pitch-equivalent at the same index p despite both
+// having 72 entries: period 1712 (index 0 of the Amiga table) implies ~2072 Hz by the standard
+// Amiga formula, while notePeriodsGB[0]=44 implies ~118 Hz by the GB formula - not an octave
+// apart, not related at all. mod_module.js's own Amiga table is just an arbitrary lookup key
+// (matching whatever period GB Studio's own .mod export tool happened to write for "GB note i"),
+// not a real pitch reference - so there's no principled bridge from IT's real note numbers to
+// this table's index space. This constant is tuned purely by iterating with the user's own ears
+// (this environment can't play or judge audio), not derived.
+var NOTE_OCTAVE_SHIFT = 36;
+
 /**
  * IT note bytes are 0-119 (real pitch), 255 note-off, 254 note-cut - remapped onto the generic 1-based
  * note scheme (1 = lowest note) with 97 as the shared "stop this note" sentinel every loader/the player
@@ -300,7 +315,12 @@ ItModule.prototype.loadPattern = function(fileData, ptr, channels) {
 ItModule.prototype.decodeNote = function(noteByte) {
 	if (noteByte === 255 || noteByte === 254) return 97;
 	if (noteByte > 119) return 0;
-	return noteByte + 1;
+
+	var generic = noteByte - NOTE_OCTAVE_SHIFT + 1;
+	// Clamp rather than let a very low note collide with 0 (the shared "no note" sentinel, which
+	// would silently drop a real note instead of just playing it low) or go negative into
+	// getPeriodForNote's untested range.
+	return Math.max(1, generic);
 };
 
 
