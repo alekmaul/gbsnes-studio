@@ -89,6 +89,39 @@ var ScripTracker = function() {
   this.audioSource.start(0);
 };
 
+/**
+ * notePeriodsGB only covers a 6-octave span (72 entries, indices 0-71, "C3 to B8" per its own
+ * comment) - a table tuned specifically for GB Studio's own narrow authored .mod convention, not
+ * for a generically-composed song (mod/s3m/xm/it alike) that can use the format's full note range.
+ * A note outside the table used to read back `undefined`, cascading into NaN pitch and permanent
+ * silence on that channel (found via a real .it file whose notes spanned 61-79 - more than half
+ * landed past index 71).
+ *
+ * This still returns the table's own value unchanged for every in-range note (zero behaviour
+ * change for anything that already plays correctly today, GB Studio's own .mod content included),
+ * and only extrapolates beyond the table's last entry - using the exact same equal-tempered
+ * relationship the table's own values already follow (confirmed empirically: frequency doubles
+ * every 12 entries, e.g. index 12 is almost exactly 2x index 0's frequency), anchored to the
+ * table's real last entry so there's no seam at the boundary. The result stays expressed as the
+ * same GB-period scale (0-2047ish, via the same `(131072*1.8)/(2048-period)` relationship used
+ * everywhere else in this player - PORTA_UP/DOWN, VIBRATO, TONE_PORTA, ARPEGGIO all read/write
+ * registers.period on this exact scale), so every other pitch effect keeps working consistently
+ * on a note that came from here.
+ */
+ScripTracker.prototype.getPeriodForNote = function(note) {
+  if (note >= 0 && note < this.notePeriodsGB.length) {
+    return this.notePeriodsGB[note];
+  }
+
+  var lastIndex  = this.notePeriodsGB.length - 1;
+  var lastPeriod = this.notePeriodsGB[lastIndex];
+  var lastFreq   = (131072 * 1.8) / (2048 - lastPeriod);
+  var semitones  = note - lastIndex;
+  var freq       = lastFreq * Math.pow(2, semitones / 12);
+
+  return 2048 - (131072 * 1.8) / freq;
+};
+
 ScripTracker.prototype.fillBuffer = function(audioProcessingEvent) {
   if (!this.isPlaying || !this.module) return;
 
@@ -278,8 +311,7 @@ ScripTracker.prototype.processTick = function() {
 
           // Update sample frequency according to new note if we have a sample loaded.
           if (registers.sample.sample !== null) {
-            registers.period =  //replace with gb lookup
-                this.notePeriodsGB[note];
+            registers.period = this.getPeriodForNote(note);
             var freq = ((131072*1.8)/(2048-registers.period));//131072/(2048
 
             registers.sample.position = registers.sample.restart; // Restart sample from restart position (can be changed by sample offset efect!).

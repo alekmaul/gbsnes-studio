@@ -33,7 +33,7 @@ var Effects = {
 			}
 
 			// Calculate new frequency.
-			var freq = ((131072*1.8)/(2048-(player.notePeriodsGB[registers.note + 1 + arpeggio])))
+			var freq = ((131072*1.8)/(2048-(player.getPeriodForNote(registers.note + 1 + arpeggio))))
 			//var freq = 8363 * Math.pow(2, (4608 - registers.period + arpeggio) / 768);
 			registers.sample.step = freq / player.sampleStepping;
 		}

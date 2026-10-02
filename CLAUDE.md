@@ -670,6 +670,41 @@ by target, `undefined` target still falls back to gb).
   fixture exercising pattern unpacking + note/instrument resolution; a compressed-sample
   fixture confirming silent-not-crashed; a zero pattern-pointer fixture confirming the
   "blank pattern" shorthand doesn't crash).
+  **The preview still played nothing even once `it_module.js` parsed correctly (same user,
+  immediate follow-up: "no, it is not working, no sound").** Root cause was in the *shared*
+  playback engine, not the IT loader - `scriptracker.js`'s note-trigger code (and the
+  `ARPEGGIO` effect in `effects.js`) computed pitch via a direct array lookup,
+  `this.notePeriodsGB[note]`, where `notePeriodsGB` is a hardcoded **72-entry** table (its own
+  comment: "C3 to B8", a 6-octave span) - a GB Studio-specific table that `mod_module.js`'s own
+  loader is deliberately tuned to stay inside (its own 72-entry Amiga-period table is a 1:1
+  parallel array, confirmed by checking the actual numbers: `notePeriodsGB[12]` is almost
+  exactly double `notePeriodsGB[0]`'s equivalent frequency - a real, intentional equal-tempered
+  correspondence, not coincidence). A **real, externally-composed song** has no reason to stay
+  inside that narrow 6-octave window: checking the user's own re-exported `ITRulz_Outside.it`
+  directly, its notes span raw values 61-79 - more than half (33 of 61 note triggers) read
+  `notePeriodsGB[72+]` = `undefined`, cascading to `NaN` pitch and permanent silence on that
+  channel; the in-range notes (61-71) sat at the very top edge of the table and would have
+  played back implausibly high-pitched even where defined. This isn't a defect specific to IT -
+  MOD/S3M/XM content composed outside GB Studio's own narrow authoring convention would hit the
+  identical wall (the code even carries a `//replace with gb lookup` comment, suggesting the
+  original author already knew this was a stopgap). User-chosen fix (offered a smaller
+  "leave it" option first, given this touches playback shared by every format and can't be
+  verified by ear in this environment): added `ScripTracker.prototype.getPeriodForNote(note)`,
+  replacing both direct-lookup call sites (`scriptracker.js`'s note trigger, `effects.js`'s
+  `ARPEGGIO`). For any **in-range** note (0-71) it returns the table's own value completely
+  unchanged - zero behaviour change for anything that already played correctly, GB Studio's own
+  `.mod` content included. Beyond the table, it extrapolates using the *exact same*
+  equal-tempered relationship the table's own values already follow (confirmed empirically
+  above), anchored to the table's real last entry (no seam at the boundary) and expressed on
+  the same GB-period scale (`2048 - (131072*1.8)/freq`, the inverse of the
+  `freq=(131072*1.8)/(2048-period)` formula used pervasively throughout `effects.js` -
+  PORTA_UP/DOWN, VIBRATO, TONE_PORTA all read/write `registers.period` on this exact scale, so
+  a note originating from the extrapolated path stays fully compatible with every other pitch
+  effect). Tests: `test/lib/vendor/scriptracker/scriptracker.test.js` - every in-range note
+  returns the table's own value byte-for-byte; a note past the table's end (the real 79 from
+  the regression) returns a finite, non-NaN value; the boundary is continuous (no pitch jump
+  between index 71 and 72, a full 12-semitone step is almost exactly a frequency doubling);
+  pitch rises monotonically well past the old ceiling (tested through note 96).
   **`smconv` crashes outright on a compressed `.it` sample, it does not fail cleanly
   (user-found: a real downloaded `.it` dropped into a project crashed "Build ROM" with
   `exit 3221225477` = `0xC0000005` = `STATUS_ACCESS_VIOLATION` on Windows).** The paragraph
