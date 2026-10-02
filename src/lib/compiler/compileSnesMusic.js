@@ -22,6 +22,7 @@ import { assetFilename } from "../helpers/gbstudio";
 import { pathExists } from "../helpers/fsCopy";
 import { resolvePvsHome } from "./buildSnesRom";
 import { modToIt } from "./mod2it";
+import validateIt from "./itValidate";
 
 const run = (cmd, args, cwd) =>
   new Promise((resolve, reject) => {
@@ -132,10 +133,30 @@ const compileSnesMusic = async ({
     // A project .it is already in the format smconv wants - pass it through
     // untouched rather than running it through mod2it.js (that conversion
     // only knows how to re-derive IT from a 4-channel M.K. .mod; it isn't a
-    // general IT normaliser). smconv itself still gets the final say: an .it
-    // file smconv can't read (outside whatever subset it supports) fails the
-    // same way an unconvertable .mod does, same fallback below.
+    // general IT normaliser).
+    //
+    // v4 fix (user-found): a project .it can reach smconv in two different
+    // broken-but-not-obviously-broken shapes - a compressed sample crashes
+    // smconv outright (a null-pointer access violation deep in its own IT
+    // loader), and an .it saved without instruments builds and links fine
+    // but is permanently silent in-game, with no warning at all (see
+    // itValidate.js's own comment for the full story on both). Either way
+    // this isn't a "silent in-game" situation like a missing/unconvertable
+    // track - it's thrown here so the build fails loudly with an actionable
+    // message, before the file ever reaches smconv (a crash would also take
+    // every other, valid track's build down with it, since smconv builds
+    // the whole soundbank - effects + every project song - in one call).
     const isIt = /\.it$/i.test(track.filename);
+    if (isIt) {
+      const problems = validateIt(buf);
+      if (problems.length > 0) {
+        throw new Error(
+          `Music track "${track.filename}" can't be used: ${problems.join(
+            "; "
+          )}.`
+        );
+      }
+    }
     try {
       const itPath = Path.join(workDir, `mus${i}.it`);
       await fs.writeFile(itPath, isIt ? buf : modToIt(buf));

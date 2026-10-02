@@ -632,15 +632,75 @@ by target, `undefined` target still falls back to gb).
   alongside `*.mod`/`*.MOD`, and `compileSnesMusic.js`'s `convertTrack` passes a `.it` track to
   `smconv` byte-for-byte instead of running it through `mod2it.js` (that converter only knows
   how to *re-derive* IT from a 4-channel `.mod`; it isn't a general IT normaliser, so an `.it`
-  input skips it entirely - smconv itself still gets the final say on whether it can read it,
-  same fallback-to-effects-module-with-a-warning as an unconvertable `.mod`). **Not done**: the
-  in-editor music preview player (`src/lib/vendor/scriptracker/`, `musicMiddleware.ts`) declares
-  `Module.Types.IT` in `module.js` but its loader dispatch (`scriptracker.js` `loadRaw`'s switch)
-  only implements `mod`/`s3m`/`xm` - there's no `it_module.js` at all, unlike the sibling
+  input skips it entirely). **Not done**: the in-editor music preview player
+  (`src/lib/vendor/scriptracker/`, `musicMiddleware.ts`) declares `Module.Types.IT` in
+  `module.js` but its loader dispatch (`scriptracker.js` `loadRaw`'s switch) only implements
+  `mod`/`s3m`/`xm` - there's no `it_module.js` at all, unlike the sibling
   `mod_module.js`/`s3m_module.js`/`xm_module.js`. An `.it` track builds into the ROM correctly
   but the editor's own "Play" preview button silently no-ops for it (falls through to `default:
   return;`) - writing a real IT-format parser for this vendored library would be a substantial,
   separate undertaking, deliberately not attempted here.
+  **`smconv` crashes outright on a compressed `.it` sample, it does not fail cleanly
+  (user-found: a real downloaded `.it` dropped into a project crashed "Build ROM" with
+  `exit 3221225477` = `0xC0000005` = `STATUS_ACCESS_VIOLATION` on Windows).** The paragraph
+  above was wrong to assume `smconv` "gets the final say" safely - fetching its real upstream
+  source (`pvsneslib/tools/smconv/itloader.cpp`, `Sample::LoadData`) directly (not trusting a
+  web-search summary, after this session had already been burned once by a wrong summarized
+  claim about `oamSet`/`oamSetEx`) showed a genuine, upstream-acknowledged gap: a *compressed*
+  IT sample (the default export setting in most modern trackers) prints "unsupported compressed
+  samples" but then falls through **without ever allocating** the sample's PCM buffer (the
+  `new s8[]`/`new s16[]` call only happens in the uncompressed branch) - every later use of that
+  sample dereferences a null pointer. Worse, `smconv` builds the *whole* soundbank (effects +
+  every project song) in one invocation, so one bad `.it` crashes every other, valid track's
+  build too. Fixed with a pre-flight check, `src/lib/compiler/itValidate.js`: parses just the
+  fixed IT header + the sample pointer table (ordNum/insNum/smpNum at 0x20/0x22/0x24, pointer
+  tables starting at `0xc0 + ordNum`, matching `mod2it.js`'s own already-tested header layout)
+  and reads each sample's Flags byte (offset 18 inside its 80-byte "IMPS" block; bit 3 = the
+  same `Compressed = !!(Flags & 8)` check `itloader.cpp` itself uses). `compileSnesMusic.js`'s
+  `convertTrack` calls it before ever writing a `.it` track to the work dir smconv reads from;
+  a compressed sample is a hard stop - `convertTrack` throws a normal `Error` naming the
+  track and telling the user to re-export without sample compression, failing the whole build
+  loudly instead of crashing it (deliberately **not** the existing silent "falls back to the
+  effects module, warns" treatment a merely-missing or unconvertable `.mod` track gets - a
+  build that silently drops a track's music is a worse outcome here than one that stops and
+  says exactly why). `mod2it.js`'s own output is never at risk (it only ever emits
+  uncompressed 8-bit PCM, by construction) and is never run through this check. Two further
+  "print-and-continue" gaps found in the same audit (`it2spc.cpp`): an over-32KB-module falls
+  through the same dangerous way (not yet guarded against - no confirmed crash yet, lower
+  priority) and an over-8-channel module `return`s cleanly on its own (self-protecting, left
+  alone). Verified: a synthetic `.it` built by flipping one sample's compression bit on an
+  otherwise-valid `modToIt()` output makes a real toolchain `buildProject()` run reject with
+  that exact error instead of crashing (`compileSnesMusic.test.js`), and `itValidate.js` itself
+  is unit-tested (clean file → no problems; compressed sample(s) → reported by number;
+  malformed/truncated/wrong-magic → throws). Confirmed directly against the user's own
+  `ITRulz_Outside.it` fixture: 28 of its 31 samples were compressed - exactly what would have
+  crashed `smconv`, now reported as a clean, named build error instead (the user re-exported it
+  without compression once this was reported, confirmed by re-checking the same fixture).
+  **A second, distinct `.it` failure mode (same user, immediate follow-up: "I have no playback
+  within the builded rom" after re-exporting without compression).** Re-exporting without
+  compression fixed the crash but the track was still silent in-game - confirmed for real in
+  Mesen: with the fixed `ITRulz_Outside.it` wired to the project's actual start scene (not
+  `scenes[0]` - `settings.startSceneId` must be resolved, scene array order doesn't match boot
+  order), every SPC voice stayed at `envVolume` 0 the whole time the track "played", while the
+  exact same pipeline playing PVSnesLib's own known-working example
+  (`pvsneslib/snes-examples/audio/music/res/pollen8.it`) showed real voices ramping up
+  (confirmed via `emu.getState()`'s flat `"spc.dsp.voices[N].envVolume"` string keys - Mesen's
+  Lua `getState()` table is flat, not nested, despite the dotted-looking key names). Root cause,
+  confirmed from `smconv`'s real upstream source (`it2spc.cpp`): the user's file has
+  `InstrumentCount == 0` (saved in "old"/sample-direct IT mode - samples triggered directly by
+  number, no instrument layer - vs. `pollen8.it`'s `InstrumentCount == SampleCount == 17`, one
+  instrument per sample, matching what `mod2it.js` itself always emits). `smconv` builds the
+  compiled module's per-instrument pointer table 1:1 from the source file's own
+  `InstrumentCount` (`Instruments.push_back(...)` once per source instrument); with 0
+  instruments, every one of the table's `max_instruments` (64) slots is written as the
+  "no instrument" placeholder (`i < Instruments.size() ? ... : 0xFF`) - there is nothing for any
+  pattern cell to ever resolve to, so the module builds and links at a plausible size with no
+  error or warning, and is simply silent forever. `itValidate.js` now also flags
+  `insNum === 0 && smpNum > 0` with a message naming the real cause and the fix (re-export with
+  instruments enabled - e.g. OpenMPT's "Song > Convert to Instruments"), using the same hard
+  stop as the compression check. Verified: a synthetic header-only `.it` with `InstrumentCount
+  0` is rejected before ever reaching `smconv` (`compileSnesMusic.test.js`), and `itValidate.js`
+  has direct unit coverage for both the no-instrument and has-instrument cases.
   A soundbank > 32 KB is split by smconv into `SOUNDBANK__0/1/...` on consecutive banks (5,6,…);
   `soundbank_banks.h`'s `MUSIC_SET_BANKS()` macro `spcSetBank()`s each chunk reverse-order
   (`music.c` `MusicInit` calls it). A track that can't be read/converted falls back to the
