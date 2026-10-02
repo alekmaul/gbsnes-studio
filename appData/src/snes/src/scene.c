@@ -2469,7 +2469,19 @@ static void SceneUpdateActors(void)
         {
             if (i == script_actor) is_cmd = 1;
         }
-        if (!a->enabled)
+        // A hidden (enabled=0) actor must still be allowed to step forward if
+        // it's the actor a scripted Move To/Move Relative is currently aiming
+        // (is_cmd) - the aim block above (actor_try_move) isn't itself gated
+        // on enabled, so without this exception a Hide immediately followed
+        // by a scripted move on the same actor arms the move (sa->moving=1)
+        // but this stepping loop then skips it forever: sa->x/y never reach
+        // actor_move_dest_x/y, "arrived" is never true, script_action_complete
+        // is never set, and the blocking move command - and the whole script
+        // after it - hangs permanently (user-found: a scene's trigger script
+        // doing Hide then Move Relative on the Player silently did nothing).
+        // Rendering/animation are unaffected - SceneRenderActors has its own,
+        // separate enabled check, so this doesn't make a hidden actor visible.
+        if (!a->enabled && !is_cmd)
         {
             continue;
         }
