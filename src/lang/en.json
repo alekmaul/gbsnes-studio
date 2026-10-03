@@ -114,6 +114,7 @@
   "FIELD_SPEED": "Speed",
   "FIELD_FASTER": "Faster",
   "FIELD_SLOWER": "Slower",
+  "FIELD_PIXELS_PER_FRAME_SHORT": "PPF",
   "FIELD_SCENE_PUSH_STATE_DESCRIPTION": "Push scene state to stack.",
   "FIELD_SCENE_POP_STATE_DESCRIPTION": "Pop the top scene state from stack.",
   "FIELD_SCENE_POP_ALL_STATE_DESCRIPTION": "Pop all scene state from stack.",

@@ -1122,6 +1122,22 @@ to match B's real list, which never included it there either. Verified: full tes
 a real `npm start` webpack + `fork-ts-checker` build with no TS errors (confirms
 `editorState.ts`/`ToolPicker.tsx`).
 
+**Movement Speed dropdown now shows real pixels/frame per option (user-asked: "like in GB
+3.2.0, add to Speed dropdown list the PPF concerned for each speed").** `MovementSpeedSelect.tsx`
+(shared by `ActorEditor.tsx`, `WorldEditor.tsx`'s player speed, and the `movementSpeed` script
+field) now shows e.g. "Speed 3 (4 PPF)" in the dropdown menu via `formatOptionLabel`, matching
+B's own `OptionLabelWithInfo` pattern but with this fork's real numbers, not B's - B's picker is
+real sub-pixel movement (0.5/1/2/3/4 px/frame, matching its literal labels); this fork's is
+still the index-based `MOVEMENT_SPEED_LOOKUP = [0, 1, 2, 4, 8]` (`src/lib/compiler/helpers.js`,
+left as-is per an earlier M4 decision not to add a sub-pixel accumulator), so "Speed 3"/"Speed 4"
+are arbitrary tier names that **don't** match their real px/frame (4 and 8, not 3 and 4) - this
+is exactly the gap the PPF label now closes. Index 0 ("Speed ½") shows 0.5, not 0: the engine's
+`move_speed==0` isn't "stationary", it's "advance 1px every other frame" (`scene.c`
+`SceneUpdateActors`, `if ((time & 1) == 0) { x += dir_x; ... }`), an averaged 0.5 px/frame -
+shown to match what the actor actually does, not the raw byte `moveSpeedDec` emits for index 0.
+No new `Select` component needed - our fork's `Select.tsx` (a styled `react-windowed-select`)
+already passes through `formatOptionLabel` like any react-select consumer.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
