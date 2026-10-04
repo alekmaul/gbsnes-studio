@@ -27,7 +27,7 @@ module.exports = () => {
 
   // eslint-disable-next-line consistent-return
   return notarize({
-    appBundleId: "dev.gbstudio.gbstudio",
+    appBundleId: "dev.gb2snes.gb2snesstudio",
     appPath: buildOutput,
     appleId: process.env.APPLE_ID,
     appleIdPassword: process.env.APPLE_ID_PASSWORD

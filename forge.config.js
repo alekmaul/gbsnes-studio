@@ -33,7 +33,7 @@ module.exports = {
     extraResource: ["src/assets/app/icon/gbsproj.icns"],
     afterCopy: ["./after-copy"],
     asar: true,
-    appBundleId: "dev.gbstudio.gbstudio",
+    appBundleId: "dev.gb2snes.gb2snesstudio",
     // Code-sign the .app locally, but skip it on CI (no Apple identity there —
     // electron-osx-sign would fail trying to auto-discover one). CI produces an
     // unsigned build; the notarize hook already no-ops without APPLE_ID.

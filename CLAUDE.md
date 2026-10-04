@@ -27,9 +27,17 @@ whatever `productName`/the CLI's own filename really are until (if ever) those a
 `menu.js`'s `openAbout()` sets `product_name: "GB2SNES Studio"` explicitly for exactly this
 reason - without it, the About window would fall back to `package.json`'s own unrenamed name.
 Still `gbstudio`-flavoured (not renamed on purpose, unrelated to the "SNES Studio"→"GB2SNES
-Studio" rename above): `appBundleId` (`dev.gbstudio.gbstudio`, a macOS identifier), the
-`src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/download URLs (point at the
-upstream site). `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
+Studio" rename above): the `src/lib/helpers/gbstudio.js` module, and the `gbstudio.dev` doc/
+download URLs (point at the upstream site). `appBundleId` (`forge.config.js` +
+`src/hooks/notarize.js`, which needs its own matching copy) **was** `dev.gbstudio.gbstudio` but
+is now `dev.gb2snes.gb2snesstudio` (user-asked, reversing the earlier "left alone" decision) -
+a macOS app identity (CFBundleIdentifier), not literally the same kind of "display text" the
+GB2SNES Studio rename covered, so changing it has one real, narrow consequence: any existing
+macOS install built under the old ID is treated as a different app afterward (loses window
+position/zoom prefs, `.gbsproj` Launch Services file-type association needs re-registering).
+Low-risk here since CI doesn't actually sign/notarize yet (`forge.config.js` skips `osxSign`
+without an Apple identity - see below), so there's no notarization ticket pinned to the old ID
+to break. `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
 the latest release version (`github.repos.getLatestRelease`, unchanged) — but the "Download"
 button in both the update-available dialog (`updateChecker.js`) and the
 project-from-a-newer-version dialog (`migrateWarning.js`) opens
