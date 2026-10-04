@@ -1986,6 +1986,30 @@ void Update_Platform(void)
  * engine_fields.h) - the primary-axis advance below uses
  * shooter_scroll_speed, the perpendicular advance still uses
  * actors[0].move_speed, matching GB's real split exactly.
+ *
+ * v4 follow-up #4 (user-found: "scrolling is really slow" in a real Shmup
+ * scene). The field's default (1) and max (8) were ported from GB's own
+ * engine.json unchanged - but GB's shooter_scroll_speed feeds
+ * point_translate_dir() against PLAYER.pos, which GB stores in 16.4
+ * fixed-point (1 real pixel = 16 units) - so GB's default of 16 is actually
+ * exactly 1 real pixel/frame, not 16. This engine's actors[].x/y are plain
+ * whole pixels (no fixed-point anywhere in this port), and the line below
+ * adds shooter_scroll_speed directly - so porting GB's raw field numbers
+ * unchanged left the real default at 1 whole pixel/frame (60px/s), when GB's
+ * actual equivalent is also ~1px/frame - already correct by coincidence of
+ * the units GB happens to use 16 for. The reported "really slow" was
+ * real and reproduced (confirmed in Mesen: Update_Shmup runs at a true 1:1
+ * per-frame rate against a normally-sized background, and each call that
+ * scrolls adds exactly shooter_scroll_speed whole pixels - no hidden
+ * half-rate or compiler-miscompile cause, this is genuinely just "1px/frame
+ * feels too slow for a forced-scroll shooter"). Bumped default to 2
+ * (~120px/s) - a modest, reasoned correction, not a GB-matching one (a
+ * mechanical first attempt at 16 - copying GB's raw number - was tried and
+ * reverted once this unit mismatch was found: 16 whole pixels/frame is
+ * 960px/s, unreasonably fast). max left well above default (8) for a
+ * project that wants a faster scroll. This is a feel/pacing call this
+ * session can't verify by eye (no rendered output here, only WRAM reads) -
+ * revisit by eye/playtest if 2 still isn't right.
  */
 // game.c's own SCREEN_W_HALF/SCREEN_H_HALF are file-static - redefined here
 // rather than exported, since they're plain screen-geometry constants
@@ -2078,15 +2102,40 @@ void Update_Shmup(void)
     if (shmup_horizontal)
     {
         s16 body_col = actors[0].x >> 3;
+        // Nested ifs, not a 3-term `a && b && c` chain: see the actor_on_tile
+        // comment - 816-tcc mis-links the false-branch target of a 3+-term
+        // &&/|| chain in a conditional, which here made the player's
+        // perpendicular dodge movement silently never trigger (user-found:
+        // "player can't move" in a Shmup scene).
+        u8 can_up = 0;
+        u8 can_down = 0;
+        if (joy & KEY_UP)
+        {
+            if (actors[0].y > 8)
+            {
+                if (!col_solid(body_col, ((actors[0].y - 1) - 1) >> 3))
+                {
+                    can_up = 1;
+                }
+            }
+        }
+        if (joy & KEY_DOWN)
+        {
+            if (actors[0].y < ((s16)scene_height << 3))
+            {
+                if (!col_solid(body_col, ((actors[0].y + 1) - 1) >> 3))
+                {
+                    can_down = 1;
+                }
+            }
+        }
 
-        if ((joy & KEY_UP) && actors[0].y > 8 &&
-            !col_solid(body_col, ((actors[0].y - 1) - 1) >> 3))
+        if (can_up)
         {
             actors[0].dir_y = -1;
             actors[0].dir_x = 0;
         }
-        else if ((joy & KEY_DOWN) && actors[0].y < ((s16)scene_height << 3) &&
-                 !col_solid(body_col, ((actors[0].y + 1) - 1) >> 3))
+        else if (can_down)
         {
             actors[0].dir_y = 1;
             actors[0].dir_x = 0;
@@ -2118,15 +2167,36 @@ void Update_Shmup(void)
     else
     {
         s16 body_row = (actors[0].y - 1) >> 3;
+        // Same 3-term-chain fix as the horizontal branch above.
+        u8 can_left = 0;
+        u8 can_right = 0;
+        if (joy & KEY_LEFT)
+        {
+            if (actors[0].x > 8)
+            {
+                if (!col_solid(((actors[0].x - 1) - 8) >> 3, body_row))
+                {
+                    can_left = 1;
+                }
+            }
+        }
+        if (joy & KEY_RIGHT)
+        {
+            if (actors[0].x < ((s16)scene_width << 3))
+            {
+                if (!col_solid(((actors[0].x + 1) + 7) >> 3, body_row))
+                {
+                    can_right = 1;
+                }
+            }
+        }
 
-        if ((joy & KEY_LEFT) && actors[0].x > 8 &&
-            !col_solid(((actors[0].x - 1) - 8) >> 3, body_row))
+        if (can_left)
         {
             actors[0].dir_x = -1;
             actors[0].dir_y = 0;
         }
-        else if ((joy & KEY_RIGHT) && actors[0].x < ((s16)scene_width << 3) &&
-                 !col_solid(((actors[0].x + 1) + 7) >> 3, body_row))
+        else if (can_right)
         {
             actors[0].dir_x = 1;
             actors[0].dir_y = 0;

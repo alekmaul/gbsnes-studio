@@ -17,5 +17,5 @@ u8 engine_fields_raw[ENGINE_FIELDS_SIZE] = {
     0, 7, /* plat_grav @15 = 1792 */
     0, 2, /* plat_hold_grav @17 = 512 */
     32, 78, /* plat_max_fall_vel @19 = 20000 */
-    1, /* shooter_scroll_speed @21 = 1 */
+    2, /* shooter_scroll_speed @21 = 2 */
 };

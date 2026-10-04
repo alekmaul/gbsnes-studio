@@ -399,6 +399,22 @@ global already existed:
   B's real split exactly. Default `1` (this engine's own whole-pixel-per-frame movement scale,
   not B's larger fixed-point one - chosen to match this target's previous *effective* default
   speed, not B's raw number).
+  **v4 follow-up (user-found: "scrolling is really slow" in a real Shmup scene).** The original
+  default (`1`) and max (`8`) were ported from B's own `engine.json` unchanged, on the mistaken
+  assumption the two engines share units. They don't: B's `shooter_scroll_speed` feeds
+  `point_translate_dir()` against `PLAYER.pos`, which B stores in 16.4 fixed-point (16 units = 1
+  real pixel) - B's default of `16` is actually 1px/frame. This engine's `actors[].x/y` are plain
+  whole pixels (no fixed-point anywhere in this port) and `Update_Shmup` adds
+  `shooter_scroll_speed` to `x`/`y` directly - so the ported default of `1` really was only
+  1 whole pixel/frame (60px/s), genuinely too slow for a forced-scroll shooter. A first fix
+  mechanically copied B's raw number (`16`) into this field without re-deriving the unit
+  conversion - tried and reverted once the mismatch was found (16 whole pixels/frame is
+  960px/s, wildly too fast). Landed on `2` (~120px/s, max raised to `8`) as a modest, reasoned
+  correction, not a B-matching one - a feel/pacing call verified only by reading WRAM in Mesen
+  (no rendered output in this environment), not by eye; revisit if `2` still isn't right.
+  Verified in Mesen: `Update_Shmup` runs at a true 1:1 per-real-frame rate against a
+  normally-sized background (ruling out a hidden half-rate cause), and each call that scrolls
+  now adds exactly 2 whole pixels.
 
 Not ported: the 3 `cType: "define"` input-remapping fields (`INPUT_PLATFORM_JUMP`/`RUN`/
 `INTERACT`, `INPUT_TOPDOWN_INTERACT` - which physical button triggers jump vs. interact) - this

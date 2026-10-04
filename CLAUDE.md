@@ -1163,6 +1163,63 @@ shown to match what the actor actually does, not the raw byte `moveSpeedDec` emi
 No new `Select` component needed - our fork's `Select.tsx` (a styled `react-windowed-select`)
 already passes through `formatOptionLabel` like any react-select consumer.
 
+**Shoot Em Up genre: 4 reported issues investigated (user: "player can't move / scrolling is
+really slow / can't send projectiles / enemies are not moving nor sending projectiles").**
+Two real engine bugs found and fixed; the other two symptoms didn't reproduce once tested
+correctly - see each below.
+- **Player can't move (real bug, fixed).** `Update_Shmup`'s perpendicular-dodge check
+  (`scene.c`) was a 3-term `&&` chain - the same 816-tcc miscompile class already fixed 4 times
+  elsewhere in this file (`actor_on_tile`, `in_box`, `col_solid`, `can_step`): a 3+-term `&&`/`||`
+  chain in a conditional mis-links its false-branch target. Rewritten as nested single-condition
+  `if`s with explicit `can_up`/`can_down`/`can_left`/`can_right` flags. **Verification pitfall
+  found along the way**: a first Mesen Lua test using `emu.setInput(...)` from the
+  `emu.eventType.endFrame` callback showed `joy` staying `0x0000` forever even while "held" -
+  the override needs to be set from `emu.eventType.inputPolled`, not `endFrame` (which fires
+  after that frame's input was already latched). Once fixed, the real test showed `dir_y`
+  correctly flipping to `-1` on a simulated Up press and `y` decreasing at the expected
+  `move_speed` rate.
+- **Scrolling is really slow (real bug, fixed) - see the Engine Fields section above for the
+  full writeup.** `shooter_scroll_speed`'s default/max were ported from B's raw numbers without
+  accounting for B's 16.4 fixed-point position scale (B's `16` = 1px/frame; this engine's `1` =
+  1 whole px/frame, i.e. correctly ported *in isolation* but genuinely slower in absolute terms
+  than a shooter wants). Landed on default `2` after a first overcorrection (mechanically
+  copying B's raw `16`, giving an absurd 960px/s) was caught and reverted.
+- **Can't send projectiles - did not reproduce.** A scene-init script's `Launch Projectile`
+  (direction/speed/collision group/mask) compiled and ran correctly in Mesen: the projectile
+  struct (`active`/`x`/`y`/`dir_x`/`dir_y`/`speed`/`sprite_slot`/`collision_group`/
+  `collision_mask`/`ttl`, 13 real bytes + 1 trailing pad = **14 bytes/slot**, `MAX_PROJECTILES`
+  slots at `projectiles[]`) showed every field matching the authored args exactly, the
+  projectile moved at the authored speed/direction, and correctly deactivated later. No fix
+  needed here; the struct's real 14-byte stride (not 12 or 13 - confirmed by the gap between
+  the `projectiles` and the next WRAM symbol in a `.sym` file) is worth remembering for any
+  future Mesen-based debugging of this subsystem.
+- **Enemies not moving / not sending projectiles - did not reproduce on an up-to-date project,
+  but a real, separate bug was found along the way.** `randomWalk` actor movement (native
+  `scene.c` AI, `MOVE_AI_RANDOM_WALK`) and an actor's own `updateScript` firing
+  `Launch Projectile` on a repeating `Loop { Wait; Launch Projectile }` both worked correctly
+  once tested against a project with a current `_version`/`_release`. **The real finding**:
+  `migrateProject.js`'s `migrateFrom120To200Actors` (the GB Studio 1.2.0→2.0.0 migration step)
+  unconditionally **overwrites** `actor.updateScript` with an auto-generated wander script
+  (`generateRandomWalkScript()`) whenever `actor.movementType === "randomWalk"` - a leftover
+  from when "random walk" *was* an authored update-script pattern, pre-dating both this port's
+  native C-side random-walk AI and the v4 On Update subsystem. The migration is correctly
+  version-gated (`version === "1.2.0"` only) so a properly up-to-date project never hits it -
+  but `compileSnesData.js` calls `migrateProject()` fresh on every build straight from the raw
+  `.gbsproj` file on disk (by design, documented elsewhere in this file, so standalone/CLI
+  builds don't need a prior app load+save cycle), and nothing in the build path writes the
+  bumped `_version`/`_release` back to that file. A project whose `_version` was never
+  persisted past `"1.2.0"` (an old project that's only ever been *built*, never
+  loaded-and-saved in the app since) will have **any custom On Update script on a randomWalk
+  actor silently discarded on every single build** - this is the mechanism that produced the
+  "enemies not moving/sending projectiles" symptom in testing (found via a stale test fixture,
+  `test/projects/Test_ActorInvoke`, whose `_version: 1` triggers the full 1.0.0→2.0.0 migration
+  chain on every compile). Not fixed here (no confirmation the *user's own* project actually
+  has a stale `_version` - this needs checking against their real `.gbsproj` before treating it
+  as the root cause) - flagged for follow-up: either have the build path persist the bumped
+  version back to disk after migrating, or have `migrateFrom120To200Actors` skip actors that
+  already have a non-empty `updateScript` (ambiguous for a true 1.2.0 file, where the field
+  can't have been user-authored yet, but safe either way).
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

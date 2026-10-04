@@ -565,7 +565,7 @@ describe("compileSnesData - Engine Fields (v4)", () => {
     });
     expect(out.engineFieldsC).toMatch(/topdown_grid @0 = 8/);
     expect(out.engineFieldsC).toMatch(/plat_jump_vel @13 = 16384/);
-    expect(out.engineFieldsC).toMatch(/shooter_scroll_speed @21 = 1/);
+    expect(out.engineFieldsC).toMatch(/shooter_scroll_speed @21 = 2/);
     // the actual byte(s), not just the doc comment - 16384 = 0x4000,
     // little-endian -> lo=0x00, hi=0x40
     expect(out.engineFieldsC).toMatch(/\s+0, 64, \/\* plat_jump_vel @13 = 16384 \*\//);
