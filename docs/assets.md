@@ -19,7 +19,8 @@ subfolder, and they'll appear ready to use in the Project Editor.
 - **Backgrounds** - [Tiled Map Editor](https://www.mapeditor.org/) works well for staying
   aligned to the 8px tile grid.
 - **Music** - [OpenMPT](https://openmpt.org/) or [MilkyTracker](https://milkytracker.org/),
-  exporting a 4-channel `M.K.` ProTracker `.mod` file.
+  exporting either a 4-channel `M.K.` ProTracker `.mod` or an Impulse Tracker `.it` file - see
+  [Music](music.html) for the difference and `.it`'s real format limitations.
 
 ## Community Assets
 
