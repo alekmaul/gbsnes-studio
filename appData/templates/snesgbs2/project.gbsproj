@@ -7982,7 +7982,7 @@
                             "id": "3f4b8292-f024-47fb-955d-f7f99a08415e",
                             "command": "EVENT_TEXT",
                             "args": {
-                                "text": "Check out\ngbstudio.dev/docs"
+                                "text": "Check out\nalekmaul.github.io/gbsnes-studio/"
                             }
                         },
                         {
@@ -31914,7 +31914,7 @@
                             "command": "EVENT_TEXT",
                             "args": {
                                 "text": [
-                                    "Check out\ngbstudio.dev/docs"
+                                    "Check out\nalekmaul.github.io/gbsnes-studio/"
                                 ],
                                 "avatarId": ""
                             },
@@ -40216,7 +40216,7 @@
                             "id": "149845e1-e0b4-4a2e-97e3-4a59c8bc2634",
                             "command": "EVENT_TEXT",
                             "args": {
-                                "text": "Welcome to\nGBStudio!"
+                                "text": "Welcome to\nGB2SNESStudio!"
                             }
                         },
                         {
@@ -48086,7 +48086,7 @@
                             "id": "149845e1-e0b4-4a2e-97e3-4a59c8bc2634",
                             "command": "EVENT_TEXT",
                             "args": {
-                                "text": "Welcome to\nGBStudio!"
+                                "text": "Welcome to\nGB2SNESStudio!"
                             }
                         },
                         {

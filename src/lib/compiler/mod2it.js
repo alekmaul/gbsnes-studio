@@ -362,7 +362,7 @@ const writeIt = mod => {
   // ---- assemble ----
   const head = Buffer.alloc(HEADER);
   head.write("IMPM", 0, "latin1");
-  head.write((mod.title || "gbstudio").slice(0, 25), 0x04, "latin1");
+  head.write((mod.title || "gb2snesstudio").slice(0, 25), 0x04, "latin1");
   head.writeUInt16LE(0x1004, 0x1e); // pattern row hilight
   head.writeUInt16LE(ordNum, 0x20);
   head.writeUInt16LE(insNum, 0x22);

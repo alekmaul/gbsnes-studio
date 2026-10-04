@@ -238,15 +238,15 @@ const createWindow = async (projectPath: string) => {
 
 const openHelp = async (helpPage: string) => {
   if (helpPage === "sprites") {
-    shell.openExternal("https://www.gbstudio.dev/docs/sprites/");
+    shell.openExternal("https://alekmaul.github.io/gbsnes-studio/sprites.html");
   } else if (helpPage === "backgrounds") {
-    shell.openExternal("https://www.gbstudio.dev/docs/backgrounds/");
+    shell.openExternal("https://alekmaul.github.io/gbsnes-studio/backgrounds.html");
   } else if (helpPage === "ui-elements") {
-    shell.openExternal("https://www.gbstudio.dev/docs/ui-elements/");
+    shell.openExternal("https://alekmaul.github.io/gbsnes-studio/ui-elements.html");
   } else if (helpPage === "music") {
-    shell.openExternal("https://www.gbstudio.dev/docs/music/");
+    shell.openExternal("https://alekmaul.github.io/gbsnes-studio/music.html");
   } else if (helpPage === "error") {
-    shell.openExternal("https://www.gbstudio.dev/docs/error/");
+    shell.openExternal("https://alekmaul.github.io/gbsnes-studio/error.html");
   }
 };
 

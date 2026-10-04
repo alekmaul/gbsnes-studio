@@ -118,7 +118,7 @@ const audioHandler = new AudioHandler(); // eslint-disable-line no-undef
 // the same origin don't collide) and flush on an interval + when the page is
 // hidden or unloaded.
 // ---------------------------------------------------------------------------
-const SAVE_KEY = "gbstudio-snes-sram:" + (document.title || "game");
+const SAVE_KEY = "gb2snesstudio-snes-sram:" + (document.title || "game");
 let sramDirty = false;
 let lastSramHash = 0;
 

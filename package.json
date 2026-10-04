@@ -1,7 +1,7 @@
 {
   "name": "snes-studio",
   "productName": "SNES Studio",
-  "homepage": "https://www.gbstudio.dev",
+  "homepage": "https://portabledev.itch.io/gbsnes-studio",
   "bugs": {
     "url": "https://github.com/alekmaul/gbsnes-studio/issues"
   },

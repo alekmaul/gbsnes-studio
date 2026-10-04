@@ -535,7 +535,7 @@
                             "id": "3f4b8292-f024-47fb-955d-f7f99a08415e",
                             "command": "EVENT_TEXT",
                             "args": {
-                                "text": "Check out\ngbstudio.dev/docs"
+                                "text": "Check out\nalekmaul.github.io/gbsnes-studio/"
                             }
                         },
                         {
