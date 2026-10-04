@@ -50,7 +50,7 @@ export default async projectPath => {
     };
     const { response: updateButtonIndex } = await dialog.showMessageBox(dialogOptions);
     if (updateButtonIndex === 0) {
-      await shell.openExternal("https://www.gbstudio.dev/download/");
+      await shell.openExternal("https://portabledev.itch.io/gbsnes-studio");
       return false;
     }
     if (updateButtonIndex === 2) {

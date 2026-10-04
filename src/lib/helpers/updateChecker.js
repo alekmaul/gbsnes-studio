@@ -37,8 +37,8 @@ export const getLatestVersion = async () => {
   }
 
   const latest = await github.repos.getLatestRelease({
-    owner: "chrismaltby",
-    repo: "gb-studio",
+    owner: "alekmaul",
+    repo: "gbsnes-studio",
   });
 
   if (latest) {
@@ -134,7 +134,7 @@ export const checkForUpdate = async (force) => {
         settings.set("dontCheckForUpdates", true);
       }
       if (buttonIndex === 0) {
-        shell.openExternal("https://www.gbstudio.dev/download/");
+        shell.openExternal("https://portabledev.itch.io/gbsnes-studio");
       } else if (buttonIndex === 2) {
         // Ingore this version but notify for next
         settings.set("dontNotifyUpdatesForVersion", latestVersion);

@@ -38,12 +38,29 @@ position/zoom prefs, `.gbsproj` Launch Services file-type association needs re-r
 Low-risk here since CI doesn't actually sign/notarize yet (`forge.config.js` skips `osxSign`
 without an Apple identity - see below), so there's no notarization ticket pinned to the old ID
 to break. `updateChecker.js` points at the GitHub repo `alekmaul/gbsnes-studio` to *check*
-the latest release version (`github.repos.getLatestRelease`, unchanged) — but the "Download"
+the latest release version (`github.repos.getLatestRelease`) — but the "Download"
 button in both the update-available dialog (`updateChecker.js`) and the
 project-from-a-newer-version dialog (`migrateWarning.js`) opens
 `https://portabledev.itch.io/gbsnes-studio`, not a GitHub releases page: GitHub is the version
 source of truth, itch.io is where a user actually gets the binary. Neither the git repo name
 nor the itch.io URL changed as part of the GB2SNES Studio rename (explicitly out of scope).
+**This was broken for a long time and nobody had noticed (user-found, v4): `updateChecker.js`'s
+real code had `owner: "chrismaltby", repo: "gb-studio"` - checking the *upstream* GB Studio
+project's own releases, nothing to do with this fork at all - and both its own Download button
+and `migrateWarning.js`'s matching button opened `gbstudio.dev/download` (upstream's page), not
+itch.io.** Confirmed via `git log -p --follow` that this isn't a mistake introduced recently:
+`main`/v1 once had this correctly pointed at `alekmaul`/`gbsnes-studio` and itch.io (commits
+"Point the 'Download' update prompts at our own releases" and "...at itch.io instead of GitHub
+releases"), but `v2`'s M1 milestone ("import GB Studio 2.0.0-beta5 sources" - a wholesale fresh
+vendor import, not a merge, per this file's own *History* section) silently brought in
+upstream's own unmodified `updateChecker.js`/`migrateWarning.js`, discarding that fix - and it
+was never re-applied through `v2` → `v3` → `v4`. The paragraph above describing the "correct"
+behavior was itself wrong, describing intent that had silently stopped being true for three
+whole generations. Fixed: both files now check/link `alekmaul/gbsnes-studio` and
+`portabledev.itch.io/gbsnes-studio` again, matching what this paragraph always claimed. Worth
+remembering as its own case of the "fresh vendor import can silently drop a fork-specific fix
+that nothing catches" pattern - this one wasn't caught by any test (network-dependent, nothing
+exercises it), only by a user directly reading the source.
 Icons/artwork under `src/assets/app/` are GBSNES-branded: `icon/app_icon.{png,ico,icns}` (a
 GB/SNES hybrid handheld), `icon/gbsproj.{png,ico,icns}` (a "SNES Studio Project" cartridge,
 the `.gbsproj` file-type icon) and `dmg/background.{png,tiff}` (the macOS installer window).
