@@ -8,13 +8,6 @@ import {
   SplashAppTitle,
   SplashContent,
   SplashCreateButton,
-  SplashCredits,
-  SplashCreditsBackground,
-  SplashCreditsCloseButton,
-  SplashCreditsContent,
-  SplashCreditsContributor,
-  SplashCreditsTitle,
-  SplashEasterEggButton,
   SplashForm,
   SplashInfoMessage,
   SplashLogo,
@@ -123,7 +116,6 @@ export default () => {
 
   const [templateId, setTemplateId] = useState("snesgbs2");
   const [section, setSection] = useState<SplashTab>(initialTab);
-  const [openCredits, setOpenCredits] = useState(false);
   const [recentProjects, setRecentProjects] = useState<ProjectInfo[]>([]);
   const [name, setName] = useState<string>(l10n("SPLASH_DEFAULT_PROJECT_NAME"));
   const [path, setPath] = useState<string>(getLastUsedPath());
@@ -237,7 +229,6 @@ export default () => {
         <SplashSidebar>
           <SplashLogo>
             <img src={logoFile} />
-            <SplashEasterEggButton onClick={() => setOpenCredits(true)} />
           </SplashLogo>
           <SplashAppTitle />
           <SplashTab selected={section === "new"} onClick={onSetTab("new")}>
@@ -333,34 +324,6 @@ export default () => {
           </SplashScroll>
         )}
       </SplashWrapper>
-
-      {openCredits && (
-        <FocusLock>
-          <SplashCredits>
-            <SplashCreditsBackground />
-            <SplashCreditsContent>
-              <SplashCreditsTitle>GB2SNES Studio</SplashCreditsTitle>
-              {contributors.map((contributor) => (
-                <SplashCreditsContributor
-                  key={contributor.id}
-                  contributor={contributor}
-                  onClick={() => shell.openExternal(contributor.html_url)}
-                />
-              ))}
-            </SplashCreditsContent>
-            <SplashCreditsCloseButton>
-              <AutoFocusInside>
-                <Button
-                  variant="transparent"
-                  onClick={() => setOpenCredits(false)}
-                >
-                  <CloseIcon />
-                </Button>
-              </AutoFocusInside>
-            </SplashCreditsCloseButton>
-          </SplashCredits>
-        </FocusLock>
-      )}
     </ThemeProvider>
   );
 };
