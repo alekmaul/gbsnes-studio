@@ -87,6 +87,16 @@ extern u8 actor_move_settings;
 extern s16 actor_move_dest_x;
 extern s16 actor_move_dest_y;
 
+/* Re-aims whichever actor script_actor currently names against
+ * actor_move_dest_x/y, advancing or completing a blocking ACTOR_MOVE_TO/
+ * MOVE_RELATIVE one tile at a time; returns whether a move is still active
+ * for the caller's own (already swapped-in) copy of these globals. Called
+ * once for the foreground (scene.c's own SceneUpdateActors) and once per
+ * active On Update context (update_script.c's UpdateScriptsProcess) - see
+ * ActorMoveAim's own comment in scene.c for why each caller must swap its
+ * own move_dest_x/y/settings in first. */
+u8 ActorMoveAim(void);
+
 /* GB direction code (1 down, 2 left, 4 right, 8 up) -> unit vector */
 void dir_to_vec(u8 d, s8 *dx, s8 *dy);
 

@@ -523,8 +523,9 @@ Real, documented limitations of this scoped version vs GB Studio 3.x (see
   small fixed cap, same class as `SPRITE_SLOTS`/`MAX_PROJECTILES`/the 4 timer contexts elsewhere
   in this engine. A scene needing more just doesn't run the extras' update scripts (silent, like
   every other pool-exhaustion cap in this engine).
-- An update script's own blocking opcodes only get a private `Wait` timer - `Camera Shake`/
-  `Await Input` still read/write the *foreground's* shared `shake_time`/`await_input`, so using
+- An update script's own blocking opcodes get a private `Wait` timer *and* (v4 follow-up, see
+  below) a private `Move To`/`Move Relative` destination - `Camera Shake`/`Await Input` are the
+  two still left reading/writing the *foreground's* shared `shake_time`/`await_input`, so using
   either inside an On Update script has undefined/shared behaviour. Not a realistic authoring
   pattern for a background ambient script, so not solved here.
 - Turns are round-robined one context at a time per frame in pool-slot order, not truly
@@ -543,6 +544,36 @@ toolchain build (816-tcc/816-opt/wla-65816/wlalink) compiles and links `update_s
 (pointer/call-stack/wait-timer save-restore is correct); the **foreground** `script_ptr` read
 `0,0,0` on every single sampled frame throughout, confirming the core fix - the update script's
 execution never touches the global that would otherwise freeze the player.
+
+**`Move To`/`Move Relative` inside an On Update script could permanently freeze the whole scene
+(v4 fix, user-found: a real Shoot Em Up scene where 15 enemies' own On Update scripts each did
+a bob/weave `Move Relative` - "I still can't move [...], it is still slow").** The design note
+above already flagged Camera Shake/Await Input as unsafe to use inside an On Update script for
+sharing a global with the foreground - missed that `ACTOR_MOVE_TO`/`ACTOR_MOVE_RELATIVE` have
+the identical hazard: `BEGIN_MOVE` (`script_cmds.c`) writes `actor_move_dest_x/y` and
+`actor_move_settings`, neither swapped per-context. The moment any context's own blocking move
+ran, it silently overwrote whichever move the foreground (or another context) already had in
+flight - confirmed in Mesen: the foreground's own scene-init `Move Relative` on the player had
+its destination (a sane `40`) replaced by an enemy's own On Update move (`696`) mid-flight, so
+the arrival check never fired again, `script_action_complete` never came back, and the scene's
+own init script - gating everything downstream, including real player control - hung forever.
+Fixed for real (not just documented as a limitation, since "something bobs/patrols on its own"
+is an extremely natural On Update use): `UPDATE_CTX` gained its own `move_settings`/
+`move_dest_x`/`move_dest_y`, swapped in/out exactly like `wait_time`; the foreground's own
+copies are saved/restored around the whole per-context loop the same way `fg_wait_time` already
+is. The arrival-check logic itself (previously inline in `SceneUpdateActors`) is now a shared
+`u8 ActorMoveAim(void)` (`scene.c`/`scene.h`), called once for the foreground (unchanged) and
+once per active context right after `ScriptRunnerUpdate()` runs its turn. Verified against the
+real project: the foreground's `actor_move_dest_x` stays `40`, its `script_ptr` now reaches
+`0,0,0` within the expected window instead of never, and `Update_Shmup` runs for real
+afterward. **Known remaining gap** (not hit by this project, not fixed): the stepping loop's
+"a hidden actor can still finish *its own* commanded move" exception only covers the
+foreground's `script_actor`, not a per-context mover - an On Update script that hides then
+moves its own actor would still hit the older "Hide then Move Relative" bug class for that
+narrower case. The separate, non-engine half of this bug report - 15 `Call Custom Event` call
+sites never binding the "Enemy Ship" actor parameter, so each one's body fell back to actor
+index 0 (the player) via the same `findIndex()+1→0` convention that resolves `$self$` - is a
+project-authoring fix, not an engine one.
 
 **Actor: Set Sprite Sheet, If Actor Relative to Actor, Actor: Set Animate shipped (v4).** All 3
 were listed here through this point as needing the `On Update` per-actor script port - re-checked

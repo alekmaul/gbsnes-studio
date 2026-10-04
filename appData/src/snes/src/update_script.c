@@ -4,6 +4,7 @@
 #include "update_script.h"
 #include "script_runner.h"
 #include "assets.h"
+#include "scene.h"
 
 typedef struct
 {
@@ -15,6 +16,14 @@ typedef struct
     u8 actor;
     u8 wait_time;
     u8 action_complete;
+    /* v4 fix: this context's own copy of the blocking-move state
+     * (ACTOR_MOVE_TO/MOVE_RELATIVE's BEGIN_MOVE writes actor_move_settings/
+     * actor_move_dest_x/y) - see ActorMoveAim's comment in scene.c for the
+     * real bug this fixes (one context's own Move Relative silently
+     * stealing another's in-flight move, freezing it forever). */
+    u8 move_settings;
+    s16 move_dest_x;
+    s16 move_dest_y;
 } UPDATE_CTX;
 
 static UPDATE_CTX update_ctxs[MAX_UPDATE_CONTEXTS];
@@ -63,6 +72,9 @@ void ActorStartUpdate(u8 actor)
             update_ctxs[i].actor = actor;
             update_ctxs[i].wait_time = 0;
             update_ctxs[i].action_complete = 1;
+            update_ctxs[i].move_settings = 0;
+            update_ctxs[i].move_dest_x = 0;
+            update_ctxs[i].move_dest_y = 0;
             actors[actor].update_ctx = i;
             return;
         }
@@ -92,6 +104,9 @@ void UpdateScriptsProcess(void)
     u8 fg_actor = script_actor;
     u8 fg_wait_time = wait_time;
     u8 fg_action_complete = script_action_complete;
+    u8 fg_move_settings = actor_move_settings;
+    s16 fg_move_dest_x = actor_move_dest_x;
+    s16 fg_move_dest_y = actor_move_dest_y;
     u8 i, j;
 
     for (j = 0; j < SCRIPT_STACK_SIZE; j++)
@@ -120,6 +135,9 @@ void UpdateScriptsProcess(void)
         script_actor = update_ctxs[i].actor;
         wait_time = update_ctxs[i].wait_time;
         script_action_complete = update_ctxs[i].action_complete;
+        actor_move_settings = update_ctxs[i].move_settings;
+        actor_move_dest_x = update_ctxs[i].move_dest_x;
+        actor_move_dest_y = update_ctxs[i].move_dest_y;
 
         /* This context's own Wait countdown - mirrors what the main loop's
          * ScriptUpdateTimers() does for the foreground's wait_time, scoped
@@ -135,6 +153,15 @@ void UpdateScriptsProcess(void)
         }
 
         ScriptRunnerUpdate();
+
+        /* This context's own blocking-move step (ACTOR_MOVE_TO/MOVE_RELATIVE),
+         * against its own move_settings/move_dest_x/y just swapped in above -
+         * see ActorMoveAim's comment in scene.c. Runs after ScriptRunnerUpdate,
+         * same order the foreground gets every frame (main.c: ScriptRunnerUpdate
+         * then SceneUpdate/SceneUpdateActors), so a move just started by the
+         * opcode above takes its first step this same turn, same as the
+         * foreground would. */
+        ActorMoveAim();
 
         if (!script_ptr)
         {
@@ -159,6 +186,9 @@ void UpdateScriptsProcess(void)
         update_ctxs[i].stack_ptr = script_stack_ptr;
         update_ctxs[i].wait_time = wait_time;
         update_ctxs[i].action_complete = script_action_complete;
+        update_ctxs[i].move_settings = actor_move_settings;
+        update_ctxs[i].move_dest_x = actor_move_dest_x;
+        update_ctxs[i].move_dest_y = actor_move_dest_y;
     }
 
     /* Restore the foreground's own live state - none of the above is ever
@@ -174,4 +204,7 @@ void UpdateScriptsProcess(void)
     script_actor = fg_actor;
     wait_time = fg_wait_time;
     script_action_complete = fg_action_complete;
+    actor_move_settings = fg_move_settings;
+    actor_move_dest_x = fg_move_dest_x;
+    actor_move_dest_y = fg_move_dest_y;
 }

@@ -1164,61 +1164,103 @@ No new `Select` component needed - our fork's `Select.tsx` (a styled `react-wind
 already passes through `formatOptionLabel` like any react-select consumer.
 
 **Shoot Em Up genre: 4 reported issues investigated (user: "player can't move / scrolling is
-really slow / can't send projectiles / enemies are not moving nor sending projectiles").**
-Two real engine bugs found and fixed; the other two symptoms didn't reproduce once tested
-correctly - see each below.
-- **Player can't move (real bug, fixed).** `Update_Shmup`'s perpendicular-dodge check
-  (`scene.c`) was a 3-term `&&` chain - the same 816-tcc miscompile class already fixed 4 times
-  elsewhere in this file (`actor_on_tile`, `in_box`, `col_solid`, `can_step`): a 3+-term `&&`/`||`
-  chain in a conditional mis-links its false-branch target. Rewritten as nested single-condition
-  `if`s with explicit `can_up`/`can_down`/`can_left`/`can_right` flags. **Verification pitfall
-  found along the way**: a first Mesen Lua test using `emu.setInput(...)` from the
-  `emu.eventType.endFrame` callback showed `joy` staying `0x0000` forever even while "held" -
-  the override needs to be set from `emu.eventType.inputPolled`, not `endFrame` (which fires
-  after that frame's input was already latched). Once fixed, the real test showed `dir_y`
-  correctly flipping to `-1` on a simulated Up press and `y` decreasing at the expected
-  `move_speed` rate.
-- **Scrolling is really slow (real bug, fixed) - see the Engine Fields section above for the
-  full writeup.** `shooter_scroll_speed`'s default/max were ported from B's raw numbers without
-  accounting for B's 16.4 fixed-point position scale (B's `16` = 1px/frame; this engine's `1` =
-  1 whole px/frame, i.e. correctly ported *in isolation* but genuinely slower in absolute terms
-  than a shooter wants). Landed on default `2` after a first overcorrection (mechanically
-  copying B's raw `16`, giving an absurd 960px/s) was caught and reverted.
-- **Can't send projectiles - did not reproduce.** A scene-init script's `Launch Projectile`
-  (direction/speed/collision group/mask) compiled and ran correctly in Mesen: the projectile
-  struct (`active`/`x`/`y`/`dir_x`/`dir_y`/`speed`/`sprite_slot`/`collision_group`/
-  `collision_mask`/`ttl`, 13 real bytes + 1 trailing pad = **14 bytes/slot**, `MAX_PROJECTILES`
-  slots at `projectiles[]`) showed every field matching the authored args exactly, the
-  projectile moved at the authored speed/direction, and correctly deactivated later. No fix
-  needed here; the struct's real 14-byte stride (not 12 or 13 - confirmed by the gap between
-  the `projectiles` and the next WRAM symbol in a `.sym` file) is worth remembering for any
-  future Mesen-based debugging of this subsystem.
-- **Enemies not moving / not sending projectiles - did not reproduce on an up-to-date project,
-  but a real, separate bug was found along the way.** `randomWalk` actor movement (native
-  `scene.c` AI, `MOVE_AI_RANDOM_WALK`) and an actor's own `updateScript` firing
-  `Launch Projectile` on a repeating `Loop { Wait; Launch Projectile }` both worked correctly
-  once tested against a project with a current `_version`/`_release`. **The real finding**:
-  `migrateProject.js`'s `migrateFrom120To200Actors` (the GB Studio 1.2.0→2.0.0 migration step)
-  unconditionally **overwrites** `actor.updateScript` with an auto-generated wander script
-  (`generateRandomWalkScript()`) whenever `actor.movementType === "randomWalk"` - a leftover
-  from when "random walk" *was* an authored update-script pattern, pre-dating both this port's
-  native C-side random-walk AI and the v4 On Update subsystem. The migration is correctly
-  version-gated (`version === "1.2.0"` only) so a properly up-to-date project never hits it -
-  but `compileSnesData.js` calls `migrateProject()` fresh on every build straight from the raw
-  `.gbsproj` file on disk (by design, documented elsewhere in this file, so standalone/CLI
-  builds don't need a prior app load+save cycle), and nothing in the build path writes the
-  bumped `_version`/`_release` back to that file. A project whose `_version` was never
-  persisted past `"1.2.0"` (an old project that's only ever been *built*, never
-  loaded-and-saved in the app since) will have **any custom On Update script on a randomWalk
-  actor silently discarded on every single build** - this is the mechanism that produced the
-  "enemies not moving/sending projectiles" symptom in testing (found via a stale test fixture,
-  `test/projects/Test_ActorInvoke`, whose `_version: 1` triggers the full 1.0.0→2.0.0 migration
-  chain on every compile). Not fixed here (no confirmation the *user's own* project actually
-  has a stale `_version` - this needs checking against their real `.gbsproj` before treating it
-  as the root cause) - flagged for follow-up: either have the build path persist the bumped
-  version back to disk after migrating, or have `migrateFrom120To200Actors` skip actors that
-  already have a non-empty `updateScript` (ambiguous for a true 1.2.0 file, where the field
-  can't have been user-authored yet, but safe either way).
+really slow / can't send projectiles / enemies are not moving nor sending projectiles"), then
+a user follow-up ("I still can't move, it is still slow") after the first two fixes below
+landed - that follow-up led to the real root cause.**
+
+First pass found 2 real, narrow fixes (both still correct and still needed) using a synthetic
+test fixture:
+- `Update_Shmup`'s perpendicular-dodge check (`scene.c`) was a 3-term `&&` chain - the same
+  816-tcc miscompile class already fixed 4 times elsewhere in this file (`actor_on_tile`,
+  `in_box`, `col_solid`, `can_step`): a 3+-term `&&`/`||` chain in a conditional mis-links its
+  false-branch target. Rewritten as nested single-condition `if`s with explicit
+  `can_up`/`can_down`/`can_left`/`can_right` flags.
+- `shooter_scroll_speed`'s default/max (see the Engine Fields section above) were ported from
+  B's raw numbers without accounting for B's 16.4 fixed-point position scale (B's `16` =
+  1px/frame; this engine's `1` = 1 whole px/frame - correctly ported *in isolation* but
+  genuinely slower in absolute terms than a shooter wants). Landed on default `2` after a first
+  overcorrection (mechanically copying B's raw `16`, giving an absurd 960px/s) was caught and
+  reverted.
+
+Those two fixes tested green in isolation - but didn't touch the user's actual symptom at all,
+because both are inside `Update_Shmup`, and `Update_Shmup` never got a chance to run in the
+real project: `SceneHandleInput()` refuses to call it while `script_ptr` is non-zero (a script
+is running), and the scene's own init script was stuck forever, never reaching `EVENT_END`.
+
+**The real root cause, found by rebuilding the user's actual project** (not just a synthetic
+fixture - the user's own report "I still can't move" after the first two fixes already landed
+was the signal this needed the real `.gbsproj`, downloaded test ROM notwithstanding): Space
+Battle's own scene-init script does a real, authored `Actor: Move Relative` on the player
+(4 tiles, blocking) - and **every one of its 15 enemy ships has its own `updateScript`** doing
+a repeating bob/weave `Move Relative` on itself via a shared custom event. Two things combined
+to break this:
+1. **A real project-authoring gap, not an engine bug**: each enemy's `Move Relative` call site
+   (inside the custom event "Enemy Ship Movement Vertical/Diagonal/…") refers to its actor
+   parameter by the literal string `"0"` (the parameter's declared id, e.g. `actors: {"0": {id:
+   "0", name: "Enemy Ship"}}`) - but none of the 15 `EVENT_CALL_CUSTOM_EVENT` call sites in the
+   `.gbsproj` actually pass an `actors` binding for that parameter. With nothing bound,
+   `getActorIndex("0", scene)` (`src/lib/events/helpers.js`) can't find a real actor with id
+   `"0"` either, so `findIndex` returns `-1`, and `-1 + 1 = 0` - the exact same fallback that
+   correctly resolves `"$self$"` to the player for a scene-level script. Every enemy's own bob
+   script was unintentionally moving the *player*, not itself.
+2. **The real, confirmed engine bug this fork needed to fix**: `update_script.h`'s own design
+   note already flagged Camera Shake's `shake_time` and Await Input's `await_input` as unsafe
+   to use inside an On Update script, because they're shared globals `UpdateScriptsProcess()`
+   never swaps per-context - but missed that `ACTOR_MOVE_TO`/`ACTOR_MOVE_RELATIVE` have the
+   *exact same* hazard: `BEGIN_MOVE` (`script_cmds.c`) writes `actor_move_dest_x/y` and
+   `actor_move_settings` (plus, implicitly, which actor `script_actor` names) - none of which
+   were part of `UPDATE_CTX` or swapped around the per-context loop. The moment *any* On Update
+   context's own `Move Relative` ran, it stomped whichever move the foreground (or another
+   context) already had in flight, by overwriting these shared globals. Concretely here: the
+   scene-init script's own blocking move on the player got its destination silently replaced by
+   whatever an enemy's bob script computed next (confirmed in Mesen: `actor_move_dest_x` jumped
+   from a sane `40` to `696`, matching one enemy's own resting x position) - the arrival check
+   (`SceneUpdateActors`) then never saw "arrived" again, `script_action_complete` never came back
+   to `1`, and the scene's own init script - which the player's gameplay controls live
+   downstream of - hung forever. This is why "player can't move" and "scrolling is slow" are
+   the *same* bug, not two: the player genuinely never left the scene's own opening cutscene the
+   whole time, so `Update_Shmup` (containing both of the fixes above) was simply never reached,
+   and the tiny creeping position change the user saw was the stuck move's own abandoned-partial
+   step (`move_speed` had just been set to 0 for that one cutscene move), not the real auto-scroll.
+   **Fixed properly** (not just documented as a limitation, since "a bobbing enemy" is a very
+   natural thing to want in an On Update script): `UPDATE_CTX` (`update_script.c`) gained its own
+   `move_settings`/`move_dest_x`/`move_dest_y`, swapped in/out exactly like `wait_time` already
+   was; the foreground's own copies are now saved/restored around the whole per-context loop the
+   same way `fg_wait_time` already is. The arrival-check/aim logic itself (`SceneUpdateActors`'s
+   old inline block) was extracted into a shared `u8 ActorMoveAim(void)` (`scene.c`, declared in
+   `scene.h` so `update_script.c` can call it) - called once for the foreground (unchanged
+   behaviour, same call site) and once per active context, right after that context's own move
+   state is swapped in and its `ScriptRunnerUpdate()` turn runs (same ordering the foreground
+   already gets: aim-check follows the opcode dispatch, so a move started this very turn takes
+   its first step this same turn). Verified in Mesen against the real project: `actor_move_dest_x`
+   stays at the real `40` (not `696`), the scene's own init script's `script_ptr` reaches
+   `0,0,0` (really finishes) within the expected ~60-frame window instead of never, and
+   `Update_Shmup` then runs for real - `dir_y` responds to a held Up press and the camera scrolls.
+   **Known remaining gap, not hit by this project**: the stepping loop's `is_cmd` exception
+   (lets a *hidden* actor still finish a scripted move - the earlier "Hide then Move Relative"
+   fix elsewhere in this file) only covers the foreground's own `script_actor`, not a per-context
+   mover - an On Update script hiding then moving *itself* would still hit that older bug. Not
+   fixed here (no project exercises it yet); would need threading "which actors are currently
+   being aimed by *any* active context" through the stepping loop, not just the foreground's one.
+   The project-authoring half (unbound custom-event actor parameters) is the user's own fix to
+   make - rebind "Enemy Ship" to `$self$`/the calling actor at each of the 15 On Update call
+   sites - but no longer catastrophic once rebound correctly, since a *correctly*-self-targeting
+   concurrent Move Relative now works too (per-context move state, same fix).
+   A **separate, smaller finding along the way, left for follow-up, not fixed**: this scene's
+   own background (`leaving_earth.png`) is 255 tiles wide, this engine's SC_64x64 addressing
+   realistic ceiling - and `Update_Shmup` was observed running at well under 1:1 per real frame
+   against it (confirmed by direct instrumentation: call-count stayed far below frame-count),
+   independent of the bug above. This likely explains why the auto-scroll, even once genuinely
+   running, still measured closer to ~1px/frame than the engine field's real `2` - a CPU/
+   VRAM-streaming cost tied to the oversized background, the same class of gap the background-
+   streaming work (Phase 1/2, see the roadmap artifact) exists to eventually close, not something
+   attempted here.
+   Also found, not a bug: `Launch Projectile`'s compiled wire format and runtime behaviour are
+   both correct - a scene-init script's call matched its authored args exactly in WRAM, moved,
+   and deactivated on schedule. The `PROJECTILE` struct's real stride is **14 bytes/slot** (13
+   real fields + 1 trailing pad, not 12 or 13 - confirmed from the gap between the `projectiles`
+   symbol and the next one in a `.sym` file), worth remembering for any future Mesen debugging
+   of this subsystem.
 
 ## Tests
 

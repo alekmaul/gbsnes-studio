@@ -2476,10 +2476,46 @@ static void SceneAnimateActors(void)
     }
 }
 
-static void SceneUpdateActors(void)
+// Script-commanded walk: re-aims whichever actor is currently targeted by
+// the *active* blocking move (ACTOR_MOVE_TO/MOVE_RELATIVE's BEGIN_MOVE),
+// reading/writing the shared actor_move_settings/actor_move_dest_x/y/
+// script_actor/script_action_complete globals - same globals script_cmds.c's
+// BEGIN_MOVE itself writes. Called once for the foreground (from
+// SceneUpdateActors, below) and once per active On Update context (from
+// UpdateScriptsProcess, update_script.c) - in both cases right after that
+// context's own saved copies of these globals have been swapped in, so
+// "the active move" always means the one the current caller owns, never a
+// different context's (see UPDATE_CTX's own move_dest_x/y/settings fields
+// and the user-found bug this fixes, below).
+//
+// v4 fix (user-found: an enemy's own On Update script doing a simple
+// Move Relative "bob up, bob down" loop made the *player* freeze solid the
+// moment the scene loaded, and permanently - not a stutter). Root cause:
+// actor_move_settings/actor_move_dest_x/actor_move_dest_y (and, implicitly,
+// which actor script_actor currently names) are the *only* state
+// BEGIN_MOVE's blocking-move protocol has - and update_script.c's own
+// design doc already flagged Camera Shake/Await Input as unsafe to author
+// inside an On Update script for exactly this shared-global reason, but
+// missed that Move To/Move Relative share the identical hazard. Before this
+// fix, UpdateScriptsProcess swapped script_ptr/wait_time/stack per context
+// but left these move globals untouched - so the moment *any* On Update
+// context's own blocking move started, it stomped whichever move the
+// foreground (or another context) already had in flight. Concretely: the
+// scene's own init script does Move Relative on the player ($self$); an
+// enemy's On Update script's Move Relative (even though its own actor
+// parameter was never bound to a real actor, itself a separate project-
+// authoring issue, not this bug) overwrote actor_move_dest_x/
+// actor_move_settings mid-flight - the player's own move's destination was
+// gone, this function never saw "arrived" again, script_action_complete
+// stayed 0 forever, and the scene's own init script (which the player's
+// gameplay controls live downstream of) never finished. Fixed by giving
+// each UPDATE_CTX its own move_dest_x/y/settings, saved/restored around the
+// swap exactly like wait_time already was, and the foreground's own copies
+// saved/restored around the whole per-context loop the same way fg_wait_time
+// already is - see update_script.c.
+u8 ActorMoveAim(void)
 {
     u8 scripting = 0;
-    u8 i;
 
     // Nested ifs, not `(a & b) && (c < d)`: see the actor_on_tile comment.
     if (actor_move_settings & ACTOR_MOVE_ENABLED)
@@ -2490,7 +2526,6 @@ static void SceneUpdateActors(void)
         }
     }
 
-    // Script-commanded walk: re-aim the actor on each tile boundary.
     if (scripting && actor_on_tile(&actors[script_actor]))
     {
         u8 a = script_actor;
@@ -2525,6 +2560,16 @@ static void SceneUpdateActors(void)
             }
         }
     }
+
+    return scripting;
+}
+
+static void SceneUpdateActors(void)
+{
+    u8 scripting;
+    u8 i;
+
+    scripting = ActorMoveAim();
 
     // Step every moving actor. A scripted actor keeps its `moving` flag between
     // tiles (only the aim block or arrival clears it).
