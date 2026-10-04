@@ -24,14 +24,13 @@ the extras are snapped to the nearest already-kept color and a warning is shown.
 - Up to **512px x 512px** (64x64 tiles) works with no special handling - this is the SNES
   hardware's `SC_64x64` VRAM tilemap budget.
 - **Wider than 512px** is also supported for horizontally-scrolling scenes: the engine
-  streams tile columns into VRAM automatically as the camera scrolls, so there's no hard
-  ceiling on scene width. Taller than 512px isn't supported yet - only horizontal streaming
-  has been implemented so far.
+  streams tile columns into VRAM automatically as the camera scrolls, up to **2040px
+  (255 tiles)** - the real hard ceiling (the compiled background-width byte can't hold more).
+  Taller than 512px isn't supported yet - only horizontal streaming has been implemented so
+  far.
 
-{: .note }
-> The editor's background-size warning is currently still tuned to the 512px threshold, so
-> it may flag a wider streaming-eligible background as oversized even though it compiles
-> and scrolls correctly - a known cosmetic mismatch, not a real limit.
+See [Scene Limits](scene-limits.html) for the full picture, including the VRAM budget shared
+with actor sprites and the UI box.
 
 An undersized background still compiles (you'll get a warning in the editor), it just won't
 fill the screen.

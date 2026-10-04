@@ -2,6 +2,7 @@
 title: Scenes
 parent: Project Editor
 nav_order: 1
+has_children: true
 ---
 
 # Scenes
@@ -48,15 +49,6 @@ block actor and player movement.
 
 ## Scene limits
 
-The status bar under each scene shows `A: n/20`, `S: n/8` and `T: n/30`:
-
-- **Actors** - up to **20** per scene.
-- **Sprite sheets** (`S`) - up to **8** distinct actor sprite sheets loaded at once per
-  scene (the player counts as one). This replaces Game Boy's per-frame VRAM budget, since
-  the SNES engine pre-loads whole sprite sheets per scene instead. See
-  [Scripting Events](scripting-events.html) / `appData/src/snes/EVENTS.md` for what happens
-  if a scene needs more than 8.
-- **Triggers** - up to **30** per scene.
-- A scene's size is set by its background image - see [Backgrounds](backgrounds.html) for
-  the real size limits (up to 512px x 512px with no special handling, wider still for a
-  horizontally-scrolling scene via VRAM streaming).
+The status bar under each scene shows `A: n/19`, `S: n/8` and `T: n/30` - actors, sprite
+sheets and triggers. See [Limits](scene-limits.html) for the full numbers, including the
+VRAM budget behind them.
