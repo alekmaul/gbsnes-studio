@@ -32,9 +32,27 @@
  *
  * Real, documented limitations of this scoped version vs GB Studio 3.x:
  *  - Only MAX_UPDATE_CONTEXTS actors can have a running update script at
- *    once per scene (a small fixed cap, same class as SPRITE_SLOTS/
- *    MAX_PROJECTILES/the 4 timer contexts elsewhere in this engine) - a
- *    scene needing more just doesn't run the extras' update scripts.
+ *    once per scene - a scene needing more just doesn't run the extras'
+ *    update scripts. v4 follow-up (user-asked: "can we update to 16?",
+ *    after hitting the 4-ship cap in a 15-ship Shoot Em Up scene): raised
+ *    4 -> 16 to match GB Studio 3.x's own real `VM_MAX_CONTEXTS` (GBVM,
+ *    `vm.h`) exactly - 4 was this port's own original, deliberately modest
+ *    choice (matching SPRITE_SLOTS/MAX_PROJECTILES/the 4 timer contexts
+ *    elsewhere in this engine), not a hardware ceiling: each slot is a
+ *    real but small WRAM cost (measured from a real compiled binary - the
+ *    gap between the `update_ctxs` symbol and the next one in a `.sym`
+ *    file - 84 bytes/slot), so 16 costs ~1.3 KB total vs 4's ~336 B, a
+ *    trivial fraction of this engine's WRAM budget (PERF.md: ~14% used).
+ *    GB Studio's own 16 is shared across *every* concurrent script of any
+ *    kind (On Update, input scripts, timer scripts, ...), not an "On
+ *    Update only" budget - this port's pool is the same way. The real
+ *    risk of raising this isn't WRAM, it's CPU: each *active* context
+ *    pays a real per-frame ScriptRunnerUpdate()+ActorMoveAim() cost on a
+ *    compiler (816-tcc) PERF.md already documents as CPU-constrained: an
+ *    inactive slot is cheap (one array read + branch to skip it), but a
+ *    scene that actually populates many more *active* concurrent update
+ *    scripts than before (not just raises the cap) should be re-profiled
+ *    the same way PERF.md's own actor-count stress tests were.
  *  - An update script's own Wait/blocking opcodes only manage a per-context
  *    wait_time - opcodes that block via a *different* shared global
  *    (Camera Shake's shake_time, Await Input's await_input) aren't safe to
@@ -47,7 +65,7 @@
  */
 #include "gbs_types.h"
 
-#define MAX_UPDATE_CONTEXTS 4
+#define MAX_UPDATE_CONTEXTS 16
 #define UPDATE_CTX_NONE 0xFF
 
 /* SceneInit: clears the pool (a previous scene's saved pointers are
