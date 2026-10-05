@@ -419,3 +419,61 @@ test("EVENT_PLAYER_SET_STATE compiles to the exact same bytecode as EVENT_PLAYER
 
   expect(stateOutput).toEqual(directOutput);
 });
+
+// v4 fix (user-found: enemies in a real Shoot Em Up scene stopped moving/
+// shooting after one pass - their On Update script never looped). `loop`
+// already existed here (ported from GB Studio 3.x's identical mechanism)
+// but was never wired up from compileSnesData.js, AND its own condition was
+// wrong for the single most common authoring shape: a script that's just
+// one EVENT_CALL_CUSTOM_EVENT (the normal way to reuse one enemy behaviour
+// across several actors) has `input.length === 1`, so the old `> 1` check
+// never looped it at all. Matches B's real condition exactly now
+// (`input.length > 0` for the label, `input.length > 0 && output.length > 1`
+// for the jump) - both halves checked here.
+describe("compileEntityEvents - loop option (v4 fix)", () => {
+  test("loop:true wraps a single-event script in a label + one-frame yield + jump back, instead of just ending", () => {
+    const input = [
+      {
+        command: EVENT_TEXT,
+        args: { text: "HELLO WORLD" },
+      },
+    ];
+    const strings = ["HELLO WORLD"];
+    const output = compileEntityEvents(input, { strings, loop: true, labels: {} });
+    expect(output).toEqual([
+      // the label sits at offset 0 - no bytes of its own
+      CMD_LOOKUP.TEXT,
+      "__REPLACE:STRING_BANK:0",
+      "__REPLACE:STRING_HI:0",
+      "__REPLACE:STRING_LO:0",
+      CMD_LOOKUP.NEXT_FRAME,
+      CMD_LOOKUP.JUMP,
+      0, // jump ptr hi - back to offset 0
+      0, // jump ptr lo
+      CMD_LOOKUP.END,
+    ]);
+  });
+
+  test("loop:true on an empty script does not loop (nothing to repeat)", () => {
+    const output = compileEntityEvents([], { loop: true, labels: {} });
+    expect(output).toEqual([CMD_LOOKUP.END]);
+  });
+
+  test("loop:false (the default) never adds the yield/jump, even for the same script", () => {
+    const input = [
+      {
+        command: EVENT_TEXT,
+        args: { text: "HELLO WORLD" },
+      },
+    ];
+    const strings = ["HELLO WORLD"];
+    const output = compileEntityEvents(input, { strings });
+    expect(output).toEqual([
+      CMD_LOOKUP.TEXT,
+      "__REPLACE:STRING_BANK:0",
+      "__REPLACE:STRING_HI:0",
+      "__REPLACE:STRING_LO:0",
+      CMD_LOOKUP.END,
+    ]);
+  });
+});

@@ -1262,6 +1262,74 @@ to break this:
    symbol and the next one in a `.sym` file), worth remembering for any future Mesen debugging
    of this subsystem.
 
+**Shoot Em Up follow-up: enemies stopped moving/shooting after one pass, and a real
+~5x slowdown once they didn't (both user-found, real project `sntst01`, 15 enemy ships,
+not a synthetic fixture).** Two independent bugs plus one real perf cost, found by actually
+building the project and instrumenting Mesen (a flat per-actor WRAM snapshot - `x`/`y`/
+`update_ctx`/`moving` - read every frame), not by reasoning from the JSON alone.
+
+1. **"Projectile sprite sheet not loaded in this scene" warned for every single enemy.**
+   `compileSnesData.js`'s `scanRuntimeSpriteIds` (feeds a scene's own 8-slot OBJ pool,
+   consumed by `scriptBuilder.js`'s `_projectileSpriteSlot`) scanned `actor.script`/
+   `startScript`/`hit1-3Script` but never `actor.updateScript` - exactly where a real
+   enemy's `EVENT_LAUNCH_PROJECTILE` call lives (the "On Update" tab is the natural place
+   to author a repeating attack). Every projectile silently fell back to OBJ slot 0 (the
+   player's own sheet) instead of its real graphic. Fixed: added `updateScript` to that
+   scan, same as every other actor script field. Test: `compileSnesData.test.js` ("EVENT_
+   LAUNCH_PROJECTILE inside an Actor's On Update script gets a real slot").
+2. **Enemies stopped moving and shooting after exactly one bob/shoot cycle.** Traced via a
+   live WRAM actor snapshot: `update_ctx` for most enemies read back `0xFF`
+   (`UPDATE_CTX_NONE`) well before the test window ended - their On Update script had
+   *genuinely finished*, matching `update_script.c`'s own documented, correct-per-GB-Studio-
+   3.x runtime behaviour ("a completed update script doesn't auto-relaunch on its own" -
+   confirmed directly against the real `gb-studio-3.2.1` reference checkout's
+   `vm.c`/`script_terminate`: a script context really does terminate for good once `VM_STEP`
+   returns false, no runtime auto-relaunch anywhere). The real missing piece was one level
+   up: B's compiler (`compileData.js`) passes `loop: entityScriptField === "updateScript"`
+   into `compileEntityEvents`, which wraps the script in a label + a one-frame yield
+   (`idle()`) + an unconditional jump back to that label *instead of* the normal
+   terminator - the loop lives in the compiled bytecode, not the runtime. This fork's own
+   `compileEntityEvents.js` already had the **identical** mechanism ported in wholesale
+   (`loop`/`labelDefine`/`nextFrameAwait`/`labelGoto`) - it was simply never passed
+   `loop: true` from anywhere, so it had never been exercised. Fixed in two parts:
+   `compileSnesData.js`'s `updateScriptIdx` now calls `compile(..., true)` for the loop
+   flag; and the existing-but-dead loop code's own condition was *also* wrong and would
+   have silently no-opped even with `loop: true` passed - it checked `input.length > 1`
+   (raw top-level JSON event count) for both the label and the jump, but the single most
+   common authoring shape for an update script is exactly one `EVENT_CALL_CUSTOM_EVENT`
+   (reusing one enemy-behaviour script across many actors) - `input.length === 1`, so it
+   would never have looped in practice. Fixed to match B's real condition exactly:
+   `input.length > 0` for the label, `input.length > 0 && output.length > 1` (byte count,
+   not event count) for the jump. Tests: `compileEntityEvents.test.js` (byte-exact: a
+   single-event `loop: true` script now compiles to `[event bytes, NEXT_FRAME, JUMP 0 0,
+   END]`; an empty script still doesn't loop; `loop: false` is unaffected).
+3. **Once (1) and (2) together let all 15 enemies genuinely run their update script forever,
+   a real, severe CPU cost appeared: ~0.2 ticks/real-frame (~12 fps) measured over 1000+
+   frames, not just at scene start.** A Mesen bisection (temporarily no-op'd
+   `UpdateScriptsProcess()` in `scene.c`'s `SceneUpdate`) isolated the *entire* drop to that
+   one function - disabling it alone brought the ratio to a locked 1.0. Root cause: its
+   per-context state swap (in `update_script.c`, run twice - once in, once out - for every
+   *active* context, 15 times a frame here) unconditionally copied all `SCRIPT_STACK_SIZE`
+   (8) `stack`/`start_stack` slots regardless of the script's real call depth - and nothing
+   anywhere ever reads a slot at or past the current `stack_ptr` (only `Script_StackPush_b`/
+   `StackPop_b` - Actor Invoke/sub-scripts - touch it at all; a plain custom-event call
+   inlines at compile time instead and never pushes, so these particular scripts never use
+   the stack beyond depth 0). Fixed: all 4 copy loops in `UpdateScriptsProcess` (foreground
+   save/restore, per-context swap in/out) now bound by the real depth (`stack_ptr`) instead
+   of the fixed `SCRIPT_STACK_SIZE`. Measured improvement: ratio 0.2 -> ~0.33 (a real ~65%
+   relative gain) - a genuine win, but **not a full fix**: the remaining gap is the sheer
+   cost of actually running 15 concurrent scripted VM contexts' own opcodes
+   (`ScriptRunnerUpdate`/`ActorMoveAim`) every frame through 816-tcc's slow codegen, a
+   stress shape this engine had never been exercised against before (every prior profiling
+   pass in `PERF.md`'s history used AI-driven NPCs, not persistent per-actor scripts, and
+   never more than ~9 actors). Flagged, not silently called "fixed" - a project leaning this
+   hard on concurrently-active On Update scripts (15 of the 16-context pool, all genuinely
+   busy every frame) may still want fewer simultaneously-active enemies, or a future
+   dedicated profiling pass (same bisection method, applied inside `ScriptRunnerUpdate`/the
+   hot opcode handlers themselves) if this specific shape becomes common. No test added for
+   the perf change itself (matches this file's own established pattern - verified via a real
+   Mesen tick-ratio measurement against the real project, not a unit test).
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

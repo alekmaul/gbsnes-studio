@@ -109,7 +109,23 @@ void UpdateScriptsProcess(void)
     s16 fg_move_dest_y = actor_move_dest_y;
     u8 i, j;
 
-    for (j = 0; j < SCRIPT_STACK_SIZE; j++)
+    /* v4 perf fix (user-found: a real Shoot Em Up scene with 15 concurrently
+     * active On Update contexts measured ~0.2 ticks/real-frame - a Mesen
+     * bisection isolated most of the drop to this function). This loop (and
+     * the 3 others below shaped just like it) used to always copy all
+     * SCRIPT_STACK_SIZE (8) stack/start_stack slots regardless of how many
+     * are actually in use - stack_ptr (saved/restored right alongside) is
+     * the real depth, and nothing anywhere ever reads a stack slot at or
+     * past the current stack_ptr (only Script_StackPush_b/StackPop_b -
+     * ActorInvoke/sub-scripts - ever touch it; a plain custom-event call
+     * inlines at compile time instead, so an update script built from one,
+     * like these, never pushes at all), so copying past it is pure waste -
+     * 816-tcc-generated code pays a real per-iteration cost for each of
+     * those unconditional extra slots, now paid 2x per *active* context
+     * (swap in + out) every single frame. Cuts this particular cost to
+     * zero for a script that never pushes (the scene that exposed this),
+     * and to the real depth for one that does. */
+    for (j = 0; j < fg_stack_ptr; j++)
     {
         fg_stack[j] = script_stack[j];
         fg_start_stack[j] = script_start_stack[j];
@@ -126,7 +142,7 @@ void UpdateScriptsProcess(void)
          * opcode dispatch table operates on. */
         script_ptr = update_ctxs[i].ptr;
         script_start_ptr = update_ctxs[i].start_ptr;
-        for (j = 0; j < SCRIPT_STACK_SIZE; j++)
+        for (j = 0; j < update_ctxs[i].stack_ptr; j++)
         {
             script_stack[j] = update_ctxs[i].stack[j];
             script_start_stack[j] = update_ctxs[i].start_stack[j];
@@ -178,7 +194,7 @@ void UpdateScriptsProcess(void)
          * state back out. */
         update_ctxs[i].ptr = script_ptr;
         update_ctxs[i].start_ptr = script_start_ptr;
-        for (j = 0; j < SCRIPT_STACK_SIZE; j++)
+        for (j = 0; j < script_stack_ptr; j++)
         {
             update_ctxs[i].stack[j] = script_stack[j];
             update_ctxs[i].start_stack[j] = script_start_stack[j];
@@ -195,7 +211,7 @@ void UpdateScriptsProcess(void)
      * visible to it, and it was never touched while idle. */
     script_ptr = fg_ptr;
     script_start_ptr = fg_start_ptr;
-    for (j = 0; j < SCRIPT_STACK_SIZE; j++)
+    for (j = 0; j < fg_stack_ptr; j++)
     {
         script_stack[j] = fg_stack[j];
         script_start_stack[j] = fg_start_stack[j];

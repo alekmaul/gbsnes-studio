@@ -56,7 +56,17 @@ const compileEntityEvents = (input = [], options = {}) => {
 
   const loopId = `loop_${Math.random()}`;
 
-  if(loop && input.length > 1) {
+  // v4 fix (user-found: a real Actor.updateScript consisting of a single
+  // EVENT_CALL_CUSTOM_EVENT - the overwhelmingly common authoring shape,
+  // since a custom event is how an author reuses one enemy-behaviour
+  // script across several actors - never looped, because "more than 1
+  // top-level event" was never true for it). Matches B's real condition
+  // (src/lib/compiler/compileEntityEvents.js: `loop && input.length > 0`
+  // for the label, `loop && input.length > 0 && output.length > 1` for the
+  // jump below) - any non-empty script should loop, not just a multi-event
+  // one; `output.length > 1` (not `input.length`) is the real guard against
+  // looping something that compiled to nothing.
+  if(loop && input.length > 0) {
     scriptBuilder.labelDefine(loopId);
   }
 
@@ -111,9 +121,9 @@ const compileEntityEvents = (input = [], options = {}) => {
 
   if (!branch) {
 
-    if(loop && input.length > 1) {
+    if(loop && input.length > 0 && output.length > 1) {
       scriptBuilder.nextFrameAwait();
-      scriptBuilder.labelGoto(loopId);    
+      scriptBuilder.labelGoto(loopId);
     }
     output.push(0); // End script
 

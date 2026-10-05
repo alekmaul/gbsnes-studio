@@ -1092,3 +1092,68 @@ describe("compileSnesData - runtime sprite-swap events get a real slot (v4 fix)"
     expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
   });
 });
+
+// v4 fix (user-found: a real Shoot Em Up scene - 15 enemies each firing
+// EVENT_LAUNCH_PROJECTILE from their own Actor.updateScript ("On Update"
+// tab) - warned "Projectile sprite sheet not loaded in this scene" for
+// every single one, and the projectile silently fell back to slot 0 (the
+// player) at runtime instead of its own real graphic). The scanner that
+// feeds a scene's own OBJ sprite pool (sceneRuntimeSpriteIds, upstream of
+// _projectileSpriteSlot in scriptBuilder.js) scanned actor.script/
+// startScript/hit1-3Script but never actor.updateScript - the one script
+// field every one of those 15 real calls actually lived in.
+describe("compileSnesData - EVENT_LAUNCH_PROJECTILE inside an Actor's On Update script gets a real slot (v4 fix)", () => {
+  const PROJECTILE_SHEET_ID = "projectile-only-sheet";
+
+  const project = {
+    _version: "2.0.0",
+    _release: "7",
+    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+    spriteSheets: [{ id: PROJECTILE_SHEET_ID, filename: "actor.png", type: "actor" }],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "shmup",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [
+          {
+            id: "a0",
+            x: 0,
+            y: 0,
+            updateScript: [
+              {
+                id: "ev0",
+                command: "EVENT_LAUNCH_PROJECTILE",
+                args: {
+                  spriteSheetId: PROJECTILE_SHEET_ID,
+                  actorId: "$self$",
+                  direction: { type: "direction", value: "left" },
+                  speed: 1,
+                  collisionGroup: "1",
+                  collisionMask: ["player"],
+                },
+              },
+            ],
+          },
+        ],
+        triggers: [],
+        script: [],
+      },
+    ],
+  };
+
+  test("the projectile's sprite sheet is loaded into this scene's own OBJ pool, no fallback warning", async () => {
+    const warnings = [];
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: (w) => warnings.push(w),
+    });
+    expect(warnings.some((w) => w.includes("Projectile sprite sheet not loaded"))).toBe(false);
+    const sheetIndex = project.spriteSheets.findIndex((s) => s.id === PROJECTILE_SHEET_ID);
+    expect(out.stats.sceneSlotForIndex[0][sheetIndex]).not.toBe(0xff);
+  });
+});

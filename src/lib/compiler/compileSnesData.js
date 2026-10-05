@@ -370,6 +370,7 @@ const compileSnesData = async (
     (sc.actors || []).forEach((a) => {
       scanRuntimeSpriteIds(a.script, ids);
       scanRuntimeSpriteIds(a.startScript, ids);
+      scanRuntimeSpriteIds(a.updateScript, ids);
       scanRuntimeSpriteIds(a.hit1Script, ids);
       scanRuntimeSpriteIds(a.hit2Script, ids);
       scanRuntimeSpriteIds(a.hit3Script, ids);
@@ -700,11 +701,12 @@ const compileSnesData = async (
 
   // compileEntityEvents appends the terminating 0 and resolves label jumps; the
   // placeholders left are __REPLACE:STRING_* (dialogue) - resolved at the end.
-  const compile = (script, entity, entityType, entityIndex, sceneIndex, scene, out = []) => {
+  const compile = (script, entity, entityType, entityIndex, sceneIndex, scene, out = [], loop = false) => {
     compileEntityEvents((script || []).filter((e) => e.command !== EVENT_END), {
       scene,
       sceneIndex,
       scenes,
+      loop,
       sprites: projectData.spriteSheets || [],
       avatars: sceneAvatars[sceneIndex] || [],
       // Projectiles (v4): launchProjectile()/weaponAttack() (scriptBuilder.js)
@@ -816,8 +818,21 @@ const compileSnesData = async (
     // missing). Always compiled, same as every other actor script slot -
     // update_script.c's ActorStartUpdate() checks for a real (non-empty)
     // compiled script at launch time, not here.
+    //
+    // v4 fix (user-found: enemies in a real Shoot Em Up scene stopped
+    // moving/shooting after one pass): loop=true makes compileEntityEvents
+    // (already ported from GB Studio 3.x with this exact mechanism, just
+    // never wired up here) emit a label at the script's own start and, once
+    // it reaches the end, a one-frame yield (nextFrameAwait, so an update
+    // script with no blocking op of its own can't spin forever within a
+    // single frame) followed by a jump back to that label - instead of
+    // just terminating. Matches B's real semantics exactly: an On Update
+    // script that reaches its natural end does NOT auto-relaunch at the
+    // *runtime* VM/context-pool level (update_script.c's own comment is
+    // correct about that), it loops because the *compiler* always wraps it
+    // this way, which this fork's compiler simply never did until now.
     const updateScriptIdx = (scene.actors || []).map((actor, i) =>
-      pushScript(compile(actor.updateScript, actor, "actor", i, sceneIndex, scene))
+      pushScript(compile(actor.updateScript, actor, "actor", i, sceneIndex, scene, [], true))
     );
 
     // Collision bitmap the C engine reads: 1 bit per tile, packed LSB-first,
