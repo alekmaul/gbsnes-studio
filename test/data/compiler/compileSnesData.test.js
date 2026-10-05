@@ -7,6 +7,10 @@ import compileSnesData, {
 } from "../../../src/lib/compiler/compileSnesData";
 import { COLLISION_ALL, COLLISION_TOP, TILE_PROP_PRIORITY } from "../../../src/consts";
 import snesTarget from "../../../src/lib/compiler/targets/snes";
+import {
+  METATILE_DEF_WORDS,
+  METATILE_PROP_WORDS,
+} from "../../../src/lib/compiler/snesMapEngine";
 
 const PROJECT_DIR = Path.join(__dirname, "..", "..", "projects", "Test_Math");
 const loadProject = () => {
@@ -723,6 +727,76 @@ describe("compileSnesData - oversized background warning (v4)", () => {
     expect(out.assetsData[`bg${leavingEarthIndex}_data.as`]).toMatch(
       new RegExp(`bg${leavingEarthIndex}_fullmap:`)
     );
+  });
+
+  // Map Engine streaming (v4): a background needing streaming also gets
+  // PVSnesLib's own mapLoad() data (bg_mapdata_ptrs/bg_metatiles_ptrs) -
+  // scene.c's SceneInit picks this path at runtime instead of
+  // SceneStreamBackground for any scene with no active parallax (see the
+  // plan). A background within the cap gets a null (0) entry on both
+  // tables, same convention as bg_fullmap_ptrs above.
+  test("a background over 64 tiles wide gets real bg_mapdata_ptrs/bg_metatiles_ptrs entries, a smaller one gets null", async () => {
+    const project = JSON.parse(
+      fs.readFileSync(Path.join(SNESGBS2_DIR, "project.gbsproj"), "utf8")
+    );
+    const leavingEarthIndex = project.backgrounds.findIndex(
+      (b) => b.filename === "leaving_earth.png"
+    );
+    const sampleTownIndex = project.backgrounds.findIndex(
+      (b) => b.filename === "sample_town.png"
+    );
+    expect(leavingEarthIndex).toBeGreaterThanOrEqual(0);
+    expect(sampleTownIndex).toBeGreaterThanOrEqual(0);
+    const out = await compileSnesData(project, {
+      projectRoot: SNESGBS2_DIR,
+      warnings: () => {},
+    });
+
+    const mapdataMatch = out.assetsC.match(
+      /const unsigned char \*const bg_mapdata_ptrs\[\d+\] = \{\n([\s\S]*?)\n\};/
+    );
+    const metatilesMatch = out.assetsC.match(
+      /const unsigned char \*const bg_metatiles_ptrs\[\d+\] = \{\n([\s\S]*?)\n\};/
+    );
+    expect(mapdataMatch).toBeTruthy();
+    expect(metatilesMatch).toBeTruthy();
+    const mapdataPtrs = mapdataMatch[1].split(",\n").map((s) => s.trim());
+    const metatilesPtrs = metatilesMatch[1].split(",\n").map((s) => s.trim());
+
+    expect(mapdataPtrs[leavingEarthIndex]).toBe(`bg${leavingEarthIndex}_mapdata`);
+    expect(metatilesPtrs[leavingEarthIndex]).toBe(`bg${leavingEarthIndex}_metatiles`);
+    expect(mapdataPtrs[sampleTownIndex]).toBe("0");
+    expect(metatilesPtrs[sampleTownIndex]).toBe("0");
+
+    // header bytes: width_px/height_px as u16 LE, matching the real
+    // leaving_earth.png tile dimensions (255 tiles wide, 28 tall, *8px).
+    // Its own section, separate from bg<i>_data.as (see compileSnesData.js -
+    // bundled together, a wide background's full set of sub-arrays
+    // routinely exceeds the 32 KB single-bank "superfree" ceiling).
+    const mapdataText = out.assetsData[`bg${leavingEarthIndex}_mapengine_data.as`];
+    expect(mapdataText).toMatch(new RegExp(`bg${leavingEarthIndex}_mapdata:`));
+    const body = mapdataText.match(
+      new RegExp(`bg${leavingEarthIndex}_mapdata:\\n([\\s\\S]*?)\\n\\.ends`)
+    )[1];
+    const bytes = [];
+    body.split("\n").forEach((line) => {
+      const m = line.match(/^\.db (.+)$/);
+      if (m) m[1].split(",").forEach((n) => bytes.push(parseInt(n.trim(), 10)));
+    });
+    const widthPx = bytes[0] | (bytes[1] << 8);
+    const heightPx = bytes[2] | (bytes[3] << 8);
+    expect(widthPx).toBe(255 * 8);
+    expect(heightPx).toBe(28 * 8);
+
+    // metatiles/tilesprop are always emitted at their full fixed DMA size
+    // (mapLoad reads the whole table regardless of real tile count).
+    expect(out.assetsH).toMatch(
+      new RegExp(`bg${leavingEarthIndex}_metatiles\\[${METATILE_DEF_WORDS * 2}\\]`)
+    );
+    expect(out.assetsH).toMatch(
+      new RegExp(`mapengine_tilesprop\\[${METATILE_PROP_WORDS * 2}\\]`)
+    );
+    expect(out.assetsData["mapengine_tilesprop_data.as"]).toMatch(/mapengine_tilesprop:/);
   });
 
   // v4 fix, found while scoping background streaming: the two tests above

@@ -69,6 +69,7 @@
 import fs from "fs-extra";
 import Path from "path";
 import snesgfx from "./snesgfx";
+import { buildMapEngineBackground, METATILE_PROP_WORDS } from "./snesMapEngine";
 import compileEntityEvents from "./compileEntityEvents";
 import { snesFixedAssets } from "./snesFixedAssets";
 import { dirDec, moveDec, animSpeedDec, spriteTypeDec, collisionGroupDec } from "./helpers";
@@ -1039,6 +1040,15 @@ const compileSnesData = async (
     const fullMap = needsStreaming
       ? [].concat(...conv.tilemap.map((e) => [e & 0xff, (e >> 8) & 0xff]))
       : null;
+    // v4 (Map Engine streaming): a background needing streaming also gets
+    // PVSnesLib's own Map Engine data (mapdata/metatiles), reusing the
+    // already-written, previously-unwired snesMapEngine.js reshape pass -
+    // see SceneInit (scene.c) for which scenes actually use this at runtime
+    // (any wide background qualifies here; the parallax exclusion is a
+    // per-scene runtime decision, not a per-background compile-time one,
+    // since two scenes can share one background with different parallax
+    // settings).
+    const mapEngine = needsStreaming ? buildMapEngineBackground(conv) : null;
     return {
       name: `bg${i}`,
       tiles: conv.tileBytes,
@@ -1047,6 +1057,8 @@ const compileSnesData = async (
       pal: conv.paletteBytes,
       w,
       h,
+      mapdata: mapEngine ? mapEngine.layer1map : null,
+      metatiles: mapEngine ? mapEngine.metatiles : null,
     };
   });
 
@@ -1165,6 +1177,10 @@ ${bgTables
     if (b.fullMap) {
       lines.push(`extern const unsigned char ${b.name}_fullmap[${b.fullMap.length}];`);
     }
+    if (b.mapdata) {
+      lines.push(`extern const unsigned char ${b.name}_mapdata[${b.mapdata.length}];`);
+      lines.push(`extern const unsigned char ${b.name}_metatiles[${b.metatiles.length}];`);
+    }
     return lines.join("\n");
   })
   .join("\n")}
@@ -1181,8 +1197,22 @@ extern const unsigned char bg_map_h[${nBg}];
  * to stream), a real pointer to the *complete* flat w*h tilemap in ROM
  * (not quadrant-shaped - a plain row*w+col lookup table) for a wider one.
  * SceneStreamBackground (scene.c) reads new columns from here as the
- * camera scrolls past the initially-loaded 64-tile VRAM window. */
+ * camera scrolls past the initially-loaded 64-tile VRAM window - the
+ * hand-rolled streaming path, still used by any wide scene with parallax
+ * active (see bg_mapdata_ptrs below for the alternative). */
 extern const unsigned char *const bg_fullmap_ptrs[${nBg}];
+/* PVSnesLib Map Engine streaming (v4 follow-up): 0 for a background that
+ * doesn't need streaming, a real pointer to mapLoad()'s own layer1map/
+ * layertiles input (see snesMapEngine.js) for one that does. A wide
+ * scene with no active parallax uses this (faster, hand-asm streaming)
+ * instead of bg_fullmap_ptrs/SceneStreamBackground - see SceneInit. Both
+ * bg_mapdata_ptrs and bg_fullmap_ptrs are populated together for any wide
+ * background; which one a given *scene* actually uses is a runtime
+ * decision (its own parallax_active), not a per-background compile-time
+ * one, since two scenes can share one wide background. */
+extern const unsigned char *const bg_mapdata_ptrs[${nBg}];
+extern const unsigned char *const bg_metatiles_ptrs[${nBg}];
+extern const unsigned char mapengine_tilesprop[${METATILE_PROP_WORDS * 2}];
 
 /* M7 (v4): per-scene priority-tile tilemap override - 0 (most scenes) means
  * "use bg_maps_ptrs[bg_index] unmodified", a real pointer means this scene
@@ -1263,7 +1293,31 @@ extern const unsigned char *const scenes[${scenes.length}];
     ];
     if (b.fullMap) parts.push({ label: `${b.name}_fullmap`, bytes: b.fullMap });
     assetsData[`${b.name}_data.as`] = asmAsset(b.name, parts);
+    // Map Engine data (mapdata/metatiles) gets its OWN section, not bundled
+    // into the one above - bundled, a wide background's tiles+pal+map+
+    // fullmap+mapdata+metatiles routinely exceeds the 32 KB single-bank
+    // "superfree" ceiling (confirmed: leaving_earth.png/255 tiles wide
+    // failed to link with "No room for section" once mapdata/metatiles
+    // were added on top of its already-near-the-cap fullmap). Splitting it
+    // out lets wlalink place it in a different bank than the rest of this
+    // background's data instead of forcing both to fit as one atomic unit.
+    if (b.mapdata) {
+      assetsData[`${b.name}_mapengine_data.as`] = asmAsset(`${b.name}_mapengine`, [
+        { label: `${b.name}_mapdata`, bytes: b.mapdata },
+        { label: `${b.name}_metatiles`, bytes: b.metatiles },
+      ]);
+    }
   });
+  // One shared, all-T_EMPTY tilesprop blob, always emitted (scene.c
+  // references mapengine_tilesprop unconditionally, even for a project with
+  // no wide background at all - see SceneInit) - this project's own
+  // collision bitmap (col_solid/scene_col, untouched) stays the only
+  // collision source; mapGetMetaTile(sProp) is never called, so the real
+  // content here is irrelevant, only mapLoad's fixed DMA size matters
+  // (snesMapEngine.js's METATILE_PROP_WORDS).
+  assetsData["mapengine_tilesprop_data.as"] = asmAsset("mapengine_tilesprop", [
+    { label: "mapengine_tilesprop", bytes: new Array(METATILE_PROP_WORDS * 2).fill(0) },
+  ]);
   assetsData["uifont_data.as"] = asmAsset("uifont", [
     { label: "ui_font", bytes: fixed.uiFont },
     { label: "ui_pal", bytes: fixed.uiPaletteBytes },
@@ -1318,6 +1372,12 @@ const unsigned char bg_map_w[${nBg}] = { ${bgTables.map((b) => b.w).join(", ")} 
 const unsigned char bg_map_h[${nBg}] = { ${bgTables.map((b) => b.h).join(", ")} };
 const unsigned char *const bg_fullmap_ptrs[${nBg}] = {
 ${bgTables.map((b) => (b.fullMap ? `    ${b.name}_fullmap` : "    0")).join(",\n")}
+};
+const unsigned char *const bg_mapdata_ptrs[${nBg}] = {
+${bgTables.map((b) => (b.mapdata ? `    ${b.name}_mapdata` : "    0")).join(",\n")}
+};
+const unsigned char *const bg_metatiles_ptrs[${nBg}] = {
+${bgTables.map((b) => (b.metatiles ? `    ${b.name}_metatiles` : "    0")).join(",\n")}
 };
 const unsigned char *const scene_bg_map_ptrs[${scenes.length}] = {
 ${scenePriorityMaps.map((e) => (e ? `    ${e.name}` : "    0")).join(",\n")}

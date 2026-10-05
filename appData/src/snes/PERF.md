@@ -91,14 +91,53 @@ this fix at all, without a VRAM-size clamp, silently turns a background's tilema
 place as a harmless backstop even though the corrected quadrant layout can no longer produce a
 buffer that large to begin with.
 
-Verified in Mesen: `SceneStreamBackground`'s own WRAM state (`stream_window_left`) advances
-smoothly frame-by-frame while holding the d-pad right in Space Battle, and the screen scrolls
-cleanly from the starting starfield through to the Earth/moon art far along the 255-tile
-background — no corruption, no repeated/stale tiles, no crash. Not fps-profiled against
-PERF.md's own CPU-budget numbers above; the per-column DMA cost is real but only pays while the
-camera is actually crossing new ground on a scene already past the ordinary 64-tile budget, and
-column-shift events are infrequent at normal walking speed (see the log in the plan write-up:
-~1 column streamed roughly every 8-10 frames while continuously scrolling right).
+**Superseded for the common case by PVSnesLib's own Map Engine (v4 follow-up).** The
+hand-rolled streaming above is 816-tcc-compiled C — real but measurably slow on the widest
+scene (a real Mesen call-counter showed `Update_Shmup` running well under 1 call per real frame
+against the 255-tile Space Battle background). `scene.c`'s `SceneInit` now routes any scene
+whose background needs streaming (`bg_mapdata_ptrs[bg_index]` non-null — the same `w > 64`
+threshold as `bg_fullmap_ptrs`) to PVSnesLib's own hand-asm Map Engine (`maps.asm`'s
+`mapLoad`/`mapUpdate`/`mapVblank`) **instead**, UNLESS the scene also uses parallax — the two
+real conflicts are `mapUpdateCamera()`'s own independent deadzone-based camera algorithm
+(never called; `game.c` writes `x_pos`/`y_pos` directly from this engine's own already-computed
+`scroll_x`/`scroll_y` instead, bypassing it entirely) and the Map Engine's own `BG1HOFS`
+fine-scroll write colliding with parallax's banded HDMA override of the same register. The
+hand-rolled path above is kept, not deleted, specifically for that excluded case (a wide scene
+that *also* uses parallax — "Parallax Example", 80 tiles wide, is real and stays on it).
+`map_engine_active` (scene.c/scene.h) is the runtime flag `game.c`'s main loop reads to pick
+which of the two streaming paths runs each frame — mutually exclusive with `stream_bg_index`
+being set. Collision is untouched either way: it stays on this engine's own
+`col_solid()`/`scene_col[]` bitmap, never the Map Engine's own tile-identity-keyed
+`mapGetMetaTilesProp` (one of the two real wide scenes in the reference project has 11 of 49
+distinct tile graphics used as both solid and open at different positions — genuinely
+incompatible with that model without re-authoring art).
+
+One real link-time bug was found and fixed while wiring this in: `compileSnesData.js` originally
+bundled a background's `mapdata`/`metatiles` into the *same* `.as` `superfree` section as its
+`tiles`/`pal`/`map`/`fullmap` — fine for a background just under the old ceiling, but a 255-wide
+background's full set (tiles ~8 KB + pal + map 8 KB + fullmap 14 KB + mapdata 14 KB + metatiles
+4 KB) comfortably exceeds the 32 KB single-bank `superfree` limit, so `wlalink` refused to link
+("No room for section ... in ROM bank 0") the moment a real, non-synthetic wide background (not
+just a test fixture) exercised it. Fixed by giving `mapdata`/`metatiles` their own
+`<name>_mapengine_data.as`/section, so `wlalink` can place it in a different bank than the rest
+of that background's data instead of forcing both to fit as one atomic unit.
+
+Verified against the real reference project (`sne0410_1`, not a synthetic fixture) in Mesen,
+one build per start scene, holding the d-pad right for 600 frames and scanning the *entire*
+active BG1 tilemap window (not just a slice — a slice can land on a legitimately blank area,
+e.g. sky at the top of a platform scene, and look like corruption when it isn't) each sample:
+
+| Scene | Routing | Result |
+| --- | --- | --- |
+| Space Battle (255 wide, Shmup, no parallax) | Map Engine (`map_engine_active=1`, `stream_bg_index=0xFF`) | Player and `scroll_x` advance smoothly (0→156 px by frame 600); VRAM window settles at 74 distinct tiles, non-zero count *grows* 453→735/2048 as new ground streams in — real content, not corruption. |
+| Path to Sample Town (161 wide, Platform, real painted collision, no parallax) | Map Engine (`map_engine_active=1`, `stream_bg_index=0xFF`) | Player advances then hits a real wall (stops dead for the last ~300 of 600 frames while Right is still held — the collision bitmap, untouched by this change, still blocks correctly); VRAM window converges to 76-79 distinct tiles, ~742/2048 non-zero (plausible for a platform scene: mostly sky, some ground) — fully populated by frame ~400, not instant at `SceneInit` (an internal PVSnesLib Map Engine behaviour, not a bug introduced here). |
+| Parallax Example (80 wide, Platform, parallax) | unchanged hand-rolled path (`map_engine_active=0`, `parallax_active=1`, `stream_bg_index=0x0C`) | Player and `scroll_x` advance to the real clamp (384 px = 640px scene − 256px screen); VRAM window shows 19-25 distinct tiles, 62-63/64 non-zero in the sampled slice throughout — the control case, confirmed byte-for-byte unaffected by the routing change. |
+
+Not re-profiled with exact fps numbers against the CPU-budget table above (the Mesen harness
+used here measures WRAM/VRAM state, not PPU frame timing) — the architectural win (hand-asm
+instead of 816-tcc-compiled C for the two real wide, non-parallax scenes) is the change; a
+follow-up session with the frame-ratio methodology from the CPU section above would quantify it
+precisely if ever needed.
 
 ## ARAM (SPC700, 64 KB)
 

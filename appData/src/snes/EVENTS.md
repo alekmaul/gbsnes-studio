@@ -182,6 +182,17 @@ per-scene override already uses) and referenced from `scene_bg_map_ptrs[i]`.
 **Engine** (`scene.c`): `SceneInit` DMAs from `scene_bg_map_ptrs[scene_index]` when it's set,
 falling back to the shared `bg_maps_ptrs[bg_index]` otherwise - no other engine change needed to
 make the *tilemap* bit itself take effect, since per-tile BG priority is a Mode 1 PPU hardware
+feature and the bit is already in the data (see below for where this doesn't apply).
+
+**Not supported on a Map-Engine-routed scene (v4 follow-up - see PERF.md's "Background
+streaming" section for the full routing rule).** A scene whose background needs horizontal
+streaming AND has no active parallax now loads its tilemap through PVSnesLib's own Map Engine
+(`mapLoad`), which has no equivalent of
+`scene_bg_map_ptrs`'s per-scene override - `SceneInit` skips that DMA entirely on this path.
+Not a regression in practice: checked directly against the real reference project, neither
+wide scene that qualifies ("Space Battle", "Path to Sample Town") paints any priority tile.
+A future project that does would need re-scoping this (or painting priority on a scene that
+either fits in 64 tiles or uses parallax instead).
 feature the tilemap format already fully supports once the bit is set correctly.
 
 **What *did* need an engine change**: every OAM sprite (actors, the emote bubble, projectiles)

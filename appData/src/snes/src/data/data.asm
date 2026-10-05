@@ -6,3 +6,4 @@
 .include "src/data/uifont_data.as"
 .include "src/data/scene_spr_0_data.as"
 .include "src/data/scene_spr_pal_0_data.as"
+.include "src/data/mapengine_tilesprop_data.as"

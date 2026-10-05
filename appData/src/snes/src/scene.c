@@ -50,6 +50,10 @@ static u8 stream_bg_h = 0;
  * already loads world columns 0-63 into VRAM columns 0-63 unchanged). */
 static u16 stream_window_left = 0;
 
+/* v4 (Map Engine streaming) - see scene.h's own comment. Reset every
+ * SceneInit; mutually exclusive with stream_bg_index != 0xff. */
+u8 map_engine_active = 0;
+
 s16 map_next_x = 0;
 s16 map_next_y = 0;
 s8 map_next_dir_x = 0;
@@ -713,6 +717,7 @@ void SceneInit(void)
     u16 j;
     u8 i;
     u16 mapLen; /* v4 safety clamp, see its own comment further down */
+    u8 use_map_engine; /* v4, Map Engine streaming - see map_engine_active (scene.h) */
 
     scene_num_actors = s[1];
     scene_num_triggers = s[2];
@@ -781,6 +786,19 @@ void SceneInit(void)
     player_hit_idx[2] = p[4] | ((u16)p[5] << 8);
     p += 6;
 
+    /* v4 (Map Engine streaming, see the plan): a wide background routes to
+     * PVSnesLib's own Map Engine instead of this engine's hand-rolled
+     * SceneStreamBackground, UNLESS this scene also uses parallax - the two
+     * real conflicts (mapUpdateCamera's own independent camera-centering
+     * algorithm, and the Map Engine's BG1HOFS fine-scroll write colliding
+     * with parallax's banded HDMA override of the same register) rule out
+     * ever combining them. bg_mapdata_ptrs[bg_index] is only non-null for a
+     * background compileSnesData.js decided needs streaming at all (same
+     * w > 64 threshold as bg_fullmap_ptrs), so this is a strict superset of
+     * today's branching - every scene that doesn't need streaming is
+     * unaffected either way. parallax_active was just computed above. */
+    use_map_engine = bg_mapdata_ptrs[bg_index] && !parallax_active;
+
     /* pick the tilemap size from the BG dimensions (one 2-term test per if) */
     if (bg_map_w[bg_index] > 32) sc_size = SC_64x64;
     if (bg_map_h[bg_index] > 32) sc_size = SC_64x64;
@@ -808,13 +826,20 @@ void SceneInit(void)
     WaitForVBlank();
     setScreenOff();
     dmaCopyVram((u8 *)bg_tiles_ptrs[bg_index], 0x2000, bg_tiles_len[bg_index]);
-    /* M7 (v4): a scene that painted TILE_PROP_PRIORITY tiles has its own
-     * tilemap copy (scene_bg_map_ptrs[scene_index], real SNES BG_TIL_PRIO
-     * bit set at those positions) - same length as the shared
-     * bg_maps_ptrs[bg_index] it's derived from, just a different source. */
-    dmaCopyVram(
-        (u8 *)(scene_bg_map_ptrs[scene_index] ? scene_bg_map_ptrs[scene_index] : bg_maps_ptrs[bg_index]),
-        0x0000, mapLen);
+    if (!use_map_engine)
+    {
+        /* M7 (v4): a scene that painted TILE_PROP_PRIORITY tiles has its own
+         * tilemap copy (scene_bg_map_ptrs[scene_index], real SNES BG_TIL_PRIO
+         * bit set at those positions) - same length as the shared
+         * bg_maps_ptrs[bg_index] it's derived from, just a different source.
+         * Not available on the Map Engine path below - priority tiles aren't
+         * supported there (see the plan's Phase 0d; neither real wide scene
+         * in this project paints any, so this is a documented scope limit,
+         * not a regression). */
+        dmaCopyVram(
+            (u8 *)(scene_bg_map_ptrs[scene_index] ? scene_bg_map_ptrs[scene_index] : bg_maps_ptrs[bg_index]),
+            0x0000, mapLen);
+    }
     SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
@@ -822,26 +847,45 @@ void SceneInit(void)
      * emote / avatar palettes at OBJ pal 1 / 2). */
     dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], 0x4000, SPR_TILES_SIZE);
     dmaCopyCGram((u8 *)scene_spr_pal_ptrs[scene_index], 128, SPR_PAL_SIZE);
-    bgSetMapPtr(0, 0x0000, sc_size);
-    bgSetGfxPtr(0, 0x2000);
 
-    /* Horizontal background streaming (v4): only a background wider than
-     * the 64-tile VRAM window needs it - bg_fullmap_ptrs[bg_index] is a
-     * real pointer exactly when compileSnesData.js decided that (0
-     * otherwise, the common case). The initial DMA above already loaded
-     * world columns 0-63 into VRAM columns 0-63 unchanged, so the window
-     * starts at 0 with no extra work here. */
-    if (bg_fullmap_ptrs[bg_index])
+    if (use_map_engine)
     {
-        stream_bg_index = bg_index;
-        stream_bg_w = bg_map_w[bg_index];
-        stream_bg_h = bg_map_h[bg_index];
-        stream_window_left = 0;
+        /* PVSnesLib's Map Engine owns BG1's tilemap at its own fixed VRAM
+         * address (0x6800 words - map.h's own documented address, "layer
+         * address is: 6800 for Layer 1") instead of the plain 0x0000 window
+         * above; mapLoad DMAs the real tilemap + metatile-definition tables
+         * itself. tilesprop is a single all-zero shared blob - collision
+         * stays on this engine's own col_solid()/scene_col[] bitmap, never
+         * the Map Engine's tile-identity-keyed one (see the plan). */
+        bgSetMapPtr(0, 0x6800, SC_64x32);
+        mapLoad((u8 *)bg_mapdata_ptrs[bg_index], (u8 *)bg_metatiles_ptrs[bg_index],
+                (u8 *)mapengine_tilesprop);
+        stream_bg_index = 0xff;
     }
     else
     {
-        stream_bg_index = 0xff;
+        bgSetMapPtr(0, 0x0000, sc_size);
+
+        /* Horizontal background streaming (v4): only a background wider than
+         * the 64-tile VRAM window needs it - bg_fullmap_ptrs[bg_index] is a
+         * real pointer exactly when compileSnesData.js decided that (0
+         * otherwise, the common case). The initial DMA above already loaded
+         * world columns 0-63 into VRAM columns 0-63 unchanged, so the window
+         * starts at 0 with no extra work here. */
+        if (bg_fullmap_ptrs[bg_index])
+        {
+            stream_bg_index = bg_index;
+            stream_bg_w = bg_map_w[bg_index];
+            stream_bg_h = bg_map_h[bg_index];
+            stream_window_left = 0;
+        }
+        else
+        {
+            stream_bg_index = 0xff;
+        }
     }
+    bgSetGfxPtr(0, 0x2000);
+    map_engine_active = use_map_engine;
 
     actors[0].x = ((s16)map_next_x << 3) + 8;
     actors[0].y = ((s16)map_next_y << 3) + 8;
@@ -1003,13 +1047,24 @@ void SceneInit(void)
     run_script(event_ptrs[scene_script_idx], 0);
 }
 
-/* Horizontal background streaming (v4). BgMapWordOffset mirrors
- * compileSnesData.js's mapByteIndex exactly (word units here, that
- * function returns bytes - dmaCopyVram's own destination argument is a
- * word address, matching every other call in SceneInit above) - the same
- * real SC_64x64 four-screen VRAM layout (see that function's own comment).
- * col/row are always < 64 here (streaming only ever touches the loaded
- * window), so no bounds check is needed the way the JS version has one. */
+/* Horizontal background streaming (v4) - this hand-rolled path (and the
+ * functions below it) is now only used by a wide scene that ALSO uses
+ * parallax (map_engine_active is 0 for it - see SceneInit's routing
+ * decision); every other wide scene streams through PVSnesLib's own Map
+ * Engine instead (mapLoad/mapUpdate/mapVblank, map_engine_active = 1),
+ * which this 816-tcc-compiled path can't match for CPU cost on the widest
+ * scenes (see PERF.md). Kept, not deleted, because it's the only option
+ * for a scene needing both streaming and parallax (the Map Engine's own
+ * BG1HOFS write and parallax's banded HDMA override of the same register
+ * can't coexist - see the Map Engine plan).
+ *
+ * BgMapWordOffset mirrors compileSnesData.js's mapByteIndex exactly (word
+ * units here, that function returns bytes - dmaCopyVram's own destination
+ * argument is a word address, matching every other call in SceneInit
+ * above) - the same real SC_64x64 four-screen VRAM layout (see that
+ * function's own comment). col/row are always < 64 here (streaming only
+ * ever touches the loaded window), so no bounds check is needed the way
+ * the JS version has one. */
 static u16 BgMapWordOffset(u8 col, u8 row)
 {
     u8 qx = (col >= 32) ? 1 : 0;

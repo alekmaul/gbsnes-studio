@@ -245,14 +245,30 @@ int main(void)
         /* Apply the camera scroll computed last frame - in vblank, before the
          * PPU starts drawing - so it never shears the screen mid-render while
          * the camera is moving. Also keeps BG1 and the OAM sprite positions
-         * (SceneRenderActors also reads scroll_x/y) in lockstep. */
-        bgSetScroll(0, (u16)scroll_x, (u16)scroll_y);
-        // Horizontal background streaming (v4, scene.c) - a no-op unless
-        // this scene's background is wider than the 64-tile VRAM window.
-        // Must run here (during vblank, right after the scroll this frame
-        // is about to show), same VRAM-safety reasoning as bgSetScroll
-        // itself just above.
-        SceneStreamBackground();
+         * (SceneRenderActors also reads scroll_x/y) in lockstep.
+         *
+         * v4 (Map Engine streaming, see the plan): a scene routed to
+         * PVSnesLib's own Map Engine (map_engine_active, set by SceneInit)
+         * uses mapVblank() instead - it writes BG1's VRAM tilemap window AND
+         * BG1HOFS/VOFS itself from the x_pos/y_pos written below, so the
+         * plain bgSetScroll + hand-rolled SceneStreamBackground this engine
+         * otherwise uses would fight it over the same registers/VRAM. Never
+         * true together with parallax_active (SceneInit's own routing
+         * decision - see scene.c). */
+        if (map_engine_active)
+        {
+            mapVblank();
+        }
+        else
+        {
+            bgSetScroll(0, (u16)scroll_x, (u16)scroll_y);
+            // Horizontal background streaming (v4, scene.c) - a no-op unless
+            // this scene's background is wider than the 64-tile VRAM window.
+            // Must run here (during vblank, right after the scroll this frame
+            // is about to show), same VRAM-safety reasoning as bgSetScroll
+            // itself just above.
+            SceneStreamBackground();
+        }
         // M6 (v4): banded X-axis parallax (see parallax.c) - HDMA overrides
         // BG1HOFS per scanline band for the rest of this frame's active
         // picture; the plain bgSetScroll above still owns Y (and X for any
@@ -302,6 +318,20 @@ int main(void)
         SceneUpdate();
         UIUpdate();
         CameraUpdate();
+
+        if (map_engine_active)
+        {
+            /* mapUpdateCamera() is deliberately never called - it runs its
+             * own independent deadzone-based camera-centering algorithm,
+             * which would desync from this engine's own scripted camera the
+             * instant the two disagree. Writing x_pos/y_pos directly from
+             * the camera this frame just computed and calling mapUpdate()
+             * (which only ever reads them) gets the streaming decision this
+             * engine wants with no second camera in the loop. */
+            x_pos = (u16)scroll_x;
+            y_pos = (u16)scroll_y;
+            mapUpdate();
+        }
 
         spcProcess(); // must run every frame - streams soundbank data to the APU
 

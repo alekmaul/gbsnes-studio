@@ -32,6 +32,13 @@ extern const unsigned char bg_map_h[2];
 // dummy background is over 64 tiles wide, so this is all-zero (no
 // streaming source data needed).
 extern const unsigned char *const bg_fullmap_ptrs[2];
+// Map Engine streaming (v4) - see compileSnesData.js/scene.c SceneInit.
+// Same reasoning as bg_fullmap_ptrs above: neither dummy background needs
+// it, so both pointer tables are all-zero. mapengine_tilesprop is still
+// emitted at its real full size - scene.c references it unconditionally.
+extern const unsigned char *const bg_mapdata_ptrs[2];
+extern const unsigned char *const bg_metatiles_ptrs[2];
+extern const unsigned char mapengine_tilesprop[2048];
 // M7 (v4): per-scene priority-tile tilemap override - see compileSnesData.js.
 // Both dummy scenes have no priority tiles painted, so this is all-zero
 // ("use bg_maps_ptrs[bg_index] unmodified" for every scene).

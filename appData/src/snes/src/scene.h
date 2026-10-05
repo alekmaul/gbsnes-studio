@@ -128,8 +128,22 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir);
  * same as always, and this streams in new columns as the camera scrolls
  * past it - called once per frame, during vblank, right after bgSetScroll
  * (game.c) so it sees this frame's already-applied scroll_x. A no-op for
- * every scene whose background already fits in one VRAM load. */
+ * every scene whose background already fits in one VRAM load. Only used by
+ * a wide scene that *also* uses parallax (see map_engine_active below) -
+ * every other wide scene now streams through PVSnesLib's own Map Engine
+ * instead, which this hand-rolled path can't be combined with parallax's
+ * banded HDMA (see game.c/scene.c SceneInit for why). */
 void SceneStreamBackground(void);
+
+/* v4 (Map Engine streaming): set by SceneInit when this scene's background
+ * needs streaming AND has no active parallax - PVSnesLib's own mapLoad/
+ * mapUpdate/mapVblank (see map.h) drive BG1 instead of SceneStreamBackground
+ * above. game.c's main loop reads this to pick which of the two streaming
+ * paths runs each frame; mutually exclusive with stream_bg_index being set
+ * (SceneInit never sets both). See the Map Engine plan for the two real
+ * incompatibilities (mapUpdateCamera's own camera algorithm, parallax HDMA)
+ * that rule out just always using the Map Engine. */
+extern u8 map_engine_active;
 
 /* actor's true tile (top-left), pixel pos is tile*8 + 8 like the GB engine */
 s16 SceneActorTileX(u8 i);
