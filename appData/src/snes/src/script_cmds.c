@@ -811,9 +811,26 @@ void Script_ActorMoveRel_b(void)
 // its own position, moving in whatever direction script_variables[dirVar]
 // holds - a plain GB direction code (1/2/4/8), the same encoding
 // actors[].dir_x/y already use (dir_to_vec decodes it identically). No
-// lifeTime field exists on this opcode's wire format (see the PROJECTILE
-// struct's own comment in scene.c) - ttl 0, relies entirely on leaving the
-// scene to despawn.
+// lifeTime field exists on this opcode's own wire format (see the
+// PROJECTILE struct's own comment in scene.c) - a fixed internal
+// LAUNCH_PROJECTILE_TTL is used instead (same pattern WEAPON_ATTACK_TTL
+// below already established), not a per-call author-chosen value.
+// v4 fix (user-found, real project: "player can't shoot"): MAX_PROJECTILES
+// is a small, fixed pool (4) shared by every projectile source. Once On
+// Update scripts loop forever (see update_script.c's own history), a Shoot
+// Em Up scene with several enemies continuously firing - and nothing to
+// ever despawn their shots short of leaving the whole scene, 255 tiles in
+// the real reported case - permanently fills the pool with enemy bullets,
+// so the player's own LAUNCH_PROJECTILE silently finds no free slot,
+// forever. A flat frame-count lifetime (not distance-based, matching
+// WEAPON_ATTACK_TTL's own simplicity) bounds how long any one projectile -
+// player's or an enemy's - can occupy a pool slot, so the pool always
+// drains on its own regardless of how many sources keep firing. 180 frames
+// (3s) is long enough to read as a real travelling shot (180px of travel
+// even at the slowest speed, moveSpeedDec's "1") and comfortably cross a
+// 256px screen, short enough that a handful of concurrent shooters can't
+// starve the shared pool for long.
+#define LAUNCH_PROJECTILE_TTL 180
 void Script_LaunchProjectile_b(void)
 {
     s8 dx, dy;
@@ -821,7 +838,8 @@ void Script_LaunchProjectile_b(void)
     dir_to_vec((u8)VAR(dir_var), &dx, &dy);
     ProjectileSpawn(actors[script_actor].x, actors[script_actor].y, dx, dy,
                      script_cmd_args[3], script_cmd_args[0],
-                     script_cmd_args[4] & 0x0F, script_cmd_args[4] >> 4, 0);
+                     script_cmd_args[4] & 0x0F, script_cmd_args[4] >> 4,
+                     LAUNCH_PROJECTILE_TTL);
     ADVANCE();
     script_continue = 1;
 }

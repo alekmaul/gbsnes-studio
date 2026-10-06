@@ -148,9 +148,16 @@ typedef struct
                              hit actor's scripts fires (see below) */
     u8 collision_mask;   /* which actor collision_group(s) it can hit */
     u8 ttl;              /* frames until auto-destroy, 0 = no ttl (relies on
-                             leaving the scene instead) - WEAPON_ATTACK's
-                             momentary hitbox uses this; LAUNCH_PROJECTILE
-                             doesn't need to */
+                             leaving the scene instead). WEAPON_ATTACK's
+                             momentary hitbox always sets this (its own
+                             WEAPON_ATTACK_TTL); LAUNCH_PROJECTILE now does
+                             too (LAUNCH_PROJECTILE_TTL, script_cmds.c) -
+                             without it, a scene with several actors
+                             continuously firing (On Update scripts loop
+                             forever) can permanently fill the small shared
+                             MAX_PROJECTILES pool, starving every other
+                             source (a real user-found bug: the player's own
+                             shots silently found no free slot) */
 } PROJECTILE;
 static PROJECTILE projectiles[MAX_PROJECTILES];
 /* On Player Hit script indices (collision group 1/2/3), read from the scene

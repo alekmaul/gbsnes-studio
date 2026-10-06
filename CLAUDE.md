@@ -1330,6 +1330,52 @@ building the project and instrumenting Mesen (a flat per-actor WRAM snapshot - `
    the perf change itself (matches this file's own established pattern - verified via a real
    Mesen tick-ratio measurement against the real project, not a unit test).
 
+**Same-day follow-up: with bugs 1/2 above fixed, a new real project (`snes02`, 15 ships,
+different from `sntst01`) immediately hit the real consequence (user-found: "player can't
+shoot and enemies are not with projectile shapes and can't fire").** Investigated with the
+same real-Mesen-state methodology as every finding above, plus two new verification
+techniques this session: `emu.takeScreenshot()` (a real PNG capture, not inferred from
+memory) and directly decoding the actual VRAM tile bytes + in-game CGRAM palette for a
+rendering sprite, to settle a visual claim with certainty instead of eyeballing a screenshot.
+
+- **"Enemies are not with projectile shapes" - investigated, not reproduced.** Decoded the
+  real VRAM tile data an active enemy projectile's OAM entry actually pointed at, plus the
+  real CGRAM palette bytes for its OBJ palette slot, and rendered both exactly as the PPU
+  would - they match `bullet_left.png`'s own small round shape and green palette, not the
+  enemy ship's graphic. (A first visual read of a zoomed screenshot crop looked ship-shaped
+  and seemed to confirm a bug - directly decoding the real tile/palette bytes instead of
+  trusting that visual impression is what caught the mistake; worth remembering as a
+  methodology note, not just a one-off correction.) Likely just hard to see at 16x16 and slow
+  (speed 1) against a starfield, not a rendering bug - not fixed, since nothing to fix was found.
+- **"Player can't shoot" - real, root-caused.** `MAX_PROJECTILES` (4) is one small pool shared
+  by every projectile source, enemy or player, with a plain first-come-first-served linear
+  scan for a free slot. `EVENT_LAUNCH_PROJECTILE`'s wire format has never carried a lifetime
+  (`scene.c`'s `PROJECTILE` struct comment: ttl 0 relies entirely on leaving the *scene* -
+  2040px away at 255 tiles wide here - to despawn). Before the loop fix above, enemies died
+  out after one pass and rarely filled the pool; now that all 15 fire forever, the pool fills
+  almost immediately with enemy bullets and never meaningfully drains, so the player's own
+  `LAUNCH_PROJECTILE` call finds no free slot and silently does nothing - confirmed directly:
+  every active pool slot sampled, across every checkpoint, held an enemy bullet
+  (`dir_x=-1`, matching their authored "left" direction), never the player's.
+  **Fix** (asked the user directly via `AskUserQuestion` - three real options existed: give
+  enemy bullets a lifetime, reserve a slot for the player, or just raise the pool size; user
+  picked the first): `Script_LaunchProjectile_b` (`script_cmds.c`) now passes a fixed
+  `LAUNCH_PROJECTILE_TTL` (180 frames = 3s, chosen the same way `WEAPON_ATTACK_TTL` already
+  was - a flat frame count, not distance-based) to `ProjectileSpawn` instead of `0`, applying
+  uniformly to every `LAUNCH_PROJECTILE` call regardless of who fires it (simplest
+  implementation, matches `WEAPON_ATTACK_TTL`'s own existing precedent exactly, no wire-format
+  change needed since ttl was never author-exposed to begin with). Verified in Mesen over a
+  ~900-frame real-project run: the pool genuinely cycles now (sampled with fewer than 4 active
+  slots at times, impossible before), and repeated player press attempts (one every 20 frames)
+  succeeded 11 times in a row once the scene settled past its own intro + the initial
+  all-15-enemies-starting-at-once swarm (~frame 680 onward in this specific real project) -
+  not a 100%-every-single-press guarantee (a dense early swarm can still momentarily fill 4
+  slots), but a real, working fix for the reported "can't shoot at all" state. No JS-level test
+  added - this is a pure C-engine runtime constant with no compiler/wire-format surface to test
+  (confirmed no `Projectiles`/`WeaponAttack` JS test file exists in `test/events/` at all);
+  verified the same way the perf fix just above was, a real Mesen measurement against the real
+  project.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
