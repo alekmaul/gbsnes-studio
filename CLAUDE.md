@@ -1446,6 +1446,46 @@ clean mid-reveal screenshot showing no garbage characters from the control bytes
 as byte 6, multiple codes in one string, text with no codes unchanged), `scriptBuilder.test.js`
 (byte-exact compiled output).
 
+*Correction to the paragraph above*: it described `#NN#` as part of "the project's existing
+`$NN$`/`#NN#` runtime variable-substitution mechanism" - at the time this was written, only
+`$NN$` actually had a runtime decoder; `#NN#` was real only at compile time (the compiler
+resolved the syntax, `trimlines.js` excluded it from line-wrap math) with no corresponding
+`ui.c` handling, so it printed as literal `#00#` text in-game. Found and fixed the same day
+while writing `docs/dialogue-variables.md` (see below) - the paragraph above is left as written
+since the `!Sx!` work itself didn't depend on `#NN#` being real, but this note avoids it being
+read as still describing `#NN#`'s state afterward.
+
+**`docs/dialogue-variables.md` added, and the `#NN#` gap it surfaced fixed (2026-10-07,
+user-asked, inspired by [gbstudio.dev's own dialogue-variables page](https://www.gbstudio.dev/docs/scripting/dialogue-variables)).**
+Writing the new page (linked from Scripting Events' Text section) meant checking every
+variable/text code actually implemented on this fork, not assuming GB Studio's real syntax
+carried over unchanged - it doesn't: this fork implements GB Studio 3.x's plain `$NN$`/`#NN#`/
+`!Sx!` convention, not 4.x's newer `%D$`/`%c$`/`%t$`/`%f$`/`!Font`/`!Instant`/`!Wait`/`!Cursor`
+set (none of which exist here - no GBVM, no multi-font support). Verifying `#NN#` specifically
+(the editor-facing form of `$0$`/`$L0$`/`$T0$`/`$V0$`'s "as a character, not digits" sibling -
+`replaceVariables()` in `scriptBuilder.js` already resolved all 8 forms, `$NN$`/`#NN#`, to
+their final 2-digit global index) surfaced the real gap described in the correction above:
+`ui_subst()` had no `'#'` branch at all, only `'$'`. Fixed by adding a parallel branch,
+mirroring the `$` one's structure (`ui.c`): decode the 2-digit index, then write
+`script_variables[vi]` into `ui_text` as one raw byte instead of up to 3 decimal-digit
+characters. Embedding a raw `0` byte here is safe (unlike `!Sx!`'s `+1` offset trick) because
+nothing downstream of `ui_subst()` scans `ui_text` for a null terminator - `ui_wrap()`/
+`ui_reveal_char()` both bound their loops by the explicit `ui_len` set at the end of
+`ui_subst()`, confirmed by reading both functions before relying on this. Documented, not
+fixed: a substituted value below `0x20` has no real glyph - `UI_CHAR`'s `c - 0x20` wraps
+(unsigned underflow) into the font region's non-printable tiles (the box-frame 9-slice and
+cursor, stored immediately after the 224 real glyphs) instead of blanking or erroring, so an
+out-of-range variable renders visual corruption, not nothing; matches the general "author's
+responsibility to keep the value sensible" character of this feature in the real GB Studio
+reference too, so left as-is rather than adding a runtime clamp nothing asked for. Verified
+with the project's own established real-ROM-plus-Mesen methodology: a throwaway project (`Set
+Variable 0 = 65` → `Display Text "Char:#0#!"`) built through the real toolchain and run in
+Mesen - WRAM `ui_text` read back the exact bytes `Char:A!` (`0x41` where `#0#` was authored,
+matching 65's ASCII value), and a screenshot confirmed the box visibly renders `Char:A!` with
+no corruption. No JS-level test added - pure `ui.c` runtime change, no compiler/wire-format
+surface (the compiler-side `#NN#` → `#NN#`-resolved-index behavior already had coverage before
+this fix, in `scriptBuilder.test.js`/`trimlines.test.js`, and didn't change).
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

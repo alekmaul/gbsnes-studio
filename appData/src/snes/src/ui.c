@@ -262,7 +262,18 @@ void UIInit(void)
     bgSetScroll(2, 0, 0);
 }
 
-/* Copy `str` into ui_text, substituting "$NN$" with script_variables[NN]. */
+/* Copy `str` into ui_text, substituting "$NN$" with script_variables[NN] as
+ * decimal digits and "#NN#" with script_variables[NN] as one raw character
+ * code (v4, user-asked - docs/dialogue-variables.md's own "#NN#" row was
+ * previously documented as compiled-but-not-implemented; this closes that
+ * gap). A substituted #NN# byte can legally be 0 (script_variables[NN] can
+ * be any u8) - safe to embed mid-string here, unlike the !Sx! encoding in
+ * trimlines.js, because nothing downstream of this function (ui_wrap,
+ * ui_reveal_char) scans ui_text for a 0 terminator; both use ui_len, set
+ * once below. A value below 0x20 has no real glyph (UI_CHAR's `c - 0x20`
+ * wraps to the frame/cursor tiles past the font's 224 printable glyphs,
+ * appending garbage, not blank) - same hazard as the real printable
+ * character always being the author's responsibility, not out of range. */
 static void ui_subst(const unsigned char *str)
 {
     u8 i = 0, o = 0;
@@ -290,6 +301,22 @@ static void ui_subst(const unsigned char *str)
                     ui_text[o++] = (char)('0' + (v / 10) % 10);
                 }
                 ui_text[o++] = (char)('0' + v % 10);
+                i += 4;
+                continue;
+            }
+        }
+        if (str[i] == '#')
+        {
+            u8 d0 = str[i + 1];
+            u8 d1 = str[i + 2];
+            u8 ok = 1;
+            if (d0 < '0' || d0 > '9') ok = 0;
+            if (d1 < '0' || d1 > '9') ok = 0;
+            if (str[i + 3] != '#') ok = 0;
+            if (ok)
+            {
+                u8 vi = (u8)((d0 - '0') * 10 + (d1 - '0'));
+                ui_text[o++] = (char)script_variables[vi];
                 i += 4;
                 continue;
             }

@@ -1,6 +1,7 @@
 ---
 title: Scripting Events
 nav_order: 6
+has_children: true
 ---
 
 # Scripting Events
@@ -24,8 +25,9 @@ is a breaking, test-caught change.
 
 ### Text
 
-- **Display Text** (single or multi-page) - typewriter effect, `$NN$` variable substitution,
-  word-wrap.
+- **Display Text** (single or multi-page) - typewriter effect, variable substitution, word-wrap.
+  See [Dialogue Variables](dialogue-variables.html) for the full list of variable codes and
+  inline text commands supported in these fields.
 - **Display Text with Avatar** - adds a portrait alongside the text.
 - **Display Choice** - a yes/no prompt.
 - **Display Menu** - a scrollable list of options, 1 or 2 columns.
