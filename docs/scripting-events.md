@@ -6,116 +6,45 @@ has_children: true
 
 # Scripting Events
 
-GB2SNES Studio's visual scripting is attached to scenes, actors and triggers:
+GB2SNES Studio's visual scripting lets you control what happens in your game without writing
+code, by adding a sequence of events to a script. Scripts are attached to scenes, actors and
+triggers, and edited in the Script Editor panel in the sidebar of the World editor.
+
+## Adding events
+
+Click the **Add Event** button at the point in the script where you want to add one, then
+search or browse by category for the event you want. Events are grouped the same way as on the
+[Event Reference](event-reference.html) pages.
+
+## Favorite events
+
+Hover over an event in the Add Event list and click its star icon to mark it a favorite.
+Favorited events appear under their own **Favorites** category at the top of the list, so the
+events you use most are always one click away.
+
+## Copy and paste events
+
+Each event, and each whole script, has its own menu with **Copy**, **Paste Before**, **Paste
+After** and **Delete** - use it to duplicate an event (or a whole script) and move the copy
+elsewhere in the same script, a different script, or even a different project.
+
+## Types of scripts
 
 - **Scene scripts** - On Init (runs once when the scene loads), On Player Hit.
 - **Actor scripts** - On Init, On Interact (player presses the action button facing the
   actor), On Hit, On Update (runs every frame).
 - **Trigger scripts** - On Trigger (player walks into the trigger's area).
 
-## Event categories
+## Learn more
 
-Events below are listed where SNES support is **Full**. A handful of other events work too,
-but only with a noted limitation, and a few are still inert placeholders; see
-[`appData/src/snes/EVENTS.md`](https://github.com/alekmaul/gbsnes-studio/blob/v4/appData/src/snes/EVENTS.md)
-for those and their exact caveats - it's the authoritative, up-to-date per-event breakdown,
-kept in sync whenever an opcode's behavior changes. Every event's opcode is also locked by a
-test (`test/data/compiler/snesScriptCmds.test.js`), so adding or changing an event's arguments
-is a breaking, test-caught change.
+- [Event Reference](event-reference.html) - every event with Full SNES support, one page per
+  category, described individually.
+- [Dialogue Variables](dialogue-variables.html) - inserting a variable's value, or an inline
+  typewriter-speed code, into dialogue text.
 
-### Text
-
-- **Display Text** (single or multi-page) - typewriter effect, variable substitution, word-wrap.
-  See [Dialogue Variables](dialogue-variables.html) for the full list of variable codes and
-  inline text commands supported in these fields.
-- **Display Text with Avatar** - adds a portrait alongside the text.
-- **Display Choice** - a yes/no prompt.
-- **Display Menu** - a scrollable list of options, 1 or 2 columns.
-- **Text: Set Animation Speed** - controls the dialogue box's slide-in/out and typewriter
-  speed.
-- **Overlay Show**, **Overlay Move To**, **Overlay Hide** - a solid panel that can cover part
-  or all of the screen, independent of the dialogue box.
-
-### Scene
-
-- **Switch Scene** - with a fade-out/fade-in handshake.
-- **Scene Push State**, **Pop State**, **Pop All State**, **Reset State Stack** - remember
-  and restore where the player was (e.g. a pause-menu scene that returns exactly where you
-  left off).
-- **Camera Move To**, **Camera Lock**, **Camera Shake**.
-- **Fade In**, **Fade Out**.
-
-### Variables & math
-
-- **Set Variable**, **Increment**, **Decrement**, **Set to Random**, **Copy Variable**.
-- **Math** - add/subtract/multiply/divide/modulo, by value or by variable.
-- **If Variable** (value / compare / true / false), **If Variable Flags Compare**.
-- **Add Flags**, **Clear Flags**, **Set Flags**.
-- **Reset All Variables**.
-- **Evaluate Expression** - a full operator-precedence expression (e.g. `5 + 3 * 2`), stored
-  into a variable.
-
-### Control flow
-
-- **If / If Not**, **Switch**, **Loop**, **Label** + **Goto**.
-- **If Expression**, **Loop While** - branch or loop on a full expression rather than a single
-  comparison.
-- **Wait**.
-- **Stop Script**.
-- **Call Custom Event**, **Group**, **Comment**.
-
-### Actors
-
-- **Set Active Actor**.
-- **Set Position**, **Move To** (and their to-variable / relative variants).
-- **Get Position**, **Move to Vectors**, **Load Vectors**.
-- **Push Actor** - in the actor's current facing direction.
-- **Set Movement Speed**.
-- **If Actor at Position**, **If Actor Facing Direction**, **If Actor Relative to Actor** -
-  compares the active actor's position against another actor.
-- **Set Direction**, **Set Direction to Variable**, **Get Direction**.
-- **Show Actor**, **Hide Actor**, **Show All Sprites**, **Hide All Sprites**.
-- **Activate Actor**, **Deactivate Actor** - toggles AI, movement, collision and interaction
-  independently of Show/Hide.
-- **Actor animation** - a 6-frame sheet walk-cycles while moving; a 2/4/5/6-frame "animated"
-  sheet auto-cycles its frames when ticked.
-- **Actor: Set Animation Speed** - paces the walk cycle / auto-cycle above.
-- **Actor: Set Animate** - toggles the "Animate Frames" behavior at runtime.
-- **Actor: Set Sprite Sheet** - swaps a non-player actor's sprite sheet mid-game (for a sheet
-  already loaded somewhere in the scene).
-- **Actor/Player: Set Sprite State** - switches to a named animation state (e.g. a costume
-  change), defined per sprite sheet.
-- **Actor Emote** - a speech-bubble icon over the actor's head.
-- **Set Collisions Enabled / Disabled**.
-
-### Timers & input
-
-- **Set Timer Script**, **Restart Timer**, **Disable Timer** - 4 independent timer contexts
-  per scene.
-- **If Button Pressed**, **Await Input** - all 12 SNES buttons, including X / Y / L / R.
-- **Attach Script to Button** (and remove) - same 12 buttons.
-
-### Music & sound
-
-- **Music: Play** - the project's own `.mod` songs, converted at build time.
-- **Music: Stop**.
-
-### Save data
-
-- **Save Data**, **Load Data**, **Clear Data**, **If Data Saved** - cartridge SRAM, 3
-  independent save slots.
-
-### Projectiles
-
-- **Launch Projectile** - fires a sprite in a fixed direction, with real collision.
-- **Weapon: Attack** - a momentary hitbox in the actor's current facing direction.
-- **Player: Bounce** - a fixed upward velocity impulse (Platformer scenes).
-
-### Engine fields
-
-- **Engine Field: Set**, **Engine Field: Store** - read or write a per-genre engine constant
-  (e.g. a Platformer physics value, the Shoot 'Em Up scroll speed) at runtime, in addition to
-  setting its default from Settings.
+For events with only Partial support, or that are still inert placeholders, see
+[`appData/src/snes/EVENTS.md`](https://github.com/alekmaul/gbsnes-studio/blob/v4/appData/src/snes/EVENTS.md) -
+the authoritative, per-event support matrix, kept in sync whenever an opcode's behavior changes.
 
 ## Scene types
 

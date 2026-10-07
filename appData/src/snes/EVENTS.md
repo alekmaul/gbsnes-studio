@@ -504,7 +504,8 @@ doing) - this engine has exactly one bytecode VM (`script_ptr` and friends in
 `script_runner.c`), so a literal port would mean rewriting the VM core into a real multi-context
 scheduler, the same class of change as adopting GBVM itself (excluded from this whole roadmap).
 
-Scoped design instead: a small fixed pool (`MAX_UPDATE_CONTEXTS = 4`) of saved VM states
+Scoped design instead: a small fixed pool (`MAX_UPDATE_CONTEXTS` - originally 4, raised to 16
+in a later v4 pass to match GB Studio's own `VM_MAX_CONTEXTS`) of saved VM states
 (pointer/call-stack/actor/wait-timer), each **independent of the foreground `script_ptr`** -
 critically, not the same global `SceneHandleInput()` checks to decide whether the player can
 move or interact. `UpdateScriptsProcess()` (called once per frame from `SceneUpdate`) gives
@@ -530,10 +531,11 @@ the corrected, separate-context design instead.
 
 Real, documented limitations of this scoped version vs GB Studio 3.x (see
 `update_script.h`'s own design note for the full detail):
-- Only `MAX_UPDATE_CONTEXTS` (4) actors can have a running update script at once *per scene* - a
-  small fixed cap, same class as `SPRITE_SLOTS`/`MAX_PROJECTILES`/the 4 timer contexts elsewhere
-  in this engine. A scene needing more just doesn't run the extras' update scripts (silent, like
-  every other pool-exhaustion cap in this engine).
+- Only `MAX_UPDATE_CONTEXTS` (16) actors can have a running update script at once *per scene* -
+  a fixed cap, same class as `SPRITE_SLOTS`/`MAX_PROJECTILES`/the 4 timer contexts elsewhere in
+  this engine (raised from an original 4 - see the "On Update" entry in `CLAUDE.md`'s own
+  history for why). A scene needing more just doesn't run the extras' update scripts (silent,
+  like every other pool-exhaustion cap in this engine).
 - An update script's own blocking opcodes get a private `Wait` timer *and* (v4 follow-up, see
   below) a private `Move To`/`Move Relative` destination - `Camera Shake`/`Await Input` are the
   two still left reading/writing the *foreground's* shared `shake_time`/`await_input`, so using

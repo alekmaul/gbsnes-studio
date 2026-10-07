@@ -60,7 +60,7 @@ code, or the box closes). For example, `Slow down...!S5!now reading very slowly`
 first part at the default speed and the rest at the slowest one.
 
 This is the one inline text command this engine currently implements. Unlike setting speed
-permanently via the **Text: Set Animation Speed** event (see [Scripting Events](scripting-events.html#text)),
+permanently via the **Text: Set Animation Speed** event (see [Text](events-text.html)),
 an inline `!Sx!` code only affects the speed while that one Display Text event is revealing -
 the box's open/close slide speed and any later Display Text event are unaffected.
 
