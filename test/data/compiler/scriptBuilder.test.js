@@ -447,6 +447,24 @@ test("Should be able to display text with avatar", () => {
   expect(strings).toEqual(["First Text"]);
 });
 
+// v4 fix (user-asked): GB Studio 3.x's real inline typewriter-speed
+// shorthand (!S0!..!S5!) - trimlines.js's own commandRegex already
+// recognised it for wrap-math purposes, but nothing turned it into
+// anything real; a literal "!S3!" used to compile straight through and
+// render as 4 garbage characters on screen. textDialogue() now encodes
+// each match into 2 raw bytes before it ever reaches the string table: a
+// 0x01 sentinel (ui.c's ui_reveal_char() recognises it, never a real
+// printable character) followed by (speed + 1) - the +1 so speed 0 never
+// embeds a literal 0x00, which ui.c's ui_subst() would read as the string
+// terminator and silently truncate everything after it.
+test("Should be able to embed an inline !Sx! typewriter-speed code", () => {
+  const output = [];
+  const strings = [];
+  const sb = new ScriptBuilder(output, { strings });
+  sb.textDialogue("Hi!S3!there");
+  expect(strings).toEqual([`Hi${String.fromCharCode(1, 4)}there`]);
+});
+
 test("Should be able to display choice", () => {
   const output = [];
   const strings = ["Hello World"];

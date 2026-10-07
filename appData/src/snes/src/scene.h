@@ -16,6 +16,29 @@
 #include "gbs_types.h"
 #include "assets.h" /* SPRITE_SLOTS */
 
+/* v4 (user-asked): fixed VRAM layout (words) - every region lives at the
+ * SAME address whether or not a scene routes through the Map Engine
+ * (scene.c's SceneInit), so no call site has to branch on that to pick a
+ * destination. Shared between game.c (boot-time setup) and scene.c
+ * (per-scene DMA + BgMapWordOffset's own base, StreamColumn below) -
+ * named here instead of repeating hex literals so the two can't silently
+ * drift apart again. BG3's own two regions (UI_FONT_VRAM/UI_MAP_VRAM) are
+ * ui.c-local, not needed outside that file, but follow the exact same map:
+ *   OBJ gfx   0x0000-0x0FFF (256 4bpp tiles, SPR_TILES_SIZE)
+ *   BG1 gfx   0x2000-0x5FFF (1024 4bpp tiles - targets/snes.js
+ *             maxTilesetTiles, also the real ceiling: a tilemap cell's own
+ *             tile-index field is only 10 bits, snesgfx.js's packed
+ *             tile|pal<<10|... format)
+ *   BG3 gfx   0x6000-0x67FF (235 2bpp tiles - ui.c's UI_FONT_VRAM)
+ *   BG1 map   0x6800-0x77FF (SC_64x64 budget, 4096 words - matches
+ *             PVSnesLib's own Map Engine address, map.h: "layer address is
+ *             6800 for Layer 1", so it never has to move by routing)
+ *   BG3 map   0x7800-0x7FFF (SC_32x32, 1024 of 2048 words needed -
+ *             ui.c's UI_MAP_VRAM) */
+#define OBJ_GFX_VRAM 0x0000
+#define BG1_GFX_VRAM 0x2000
+#define BG1_MAP_VRAM 0x6800
+
 /* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [24]
  * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
  * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */

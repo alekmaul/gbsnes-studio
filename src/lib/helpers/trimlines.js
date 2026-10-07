@@ -15,6 +15,31 @@ export const dummyText = (text) => {
     .replace(commandRegex, "");
 };
 
+// v4 (user-asked): GB Studio 3.x's real inline typewriter-speed shorthand
+// (!S0!..!S5!, src/lib/fonts/lexText.ts in the real gb-studio-3.2.1
+// reference) - commandRegex above already existed on this fork purely to
+// exclude it from trimlines' own line-wrap character counting (ported
+// alongside trimlines itself), but nothing ever actually implemented the
+// feature: a literal "!S3!" compiled straight through to the ROM string
+// table and rendered as 4 garbage characters. This must run AFTER
+// trimlines()/lineLength() have done their own wrap math using the regex
+// above - once a match is turned into raw control bytes here it no longer
+// matches `!S[0-5]!` for anything downstream to exclude.
+//
+// Encodes each match as 2 raw bytes: 0x01 (a control-byte sentinel ui.c's
+// ui_reveal_char() recognises - never a printable character, so it can't
+// collide with real dialogue text) followed by (speed + 1). The +1 offset
+// matters, not just a convention carried over from B: ui.c's ui_subst()
+// treats a literal 0x00 byte as the string terminator (it's a plain C
+// string), so speed 0 has to encode as byte 1, or the string would
+// silently truncate right there - matches B's own real textCodeSetSpeed()
+// (`\\001\\${speed + 1}`), which has the identical reason to avoid it.
+export const encodeTextSpeedCodes = (text) =>
+  text.replace(commandRegex, (match) => {
+    const speed = Number(match[2]);
+    return String.fromCharCode(1, speed + 1);
+  });
+
 export const lineLength = (line) => {
   return line
     .replace(varRegex, "255")

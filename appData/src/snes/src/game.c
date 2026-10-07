@@ -208,19 +208,39 @@ int main(void)
     // the scene BG (BG1 tiles + map + palette + size) is uploaded per scene by
     // SceneInit (M6). The screen stays force-blanked (bgInitTileSetData in
     // UIInit) until the first SceneInit has loaded VRAM.
+    //
+    // v4 (user-asked): fixed, unified VRAM map - every region now lives at
+    // the SAME address whether or not a scene routes through the Map Engine
+    // (see scene.c's SceneInit), instead of BG1's tilemap previously
+    // switching between 0x0000 (hand-rolled streaming/plain path) and
+    // 0x6800 (Map Engine - PVSnesLib's own hardcoded address, map.h: "layer
+    // address is: 6800 for Layer 1"). Also moves OBJ down to 0x0000 and BG3
+    // (graphics + tilemap) up past BG1 entirely, freeing a much bigger
+    // contiguous run for BG1's own tile graphics than the old layout's
+    // single 0x1000-word page - BG1's real tile *budget*
+    // (targets/snes.js maxTilesetTiles) was raised 256->1024 to use it
+    // (the same follow-up, not a separate change): 1024 is also the real
+    // hardware ceiling (a tilemap cell's tile-index field is only 10 bits -
+    // snesgfx.js's packed tile|pal<<10|... format), so BG1's graphics
+    // region now has exactly as much room as that format can ever address.
+    //   OBJ gfx    0x0000-0x0FFF (256 4bpp tiles, SPR_TILES_SIZE)
+    //   BG1 gfx    0x2000-0x5FFF (1024 4bpp tiles - the full tile-index range)
+    //   BG3 gfx    0x6000-0x67FF (235 2bpp tiles: font/frame/cursor)
+    //   BG1 map    0x6800-0x77FF (SC_64x64 budget, 4096 words - matches
+    //              PVSnesLib's own Map Engine address exactly, so it never
+    //              has to move depending on routing)
+    //   BG3 map    0x7800-0x7FFF (SC_32x32, 1024 words needed of 2048 free)
     oamClear(0, 128);
-    // OBJ tiles at VRAM 0x4000 (0x0000-0x0FFF is BG1 map, 0x2000 BG1 tiles,
-    // 0x3000 BG3 font). Up to 8 actor sprites, slot k at grid tiles 2k..2k+17.
     /* The OBJ tile sheet + its 8-palette CGRAM image (which now bakes in the
      * emote and dialogue-avatar palettes at OBJ pal 1 / 2) are per-scene:
      * SceneInit uploads scene_index's. This boot call just sets the OBJ VRAM
      * base / sprite size and seeds the start scene's data. */
     oamInitGfxSet((u8 *)scene_spr_ptrs[START_SCENE], SPR_TILES_SIZE,
                   (u8 *)scene_spr_pal_ptrs[START_SCENE], SPR_PAL_SIZE, 0,
-                  0x4000, OBJ_SIZE8_L16);
+                  OBJ_GFX_VRAM, OBJ_SIZE8_L16);
     UIInit();
-    bgSetGfxPtr(0, 0x2000);
-    bgSetMapPtr(0, 0x0000, SC_32x32);
+    bgSetGfxPtr(0, BG1_GFX_VRAM);
+    bgSetMapPtr(0, BG1_MAP_VRAM, SC_64x32);
     // Mode 1, BG3 at high priority so the dialogue box sits over the scene.
     setMode(BG_MODE1, BG3_MODE1_PRIORITY_HIGH);
     bgSetDisable(1); // BG2 unused

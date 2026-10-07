@@ -12,7 +12,11 @@ describe("compile targets", () => {
     expect(snes.disallowedBanks).toEqual([]);
     expect(snes.screenTileWidth).toBe(32);
     expect(snes.screenTileHeight).toBe(28);
-    expect(snes.maxTilesetTiles).toBe(256);
+    // v4: raised 256->1024 (user-asked, after unifying the VRAM map freed
+    // 0x2000-0x5FFF for BG1 graphics) - 1024 is also the real hardware
+    // ceiling (the tilemap's own 10-bit tile-index field), not just a
+    // VRAM-budget choice anymore.
+    expect(snes.maxTilesetTiles).toBe(1024);
     // v4: raised from 9/9 to match GB Studio 3.2.1 exactly (a stale
     // placeholder, not a real engine ceiling) - gbs_types.h's MAX_ACTORS/
     // MAX_TRIGGERS were raised to match.

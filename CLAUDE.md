@@ -335,7 +335,8 @@ by target, `undefined` target still falls back to gb).
   xflip<<14 | yflip<<15`). `imageToBGData(file)` for backgrounds; `imageToSpriteData(file)` for
   a sprite sheet's first 16×16 frame → 4 OBJ tiles. Pure helpers unit-tested; `decodeBGData()`
   inverts `imageToBGData` and `snesgfx.test.js` asserts a lossless round-trip.
-  `targets/snes.js` `maxTilesetTiles` is the real 256-tile VRAM budget.
+  `targets/snes.js` `maxTilesetTiles` is the real tile-index-field ceiling (1024 — see the
+  "Fixed VRAM layout" entry below for why it isn't a VRAM-size number).
   **`imageToSpriteData` now warns on a >16-colour sprite sheet, matching `imageToBGData`**
   (asked by the user while discussing the `snesFixedAssets.js` palette bug above: "why
   transform sprite/background palettes at all?"). Backgrounds already warned and pointed at
@@ -1006,7 +1007,9 @@ by target, `undefined` target still falls back to gb).
   runtime behaviour changes.
 - **Perf profile (M11 step 1) — `appData/src/snes/PERF.md`.** Measured in Mesen against real
   stress ROMs: ROM (77% of 4 used banks, spills to empty banks / 128-bank max), WRAM (14%),
-  VRAM (~58%, 256-tile BG cap is the only real limit), ARAM (snesmod-managed) all have headroom.
+  VRAM (~58%, 256-tile BG cap is the only real limit — superseded, see the "Fixed VRAM layout"
+  entry below: BG1 is now unified at a fixed address with a 1024-tile ceiling), ARAM
+  (snesmod-managed) all have headroom.
   The one soft spot is CPU: a typical scene holds locked 60fps, but even a 9-*static*-actor
   32×32 scene already burns ~75% of the active-frame budget in `SceneUpdate`+`UIUpdate`+
   `CameraUpdate` (816-tcc codegen is slow), so a scene with 6+ *simultaneously moving* actors
@@ -1375,6 +1378,73 @@ rendering sprite, to settle a visual claim with certainty instead of eyeballing 
   (confirmed no `Projectiles`/`WeaponAttack` JS test file exists in `test/events/` at all);
   verified the same way the perf fix just above was, a real Mesen measurement against the real
   project.
+
+**Fixed VRAM layout + BG1 tile budget raised 256→1024 (2026-10-06, user-driven).** Prompted by
+an exploratory question ("why do we limit max tiles to 256 tiles per map?"); investigating it
+surfaced that BG1's tilemap address (and therefore the budget) silently depended on whether a
+scene routed through the Map Engine or the hand-rolled streaming path (`0x0000` either way in
+practice, but by two different, unrelated code paths computing the same address, not a single
+source of truth) — the user then gave an explicit, precise directive (citing a sibling project's
+`gfxs.h` as the pattern to follow) to make every VRAM region's address **fixed and identical**
+regardless of routing: OBJ gfx `0x0000`, BG1 gfx `0x2000`, BG3 gfx `0x6000`, BG1 map `0x6800`,
+BG3 map `0x7800`. Addresses were checked against real PVSnesLib register-alignment constraints
+before implementing, not guessed — read directly from the vendored asm
+(`pvsneslib/source/sprites.asm`, `backgrounds.asm`): `BGxNBA` only needs 4KB/`0x1000`-word
+alignment, but the OBJ tile-base register needs coarser 16KB/`0x2000`-word alignment, which is
+why OBJ and BG1 gfx can't simply swap. New shared constants in `scene.h`
+(`OBJ_GFX_VRAM`/`BG1_GFX_VRAM`/`BG1_MAP_VRAM`) replace the scattered hex literals previously
+duplicated across `game.c`/`scene.c`. **A real bug this move would otherwise have introduced,
+self-caught via code audit, not user-reported**: `scene.c`'s hand-rolled `StreamColumn()` (used
+by a wide+parallax scene's background streaming — the Map Engine can't coexist with parallax's
+HDMA, see the Map Engine entry elsewhere in this file) computed its destination VRAM word with
+no base offset, implicitly relying on the tilemap living at the old `0x0000`. Once the tilemap
+moved to `0x6800`, this would have silently streamed background columns straight into OBJ's new
+`0x0000` region instead — fixed by adding `BG1_MAP_VRAM +` to the destination computation;
+verified in Mesen by walking the real "Parallax Example" scene across its entire width with
+clean rendering throughout (and no corruption of OBJ's graphics mid-walk). Once BG1's address
+was fixed and no longer shared contested space with OBJ, the user asked to raise
+`maxTilesetTiles` 256→1024: the real ceiling turns out to be the tilemap cell format itself (a
+16-bit word, `tile | pal<<10 | prio<<13 | xflip<<14 | yflip<<15` — only a 10-bit tile-index
+field), not a VRAM-size choice, so 1024 is the true hardware maximum, not an arbitrary bump.
+Verified with a dedicated stress test: a synthetic hash-based noise PNG (guaranteed not to
+tile-dedup, unlike a hand-drawn background) built near the new 1024-tile ceiling compiled and
+linked with no VRAM collision against the now-adjacent BG3 region. `PERF.md`'s VRAM table was
+rewritten to the new fixed addresses; while updating it, also caught and fixed a stale,
+unrelated figure — BG3 font size was documented as `~0x307` words (775) but the real committed
+`UI_FONT_SIZE` is `3760` bytes = `1880` words (`~0x758`) — corrected. Tests:
+`targets.test.js`'s `maxTilesetTiles` expectation updated to 1024.
+
+**`!S0!`-`!S5!` inline typewriter-speed codes in dialogue text (2026-10-06, user-asked, after a
+scoping question: "what do you need to change to implement it").** GB Studio 3.x's real
+authoring convention lets a dialogue string switch typewriter speed mid-sentence via
+`!S0!`-`!S5!` tokens; this fork's `trimlines.js` already recognised the tokens for line-wrap
+math (excluding them from character-count limits — `commandRegex`, tested already) but nothing
+ever compiled them to anything — a literal `!S3!` reached the ROM's string table unchanged and
+rendered as 4 garbage glyphs. Implemented end-to-end, following the project's existing
+`$NN$`/`#NN#` runtime variable-substitution mechanism (`ui_subst()` in `ui.c`) as the template
+for a second inline-control-code mechanism: `trimlines.js` gained `encodeTextSpeedCodes(text)`,
+called from `scriptBuilder.js`'s `textDialogue()` immediately after `trimlines()` (ordering
+matters — `trimlines()` still needs the literal `"!Sx!"` text present to correctly exclude it
+from line-wrap math; encoding to raw bytes first would break that). Each match becomes 2 raw
+bytes: a `0x01` sentinel (`UI_SPEED_CODE`, new in `ui.c`) followed by `speed + 1` — the `+1` so
+a `!S0!` code never embeds a literal `0x00`, which `ui_subst()`'s C-string-style scanning would
+otherwise read as the string terminator. Engine side: `ui_wrap()` skips the 2-byte code in both
+its per-character column-counting loop and its inner word-length-scanning loop (mirroring how it
+already must skip past `$NN$`/`#NN#`); `ui_reveal_char()` loops past any run of speed codes
+before revealing the next real character, writing each one straight to the existing
+`ui_text_speed` static — the same variable the pre-existing `TEXT_SET_ANIM_SPEED` opcode already
+writes, so the inline code is simply a second way to set it, with no new runtime state. Verified
+two ways: a byte-level ScriptBuilder test (`scriptBuilder.test.js`) asserting the exact compiled
+string contents for `"Hi!S3!there"`; and two real Mesen runs of a toolchain-built ROM reading
+real WRAM — first with `!S0!` (byte-exact proof the sentinel/value decode correctly, though
+`ui_speed_tick()`'s own thresholds make speeds 0-2 visually indistinguishable, all ticking every
+frame), then re-run with `!S5!` for a genuinely observable effect: the dialogue
+`"AAAAAAAAAA!S5!BBBBBBBBBB"` revealed its ten A's in 15 frames (default speed) then its ten B's
+in 63 frames — matching `ui_speed_tick(5)`'s real 1-in-8-frame throttle almost exactly — with a
+clean mid-reveal screenshot showing no garbage characters from the control bytes. Tests:
+`trimlines.test.js` (5 cases: basic encode, speed-0 never emits a literal 0x00, speed-5 encodes
+as byte 6, multiple codes in one string, text with no codes unchanged), `scriptBuilder.test.js`
+(byte-exact compiled output).
 
 ## Tests
 

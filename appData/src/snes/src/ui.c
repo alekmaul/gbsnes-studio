@@ -13,11 +13,16 @@
 extern u16 prev_joy;
 extern u8 time;
 
-/* VRAM layout (words): BG1 map 0x0000-0x0FFF, BG3 map 0x1000-0x17FF,
- * BG1 tiles 0x2000-0x2FFF (256 4bpp tiles), BG3 UI tiles 0x3000-0x375F
- * (235 2bpp tiles: 224 glyphs + fill + 9-slice frame + cursor), OBJ 0x4000. */
-#define UI_MAP_VRAM  0x1000
-#define UI_FONT_VRAM 0x3000
+/* v4 (user-asked): fixed VRAM layout, same regardless of whether a scene
+ * routes through the Map Engine - see scene.h's own shared constants
+ * (OBJ_GFX_VRAM/BG1_GFX_VRAM/BG1_MAP_VRAM) for the other 3 regions and the
+ * full map. These two are ui.c-local since nothing outside this file needs
+ * BG3's own addresses:
+ *   BG3 UI tiles 0x6000-0x67FF (235 2bpp tiles: 224 glyphs + fill +
+ *     9-slice frame + cursor)
+ *   BG3 map      0x7800-0x7FFF (SC_32x32, 1024 of 2048 words needed) */
+#define UI_MAP_VRAM  0x7800
+#define UI_FONT_VRAM 0x6000
 
 /* tilemap entry: palette field 4 (bits 10-12 -> CGRAM 16..19) + priority bit
  * (13), so the box wins over the opaque BG1 when $2105.3 (BG3 priority in
@@ -37,6 +42,17 @@ extern u8 time;
  * of row 28 in the overscan area, so a "parked" overlay left with fill tiles
  * down there paints a stray dark line along the bottom edge. */
 #define UI_SCREEN_ROWS 28
+
+/* v4 (user-asked): GB Studio 3.x's real inline typewriter-speed shorthand,
+ * !S0!..!S5! in the authored dialogue text - compileSnesData.js's
+ * encodeTextSpeedCodes (trimlines.js) turns each occurrence into these 2
+ * raw bytes before the string ever reaches ROM: UI_SPEED_CODE (a sentinel
+ * no real character ever produces - printable text is 0x20+) followed by
+ * (speed + 1). The +1 avoids ever embedding a literal 0x00 byte as the
+ * value, which ui_subst()'s plain C-string copy loop below would read as
+ * the string terminator, silently truncating everything after it - decoded
+ * back out in ui_reveal_char() below. */
+#define UI_SPEED_CODE 0x01
 
 #define BOX_ROW0 20        /* top of the max-size box */
 #define BOX_ROWS 8         /* max box height */
@@ -297,6 +313,14 @@ static void ui_wrap(u8 width)
             col = 0;
             continue;
         }
+        /* v4: a !Sx! speed code (UI_SPEED_CODE + value, 2 raw bytes) is
+         * zero-width - skip both without counting a column, same reasoning
+         * as trimlines.js's own commandRegex exclusion at compile time. */
+        if ((u8)c == UI_SPEED_CODE)
+        {
+            i++; /* this i++ plus the for loop's own = skip both bytes */
+            continue;
+        }
         if (c == ' ')
         {
             u8 wl = 0, j;
@@ -304,6 +328,11 @@ static void ui_wrap(u8 width)
             {
                 if (ui_text[j] == ' ') break;
                 if (ui_text[j] == '\n') break;
+                if ((u8)ui_text[j] == UI_SPEED_CODE)
+                {
+                    j++;
+                    continue;
+                }
                 wl++;
             }
             if (col + 1 + wl > width)
@@ -522,12 +551,28 @@ void UIShowMenu(u16 flag, const unsigned char *str, u8 cancel_cfg, u8 layout)
 static void ui_reveal_char(void)
 {
     char ch;
-    if (ui_pos >= ui_len)
+    /* v4: a !Sx! speed code is zero-width and takes effect instantly, not
+     * over a visible tick - loop past any run of them (the normal case is
+     * zero or one) until a real character (or end of string) is found,
+     * rather than "spending" a typewriter tick on an invisible control
+     * code. A plain loop, not recursion, to stay consistent with the rest
+     * of this engine's style and keep stack depth flat. */
+    for (;;)
     {
-        ui_state = 2;
-        return;
+        if (ui_pos >= ui_len)
+        {
+            ui_state = 2;
+            return;
+        }
+        ch = ui_text[ui_pos++];
+        if ((u8)ch == UI_SPEED_CODE)
+        {
+            u8 speed_byte = (u8)ui_text[ui_pos++];
+            ui_text_speed = (u8)(speed_byte - 1);
+            continue;
+        }
+        break;
     }
-    ch = ui_text[ui_pos++];
     if (ch == '\n')
     {
         ui_col = 0;

@@ -75,11 +75,18 @@ const snesTarget = {
   maxBackgroundWidth: 2040,
   maxBackgroundHeight: 512,
   maxBackgroundPixels: null,
-  // VRAM budget for one background layer's tiles (M6). v1.1.4 engine layout
-  // (appData/src/snes/src/ui.c): BG1 map 0x0000-0x0FFF, BG3 UI map
-  // 0x1000-0x17FF, BG1 tiles 0x2000-0x2FFF (0x1000 words), BG3 font 0x3000+.
-  // A 4bpp tile is 16 words, so 0x1000 / 16 = 256 tiles.
-  maxTilesetTiles: 256,
+  // VRAM budget for one background layer's tiles (M6; raised 256->1024,
+  // v4 user-asked follow-up to the VRAM unification below). A 4bpp tile is
+  // 16 words, so 1024 tiles = 0x4000 words (16384) - BG1's own full
+  // allotment at its fixed VRAM home, 0x2000-0x5FFF (see
+  // appData/src/snes/src/scene.h's BG1_GFX_VRAM/full fixed-layout comment),
+  // which is also the real hardware ceiling: a tilemap cell's tile-index
+  // field is only 10 bits (snesgfx.js's packed tile|pal<<10|prio<<13|
+  // xflip<<14|yflip<<15 format), so 1024 is the most any background could
+  // ever address regardless of how much VRAM were given to it - this value
+  // can't be raised further without widening that field (a tilemap format
+  // change, not a VRAM-layout one).
+  maxTilesetTiles: 1024,
 
   // --- Per-scene entity limits ---
   // v4 (user-found): raised to match GB Studio 3.2.1 exactly - these were a

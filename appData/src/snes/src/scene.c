@@ -813,18 +813,18 @@ void SceneInit(void)
     /* v4 safety clamp: compileSnesData.js now emits a background's real,
      * unpadded tilemap (fixed 2026-09-20 - it used to hard-cap at 32x32,
      * silently truncating anything bigger with no VRAM risk). SC_64x64's
-     * real VRAM budget is 8192 bytes (0x0000-0x0FFF, 4096 words) - a
-     * background over 64x64 tiles (e.g. a 255-tile-wide scrolling scene)
-     * now has more map data than fits, and dmaCopyVram doesn't know where
-     * the BG1 tilemap region ends: an unclamped copy would plow straight
-     * through BG3's tilemap/font (0x1000+) and eventually the BG1 tileset
-     * (0x2000+). Real horizontal streaming (loading only a sliding 64-tile
-     * window and DMAing new columns as the camera scrolls) is the intended
-     * fix for those scenes - not done yet; until then, clamp to what
-     * SC_64x64 can safely hold so the game only shows the top-left 64x64
-     * corner instead of corrupting VRAM. This only engages for scenes
-     * already beyond the compiler's own 64x64 warning, so it's a silent
-     * no-op for every already-warned-about-or-smaller scene. */
+     * real VRAM budget is 8192 bytes (4096 words) - a background over
+     * 64x64 tiles (e.g. a 255-tile-wide scrolling scene) now has more map
+     * data than fits, and dmaCopyVram doesn't know where the BG1 tilemap
+     * region ends: an unclamped copy would plow straight through BG3's
+     * tilemap (0x7800+, see the fixed VRAM map below). Real horizontal
+     * streaming (loading only a sliding 64-tile window and DMAing new
+     * columns as the camera scrolls) is the intended fix for those scenes -
+     * not done yet; until then, clamp to what SC_64x64 can safely hold so
+     * the game only shows the top-left 64x64 corner instead of corrupting
+     * VRAM. This only engages for scenes already beyond the compiler's own
+     * 64x64 warning, so it's a silent no-op for every already-warned-about-
+     * or-smaller scene. */
     mapLen = bg_maps_len[bg_index];
     if (mapLen > 8192) mapLen = 8192;
 
@@ -832,7 +832,7 @@ void SceneInit(void)
      * or leaves it black if a fade-in is pending after a SWITCH_SCENE. */
     WaitForVBlank();
     setScreenOff();
-    dmaCopyVram((u8 *)bg_tiles_ptrs[bg_index], 0x2000, bg_tiles_len[bg_index]);
+    dmaCopyVram((u8 *)bg_tiles_ptrs[bg_index], BG1_GFX_VRAM, bg_tiles_len[bg_index]);
     if (!use_map_engine)
     {
         /* M7 (v4): a scene that painted TILE_PROP_PRIORITY tiles has its own
@@ -842,36 +842,46 @@ void SceneInit(void)
          * Not available on the Map Engine path below - priority tiles aren't
          * supported there (see the plan's Phase 0d; neither real wide scene
          * in this project paints any, so this is a documented scope limit,
-         * not a regression). */
+         * not a regression).
+         *
+         * v4 (user-asked): BG1's tilemap now lives at the SAME fixed VRAM
+         * address (0x6800) whether or not this scene uses the Map Engine -
+         * see the fixed VRAM map in game.c's own boot-time comment. Used to
+         * be 0x0000 here specifically (switching address depending on
+         * routing); unifying it removes that distinction entirely. */
         dmaCopyVram(
             (u8 *)(scene_bg_map_ptrs[scene_index] ? scene_bg_map_ptrs[scene_index] : bg_maps_ptrs[bg_index]),
-            0x0000, mapLen);
+            BG1_MAP_VRAM, mapLen);
     }
     SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
     /* this scene's OBJ tile sheet (8 KB) + 8-palette CGRAM image (bakes in the
-     * emote / avatar palettes at OBJ pal 1 / 2). */
-    dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], 0x4000, SPR_TILES_SIZE);
+     * emote / avatar palettes at OBJ pal 1 / 2). v4: OBJ now lives at 0x0000
+     * (was 0x4000) - see game.c's fixed VRAM map comment. */
+    dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], OBJ_GFX_VRAM, SPR_TILES_SIZE);
     dmaCopyCGram((u8 *)scene_spr_pal_ptrs[scene_index], 128, SPR_PAL_SIZE);
 
     if (use_map_engine)
     {
         /* PVSnesLib's Map Engine owns BG1's tilemap at its own fixed VRAM
          * address (0x6800 words - map.h's own documented address, "layer
-         * address is: 6800 for Layer 1") instead of the plain 0x0000 window
-         * above; mapLoad DMAs the real tilemap + metatile-definition tables
-         * itself. tilesprop is a single all-zero shared blob - collision
-         * stays on this engine's own col_solid()/scene_col[] bitmap, never
-         * the Map Engine's tile-identity-keyed one (see the plan). */
-        bgSetMapPtr(0, 0x6800, SC_64x32);
+         * address is: 6800 for Layer 1"); mapLoad DMAs the real tilemap +
+         * metatile-definition tables itself. tilesprop is a single all-zero
+         * shared blob - collision stays on this engine's own
+         * col_solid()/scene_col[] bitmap, never the Map Engine's
+         * tile-identity-keyed one (see the plan). Same address the non-Map-
+         * Engine branch above now also uses - this bgSetMapPtr call is
+         * technically redundant with the one below it, kept for clarity at
+         * this specific call site (mapLoad immediately follows it). */
+        bgSetMapPtr(0, BG1_MAP_VRAM, SC_64x32);
         mapLoad((u8 *)bg_mapdata_ptrs[bg_index], (u8 *)bg_metatiles_ptrs[bg_index],
                 (u8 *)mapengine_tilesprop);
         stream_bg_index = 0xff;
     }
     else
     {
-        bgSetMapPtr(0, 0x0000, sc_size);
+        bgSetMapPtr(0, BG1_MAP_VRAM, sc_size);
 
         /* Horizontal background streaming (v4): only a background wider than
          * the 64-tile VRAM window needs it - bg_fullmap_ptrs[bg_index] is a
@@ -891,7 +901,7 @@ void SceneInit(void)
             stream_bg_index = 0xff;
         }
     }
-    bgSetGfxPtr(0, 0x2000);
+    bgSetGfxPtr(0, BG1_GFX_VRAM);
     map_engine_active = use_map_engine;
 
     actors[0].x = ((s16)map_next_x << 3) + 8;
@@ -1099,7 +1109,16 @@ static void StreamColumn(u16 worldCol)
     for (row = 0; row < maxRow; row++)
     {
         u16 srcIdx = ((u16)row * stream_bg_w + worldCol) * 2;
-        u16 dstWord = BgMapWordOffset(vramCol, row);
+        /* BgMapWordOffset is a pure in-window offset (0-based, mirroring
+         * compileSnesData.js's own mapByteIndex, which has no notion of a
+         * VRAM base either) - BG1_MAP_VRAM must be added here explicitly.
+         * v4 (user-asked VRAM unification): this used to be a no-op (base
+         * 0x0000) while this streaming path's own SceneInit DMA also used
+         * 0x0000 - now that BG1's tilemap lives at a fixed BG1_MAP_VRAM
+         * (0x6800) regardless of routing, forgetting this base here would
+         * have silently streamed columns into OBJ's new graphics region at
+         * the bottom of VRAM instead of the actual tilemap. */
+        u16 dstWord = BG1_MAP_VRAM + BgMapWordOffset(vramCol, row);
         dmaCopyVram((u8 *)(full + srcIdx), dstWord, 2);
     }
 }

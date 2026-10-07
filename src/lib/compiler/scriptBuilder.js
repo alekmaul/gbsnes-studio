@@ -135,7 +135,7 @@ import {
   rpnFunctionDec,
 } from "./helpers";
 import { hi, lo } from "../helpers/8bit";
-import trimlines from "../helpers/trimlines";
+import trimlines, { encodeTextSpeedCodes } from "../helpers/trimlines";
 import { SPRITE_TYPE_ACTOR } from "../../consts";
 import { is16BitCType } from "../helpers/engineFields";
 import { nextVariable } from "../helpers/variables";
@@ -440,6 +440,11 @@ class ScriptBuilder {
 
     const maxPerLine = avatarId ? 16 : 18;
     text = trimlines(text, maxPerLine);
+    // v4 (user-asked): !S0!..!S5! inline typewriter-speed codes - must run
+    // after trimlines() above, which still needs the literal "!Sx!" text to
+    // correctly exclude it from line-wrap math (see encodeTextSpeedCodes's
+    // own comment).
+    text = encodeTextSpeedCodes(text);
 
     let stringIndex = strings.indexOf(text);
     if (stringIndex === -1) {

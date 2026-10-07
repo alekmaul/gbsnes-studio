@@ -1,4 +1,4 @@
-import trimlines from "../../src/lib/helpers/trimlines";
+import trimlines, { encodeTextSpeedCodes } from "../../src/lib/helpers/trimlines";
 
 test("shouldn't modify strings under line limit", () => {
   expect(trimlines("012345678901234567")).toBe("012345678901234567", 18);
@@ -119,6 +119,47 @@ test("should treat variable characters as length=1 in total limits", () => {
   expect(
     trimlines("01234567890123456#L0#\n01234567890123456#L0#\n012345678901234#L0#67")
   ).toBe("01234567890123456#L0#\n01234567890123456#L0#\n012345678901234#L0#", 18);
+});
+
+// v4 fix (user-asked): !S0!..!S5! was recognised by trimlines' own
+// commandRegex (for line-wrap math, tested above) but never actually
+// implemented - a literal "!S3!" compiled straight to the ROM string table
+// and rendered as 4 garbage characters. encodeTextSpeedCodes (called from
+// scriptBuilder.js's textDialogue, after trimlines - see that call site's
+// own comment) turns each match into the 2 raw bytes ui.c's
+// ui_reveal_char() now understands: a 0x01 sentinel + (speed + 1), the +1
+// so a speed-0 code never embeds a literal 0x00 (the C string terminator
+// ui_subst() looks for).
+describe("encodeTextSpeedCodes (v4 fix)", () => {
+  test("replaces a speed code with 2 raw bytes: 0x01 sentinel + speed + 1", () => {
+    const out = encodeTextSpeedCodes("Hi!S3!there");
+    expect(out).toBe(`Hi${String.fromCharCode(1, 4)}there`);
+    expect(out.charCodeAt(2)).toBe(1);
+    expect(out.charCodeAt(3)).toBe(4);
+  });
+
+  test("speed 0 encodes as byte 1, never a literal 0x00", () => {
+    const out = encodeTextSpeedCodes("!S0!");
+    expect(out.length).toBe(2);
+    expect(out.charCodeAt(0)).toBe(1);
+    expect(out.charCodeAt(1)).toBe(1);
+  });
+
+  test("speed 5 (the highest real value) encodes as byte 6", () => {
+    const out = encodeTextSpeedCodes("!S5!");
+    expect(out.charCodeAt(1)).toBe(6);
+  });
+
+  test("multiple codes in one string all get replaced", () => {
+    const out = encodeTextSpeedCodes("!S1!Hello!S4!World");
+    expect(out).toBe(
+      `${String.fromCharCode(1, 2)}Hello${String.fromCharCode(1, 5)}World`
+    );
+  });
+
+  test("text with no speed codes is unchanged", () => {
+    expect(encodeTextSpeedCodes("Hello World")).toBe("Hello World");
+  });
 });
 
 test("should allow trimming text to a single line using third arg", () => {

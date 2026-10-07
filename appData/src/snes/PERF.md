@@ -48,20 +48,28 @@ consumers are snesmod's own driver state and the initialised-globals block. **No
 
 ## VRAM (64 KB / 32 K words)
 
-Fixed engine layout:
+**v4 (user-asked): re-laid-out, fixed engine map** - every region now lives at the same address
+whether or not a scene routes through the Map Engine (previously BG1's tilemap switched between
+`0x0000` and `0x6800` depending on routing; see `appData/src/snes/src/scene.h`'s own
+`OBJ_GFX_VRAM`/`BG1_GFX_VRAM`/`BG1_MAP_VRAM` constants, shared by `game.c`/`scene.c`):
 
 | Words | Region | Size |
 | --- | --- | --- |
-| `0x0000–0x0FFF` | BG1 tilemap | 4 KW (all of it for an `SC_64x64` scene; 1 KW for `SC_32x32`) |
-| `0x1000–0x13FF` | BG3 UI tilemap | 1 KW |
-| `0x2000–0x2FFF` | BG1 tileset | 4 KW → **256-tile cap** (`targets/snes.js` `maxTilesetTiles`) |
-| `0x3000–~0x3307` | BG3 font | ~0.8 KW |
-| `0x4000–0x4FFF` | OBJ tiles (the 256-tile sheet: actor direction + walk-cycle frames, emotes, avatars — fills the whole first OBJ name page) | 4 KW |
+| `0x0000–0x0FFF` | OBJ tiles (the 256-tile sheet: actor direction + walk-cycle frames, emotes, avatars — fills the whole first OBJ name page) | 4 KW |
+| `0x2000–0x5FFF` | BG1 tileset | 16 KW → **1024-tile cap** (`targets/snes.js` `maxTilesetTiles`) |
+| `0x6000–~0x6758` | BG3 font | ~1.8 KW (235 2bpp tiles, `UI_FONT_SIZE` 3760 B = 1880 words - the old version of this table had a stale, too-small figure for this region, corrected here) |
+| `0x6800–0x77FF` | BG1 tilemap | 4 KW (all of it for an `SC_64x64` scene or the Map Engine's own `SC_64x32`; less for a smaller `SC_32x32` scene) — also PVSnesLib's own hardcoded Map Engine address (`map.h`: "layer address is 6800 for Layer 1"), so this never moves by routing |
+| `0x7800–0x7BFF` | BG3 UI tilemap | 1 KW |
 
-High-water ≈ `0x5000` ≈ **62 %** of VRAM, with large unused gaps. Two things sit at their
-ceiling: the **256-tile BG tileset budget** (a 32×32 scene whose art doesn't de-duplicate below
-256 unique tiles gets a compiler warning) and the **256-tile OBJ sheet** (the first name page is
-full after walk-cycle frames were added — more OBJ tiles would need the 2nd page).
+High-water ≈ `0x7C00` ≈ **97 %** of VRAM (up from the old layout's ≈62% - BG1's own tileset
+region alone now reserves 16 KW, most of it unused by a typical background, versus the old
+layout's tight 4 KW). Two things can still sit at a real ceiling: the **1024-tile BG tileset
+budget** (`maxTilesetTiles` - also the real hardware ceiling now, not just a VRAM-layout choice:
+a tilemap cell's own tile-index field is only 10 bits, `snesgfx.js`'s packed
+`tile|pal<<10|prio<<13|xflip<<14|yflip<<15` format, so 1024 is the most any background could
+ever address no matter how much VRAM it were given) and the **256-tile OBJ sheet** (the first
+name page is full after walk-cycle frames were added — more OBJ tiles would need the 2nd page,
+unaffected by this VRAM move).
 
 **Background streaming, for a scene wider than 64 tiles (v4, user-found — Space Battle/
 `leaving_earth.png`, 255 tiles wide).** The BG1 tilemap region above is a **hard 64×64-tile
