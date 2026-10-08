@@ -116,14 +116,15 @@ static BANK_PTR timer_script_ptr[NUM_TIMER_CONTEXTS];
  * SceneInit (SHOW_SPRITES right before DISPLAY_ON). */
 static u8 sprites_hidden = 0;
 
-/* Per-scene OBJ slot tables, filled by SceneInit from the scene blob's [24]
+/* Per-scene OBJ slot tables, filled by SceneInit from the scene blob's [32]
  * sprite table (was compile-time-const, project-wide - now every scene loads
  * its own <=8 sheets). sprite_slot_for_index points at the current scene's
  * project-index -> slot map (PLAYER_SET_SPRITE). Mutable: the toolchain does
- * not pre-zero .bss, so SceneInit always writes all 8. */
+ * not pre-zero .bss, so SceneInit always writes all 8 (all 4 tables). */
 u8 sprite_type_for_slot[SPRITE_SLOTS];
 u8 sprite_frames_for_slot[SPRITE_SLOTS];
 u8 sprite_pal_for_slot[SPRITE_SLOTS];
+u8 sprite_anim_speed_for_slot[SPRITE_SLOTS];
 const unsigned char *sprite_slot_for_index = 0;
 
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
@@ -624,10 +625,11 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  * top over time; re-derived from the real byte offsets, not assumed):
  *   [0] bg_index  [1] num_actors  [2] num_triggers  [3..4] scene_script_idx
  *   [5] width     [6] height      [7] scene_type (genre dispatch byte)
- *   [8..31]  (24 bytes) per-scene OBJ slot table: sprite_type[8],
- *            sprite_frames[8], sprite_pal[8]
- *   [32..37] (6 bytes) up to 3 banded parallax layers: {lines, shift} each
- *   [38..43] (6 bytes) On Player Hit script indices (collision group 1/2/3)
+ *   [8..39]  (32 bytes) per-scene OBJ slot table: sprite_type[8],
+ *            sprite_frames[8], sprite_pal[8], sprite_anim_speed[8] (v4,
+ *            Path A - 0xFF = no per-sheet override, see scene.h)
+ *   [40..45] (6 bytes) up to 3 banded parallax layers: {lines, shift} each
+ *   [46..51] (6 bytes) On Player Hit script indices (collision group 1/2/3)
  *   actors   (19 bytes each): tile_x, tile_y, dir, movement_type,
  *                       sprite_idx, script_idx (2B), sprite_type, anim_speed,
  *                       animate, collision_group, hit1_idx (2B), hit2_idx (2B),
@@ -737,16 +739,17 @@ void SceneInit(void)
     scene_type = s[7];
     p = s + 8;
 
-    /* [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
-     * sprite_pal[8] - see compileSnesData.js. */
+    /* [32] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
+     * sprite_pal[8], sprite_anim_speed[8] - see compileSnesData.js. */
     for (i = 0; i < SPRITE_SLOTS; i++)
     {
         sprite_type_for_slot[i] = p[i];
         sprite_frames_for_slot[i] = p[SPRITE_SLOTS + i];
         sprite_pal_for_slot[i] = p[2 * SPRITE_SLOTS + i];
+        sprite_anim_speed_for_slot[i] = p[3 * SPRITE_SLOTS + i];
     }
     sprite_slot_for_index = scene_sprite_slot_ptrs[scene_index];
-    p += 3 * SPRITE_SLOTS;
+    p += 4 * SPRITE_SLOTS;
 
     /* M6 (v4): [MAX_PARALLAX_LAYERS*2] banded X-axis parallax table - see
      * compileSnesData.js and parallax.c. lines=0 in slot 0 means no

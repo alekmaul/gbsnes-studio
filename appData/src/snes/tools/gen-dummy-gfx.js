@@ -331,7 +331,7 @@ const MOVE_AI_RANDOM_WALK = 5;
 // ---- scene data blobs ----------------------------------------------
 // header:  [bg_index, num_actors, num_triggers, scene_script_idx, width,
 //           height, scene_type]
-// M6 (v4): [MAX_PARALLAX_LAYERS*2] banded parallax table follows the [24]
+// M6 (v4): [MAX_PARALLAX_LAYERS*2] banded parallax table follows the [32]
 // sprite-slot table below (compileSnesData.js) - all-zero (no parallax) in
 // both dummy scenes. Projectiles follow-up (v4): a further [3] On Player Hit
 // script-index table (collision group 1/2/3) follows the parallax table.
@@ -349,12 +349,14 @@ const MOVE_AI_RANDOM_WALK = 5;
 // this generator can't be re-run yet (M7) to add real fixtures for them.
 const SCENE_TYPE_TOPDOWN = 0;
 const SPRITE_STATIC = 0;
-// [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
-// (compileSnesData.js). Dummy: slot 0 static, palettes 0/3..7.
+// [32] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8],
+// sprite_anim_speed[8] (compileSnesData.js). Dummy: slot 0 static, palettes
+// 0/3..7, no per-sheet anim speed override (0xff, v4 Path A).
 const dummySprSlots = [].concat(
   [SPRITE_STATIC, 0, 0, 0, 0, 0, 0, 0],
   [1, 1, 1, 1, 1, 1, 1, 1],
-  [0, 3, 4, 5, 6, 7, 0, 0]
+  [0, 3, 4, 5, 6, 7, 0, 0],
+  [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
 );
 const dummyParallax = [0, 0, 0, 0, 0, 0]; // MAX_PARALLAX_LAYERS(3) * 2, no parallax
 // [3] On Player Hit script indices (collision group 1/2/3), v4 follow-up -

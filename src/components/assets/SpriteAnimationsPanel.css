@@ -1,0 +1,7 @@
+.SpriteAnimationsPanel__State {
+  cursor: pointer;
+}
+
+.SpriteAnimationsPanel__State--Active {
+  color: var(--input-text-color);
+}
