@@ -1729,7 +1729,22 @@ can't reach - added right next to the existing (still-passing, still correct, ju
 insufficient on their own) single-dispatch tests, not replacing them. Full suite green (150
 suites, 711 passing), a real `npm start` build with no TS errors.
 
-## Tests
+**React warning: "Can't perform a state update on an unmounted component" in `SceneInfo`
+(user-found: dragging the player start marker to a different scene in the World editor).**
+`SceneInfo.js`'s `debouncedRecalculateCounts` (a 100ms `lodash/debounce` around
+`recalculateCounts`, which ends in `this.setState(...)`) was never cancelled in
+`componentWillUnmount` - only the separate tooltip `setTimeout` was. Moving the player's start
+position re-focuses the World editor onto a different scene, unmounting the old scene's
+`SceneInfo`; if that unmount landed inside the pending 100ms debounce window, the scheduled
+`setState` fired against a component React had already torn down. Fixed by also calling
+`this.debouncedRecalculateCounts.cancel()` in `componentWillUnmount`, the standard fix for this
+very common React + lodash-debounce pattern. Audited every other `lodash/debounce` user in
+`src/components`/`src/containers` for the same gap: `ScriptEditor.js`'s `debouncedLoadMore` had
+the identical bug (also fixed, same one-line `.cancel()` addition) - `SpriteSheetCanvas.js`'s
+`debouncedDraw` only posts to a Web Worker and already un-registers its response listener on
+unmount (no local `setState` involved, so a late-firing draw is a harmless no-op), and
+`AppToolbar.tsx`/`WorldPage.tsx`'s debounced callbacks only `dispatch()` to Redux (fine to call
+after unmount - Redux doesn't care about component lifecycle) - neither needed a change.
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
 `test/data/compiler/*`, `test/helpers/*`, `test/migrate/*`, `test/store/features/*`,

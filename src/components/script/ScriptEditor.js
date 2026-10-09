@@ -56,6 +56,7 @@ class ScriptEditor extends Component {
 
   componentWillUnmount() {
     clearInterval(this.timer);
+    this.debouncedLoadMore.cancel();
   }
 
   loadMore = () => {

@@ -63,6 +63,7 @@ class SceneInfo extends Component {
 
   componentWillUnmount() {
     clearTimeout(this.tooltipTimer);
+    this.debouncedRecalculateCounts.cancel();
   }
 
   recalculateCounts = () => {
