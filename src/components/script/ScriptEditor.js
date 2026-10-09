@@ -253,7 +253,7 @@ ScriptEditor.propTypes = {
   selectCustomEvent: PropTypes.func.isRequired,
   entityId: PropTypes.string.isRequired,
   scope: PropTypes.string.isRequired,
-  pasteCustomEvents: PropTypes.string.isRequired
+  pasteCustomEvents: PropTypes.func.isRequired
 };
 
 ScriptEditor.defaultProps = Object.create(

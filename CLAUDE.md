@@ -1746,6 +1746,36 @@ unmount (no local `setState` involved, so a late-firing draw is a harmless no-op
 `AppToolbar.tsx`/`WorldPage.tsx`'s debounced callbacks only `dispatch()` to Redux (fine to call
 after unmount - Redux doesn't care about component lifecycle) - neither needed a change.
 
+**Three unrelated console warnings in the World editor (user-found: clicking a scene in the
+`sneshtml`/`snesgbs2` sample project).** All three were real, pre-existing latent bugs, not
+caused by anything in this session - just never surfaced before because they're warnings, not
+crashes.
+- `Tabs.tsx`'s `TabBar` mapped its tab buttons with no `key` prop at all (`tabKeys.map((tab,
+  index) => <Tab ...>)`), triggering React's generic "Each child in a list should have a
+  unique key prop" warning for every `Tabs`/`TabBar` instance that renders more than one tab
+  (the sidebar's World/Settings-style tab switcher). Fixed with `key={tab}` - `tab` is itself
+  a string from `Object.keys(values)`, already guaranteed unique.
+- `ScriptEditor.js`'s own `propTypes` declared `pasteCustomEvents: PropTypes.string.isRequired`
+  - a copy-paste leftover (everything around it is a real dispatch-bound function) - while the
+  component calls it as a plain function (`pasteCustomEvents()`) and `mapDispatchToProps` wires
+  it to `clipboardActions.pasteCustomEvents`, a real action creator. Fixed to
+  `PropTypes.func.isRequired`, matching every sibling prop in the same block.
+- `ScriptEventForm.js`'s `engineFields` prop was declared `PropTypes.objectOf(EngineFieldShape)`
+  but is both used as an array (`engineFields.find(...)`) and sourced from `state.engine.fields`
+  (`EngineFieldSchema[]` in `engineState.ts`) - genuinely an array the whole way through, not an
+  object. Fixed to `PropTypes.arrayOf(EngineFieldShape)`, matching `defaultProps.engineFields:
+  []` (which was already correct - only the type declaration was wrong).
+
+**Not fixed, not ours to fix**: a fourth warning in the same report ("`componentWillReceiveProps`
+has been renamed..." for `DragSource(ScriptEditorEvent)`/`DropTarget(DragSource(ScriptEditorEvent))`)
+comes from `react-dnd`'s own internal HOC implementation at the pinned `2.6.0` version (2017-era,
+predates the lifecycle rename) - confirmed by grepping this project's own `ScriptEditorEvent.js`
+for the method name (no match). Fixing it for real means upgrading `react-dnd` across several
+major versions (a real API rewrite, not a drop-in bump) - out of scope for a warning-only,
+dev-mode-only issue.
+
+## Tests
+
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
 `test/data/compiler/*`, `test/helpers/*`, `test/migrate/*`, `test/store/features/*`,
 `test/components/*`). Fixture projects in `test/projects/`. Event tests assert the exact
