@@ -624,12 +624,6 @@ const compileSnesData = async (
     const frames = new Array(SPRITE_SLOTS).fill(1);
     const pals = [];
     for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
-    // v4 (Path A, named animation states): a sheet's own default anim speed
-    // (SpriteSheet.animSpeed), applied when a sheet is equipped into this
-    // slot - 0xff ("no override") for a sheet with the field unset/null, so
-    // the actor keeps whatever anim_speed it already had. See scene.h's own
-    // comment on sprite_anim_speed_for_slot for the runtime side.
-    const animSpeeds = new Array(SPRITE_SLOTS).fill(0xff);
 
     const objPalColours = {}; // objPal -> this scene's claimed colour list
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
@@ -643,35 +637,10 @@ const compileSnesData = async (
         objPalColours[objPal] = conv.colors.slice(); // scene-local copy - conv
         // is shared/cached across every scene that uses this sprite sheet
       }
-      const spriteEntity = spriteById(id);
       placeTiles(k, tiles.slice(0, 4));
-      // placeFrames always uses the sheet's own real file-derived spriteType
-      // (conv.spriteType) - it decides which physical VRAM regions the PNG's
-      // own frame strip gets laid into (the ACTOR_UP_SLOT0/ACTOR_SIDE_SLOT0
-      // split for a genuine 3-frame file), never the overridden runtime
-      // interpretation below - a 6-frame sheet places identically either
-      // way (the "static" and "actor_animated" interpretations of 6 frames
-      // already share the exact same 6 VRAM regions, just read differently
-      // at runtime - frames_len_for/actor_render_tile, scene.c), and a
-      // 3-frame sheet forced "static" still only ever renders frame 0
-      // (frames_len_for falls through to 1 for that combination), so what
-      // placeFrames does with frames 1/2 there is moot either way.
       placeFrames(k, tiles, conv.spriteType);
-      // v4 (Path A follow-up): types[k] drives this slot's *runtime*
-      // interpretation (frames_len_for/actor_render_tile) and is what the
-      // player's scene-init equip and any runtime sheet swap both read -
-      // spriteTypeDec's own fallback (spriteEntity.defaultSpriteType
-      // undefined) reproduces conv.spriteType byte-for-byte, so an untouched
-      // sheet compiles identically to before this field existed.
-      types[k] = spriteTypeDec(
-        spriteEntity && spriteEntity.defaultSpriteType,
-        conv.frameCount
-      );
+      types[k] = conv.spriteType;
       frames[k] = conv.frameCount;
-      animSpeeds[k] =
-        spriteEntity && spriteEntity.animSpeed != null
-          ? clampByte(spriteEntity.animSpeed)
-          : 0xff;
       writePal(objPal, palBytesFor(objPalColours[objPal]));
     });
     sceneAvatarIds[sceneIndex].forEach((id, k) => {
@@ -680,7 +649,7 @@ const compileSnesData = async (
       if (k === 0) writePal(2, conv.paletteBytes);
     });
 
-    return { sheet, palBytes, types, frames, pals, animSpeeds };
+    return { sheet, palBytes, types, frames, pals };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -921,7 +890,7 @@ const compileSnesData = async (
 
     // per-scene OBJ-slot tables, read by SceneInit straight after w/h
     const spr = sceneSprites[sceneIndex];
-    const sprSlotBytes = [].concat(spr.types, spr.frames, spr.pals, spr.animSpeeds);
+    const sprSlotBytes = [].concat(spr.types, spr.frames, spr.pals);
 
     // M6 (v4): banded X-axis parallax scrolling, driven by the SNES's own
     // HDMA (setParallaxScrolling/HDMATable16, appData/src/snes/src/parallax.c)
@@ -977,7 +946,7 @@ const compileSnesData = async (
       w,
       h,
       sceneTypeDec(scene.type), // v2 M5a: genre dispatch byte
-      sprSlotBytes, // [32] sprite_type[8], sprite_frames[8], sprite_pal[8], sprite_anim_speed[8]
+      sprSlotBytes, // [24] sprite_type[8], sprite_frames[8], sprite_pal[8]
       parallaxBytes, // [6] M6 (v4): up to 3 {lines, shift} parallax bands
       // [6] Projectiles (v4, follow-up): On Player Hit script indices,
       // collision group 1/2/3 - see playerHit1/2/3ScriptIdx above.

@@ -682,12 +682,6 @@ void Script_PlayerSetSprite_b(void)
             actors[0].frames_len = frames_len_for(actors[0].sprite_type, slot);
             actors[0].frame = 0;
             actors[0].flip = 0;
-            /* v4 (Path A): apply the new sheet's own default pace, if it has
-             * one - see scene.h's sprite_anim_speed_for_slot comment. */
-            if (sprite_anim_speed_for_slot[slot] != 0xFF)
-            {
-                actors[0].anim_speed = sprite_anim_speed_for_slot[slot];
-            }
         }
     }
     ADVANCE();
@@ -722,11 +716,6 @@ void Script_ActorSetSprite_b(void)
                 frames_len_for(actors[script_actor].sprite_type, slot);
             actors[script_actor].frame = 0;
             actors[script_actor].flip = 0;
-            /* v4 (Path A): see Script_PlayerSetSprite_b's own comment. */
-            if (sprite_anim_speed_for_slot[slot] != 0xFF)
-            {
-                actors[script_actor].anim_speed = sprite_anim_speed_for_slot[slot];
-            }
         }
     }
     ADVANCE();

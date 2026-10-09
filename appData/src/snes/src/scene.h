@@ -39,24 +39,12 @@
 #define BG1_GFX_VRAM 0x2000
 #define BG1_MAP_VRAM 0x6800
 
-/* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [32]
+/* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [24]
  * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
- * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE).
- *
- * v4 (Path A, named animation states): sprite_anim_speed_for_slot holds each
- * slot's sheet's own authored default pace (SpriteSheet.animSpeed), or 0xFF
- * ("no override" - a sheet with the field unset/null). Script_PlayerSetSprite_b/
- * Script_ActorSetSprite_b (script_cmds.c) apply it to the actor's anim_speed
- * whenever that sheet is equipped at runtime (Set Sprite Sheet/Set Sprite
- * State), skipping the write entirely on 0xFF so the actor just keeps
- * whatever anim_speed it already had. Deliberately NOT applied at scene-init
- * actor spawn - SceneInit (scene.c) still reads each actor's own authored
- * anim_speed from the scene blob's per-actor entry, a separate, pre-existing
- * concept (an author's deliberate per-instance override) this doesn't touch. */
+ * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */
 extern u8 sprite_type_for_slot[SPRITE_SLOTS];
 extern u8 sprite_frames_for_slot[SPRITE_SLOTS];
 extern u8 sprite_pal_for_slot[SPRITE_SLOTS];
-extern u8 sprite_anim_speed_for_slot[SPRITE_SLOTS];
 extern const unsigned char *sprite_slot_for_index;
 
 /* v4 fix (user-found: swapping sprite sheets at runtime left frames_len

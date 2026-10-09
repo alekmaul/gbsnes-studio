@@ -1500,476 +1500,43 @@ no corruption. No JS-level test added - pure `ui.c` runtime change, no compiler/
 surface (the compiler-side `#NN#` → `#NN#`-resolved-index behavior already had coverage before
 this fix, in `scriptBuilder.test.js`/`trimlines.test.js`, and didn't change).
 
-**Named animation states, Path A (2026-10-07, user-asked, scoped via a real-codebase
-investigation into porting GB Studio 3.2.1's full metasprite/animation system).** User wanted
-this fork's sprite animation authoring to match B's real 3.2.1 system (per-sheet named states,
-each with its own animation type and frame sequence - `SpriteSheet.states[]` → `SpriteState`
-→ `SpriteAnimation` → `Metasprite`/`MetaspriteTile`, arbitrary per-tile OAM composition).
-Investigating B's real data model (`entitiesTypes.ts`, `compileSprites.ts`) against this
-engine's actual rendering (`scene.c`'s `actor_render_tile`/`frames_len_for`) found a hard
-mismatch: this engine draws exactly **one fixed 16x16 OAM sprite per actor**, picked from 6
-hardcoded VRAM regions (down/up/side × A/B pose) - there is no per-tile composition loop, and
-no sheet can have more than 6 physical frames at all (the region count is the hardware
-ceiling, not a soft limit). A literal port would mean a new multi-tile OAM-composition
-renderer - real, substantial engine work, not a data/editor change - so the work was split
-into two paths and scoped with the user via `AskUserQuestion`: **Path A** (named states/
-animations on today's fixed-frame renderer, no engine rewrite) now, **adopting PVSnesLib's
-own real metasprite engine** (`oamMetaDraw16`/`oamMetaDrawDyn16` et al - confirmed, by
-grepping the actual vendored `libc.obj`, to already be compiled into this project's toolchain,
-zero vendoring needed) as a later, separate effort for genuine per-tile composition.
+**Named animation states / metasprite editor ("Path A"/"Path B"), attempted and fully reverted
+(2026-10-07 through 2026-10-09).** A multi-day effort tried to give sprite sheets named,
+per-state animations (`SpriteState`/`SpriteSheet.animSpeed`/`defaultSpriteType`, a grouped
+"ANIMATIONS" tree + "Animation Settings" panel) and, further, a real GB Studio 3.2-style
+metasprite editor (`SpriteSheet.animationStates` → `AnimationState` → `AnimationType`-derived
+`SubState` → `Frame` → `MetaspriteTile`, click-to-place tile composition, a `compileSnesSprites.ts`
+compiler emitting real PVSnesLib `t_metasprite` records - never wired into the build). Several
+UI passes tried to reconcile the new panels' layout with the existing editor and never actually
+matched GB Studio 3.2's real page (overlapping panels, wrong positioning, a "big garbage" layout
+after one attempt) - user-rejected as not matching intent across multiple rounds, and finally
+asked for all of it removed: "it is not working, you don't understand what I want."
 
-Researching Path A's real scope found this fork already had most of the pieces, just
-disconnected: `SpriteState = {id, name, spriteSheetId}` (a named pointer to a *different whole
-sheet* - the right fit for this engine's "one coherent 6-frame layout per sheet" shape, not a
-gap to work around) and its editor, `SpriteStatesEditor.tsx`, were already fully built and
-Redux-wired (`addSpriteState`/`editSpriteState`/`removeSpriteState`) - just unmounted from
-`SpritesPage.js` after an earlier session found its old position (crammed into the left file
-list, the same spot the Animations dock already used) wasn't usable. Re-mounted instead as its
-own docked panel (`SpriteStatesEditor.css`, `position: fixed; top: 20px; right: 10px`),
-mirroring `SpriteFramesPanel`'s own `bottom: 20px; right: 10px` precedent - same "float over
-the preview area, not the narrow sidebar" fix, opposite corner so the two never collide.
-`flipLeft` needed no new field at all: the engine's `SPRITE_ACTOR`/`SPRITE_ACTOR_ANIMATED`
-render path already flips the side pose from `dir_x`'s sign unconditionally - exactly what
-B's `flipLeft` means, just always-on rather than an authored per-state toggle.
+Reverted in full: the `src/components/sprites/` directory, `compileSnesSprites.ts` and its
+test, the Path A editor panels (`SpriteAnimationSettingsPanel.tsx`, and
+`SpriteAnimationsPanel.tsx` restored to its pre-Path-A flat, ungrouped form), `SpritesPage.js`
+restored to its pre-Path-A shape (`ImageViewer` + `SpriteFramesPanel` + `FilesSidebar` +
+the flat Animations list - no state grouping, no "+ Add Animation State"), the
+`SpriteAnimationState`/`SpriteSubState`/`SpriteFrame`/`MetaspriteTile` types and their 7
+reducers in `entitiesState.ts`, `SpriteSheet.animSpeed`/`defaultSpriteType` (both the type
+fields and their `compileSnesData.js`/engine wiring - the scene blob's per-slot OBJ table is
+back to `[24]` bytes, `sprite_anim_speed_for_slot` is gone from `scene.c`/`scene.h`/
+`script_cmds.c`), and the associated l10n keys/tests. The pre-existing, actually-shipped
+mechanism this reverts *to* - `SpriteSheet.type` (static/animated/actor/actor_animated) +
+`numFrames`, named via `getSpriteAnimations()` (`spriteAnimations.js`) and compiled by
+`compileSnesData.js` into the per-scene sprite tables `SceneAnimateActors` (`scene.c`)
+auto-cycles - is untouched and still exactly as documented elsewhere in this file. Also
+untouched: `SpriteState`/`states` (the "Set Sprite State" scripting event's own data,
+`eventPlayerSetState.js`/`eventActorSetState.js`/`SpriteStateSelect.js`) - a real, older,
+unrelated feature that happened to share the word "state" with Path A's unrelated
+per-sheet-default feature.
 
-**The one genuinely new piece: `SpriteSheet.animSpeed` (number | null), matching B's own field
-shape exactly.** A sheet's own authored default pace, applied when that sheet is equipped at
-runtime via `Set Sprite Sheet`/`Set Sprite State` (`Script_PlayerSetSprite_b`/
-`Script_ActorSetSprite_b`, `script_cmds.c`) - `null`/unset means "no override," leaving the
-actor's current `anim_speed` untouched (compiles to `0xff`, which the two opcode handlers
-skip). Deliberately **not** applied at scene-init actor spawn - an actor's own authored
-`anim_speed` (already a real, separate per-instance field, unrelated to this one) is left
-alone there. Reused the existing `AnimationSpeedSelect` component verbatim (already supports
-`value: number | null` with a "None" option - exactly the shape needed) and added the first
-generic `editSpriteSheet` reducer (`entitiesState.ts`) - every sprite-sheet edit before this
-was a narrow, state-array-specific one (`editSpriteState`), since sprite sheets were otherwise
-100% file-watch-driven.
+Not reverted (unrelated real fixes that landed in the same commits as this work):
+`PlayerContactUpdate()`'s actor-script fallback fix (below) and the VRAM/dialogue-code work
+documented elsewhere in this file.
 
-Compiler/engine wiring follows the exact shape of every prior "+N bytes to the scene blob"
-change in this project's history: `compileSnesData.js`'s `buildSceneSprites` gained a 4th
-parallel 8-byte table (`animSpeeds`, alongside the existing `types`/`frames`/`pals`), growing
-the per-scene OBJ slot table `[24]` → `[32]` and shifting every scene-blob offset past it by
-+8 (`scene.c`'s own header comment, `gen-dummy-gfx.js`'s committed dummy fixture, and 7
-byte-exact assertions in `compileSnesData.test.js` all updated to match). New `scene.h`/
-`scene.c` global `sprite_anim_speed_for_slot[SPRITE_SLOTS]`, populated by `SceneInit` the same
-way the other 3 tables already are. Verified with this project's own established real-ROM-
-plus-Mesen methodology: a throwaway project (player starts on a 6-frame sheet with no
-`animSpeed` override, then swaps at runtime to a 3-frame sheet with `animSpeed: 0`) built
-through the real toolchain and run in Mesen - live WRAM showed `anim_speed` flip `3 → 0` in
-the exact same frame as `sprite_type`/`frames_len`/`frame_offset` all updating to the new
-sheet's own values, confirming the whole pipeline (schema → compiler → scene blob →
-`SceneInit` → runtime opcode handler → the actor's real field) end to end. Also confirmed via
-a real `npm start` webpack build (no TS errors) for the `entitiesTypes.ts`/`entitiesState.ts`/
-`SpriteStatesEditor.tsx` changes. Tests: `compileSnesData.test.js` (new describe block,
-byte-exact: a sheet with `animSpeed` set lands its value at the right OBJ slot, a sheet
-without it stays `0xff`), full suite green (150 suites, 713 tests).
-
-**Deferred to the later PVSnesLib-metasprite phase, not attempted here**: per-state frame
-*sequences*/sub-ranges within one sheet (blocked on the same 6-frame hardware ceiling -
-genuinely new per-tile composition is needed before a sheet can hold more than one named
-animation's worth of distinct art) and `animationType`/multi-frame-per-state authoring beyond
-what a sheet's own `type` (`static`/`animated`/`actor`/`actor_animated`) already fixes.
-
-**Path A follow-up: the Sprites page's own layout didn't read like B's real one (same day,
-user-found - side-by-side screenshots of a real project, `snest2`, against the real
-`gb-studio-3.2.1`).** Shipping Path A's pieces above left the page showing two disconnected-
-looking blocks: the pre-existing bottom-left "Animations" dock (a flat per-direction frame
-list, unrelated-looking to anything else) and the newly re-mounted states editor floating
-top-right with an unlabelled "None" dropdown above an unheaded "States" list - nothing tied
-the two together the way B's real page does (one "ANIMATIONS" tree, grouped by state, each
-state's own settings shown separately, frame thumbnails docked at the bottom - confirmed by
-checking B's actual UI, not just redescribing it from memory).
-
-Restructured to match, within what this engine's render model can actually represent (still
-no per-tile composition - see the Deferred paragraph above):
-- **`SpriteAnimationsPanel.tsx`** (the bottom-left dock) now renders a real grouped tree - one
-  group per state, always starting with the implicit "Default" group (this sheet's own
-  animations), then one group per authored `SpriteState`, each showing *that state's own
-  target sheet's* animations (falls back to an empty group if the target was since deleted,
-  not a crash). Groups are always expanded (no collapse/disclosure control, unlike B) - this
-  fork's state count is small (a handful of named alternate-sheet references, not B's
-  arbitrary per-state frame authoring), so a disclosure interaction wasn't judged worth the
-  added complexity for this engine's shape.
-- **`SpriteStatesEditor.tsx` replaced with `SpriteAnimationSettingsPanel.tsx`** - instead of
-  always listing every state's row flatly (the "weird state thing" the user flagged), it now
-  shows settings for *whichever node is selected in the tree*, matching B's real "ANIMATION
-  SETTINGS" panel. B's own panel has a genuinely editable "Animation Type" dropdown + an
-  "Auto Detect Animations" button - neither applies here: this engine auto-detects a sheet's
-  type from its PNG's own dimensions/frame count unconditionally, at file-watch time
-  (`snesgfx.js`'s `imageToSpriteData`), with no manual override point anywhere in the compile
-  pipeline - so Type is shown as a plain read-only label (new `FIELD_SPRITE_TYPE_*` strings),
-  and there's nothing for an "Auto Detect" button to trigger (it already always runs) -
-  documented as a deliberate, honest gap rather than faking a button that would do nothing.
-  Default Animation Speed now edits *whichever sheet is actually in effect* - this sheet
-  itself for Default, or the selected state's own target sheet for a named state - a state is
-  a pointer to a different sheet's own real `animSpeed` field, not a duplicate one, so there's
-  exactly one code path (resolve the effective sheet, then `editSpriteSheet` on its real id)
-  regardless of which node is selected.
-- `SpritesPage.js`'s selection model grew from a bare `animationIndex` to `{stateId,
-  animationIndex}`, and now resolves "which sheet is actually driving the Frames panel"
-  (`selectedSheet`) once per render - `SpriteFramesPanel.tsx` itself needed **no changes at
-  all**, since it already just resolves whatever sheet `id` it's given; passing it the
-  selected state's own target sheet id instead of the always-current file's id was enough to
-  make frame thumbnails correctly track the tree selection.
-- Both docked panels kept their existing fixed-position scheme (bottom-left Animations dock,
-  top-right Animation Settings panel mirroring `SpriteFramesPanel`'s own bottom-right spot) -
-  the complaint was about the content reading as disconnected, not the positions themselves.
-- New l10n keys (`FIELD_ANIMATION_SETTINGS`, `FIELD_ANIMATION_TYPE`, 4x `FIELD_SPRITE_TYPE_*`),
-  en-only per this project's established pattern for a small addition (falls back to `en` in
-  every other locale via `l10n.js`, not individually translated).
-
-Verified: full suite green (150 suites, 713 tests, unaffected - no existing test covers these
-UI files), a real `npm start` webpack build with no TS errors (confirms the new/changed `.tsx`
-files and the rewritten `SpritesPage.js`). No live in-app click-through this session (would
-need driving the real Electron GUI, which this environment can't do directly) - the user's own
-`snest2` project is the next real check.
-
-**Correction to the paragraph above, same day (user: "ce n'est pas le résultat attendu" -
-pointed directly at the real `gb-studio-3.2.1` source files, `NavigatorSprites.tsx`/
-`helpers.ts`/`AnimationTypeSelect.tsx`, instead of accepting the prior guess).** Reading those
-files directly (not re-deriving from the earlier, partial `entitiesTypes.ts` read) corrected
-two real mistakes in the write-up above:
-1. **"Animation Type" is genuinely user-editable in B** (`AnimationTypeSelect.tsx`, a real
-   6-option dropdown: Fixed Direction / Fixed Direction + Movement / Multi Direction / Multi
-   Direction + Movement / Platformer Player / Cursor) - the earlier claim that B only
-   auto-detects it was wrong. It stays read-only on this fork regardless, but for the *right*
-   reason now: `helpers.ts` (`filterAnimationsBySpriteType`/`animationMapBySpriteType`) shows
-   `animationType` is a *filter* over a fixed 8-slot array of independently-authored
-   metasprites every state always has - changing it only has real effect because each slot's
-   content is separately drawn on B's tile canvas. This engine has no such canvas; a sheet's
-   PNG layout *is* its one fixed set of poses, so there is nothing an editable dropdown here
-   could actually change - correctly inert either way, just previously justified with the
-   wrong reasoning (auto-detection, not "nothing to filter").
-2. **The real label text was wrong** - invented `FIELD_SPRITE_TYPE_*` strings ("Directional
-   (Actor)", "Directional (Walk Cycle)") where B has exact existing wording. Replaced with
-   B's real 3 relevant labels (`FIELD_FIXED_DIRECTION`/`FIELD_MULTI_DIRECTION`/
-   `FIELD_MULTI_DIRECTION_MOVEMENT`), correctly mapped: this fork's `static`/`animated` types
-   are *both* B's "fixed" (non-directional; `helpers.ts` confirms "Static" 1-frame and
-   "Animated" 2-25-frame are the same `animationType`, differing only in how many frames the
-   one Idle slot's own `SpriteAnimation` holds - not two different categories as the first
-   pass assumed), `actor` is "multi" with `flipLeft` (3 authored directions, left auto-flipped
-   - exactly this engine's own existing render convention), `actor_animated` is
-   "multi_movement" with `flipLeft`. No `platform_player`/`cursor` equivalent exists here (no
-   Platformer jump/climb poses, no point-and-click cursor sprite concept on this engine).
-3. **A real, separate UI bug also found and fixed by reading `NavigatorSprites.tsx`
-   directly**: B only shows a state *group heading* once a sheet has more than one state
-   (`tree.length > 1`) - the overwhelmingly common single-state case renders as a plain flat
-   list, no "Default" label anywhere. The first pass always showed the "Default" heading,
-   which is exactly the extra, always-present noise the user's screenshots were reacting to.
-   `SpriteAnimationsPanel.tsx` now matches B's real condition: a flat list for one group, real
-   grouped headings only once a second (named) state exists.
-
-`TYPE_LABELS`'s own code comment and `SpriteAnimationSettingsPanel.tsx`'s header comment were
-rewritten to state this derivation explicitly, citing the real source files, instead of the
-previous unsourced read-only justification. Tests: full suite green (150/150, unaffected), a
-real `npm start` webpack build with no TS errors. Still not live-in-app-verified (same
-environment limitation as above) - the user's own `snest2` project remains the next real check.
-
-**Second correction, same day (user, after seeing the read-only label rendered: "non, animation
-type is not usable").** The previous correction's conclusion - read-only, no metasprite canvas
-to filter - was itself incomplete: re-checking this engine's own existing code (not B's) found
-a real, already-wired, already-shipped lever that genuinely does change runtime behavior:
-`helpers.js`'s `spriteTypeDec(spriteType, numFrames)` can force a 3- or 6-frame sheet
-("actor"/"actor_animated") to the flat/non-directional interpretation instead of its natural
-directional one - already exposed **per-actor** (`ActorEditor.tsx`'s own Sprite Type field,
-`Actor.spriteType`), confirmed live at `scene.c`'s `actors[i].sprite_type = p[7]` for every
-regular (non-player) actor - just never surfaced as a **sheet-level default**, which is what
-the Sprites page's own Animation Type control should actually be.
-
-Asked the user directly (`AskUserQuestion`, having now guessed wrong twice) whether they
-wanted this as a real sheet-level default, a link to the existing per-actor control, or
-something else - they chose the sheet-level default. Implemented:
-- New `SpriteSheet.defaultSpriteType?: ActorSpriteType` (`entitiesTypes.ts`) - `undefined` =
-  auto (today's exact file-derived behavior; confirmed `spriteTypeDec(undefined, frameCount)`
-  reproduces `snesgfx.js`'s own `conv.spriteType` byte-for-byte, so an untouched sheet compiles
-  identically). Only meaningful for `"actor"`/`"actor_animated"` sheets - `spriteTypeDec` only
-  ever special-cases exactly 3 or 6 frames; every other count is always static regardless.
-- `compileSnesData.js`'s `buildSceneSprites`: `types[k]` (the shared per-slot table
-  `SceneInit`'s player equip and any runtime `Set Sprite Sheet`/`Set Sprite State` swap both
-  read) now comes from `spriteTypeDec(spriteEntity.defaultSpriteType, conv.frameCount)` instead
-  of the raw file-derived `conv.spriteType`. **Careful not to touch `placeFrames`'s own
-  `spriteType` argument** - that one decides which physical VRAM regions the PNG's own tile
-  strip gets DMA'd into (the `ACTOR_UP_SLOT0`/`ACTOR_SIDE_SLOT0` split for a genuine 3-frame
-  file) and must stay driven by the real file layout (`conv.spriteType`) regardless of the
-  override - a 6-frame sheet places identically either way (both interpretations already read
-  the same 6 VRAM regions, just differently - `frames_len_for`/`actor_render_tile`), and a
-  3-frame sheet forced static only ever renders frame 0 anyway (`frames_len_for`'s own n==3
-  case falls through to `1`), so what `placeFrames` does with frames 1/2 there is moot.
-- `SpriteAnimationSettingsPanel.tsx`: Animation Type is now a real `Select` when
-  `targetSheet.type` is `"actor"`/`"actor_animated"` (two options: the sheet's own natural
-  label, or "Fixed Direction"), dispatching `editSpriteSheet` on whichever sheet is actually in
-  effect - identical pattern to Animation Speed right below it. Stays a plain read-only label
-  for every other type, where there genuinely is no second interpretation to offer.
-
-Verified with this project's established real-ROM-plus-Mesen methodology: a throwaway project
-(a 6-frame `actor_animated` sheet, `defaultSpriteType: "static"`, equipped as the player) built
-through the real toolchain and run in Mesen - live WRAM read `sprite_type=0` (SPRITE_STATIC,
-forced) and `frames_len=6` (flat 6-frame cycle) at scene init, not the sheet's natural
-`sprite_type=2`/`frames_len=2` (SPRITE_ACTOR_ANIMATED, directional walk-cycle) - confirming the
-override reaches the real per-slot table, not just the per-actor one. Also a new byte-exact
-`compileSnesData.test.js` case (the compiled `sprite_type[8]` table entry for a forced-static
-6-frame sheet reads `0`, an unforced one reads `2`). Full suite green (150 suites, 714 tests),
-real `npm start` webpack build, no TS errors.
-
-**Path B foundation: the real metasprite data model, laid down for real in `entitiesTypes.ts`/
-`entitiesState.ts` (2026-10-08, user-asked - "c'est pas un nouveau, c'est le gb2snes actuel",
-i.e. extend the live app's own entity model, not a standalone prototype slice).** Adapts GB
-Studio 3.2's real sprite editor hierarchy - `SpriteSheet` -> `AnimationState` ->
-`AnimationType`-derived `SubStates` -> `Frames` -> metasprite tiles - with two SNES-specific
-constraints baked into the shape from the start rather than left for a later migration: every
-tile is a full 16x16 hardware sprite (this engine's existing `OBJ_SIZE8_L16` "large" size - no
-8x8/32x32 tiles, unlike GB Studio's own flexible per-tile size), and every tile names a
-`paletteIndex` 0-7 (the SNES's real 8 OBJ palette registers, CGRAM 128-255, 4bpp/16 colours
-each - not GB Studio's 2-colour-constrained OBJP0/OBJP1 pair).
-
-New types (`entitiesTypes.ts`): `SpriteAnimationType` (`"fixed" | "two_directions" |
-"four_directions"` - a deliberately simplified 3-tier set, not B's real 6-value
-`SpriteAnimationType` enum - `fixed`/`fixed_movement`/`multi`/`multi_movement`/
-`platform_player`/`cursor` - since this fork has no Platformer-jump/climb or point-and-click-
-cursor sprite concept to need the latter two), `BoundingBox`, `MetaspriteTile`, `SpriteFrame`,
-`SpriteSubState`, `SpriteAnimationState`; `SpriteSheet` gained `origin`/`boundingBox`/
-`animationStates?: SpriteAnimationState[]`. **Deliberately plain, non-normalized nested
-data** (an array on `SpriteSheet`, not a separate `createEntityAdapter`/normalizr-schema
-entity) - matches this fork's own existing `SpriteState`/`SpriteSheet.states` precedent
-exactly (already a plain nested array with no `entitiesHelpers.ts` schema entry), rather than
-B's own fully-normalized per-level entity design (`SpriteState`/`SpriteStateData` split, a
-real normalizr entity with its own schema). No `entitiesHelpers.ts` change needed as a result -
-a sheet's `animationStates` saves/loads as part of its own JSON exactly like `states` already
-does, with zero extra plumbing.
-
-Entirely new, additive data with **no compiler/engine integration yet** - an untouched sheet
-has no `animationStates` at all, and every existing path (`snesgfx.js`,
-`compileSnesData.js`, the Sprites page panels built earlier this session) keeps reading
-`type`/`numFrames`/`states` exactly as before; confirmed zero regression via the full test
-suite. This is explicitly groundwork for a future real Path B (the actual tile-placement
-editor UI, and wiring the compiler to walk this hierarchy and emit real `t_metasprite` records
-via PVSnesLib's `oamMetaDraw16` - see the "Named animation states, Path A" entry above for
-that discovery) - not attempted this pass.
-
-Three reducers added to the existing `entitiesState.ts` slice (not a new slice - the user was
-explicit about this: extend the live app's own single entities slice, matching every other
-sprite-sheet reducer already there):
-- **`addSpriteAnimationState`** - creates a new `AnimationState` (default `animationType:
-  "fixed"`) with its one required `"idle"` sub-state, itself seeded with one empty frame (no
-  tiles) - so the result is immediately usable by `upsertSpriteMetaspriteTile` below with no
-  separate "add a frame" action needed.
-- **`setSpriteAnimationStateType`** - regenerates `subStates` to match the new type's own
-  canonical key list (`SUB_STATES_BY_ANIMATION_TYPE`, file-local to `entitiesState.ts` for now
-  - nothing outside these 3 reducers consumes it yet). Real, non-trivial logic, not a stub: a
-  sub-state whose `key` survives the change (e.g. `idle_left` switching `four_directions` ->
-  `two_directions`) keeps its real id/frames/tiles completely untouched; a newly-needed key
-  gets a fresh empty sub-state; a key no longer relevant is simply dropped, taking its frames/
-  tiles with it (safe in this plain-nested-data model - nothing else references a sub-state by
-  id, unlike a normalized store where that would need an explicit cleanup pass).
-- **`upsertSpriteMetaspriteTile`** - adds a new 16x16 tile to a frame, or edits an existing one
-  in place; which one happens is decided purely by whether the given `tileId` already exists in
-  that frame (the `prepare` callback only generates a fresh id when the caller omits one, i.e.
-  "add" - an "edit" call passes the real existing tile's id).
-
-Verified: full suite green (150 suites, 718 tests - 5 new tests added directly exercising all
-3 reducers, including the regeneration-preservation logic specifically - a sub-state's real id/
-frame/tile survive a type change when its key does, a dropped key's sub-state is gone, a newly-
-needed key gets an empty one), a real `npm start` webpack build with no TS errors.
-
-**Path B, continued same day: 4 more reducers + the 3 requested React components
-(`SpriteEditorCanvas.tsx`/`SpriteAnimationTimeline.tsx`/`SpriteAnimationTypeSelect.tsx`),
-user-asked ("crée l'architecture des composants de l'interface graphique... Inspire-toi du
-fonctionnement de GB Studio v3.2").** Four more reducers landed in `entitiesState.ts` first,
-the data-side completion the 3 components needed to be real (not stubs) rather than designed
-blind:
-- **`removeSpriteMetaspriteTile`** - removes one tile by id from a frame; the inspector
-  panel's own "Remove" button in `SpriteEditorCanvas.tsx`.
-- **`addSpriteFrame`** - appends a new empty frame to a sub-state's timeline, inheriting the
-  *previous* last frame's `durationMs` (or the shared `DEFAULT_FRAME_DURATION_MS` if the
-  sub-state had none) - so a fresh frame doesn't silently reset an already-tuned animation's
-  pace back to the default.
-- **`removeSpriteFrame`** - removes a frame by id, but is a deliberate no-op (`return
-  subState` unchanged) when only one frame remains - mirrors this same project's own
-  `removeSpriteFrame`-shaped guards elsewhere (e.g. never removing the last collision swatch);
-  a sub-state with zero frames would have nothing for `SpriteEditorCanvas` to render at all.
-- **`setSpriteSubStateFrameDuration`** - sets every frame in a sub-state to the same
-  `durationMs` in one dispatch - the Timeline's "global speed" field from the spec, a bulk
-  setter over the per-frame field rather than a new separate "uniform speed" concept in the
-  data model (each frame's own `durationMs` is still the only stored value; a future per-frame
-  override UI needs no data-model change).
-
-A new shared helper, `mapSpriteSubState(spriteSheet, animationStateId, subStateId, fn)`,
-factors out the "find this one sub-state inside this one animation state and replace it" tree
-walk that `upsertSpriteMetaspriteTile` already had inline and all 4 new reducers also need -
-`upsertSpriteMetaspriteTile` itself was refactored to use it too, so there is exactly one copy
-of that traversal in the file.
-
-Components (`src/components/sprites/`, a new directory - distinct from the pre-existing
-`src/components/assets/Sprite*` files from the earlier "Path A" work, which stay as they are
-and are not touched by this):
-- **`SpriteAnimationTypeSelect.tsx`** - the side panel. A `Select` of the 3
-  `SpriteAnimationType` values dispatches `setSpriteAnimationStateType` on change (safe to
-  call directly with no confirmation step - see that reducer's own preserve-by-key guarantee
-  above); below it, one button per sub-state the current type implies
-  (`SUB_STATES_BY_ANIMATION_TYPE`), label-cased from its stored `key` ("idle_down" -> "Idle
-  Down", matching the user's own two example labels exactly), calling back up to the parent
-  via `onSelectSubState` rather than owning its own Redux-persisted selection - the same
-  controlled-component convention the earlier Path A panels already established.
-- **`SpriteAnimationTimeline.tsx`** - the bottom frieze. One chip per frame in the selected
-  sub-state (index + tile count - a real pixel thumbnail would need the same source-image
-  compositing `SpriteEditorCanvas` does, not duplicated here for this first draft), a hover-
-  reveal "x" per chip calling `removeSpriteFrame`, a "+" calling `addSpriteFrame`, and a
-  `NumberField` bulk-speed control calling `setSpriteSubStateFrameDuration` - shows a value
-  only when every frame already shares one (`frames.every(f => f.durationMs === frames[0]…)`),
-  blank otherwise rather than implying a uniform speed that isn't really there.
-- **`SpriteEditorCanvas.tsx`** - the main composition area, the most involved of the three.
-  Loads the sheet's own source PNG via a plain `new Image()` (the `file:///…?_v=` convention
-  confirmed from `DialoguePreview.tsx`'s avatar-loading code, not the existing worker-based
-  `SpriteSheetCanvas.js` - that one is scoped to cropping one already-known frame out of a
-  sheet, a different problem from compositing an arbitrary, user-placed set of tiles) and
-  composites every `frame.tiles[]` entry onto a plain 2D canvas at its own stored `(x, y)`,
-  flipped via `ctx.scale(-1/1, -1/1)` around each tile's own center. Draws the sheet's
-  `origin` as a small crosshair and its `boundingBox` as a dashed outline, both real fields
-  from the Path B data model above, previously unused by any UI. Click-to-place, not drag-
-  and-drop - the user's own spec explicitly offered this as the simpler alternative ("le
-  glisser-déposer (ou clic de positionnement)"): a separate tile-bank strip below shows every
-  16x16 tile the source PNG actually contains (sliced as a flat left-to-right/wrapping strip -
-  documented inline as a provisional convention, since `MetaspriteTile.tileIndex` is formally
-  opaque/compiler-owned in the data layer, not a real wire format yet); clicking a bank tile
-  arms it, then clicking an empty cell on the main canvas dispatches `upsertSpriteMetaspriteTile`
-  (no `tileId` -> add) at the clicked tile's snapped grid position; clicking an *already-placed*
-  tile instead selects it, opening an inspector panel (`paletteIndex` 0-7 via `Select`, `flipX`/
-  `flipY`/`priority` via `CheckboxField`, a Remove button) that edits in place via the same
-  action with the real `tileId`. Two honest simplifications, documented inline rather than
-  faked: there is no true per-palette colour remap in this preview (the real 4bpp/CGRAM extract
-  only happens at compile time, in `snesgfx.js`) - each tile is drawn with the PNG's own real
-  RGB pixels and `paletteIndex` is shown as a small numbered badge instead of a recoloured
-  swatch; and the priority flag is shown as a small gold corner triangle on the tile, reusing
-  the exact same visual language this project's own World editor already uses for BG priority
-  tiles (`SceneCollisions.js`) rather than inventing a new convention.
-
-New l10n keys (`en.json` only, this project's established pattern for a small addition):
-`FIELD_SPRITE_ANIM_TYPE_FIXED/_TWO_DIRECTIONS/_FOUR_DIRECTIONS`, `FIELD_PALETTE`,
-`FIELD_FLIP_X`, `FIELD_FLIP_Y`, `FIELD_PRIORITY`, `FIELD_ADD_FRAME`, `FIELD_TILE_BANK`,
-`FIELD_SELECTED_TILE`. Three new CSS files registered in `src/styles/App.css`'s `@import`
-list alongside the existing Path A panel styles.
-
-Verified: `entitiesState.test.ts` grew to 60 tests (4 new, one per new reducer - including a
-frame-removal guard test confirming the last-frame no-op, and a duration-bulk-set test), full
-suite green (150 suites, 720 passed/3 skipped/723 total - no regressions from any of this
-session's changes), a real `npm start` webpack build with the renderer's own
-`ForkTsCheckerWebpackPlugin` (`async: false` - a type error blocks the bundle outright, it
-isn't just an advisory overlay) compiling clean, confirmed by directly requesting the
-`main_window` bundle (the entry point that actually imports these new `.tsx` files via
-`SpritesPage.js`) from the dev server and getting a fast `200`, not a compile failure. Not yet
-click-through-verified in a real, visible app window (this environment has no display to drive
-one interactively) - the user's own next real project remains the practical check for the
-click-to-place/inspector interaction specifically.
-
-**Path B's compiler half: `compileSnesSprites.ts`, the real `t_metasprite` OAM output
-(user-asked, after the UI landed: "implémente le module du compilateur en TypeScript
-(`compileSprites.ts`)").** Named `compileSnesSprites.ts`, not the literally-requested
-`compileSprites.ts` - that exact name is already taken by a genuinely dead GB-era file,
-`src/lib/compiler/compileSprites.js` (confirmed by grepping all of `src/` for its own name -
-zero importers anywhere; a leftover the `v3` GB-removal pass never deleted, left alone here
-since removing unrelated dead code wasn't asked for). The new name matches this project's own
-`compileSnesData.js`/`compileSnesMusic.js` SNES-specific naming convention instead. Also the
-first `.ts` file in `src/lib/compiler/` (every sibling is plain `.js`) - a deliberate
-continuation of the TS-first choice the Path B data layer and its 3 components already made,
-not an accident.
-
-Not wired into the build (`compileSnesData.js`/`buildProjectSnes` never call it) - same
-"groundwork, not integration" scope as the data-layer landing above; a real runtime consumer
-(a new script event + `script_cmds.c` opcode calling PVSnesLib's `oamMetaDraw16`) is separate
-future work.
-
-Every byte-level decision is checked against PVSnesLib's **real** source, not the vendored
-header's doc comments alone (which turned out to describe two different, inconsistent `props`
-conventions across `t_metasprites.metsprattribute` vs. the newer `t_metasprite.props` - the
-latter's own comment, "palette and priority, flip x/y will be added later", reads as if flip
-bits might not work yet). Fetched both: `buildTools/win32-x64/pvsneslib/pvsneslib/include/
-snes/sprite.h` (the real `t_metasprite` struct - `u16 dx,dy,dtile; u8 props,unused;` = 8 bytes;
-`metasprite_end = -128`; the `OAM_ATTR` macro) from the vendored, trimmed copy this project
-actually links against, **and** the full separate PVSnesLib checkout's `pvsneslib/source/
-sprites.asm` (`oamMetaDraw16`'s real hand-asm implementation, not just its header
-documentation) to settle what the header comment left ambiguous. Confirmed directly: `props`
-is copied straight into the real hardware OAM attribute byte with **no masking** at the point
-it's written (so the full `OAM_ATTR` bit layout - including flip - really does reach hardware,
-the "will be added later" header comment is stale/wrong, not a real gap), and `dtile` ("frame
-id") is looked up through a `lkup16idT`/`lkup16idT0` word-array table keyed by the draw call's
-own size parameter, never used as a raw VRAM address - i.e. it's exactly the same "flat index
-into this sheet's own tile set" convention `MetaspriteTile.tileIndex`/`SpriteEditorCanvas.tsx`'s
-tile bank already use, so no translation was needed between the two.
-
-Confirmed bit layout for the `props` byte (`encodeOamProps`): bit7 flipY, bit6 flipX, bits5-4
-priority (0-3), bits3-1 **paletteIndex (0-7, the exact "3 bits, 0 to 7" the brief asked for)**,
-bit0 left 0 (the real tile-number-upper-bit role that byte-position plays in the *main* 4-byte
-OAM entry does not apply here - `oamMetaDraw16` derives that bit itself from `dtile`, as just
-confirmed). `MetaspriteTile.priority` is a plain boolean (entitiesTypes.ts), not a raw 0-3 int,
-so it needed a mapping - chose `false -> 2, true -> 3`, deliberately **never** emitting OAM
-priority 0, citing this project's own existing finding on it ([[snes-hdma-and-obj-priority-bugs]]:
-"OBJ priority 0 hides sprites behind ordinary BG tiles, use 2").
-
-**The size bit, item 3 of the brief ("configure the size bit statically for 16x16"), is
-answered with prose and two named constants, not a data field** - confirmed from the same
-`sprites.asm` read that there is no per-tile size byte to set: real hardware's one size bit per
-OBJ lives in OAM's separate 32-byte "extra" table, and `oamMetaDraw16` sets it uniformly for
-every tile in one call from its own `sprsize` **call argument**, never from anything in the
-`t_metasprite` table itself. `SPRITE_OBSEL_SIZE_SETTING = "OBJ_SIZE8_L16"` /
-`SPRITE_OAM_DRAW_SIZE = "OBJ_LARGE"` are the real PVSnesLib identifiers a future engine call
-site must use (OBSEL's large half must be 16x16; the draw call must always pass `OBJ_LARGE`) -
-documented, not fabricated as bytes with nowhere real to go.
-
-`tile.x`/`tile.y` map straight to `dx`/`dy` with **no origin subtraction in the compiler** -
-`entitiesTypes.ts`'s own comment on `MetaspriteTile` already says "frame-origin-relative",
-matching `t_metasprite`'s real "delta... relative to the metasprite origin (0,0)" exactly. Only
-while implementing this compiler against the type's own documented contract was it confirmed
-that `SpriteEditorCanvas.tsx` (written the day before) was placing/rendering tiles at **absolute
-canvas coordinates** instead, with `origin` drawn as an unrelated independent crosshair -
-contradicting a contract this same session had just written. Fixed as part of this work (not
-left inconsistent): the canvas now has one effective `origin` (real `spriteSheet.origin`, or a
-canvas-center `DEFAULT_ORIGIN` fallback) that the draw loop, the hit-test, the click-to-place
-math, and the crosshair itself all consistently add/subtract - so a tile placed via the editor
-and a tile compiled via `compileSnesSprites.ts` now agree on what `x`/`y` mean.
-
-Output shape, following this project's own established "`.section "rodata_<name>" superfree`,
-`.db` 32 bytes/line" graphic-asset convention (`compileSnesData.js`'s `asmAsset`/`asmDb`) for
-the per-tile byte data, plus plain `.dw <label>` pointer-table rows (confirmed no existing code
-in this project does this yet - first use of a label operand in a `.dw` anywhere in the JS
-compiler layer, though it's completely ordinary WLA-DX): per frame, one `.db`-emitted
-8-byte-per-tile `t_metasprite` table (terminated by the real `dx=0xFF80` sentinel record); per
-sub-state, a self-terminating `{frame ptr:dw, duration-in-60Hz-ticks:db}` list (`durationMs` ->
-ticks via this project's own existing 60Hz/NTSC convention, e.g. `LAUNCH_PROJECTILE_TTL`'s
-"180 frames = 3s"; clamped to a byte); per sheet, a flattened `{substate frames ptr:dw,
-loop:db}` directory covering every sub-state across every `AnimationState` in definition order
-(states are a pure editor/UI grouping concept here, per `entitiesTypes.ts`'s own comment - the
-compiled table has no reason to keep that grouping, a substate's flattened index is its real
-runtime identity). `compileSpriteSheetMetasprites(sheet, symbol)` compiles one sheet (`symbol`
-is caller-supplied, not derived here - this module has no opinion on project-wide naming, a
-future `compileSnesData.js` integration would pass whatever scheme it already uses elsewhere);
-`compileSnesSprites(sheets)` is the thin multi-sheet wrapper, skipping any sheet with no
-`animationStates` at all (an untouched sheet, unaffected).
-
-Tests: `test/data/compiler/compileSnesSprites.test.ts` (new, 18 cases) - `encodeOamProps`'s
-exact bit math for several flip/priority/palette combinations (including the never-priority-0
-guarantee and out-of-range-palette clamping); `encodeFrameDurationTicks`'s ms->ticks conversion
-and byte clamping; `asmLabel`'s sanitization; `buildFrameRecordBytes`'s byte-exact single-tile
-and zero-tile cases; `compileSpriteSheetMetasprites`'s full emitted-text shape (section
-wrapper, frame/frames-list/substate-directory labels, the loop-flag byte, both terminators);
-`compileSnesSprites`'s skip-untouched-sheet behaviour. Full suite green (151 suites, 738
-passed/3 skipped/741 total - up from 150/720, one new suite), a real `npm start` webpack build
-confirmed clean the same way as the prior landing (the main-process compile step's
-`ForkTsCheckerWebpackPlugin` instance checks the whole tsconfig-included `src/` tree
-regardless of which files `main.ts` itself imports, so it covers this still-unwired module
-too, not just reachable-from-an-entry-point files).
-
-**Two small `SpriteAnimationSettingsPanel` follow-ups, same week (user-asked/user-found).**
-Animation Type now always renders as a real `Select` dropdown (`isDisabled` when there's no
-second interpretation to offer, e.g. a `static`/`animated` sheet) instead of switching between
-a `Select` and a plain text `<div>` depending on sheet type - user-asked ("must be a dropdown
-list"), since a control that sometimes looks like a dropdown and sometimes doesn't reads as
-broken even though the underlying logic (only `actor`/`actor_animated` sheets have a real
-choice) was already correct. The now-unused `__TypeLabel` CSS rule was removed. Separately,
-user-found (screenshot): the panel's own `top: 20px` (copied from `SpriteStatesEditor.css`
-without checking it against the real toolbar) sat its "Animation Settings" title under
-`AppToolbar`'s icons instead of clear of them - `AppToolbar` is 37px tall (`Toolbar.css`), so
-`top: 20px` overlapped by 17px; fixed to `top: 47px` (37px + this panel's own existing 10px gap
-unit).
+A future attempt at named/richer sprite animations should start fresh, not resume from this
+history.
 
 **`PlayerContactUpdate()` only fired the scene's own playerHit1/2/3Script, never the touched
 actor's own script - silently breaking real GB Studio sample content (user-found: "turnip in
@@ -1989,14 +1556,12 @@ had that content silently dead, with no error or warning anywhere.
 The user's own first lead - an animation-type mismatch (GB: `Fixed Direction`, 2-frame
 Idle + 1-frame Explode across two named states; SNES: this engine's own flat 3-frame sheet,
 auto-detected as `actor`/Multi Direction) - was checked and ruled out: `s0910_2.gbsproj`'s 3
-Turnip actors already carry the existing per-actor `spriteType: "static"` override (the same
-lever `SpriteAnimationSettingsPanel`'s Animation Type control exposes at the sheet level, see
-above and the "Named animation states" entries), correctly forcing the engine's existing
+Turnip actors already carry the existing per-actor `spriteType: "static"` override
+(`ActorEditor.tsx`'s own Sprite Type field), correctly forcing the engine's existing
 non-directional rendering regardless of the sheet's own 3-frame `actor` type - confirmed via
 `spriteTypeForActor`/`spriteTypeDec` in `compileSnesData.js`. Not a perfect match for GB's real
-2-state (Idle/Explode) breakdown - that's a known, already-documented Path B limitation (no
-per-state frame sub-ranges until the PVSnesLib-metasprite phase) - but not broken, and not the
-cause of this bug.
+2-state (Idle/Explode) breakdown - this engine has no per-state frame sub-range concept at all -
+but not broken, and not the cause of this bug.
 
 The real root cause, found by reading `scene.c` directly rather than continuing to reason about
 the animation-type lead: `SceneTryInteract()` (the A-press interact) explicitly skips any actor
