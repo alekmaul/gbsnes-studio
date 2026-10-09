@@ -7,7 +7,7 @@ nav_order: 2
 
 # Scene
 
-Scene transitions, the state stack, camera control and screen fades.
+Scene transitions, the state stack, camera control and screen effects (fades, mosaic).
 
 **Switch Scene** - moves the player to a different scene, with a fade-out/fade-in handshake
 around the switch.
@@ -32,3 +32,9 @@ player was.
 **Fade In** - fades the screen in from black.
 
 **Fade Out** - fades the screen out to black.
+
+**Mosaic** - ramps a hardware mosaic/pixelisation effect on the background and/or the dialogue
+overlay (BG1 and/or BG3) to a target block size (0-15), at a configurable speed. SNES-exclusive
+(no GB Studio equivalent) - sprites have no hardware mosaic on this console, so there is no
+"affect sprites" option. Can block the script until the effect finishes, like Fade In/Out, or
+start it and continue immediately.

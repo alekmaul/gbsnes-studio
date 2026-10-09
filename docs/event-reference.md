@@ -17,7 +17,7 @@ the authoritative, per-event support matrix, kept in sync whenever an opcode's b
 ## Categories
 
 - [Text](events-text.html) - dialogue, choices, menus, overlays.
-- [Scene](events-scene.html) - scene transitions, state stack, camera, fades.
+- [Scene](events-scene.html) - scene transitions, state stack, camera, fades, mosaic.
 - [Variables & Math](events-variables.html) - variables, flags, math, expressions.
 - [Control Flow](events-control-flow.html) - conditionals, loops, custom events.
 - [Actors](events-actors.html) - position, movement, appearance, animation.
