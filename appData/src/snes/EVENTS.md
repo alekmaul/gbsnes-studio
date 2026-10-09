@@ -353,6 +353,7 @@ confirmed end to end rather than assumed from the code alone.
 | Event | SNES | Notes |
 | --- | --- | --- |
 | Fade In, Fade Out | ✅ | Brightness-based (`setBrightness`) rather than GB's palette cycle — visually equivalent. |
+| Mosaic | ✅ | SNES-exclusive (no GB Studio equivalent) - `REG_MOSAIC` hardware pixelisation, ramped frame by frame like Fade In/Out rather than PVSnesLib's own blocking `setMosaicEffect()`, see `mosaic.h`. Targets BG1 and/or BG3 only - BG2/BG4 don't apply to this engine's layout, and sprites (OBJ) have no hardware mosaic on the SNES at all. |
 
 ## Music & sound
 

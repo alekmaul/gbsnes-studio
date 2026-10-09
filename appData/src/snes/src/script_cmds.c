@@ -17,6 +17,7 @@
 #include "scene.h"
 #include "assets.h"
 #include "fade.h"
+#include "mosaic.h"
 #include "ui.h"
 #include "camera.h"
 #include "music.h"
@@ -426,6 +427,27 @@ void Script_FadeIn_b(void)
     fade_script_wait = 1;
     ADVANCE();
     script_action_complete = 0;
+}
+
+/* MOSAIC_SET. args: size (0-15), bgMask (REG_MOSAIC bits 0-3), speed
+ * (frames between size steps), wait (1 = block the script until the ramp
+ * reaches size, mirroring Script_FadeIn_b/Script_FadeOut_b above; 0 = start
+ * the ramp and continue immediately, matching Script_SoundPlayBeep_b's own
+ * non-blocking "Wait Until Finished" convention). */
+void Script_MosaicSet_b(void)
+{
+    MosaicSetSpeed(script_cmd_args[2]);
+    MosaicTo(script_cmd_args[0], script_cmd_args[1]);
+    ADVANCE();
+    if (script_cmd_args[3])
+    {
+        mosaic_script_wait = 1;
+        script_action_complete = 0;
+    }
+    else
+    {
+        script_continue = 1;
+    }
 }
 
 // CAMERA_MOVE_TO. args: tileX, tileY, settings (speed + lock flag).
@@ -1361,7 +1383,8 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_IfCurrentSceneIs_b, 4) /* 0x75 IF_CURRENT_SCENE_IS */ \
     X(Script_ActorActivateFlag_b, 0) /* 0x76 ACTOR_ACTIVATE */ \
     X(Script_ActorDeactivateFlag_b, 0) /* 0x77 ACTOR_DEACTIVATE */ \
-    X(Script_ActorStartUpdate_b, 0) /* 0x78 ACTOR_START_UPDATE - v4, real On Update subsystem, see update_script.h */
+    X(Script_ActorStartUpdate_b, 0) /* 0x78 ACTOR_START_UPDATE - v4, real On Update subsystem, see update_script.h */ \
+    X(Script_MosaicSet_b, 4) /* 0x79 MOSAIC_SET - v4, hardware mosaic/pixelisation effect, see mosaic.h */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

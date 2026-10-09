@@ -107,7 +107,8 @@ import {
   IF_CURRENT_SCENE_IS,
   ACTOR_ACTIVATE,
   ACTOR_DEACTIVATE,
-  ACTOR_START_UPDATE
+  ACTOR_START_UPDATE,
+  MOSAIC_SET
 } from "../events/scriptCommands";
 import {
   getActorIndex,
@@ -1343,6 +1344,21 @@ class ScriptBuilder {
     const output = this.output;
     output.push(cmd(FADE_OUT));
     output.push(speed);
+  };
+
+  // Mosaic/pixelisation (REG_MOSAIC - see mosaic.c). bgMask bit0 = BG1,
+  // bit2 = BG3 (matching PVSnesLib's own MOSAIC_BG1/MOSAIC_BG3 constants -
+  // bit1/BG2 and bit3/BG4 are never set, this target has neither). wait=1
+  // blocks the script until the ramp reaches size, like fadeIn/fadeOut;
+  // wait=0 starts the ramp and continues immediately, same convention as
+  // Sound: Play Effect's own "Wait Until Finished" checkbox.
+  mosaicSet = (size = 0, bgMask = 5, speed = 1, wait = true) => {
+    const output = this.output;
+    output.push(cmd(MOSAIC_SET));
+    output.push(size);
+    output.push(bgMask);
+    output.push(speed);
+    output.push(wait ? 1 : 0);
   };
 
   // Music

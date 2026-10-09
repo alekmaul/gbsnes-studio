@@ -123,6 +123,8 @@ export const ACTOR_DEACTIVATE = "ACTOR_DEACTIVATE";
 // v4: On Update subsystem - the sibling of the already-existing
 // ACTOR_STOP_UPDATE (which had no counterpart to start anything until now).
 export const ACTOR_START_UPDATE = "ACTOR_START_UPDATE";
+// v4: hardware mosaic/pixelisation effect (REG_MOSAIC) - see mosaic.c.
+export const MOSAIC_SET = "MOSAIC_SET";
 
 export const scriptCommands = [
   END,
@@ -246,6 +248,7 @@ export const scriptCommands = [
   ACTOR_ACTIVATE,
   ACTOR_DEACTIVATE,
   ACTOR_START_UPDATE,
+  MOSAIC_SET,
 ];
 
 export const commandIndex = key => {

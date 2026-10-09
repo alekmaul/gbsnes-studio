@@ -23,6 +23,7 @@
 #include "script_runner.h"
 #include "scene.h"
 #include "fade.h"
+#include "mosaic.h"
 #include "ui.h"
 #include "camera.h"
 #include "music.h"
@@ -245,6 +246,7 @@ int main(void)
     setMode(BG_MODE1, BG3_MODE1_PRIORITY_HIGH);
     bgSetDisable(1); // BG2 unused
     FadeInit();
+    MosaicInit();
     SceneScheduledScriptsInit(); // zero input_script_ptrs[] - not pre-zeroed by the toolchain
     MusicInit(); // boots the SPC700 driver (M8 phase 1) - takes a moment
 
@@ -327,6 +329,7 @@ int main(void)
         }
 
         FadeUpdate();
+        MosaicUpdate();
         SceneUpdateTimerScript();
 
         if (UIIsClosed())

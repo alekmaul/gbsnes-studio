@@ -43,6 +43,7 @@ import {
   CLEAR_DATA,
   FADE_IN,
   FADE_OUT,
+  MOSAIC_SET,
   ACTOR_MOVE_TO_VALUE,
   ACTOR_SET_POSITION_TO_VALUE,
   ACTOR_GET_POSITION,
@@ -1324,6 +1325,20 @@ test("Should be able to fade out", () => {
   const sb = new ScriptBuilder(output);
   sb.fadeOut(2);
   expect(output).toEqual([cmd(FADE_OUT), 2]);
+});
+
+test("Should be able to set the mosaic effect, blocking", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.mosaicSet(8, 5, 2, true);
+  expect(output).toEqual([cmd(MOSAIC_SET), 8, 5, 2, 1]);
+});
+
+test("Should be able to set the mosaic effect, non-blocking", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.mosaicSet(8, 1, 0, false);
+  expect(output).toEqual([cmd(MOSAIC_SET), 8, 1, 0, 0]);
 });
 
 test("Should be able to load data", () => {

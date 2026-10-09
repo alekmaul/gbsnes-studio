@@ -1633,6 +1633,64 @@ some other explanation. No JS/compiler test added - pure C engine runtime change
 compiler/wire-format surface, verified the same real-ROM-plus-Mesen way every other engine-only
 fix in this file's history has been.
 
+**New event: `EVENT_MOSAIC` (Screen: Mosaic), user-requested, SNES-exclusive hardware
+pixelisation.** Modeled on Fade In/Out's own architecture end to end (`eventMosaic.js` →
+`scriptBuilder.js`'s `mosaicSet` → `Script_MosaicSet_b` → a new `mosaic.c`/`.h` pair mirroring
+`fade.c`'s frame-ticked ramp), not on the file layout the request described (`eventTypes.js`,
+a per-event React component, a `compileEntityEvents.js` switch/case) - this fork's real
+architecture auto-loads one `src/lib/events/event*.js` per command, keyed by its own `id`, with
+no central registry or per-event component to touch (see "Events are the extension point"
+above); fields render generically from the `fields` array, and `compileEntityEvents.js` already
+dispatches to `events[command].compile()` with no changes needed there at all.
+
+Writes `REG_MOSAIC` (0x2106: bits 7-4 = block size 0-15, bits 0-3 = per-background enable -
+bit0 BG1, bit1 BG2, bit2 BG3, bit3 BG4, confirmed from PVSnesLib's own `background.h`) directly,
+rather than calling PVSnesLib's existing `setMosaicEffect(mode, bgNumbers)` (`videos.asm`,
+checked against the real source in the full PVSnesLib checkout at
+`snesdev/pvsneslib/pvsneslib/source/videos.asm`, not just the header comment): that helper
+blocks the CPU for the entire ramp (16 fixed steps x 3 vblanks each via `WaitForThreeVBlanks`,
+always the full 0..15 range) - fine for a one-off effect, but it would stall this engine's
+cooperative script VM and every other actor/animation for 48+ frames, and has no way to target
+a partial size or a configurable step rate the way the event's own `size`/`speed` fields ask
+for. `mosaic.c` is a from-scratch, non-blocking module instead, structurally identical to
+`fade.c` (`mosaic_size`/`mosaic_target`/`mosaic_step_frames`/`mosaic_tick`/`mosaic_active`
+mirror `fade_level`/`fade_target`/etc. exactly) - `MosaicUpdate()` is called once/frame from
+`game.c`'s main loop right after `FadeUpdate()`, ramping `mosaic_size` toward `mosaic_target`
+by 1 every `speed` frames (0 = every frame) and writing `REG_MOSAIC` on each step.
+
+Only **BG1** and **BG3** are offered as targets (two checkboxes, both default-checked) - BG2 is
+unused by this engine (`game.c` disables it) and BG4 doesn't exist in Mode 1, so neither bit
+would do anything. **Sprites/OBJ have no hardware mosaic at all on the SNES** - the register
+only ever divides BG layers - so the request's optional third "Sprites" checkbox was dropped
+rather than added as a control with no real effect; `mosaic.h`'s own comment states this
+explicitly for the next person who wonders why it's missing.
+
+New `wait` checkbox (`FIELD_WAIT_UNTIL_FINISHED`, reused as-is - already exists for Sound: Play
+Effect's identical concept) gives Mosaic a choice Fade doesn't have: `wait = true` blocks the
+script until the ramp reaches `size` (`mosaic_script_wait = 1; script_action_complete = 0;`
+exactly like `Script_FadeIn_b`/`Script_FadeOut_b`); `wait = false` starts the ramp and lets the
+script continue immediately in the same tick (`script_continue = 1`, matching every other
+non-blocking opcode's own convention, e.g. `Script_ActorSetAnimate_b`) while `MosaicUpdate()`
+keeps ticking across subsequent frames regardless of what the script does next - the same
+decoupled-from-the-VM relationship `IsFading()`/`FadeUpdate()` already have with the main loop.
+
+New opcode `MOSAIC_SET` appended at the very end of `scriptCommands.js` (index 0x79) - appending
+rather than inserting mid-list keeps every earlier opcode's index unchanged, matching how
+`ACTOR_START_UPDATE` was added before it. `SCRIPT_CMD_COUNT` (`script_runner.h`) bumped
+121 -> 122; `script_cmd_args[7]`'s existing size already covers this opcode's 4 argument bytes
+(`size`, `bgMask`, `speed`, `wait`) with no change needed. Verified: `yarn jest buildSnesRom`
+(the real engine, including the new `mosaic.c`/`.h`, compiles and links against the real
+vendored toolchain to a bootable ROM), the full JS suite green (150 suites, byte-exact
+`scriptBuilder.test.js`/`eventMosaic.test.js` coverage of both the blocking and non-blocking
+wire format, `snesScriptCmds.test.js`'s opcode-table contract unaffected by the new row), and a
+real `npm start` build with no TS errors. Not yet Mesen-verified on real hardware timing (no
+project in this repo exercises it yet) - the byte format and the blocking/non-blocking split
+are exercised by tests the same way every other opcode's wire format is, but the visual ramp
+itself (and the one architectural assumption carried over from Fade without re-deriving it -
+that writing a PPU register once per frame outside the vblank-gated block in `game.c`'s main
+loop, the same spot `FadeUpdate()` already does this from, is safe here too) has not been
+confirmed against a real running ROM the way this file's engine-only fixes normally are.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
