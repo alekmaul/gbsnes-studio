@@ -960,7 +960,14 @@ const addActor: CaseReducer<
     variables?: Variable[];
   }>
 > = (state, action) => {
-  const scene = localSceneSelectors.selectById(state, action.payload.sceneId);
+  // Not localSceneSelectors.selectById: createEntityAdapter's generated
+  // selectors go through RTK's createDraftSafeSelector, which calls
+  // immer's current() to safely read a draft for memoization - but
+  // current() returns a frozen snapshot, not the live draft, so a scene
+  // created in an earlier dispatch (and thus already Immer-auto-frozen)
+  // can't be mutated through it (addActorToScene below assigns directly to
+  // scene.actors). Reading the entity straight off the draft keeps it live.
+  const scene = state.scenes.entities[action.payload.sceneId];
   if (!scene) {
     return;
   }
@@ -1266,7 +1273,10 @@ const addTrigger: CaseReducer<
     variables?: Variable[];
   }>
 > = (state, action) => {
-  const scene = localSceneSelectors.selectById(state, action.payload.sceneId);
+  // Not localSceneSelectors.selectById - see addActor's own identical
+  // comment above; addTriggerToScene below assigns directly to
+  // scene.triggers, which needs the live draft, not a de-drafted snapshot.
+  const scene = state.scenes.entities[action.payload.sceneId];
   if (!scene) {
     return;
   }

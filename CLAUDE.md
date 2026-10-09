@@ -1691,6 +1691,44 @@ that writing a PPU register once per frame outside the vblank-gated block in `ga
 loop, the same spot `FadeUpdate()` already does this from, is safe here too) has not been
 confirmed against a real running ROM the way this file's engine-only fixes normally are.
 
+**Editor bug: "Add Trigger" silently did nothing on any scene except the very first thing
+created in a given session (user-found: clicked the Trigger tool, saw the `+` cursor, no
+console error visible at first - a follow-up report caught the real error: `TypeError: Cannot
+assign to read only property 'triggers' of object '#<Object>'` at `addTriggerToScene`).**
+Root-caused with a real reproduction, not by reading code alone - the existing
+`entitiesState.test.ts` coverage for `addActor`/`addTrigger` all hand-roll their `state` as a
+plain object literal, so `reducer()` only ever runs *once*, against a state Immer never froze;
+that masks this bug completely, since it only exists once a *real* dispatch's own output
+(immer's `autoFreeze` deep-freezes everything `produce()` returns) is fed into a *second*
+dispatch. Confirmed with a minimal, isolated `createSlice`/`createEntityAdapter` reproduction
+(not the full `entitiesState.ts`) before touching any real code, to rule out a project-specific
+cause first: `addActor`/`addTrigger` looked up their target scene via
+`localSceneSelectors.selectById(state, id)` - one of `createEntityAdapter`'s generated
+selectors, wrapped by RTK's own `createDraftSafeSelector`, which calls immer's `current(state)`
+whenever `state` is a draft, specifically so reselect's memoization has a *stable* value to
+compare against rather than a live, mutating proxy. `current()` returns a plain, **frozen**
+snapshot, not the live draft - fine for *reading*, but `addActorToScene`/`addTriggerToScene`
+assign straight into `scene.actors`/`scene.triggers` (`scene.triggers = [...].concat(...)`),
+which needs a live, mutable draft. The result: adding an actor/trigger to a scene that was
+created in an *earlier*, separate dispatch (i.e. any scene except the special case where
+`addScene` itself immediately populates `defaults.actors`/`defaults.triggers` on the exact same
+`fixedScene` object within its own single dispatch) threw this exact error - confirmed via a
+`console.log(isDraft(scene), Object.isFrozen(scene))` probe in an isolated repro:
+`isDraft` false, `isFrozen` true, the instant `getSelectors()` was introduced into an otherwise-
+identical minimal test that passed without it. Audited every other `local*Selectors.selectById`
+call site in the file for the same pattern (about 20 of them) - all the others only *read* the
+selected value and feed it into the entity adapter's own `updateOne`/`upsertOne` (e.g.
+`moveActor`'s `scenesAdapter.updateOne(state.scenes, { id, changes: {...} })`), which is the
+correct, Immer-safe way to mutate and was never affected; only these two direct-assignment call
+sites were broken. Fixed by reading `state.scenes.entities[id]` directly in both
+`addActor`/`addTrigger` instead of through the selector - bypasses `createDraftSafeSelector`'s
+unwrapping entirely, so the live draft is what gets mutated. Tests: two new cases in
+`entitiesState.test.ts` chain two *real* `reducer()` calls (`addScene` then `addTrigger`/
+`addActor`) specifically to exercise the cross-dispatch freeze a hand-rolled `state` fixture
+can't reach - added right next to the existing (still-passing, still correct, just
+insufficient on their own) single-dispatch tests, not replacing them. Full suite green (150
+suites, 711 passing), a real `npm start` build with no TS errors.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

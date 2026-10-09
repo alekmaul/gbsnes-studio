@@ -1242,6 +1242,80 @@ test("Should be able to add a trigger to a scene", () => {
   expect(newState.triggers.entities[newTriggerId]?.height).toBe(2);
 });
 
+// User-found regression: every test above builds `state` as a plain,
+// hand-written object literal, so `reducer()` only ever runs once against
+// a state Immer never froze - it can't catch a bug that only exists once a
+// *real* dispatch's own output (which immer's autoFreeze deep-freezes) is
+// fed into a *second* dispatch. addActor/addTrigger looked up their target
+// scene via `localSceneSelectors.selectById(state, ...)` - one of
+// createEntityAdapter's generated selectors, wrapped by RTK's own
+// createDraftSafeSelector - which calls immer's `current()` on a draft to
+// make it safe to use for memoization. current() returns a frozen
+// snapshot, not the live draft, so a scene created by an *earlier* dispatch
+// (and therefore already frozen) could be read this way but not mutated -
+// addActorToScene/addTriggerToScene assign straight into
+// scene.actors/scene.triggers, which threw "Cannot assign to read only
+// property" the moment a user tried to add an actor or trigger to any
+// scene that wasn't the very first thing created in that same reducer
+// call. Fixed by reading `state.scenes.entities[id]` directly in both
+// reducers instead, which stays the live draft. These two tests chain two
+// *real* `reducer()` calls specifically to reproduce that - a hand-rolled
+// `state` here would hide the bug exactly like the test above does.
+test("Should be able to add a trigger to a scene created by an earlier, separate dispatch (not hand-rolled state)", () => {
+  const afterScene = reducer(
+    undefined,
+    actions.addScene({
+      x: 0,
+      y: 0,
+    })
+  );
+  const sceneId = Object.keys(afterScene.scenes.entities)[0];
+
+  expect(() => {
+    reducer(
+      afterScene,
+      actions.addTrigger({
+        sceneId,
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1,
+      })
+    );
+  }).not.toThrow();
+});
+
+test("Should be able to add an actor to a scene created by an earlier, separate dispatch (not hand-rolled state)", () => {
+  const afterScene = reducer(
+    undefined,
+    actions.addScene({
+      x: 0,
+      y: 0,
+    })
+  );
+  const sceneId = Object.keys(afterScene.scenes.entities)[0];
+  const afterSprite: EntitiesState = {
+    ...afterScene,
+    spriteSheets: {
+      ids: ["sprite1"],
+      entities: {
+        sprite1: { ...dummySpriteSheet, id: "sprite1" },
+      },
+    },
+  };
+
+  expect(() => {
+    reducer(
+      afterSprite,
+      actions.addActor({
+        sceneId,
+        x: 0,
+        y: 0,
+      })
+    );
+  }).not.toThrow();
+});
+
 test("Should be able to add a trigger to a scene with defaults and variables", () => {
   const state: EntitiesState = {
     ...initialState,
