@@ -16,6 +16,7 @@
 @import url("./../components/sprites/SpriteAnimationTypeSelect.css");
 @import url("./../components/sprites/SpriteAnimationTimeline.css");
 @import url("./../components/sprites/SpriteEditorCanvas.css");
+@import url("./../containers/pages/SpritesPage.css");
 @import url("./../components/world/Actor.css");
 @import url("./../components/world/Trigger.css");
 @import url("./../components/world/SceneCursor.css");

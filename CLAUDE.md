@@ -1249,6 +1249,20 @@ to break this:
    make - rebind "Enemy Ship" to `$self$`/the calling actor at each of the 15 On Update call
    sites - but no longer catastrophic once rebound correctly, since a *correctly*-self-targeting
    concurrent Move Relative now works too (per-context move state, same fix).
+   *Correction, caught and retracted mid-conversation (not reflected in the paragraph above,
+   which otherwise stands as written)*: this was itself a mistake - an unbound actor parameter
+   does **not** need a project-side rebind at all. Re-checking `compileEntityEvents.js`/
+   `eventCallCustomEvent.js` directly showed the unbound-parameter fallback already resolves to
+   literal `"$self$"`, and for a custom event called from an actor's own script (updateScript or
+   plain `script`), the compile-time `entity` context *is* that actor - so `$self$` already
+   correctly targets the calling actor, not the player, with zero authoring changes needed.
+   Verified empirically for this exact scene: each ship's own `Move Relative` genuinely targeted
+   its own position. No project-side rebind was ever actually required for these 15 call sites -
+   the per-context move-state engine fix above was the whole story. Independently reconfirmed
+   byte-exact in a later, unrelated investigation (a real "Path to Sample Town" turnip-stomp
+   scene's own unbound custom-event actor parameter, inside a plain actor `script` this time -
+   see the `PlayerContactUpdate()` entry further down) - every reference correctly compiled to
+   that specific actor's own real engine index, never the player's.
    A **separate, smaller finding along the way, left for follow-up, not fixed**: this scene's
    own background (`leaving_earth.png`) is 255 tiles wide, this engine's SC_64x64 addressing
    realistic ceiling - and `Update_Shmup` was observed running at well under 1:1 per real frame
@@ -1943,6 +1957,93 @@ confirmed clean the same way as the prior landing (the main-process compile step
 `ForkTsCheckerWebpackPlugin` instance checks the whole tsconfig-included `src/` tree
 regardless of which files `main.ts` itself imports, so it covers this still-unwired module
 too, not just reachable-from-an-entry-point files).
+
+**Two small `SpriteAnimationSettingsPanel` follow-ups, same week (user-asked/user-found).**
+Animation Type now always renders as a real `Select` dropdown (`isDisabled` when there's no
+second interpretation to offer, e.g. a `static`/`animated` sheet) instead of switching between
+a `Select` and a plain text `<div>` depending on sheet type - user-asked ("must be a dropdown
+list"), since a control that sometimes looks like a dropdown and sometimes doesn't reads as
+broken even though the underlying logic (only `actor`/`actor_animated` sheets have a real
+choice) was already correct. The now-unused `__TypeLabel` CSS rule was removed. Separately,
+user-found (screenshot): the panel's own `top: 20px` (copied from `SpriteStatesEditor.css`
+without checking it against the real toolbar) sat its "Animation Settings" title under
+`AppToolbar`'s icons instead of clear of them - `AppToolbar` is 37px tall (`Toolbar.css`), so
+`top: 20px` overlapped by 17px; fixed to `top: 47px` (37px + this panel's own existing 10px gap
+unit).
+
+**`PlayerContactUpdate()` only fired the scene's own playerHit1/2/3Script, never the touched
+actor's own script - silently breaking real GB Studio sample content (user-found: "turnip in
+sample town scene are not using collision", pointed at a real GB Studio 3.2.1 "Path to Sample
+Town" sample scene, `C:\temp\s0910_2`).** The turnip's whole stomp/hurt/defeat/counter logic
+(bounce the player if hit from above, else hurt and reposition them, decrement a counter,
+eventually hide the turnip) is authored entirely inside each Turnip actor's own plain `script`
+field (`collisionGroup: "1"`, calling a shared "Turnip Collisions" custom event) - with the
+scene's own `playerHit1Script` left completely empty, exactly how this official sample is
+really authored. `PlayerContactUpdate()`'s own code comment already documented the relevant
+trade-off it made: "B's `actors_handle_player_collision()` fires `script_p_hit1/2/3` + the
+actor's own script... this engine only ever runs one script at a time project-wide... picking
+one [the scene script] consistently... beats trying to fire two" - but picking *only* the scene
+script meant any project (like this one) that authors the touched actor's *own* script instead
+had that content silently dead, with no error or warning anywhere.
+
+The user's own first lead - an animation-type mismatch (GB: `Fixed Direction`, 2-frame
+Idle + 1-frame Explode across two named states; SNES: this engine's own flat 3-frame sheet,
+auto-detected as `actor`/Multi Direction) - was checked and ruled out: `s0910_2.gbsproj`'s 3
+Turnip actors already carry the existing per-actor `spriteType: "static"` override (the same
+lever `SpriteAnimationSettingsPanel`'s Animation Type control exposes at the sheet level, see
+above and the "Named animation states" entries), correctly forcing the engine's existing
+non-directional rendering regardless of the sheet's own 3-frame `actor` type - confirmed via
+`spriteTypeForActor`/`spriteTypeDec` in `compileSnesData.js`. Not a perfect match for GB's real
+2-state (Idle/Explode) breakdown - that's a known, already-documented Path B limitation (no
+per-state frame sub-ranges until the PVSnesLib-metasprite phase) - but not broken, and not the
+cause of this bug.
+
+The real root cause, found by reading `scene.c` directly rather than continuing to reason about
+the animation-type lead: `SceneTryInteract()` (the A-press interact) explicitly skips any actor
+with `collision_group` set, by its own design (its own comment: "never A-press-interactable,
+only contact-triggered") - and `PlayerContactUpdate()`, the function meant to be that contact
+trigger, never actually ran the touched actor's own script at all, only
+`event_ptrs[player_hit_idx[...]]` (the scene-level script). Confirmed the compiler side was
+never at fault first, byte-exact: compiled the real project (`compileSnesData` on the real
+`s0910_2.gbsproj`) and decoded the Turnip actors' own compiled `script` bytes directly - every
+`actorId: "0"` reference inside the inlined "Turnip Collisions" custom event (left unbound at
+the call site, so `eventCallCustomEvent.js` substitutes `"$self$"`) correctly resolved to each
+turnip's own real engine actor index (2, 4, 5 for Turnip 1/2/3 respectively, matching their
+real position in `scene.actors`+1 for the player slot) - not the player, not each other. A
+second, independent, byte-exact confirmation of the same already-corrected understanding from
+the earlier Shmup "unbound custom-event actor parameter" investigation (see that entry's own
+retraction note above) - `eventCallCustomEvent.js`'s real `|| "$self$"` fallback correctly
+resolves to whichever actor's script is actually being compiled, including a plain top-level
+`script` field, not just an `updateScript`.
+
+Fixed by mirroring this file's own existing, architecturally identical precedent one function
+below - `projectile_fire_hit_script()` (a projectile with a matching `collision_group` hitting
+an actor already runs *that actor's own* `script`/`hit1/2/3Script`, never a scene-level
+fallback) - exactly the shape `PlayerContactUpdate()` should have used for the mirror case
+(the player's own body touching an actor). `PlayerContactUpdate()` now tries the scene script
+first (`event_ptrs[idx].ptr[0] != 0` - the same "a compiled script is never truly empty,
+`EVENT_END` is a real byte" check `SceneTryInteract()`'s own actor-script gate already uses),
+and falls back to the touched actor's own `events_ptr` only when that scene script is empty -
+purely additive: a scene that already authors `playerHit1/2/3Script` keeps exactly the same
+behaviour (its script isn't empty, so the fallback never triggers); only the previously-broken,
+empty-scene-script case gains real behaviour.
+
+Verified three ways: `yarn jest buildSnesRom` (the engine tree still compiles/links against
+the real vendored toolchain) and the full JS suite stayed green (151 suites, 738/741) with no
+JS-level change at all (pure C); then a real A/B Mesen run against a minimal synthetic repro
+(cloned `test/projects/Test_Math`'s fixture shape, one actor with `collisionGroup: "1"`
+standing on the player's own start tile, its `script` setting `script_variables[0] = 42`, scene
+`playerHit1Script` left empty - the exact bug shape) - built through the real toolchain
+(`buildProject()`), read via `emu.read(addr, emu.memType.snesMemory, false)` against the real
+`game.sym` address for `script_variables` (per
+[[mesen-snesmemory-addressing-correction]]): **before** the fix, `script_variables[0]` read
+back `0` (unchanged - the actor's script genuinely never ran); **after** the fix (the same ROM
+rebuilt with no other changes), it read back `42`. The negative-control half (`git stash` to
+temporarily remove just this fix, rebuild, re-run, confirm it reverts to `0`, then `git stash
+pop`) is what makes this a real A/B result rather than a single data point that could have had
+some other explanation. No JS/compiler test added - pure C engine runtime change with no
+compiler/wire-format surface, verified the same real-ROM-plus-Mesen way every other engine-only
+fix in this file's history has been.
 
 ## Tests
 

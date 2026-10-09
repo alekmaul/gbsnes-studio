@@ -6,6 +6,9 @@ import ImageViewer from "../../components/assets/ImageViewer";
 import SpriteAnimationsPanel from "../../components/assets/SpriteAnimationsPanel";
 import SpriteAnimationSettingsPanel from "../../components/assets/SpriteAnimationSettingsPanel";
 import SpriteFramesPanel from "../../components/assets/SpriteFramesPanel";
+import { SpriteAnimationTypeSelect } from "../../components/sprites/SpriteAnimationTypeSelect";
+import { SpriteAnimationTimeline } from "../../components/sprites/SpriteAnimationTimeline";
+import { SpriteEditorCanvas } from "../../components/sprites/SpriteEditorCanvas";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import entitiesActions from "../../store/features/entities/entitiesActions";
 import electronActions from "../../store/features/electron/electronActions";
@@ -50,7 +53,14 @@ class SpritesPage extends Component {
     this.state = {
       query: "",
       stateId: undefined,
-      animationIndex: 0
+      animationIndex: 0,
+      // Path B (metasprite groundwork - SpriteSheet.animationStates, a
+      // completely separate data tree from the Path A `states`/
+      // `animationIndex` pair above) has its own 3-level selection, tracked
+      // independently so the two systems never collide.
+      pathBAnimationStateId: undefined,
+      pathBSubStateId: undefined,
+      pathBFrameId: undefined
     };
   }
 
@@ -58,7 +68,13 @@ class SpritesPage extends Component {
     const { id } = this.props;
     if (id !== prevProps.id) {
       // eslint-disable-next-line react/no-did-update-set-state
-      this.setState({ stateId: undefined, animationIndex: 0 });
+      this.setState({
+        stateId: undefined,
+        animationIndex: 0,
+        pathBAnimationStateId: undefined,
+        pathBSubStateId: undefined,
+        pathBFrameId: undefined
+      });
     }
   }
 
@@ -81,6 +97,27 @@ class SpritesPage extends Component {
   // exists.
   onStateRemoved = () => {
     this.setState({ stateId: undefined, animationIndex: 0 });
+  };
+
+  // Path B
+  onAddPathBAnimationState = () => {
+    const { addSpriteAnimationState } = this.props;
+    const { file } = this.getGroups();
+    if (!file) {
+      return;
+    }
+    addSpriteAnimationState({
+      spriteSheetId: file.id,
+      name: l10n("FIELD_STATE_DEFAULT")
+    });
+  };
+
+  onSelectPathBSubState = subStateId => {
+    this.setState({ pathBSubStateId: subStateId, pathBFrameId: undefined });
+  };
+
+  onSelectPathBFrame = frameId => {
+    this.setState({ pathBFrameId: frameId });
   };
 
   onAddState = () => {
@@ -112,8 +149,33 @@ class SpritesPage extends Component {
 
   render() {
     const { files, openHelp, sidebarWidth } = this.props;
-    const { query, stateId, animationIndex } = this.state;
+    const {
+      query,
+      stateId,
+      animationIndex,
+      pathBAnimationStateId,
+      pathBSubStateId,
+      pathBFrameId
+    } = this.state;
     const { filesList, file, groups } = this.getGroups();
+
+    // Path B selection - defaults to the sheet's own first AnimationState/
+    // SubState/Frame (file.animationStates is empty for every project today,
+    // nothing creates one yet outside this page's own "+" button below).
+    const pathBAnimationStates = (file && file.animationStates) || [];
+    const selectedPathBAnimationState =
+      pathBAnimationStates.find(a => a.id === pathBAnimationStateId) ||
+      pathBAnimationStates[0];
+    const selectedPathBSubState =
+      selectedPathBAnimationState &&
+      (selectedPathBAnimationState.subStates.find(
+        s => s.id === pathBSubStateId
+      ) ||
+        selectedPathBAnimationState.subStates[0]);
+    const selectedPathBFrame =
+      selectedPathBSubState &&
+      (selectedPathBSubState.frames.find(f => f.id === pathBFrameId) ||
+        selectedPathBSubState.frames[0]);
 
     // Whichever sheet is actually in effect for the current selection -
     // this file for Default, or the selected state's own target sheet. The
@@ -173,6 +235,52 @@ class SpritesPage extends Component {
             />
           </div>
         )}
+        {/* Path B (metasprite groundwork) - draft components, first mount.
+            Deliberately not laid out against the Path A panels above yet
+            (expect visual overlap until this gets its own pass); here so it
+            can actually be seen and tried, not hidden in src/. */}
+        {file && !selectedPathBAnimationState && (
+          <div
+            className="SpritesPage__PathBEmpty"
+            style={{ left: sidebarWidth + 20 }}
+          >
+            <button type="button" onClick={this.onAddPathBAnimationState}>
+              {l10n("FIELD_ADD_ANIMATION_STATE")}
+            </button>
+          </div>
+        )}
+        {file && selectedPathBAnimationState && (
+          <div
+            className="SpritesPage__PathBDock"
+            style={{ left: sidebarWidth + 20 }}
+          >
+            <SpriteAnimationTypeSelect
+              spriteSheetId={file.id}
+              animationStateId={selectedPathBAnimationState.id}
+              selectedSubStateId={
+                selectedPathBSubState && selectedPathBSubState.id
+              }
+              onSelectSubState={this.onSelectPathBSubState}
+            />
+            {selectedPathBSubState && selectedPathBFrame && (
+              <SpriteEditorCanvas
+                spriteSheetId={file.id}
+                animationStateId={selectedPathBAnimationState.id}
+                subStateId={selectedPathBSubState.id}
+                frameId={selectedPathBFrame.id}
+              />
+            )}
+          </div>
+        )}
+        {file && selectedPathBSubState && (
+          <SpriteAnimationTimeline
+            spriteSheetId={file.id}
+            animationStateId={selectedPathBAnimationState.id}
+            subStateId={selectedPathBSubState.id}
+            selectedFrameId={selectedPathBFrame && selectedPathBFrame.id}
+            onSelectFrame={this.onSelectPathBFrame}
+          />
+        )}
       </div>
     );
   }
@@ -188,6 +296,7 @@ SpritesPage.propTypes = {
   ).isRequired,
   openHelp: PropTypes.func.isRequired,
   addSpriteState: PropTypes.func.isRequired,
+  addSpriteAnimationState: PropTypes.func.isRequired,
   sidebarWidth: PropTypes.number.isRequired
 };
 
@@ -208,7 +317,8 @@ function mapStateToProps(state) {
 
 const mapDispatchToProps = {
   openHelp: electronActions.openHelp,
-  addSpriteState: entitiesActions.addSpriteState
+  addSpriteState: entitiesActions.addSpriteState,
+  addSpriteAnimationState: entitiesActions.addSpriteAnimationState
 };
 
 export default connect(

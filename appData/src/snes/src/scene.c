@@ -3109,11 +3109,28 @@ void ProjectilesUpdate(void)
  * how (or whether) that genre blocks actor-vs-actor movement, covers all
  * five without new genre-specific plumbing.
  *
- * Only fires the scene's playerHit1/2/3Script (same as a projectile hitting
- * the player) - not also the actor's own script the way B fires both context
- * fires, since this engine only ever runs one script at a time project-wide;
- * picking one consistently (matching the already-shipped projectile path)
- * beats trying to fire two and only getting to the first. */
+ * Fires the scene's playerHit1/2/3Script (same as a projectile hitting the
+ * player) when one is actually authored; B fires that *and* the touched
+ * actor's own script unconditionally, but this engine only ever runs one
+ * script at a time project-wide, so a real choice has to be made. v4
+ * follow-up (user-found, a real GB Studio 3.2.1 sample project's "Path to
+ * Sample Town" turnip-stomp scene - its whole stomp/hurt/defeat logic lives
+ * in each Turnip actor's own plain `script` field, with every scene-level
+ * playerHit1/2/3Script left empty, matching how that official sample is
+ * actually authored): firing *only* the scene script left that content
+ * dead - confirmed by compiling the real project and decoding the turnip's
+ * own script bytes byte-exact, which correctly self-target each turnip's
+ * real actor index (so the compiler side was never the problem), but
+ * nothing here ever ran it. Now falls back to the touched actor's own
+ * `events_ptr` when the scene script is empty (`ptr[0] != 0` - a compiled
+ * script is never truly empty, EVENT_END is a real byte - the same
+ * "real empty" check SceneTryInteract's own actor-script gate already
+ * uses), rather than always picking one or the other: a scene that already
+ * authors playerHit1/2/3Script keeps running exactly that, unchanged; a
+ * scene that authors the touched actor's own script instead (this sample's
+ * own convention, and also this engine's `projectile_fire_hit_script`'s own
+ * established precedent for "something with a matching collision_group
+ * touched an actor - run its own script") now actually runs it too. */
 void PlayerContactUpdate(void)
 {
     u8 j;
@@ -3148,7 +3165,14 @@ void PlayerContactUpdate(void)
         if (!script_ptr)
         {
             u8 idx = player_hit_idx[g == 2 ? 0 : g == 4 ? 1 : 2];
-            run_script(event_ptrs[idx], 0);
+            if (event_ptrs[idx].ptr[0] != 0)
+            {
+                run_script(event_ptrs[idx], 0);
+            }
+            else if (actors[j].events_ptr.ptr[0] != 0)
+            {
+                run_script(actors[j].events_ptr, j);
+            }
         }
         player_iframes = PLAYER_IFRAMES;
         return;

@@ -1,6 +1,11 @@
 .SpriteAnimationSettingsPanel {
   position: fixed;
-  top: 20px;
+  /* AppToolbar is 37px tall (Toolbar.css) - top: 20px (this panel's
+     original value, copied from SpriteStatesEditor.css without checking
+     against it) sat the panel's own title under the toolbar's icons
+     instead of clear of them. 10px below the toolbar matches this panel's
+     own right-edge gap. */
+  top: 47px;
   right: 10px;
   width: 260px;
   box-sizing: border-box;
@@ -12,9 +17,4 @@
 
 .SpriteAnimationSettingsPanel .FormRow {
   align-items: center;
-}
-
-.SpriteAnimationSettingsPanel__TypeLabel {
-  padding: 5px 0;
-  color: var(--input-text-color);
 }

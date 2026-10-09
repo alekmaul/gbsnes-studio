@@ -168,15 +168,21 @@ const SpriteAnimationSettingsPanel: FC<SpriteAnimationSettingsPanelProps> = ({
   // Only "actor" (3 frames) and "actor_animated" (6 frames) have a second,
   // genuinely different interpretation spriteTypeDec can select between -
   // every other frame count is always static regardless, so there's nothing
-  // real to offer a choice over there.
+  // real to offer a choice over there. Still shown as a Select either way
+  // (user-asked: "must be a dropdown list", not a plain label that happens
+  // to look like one sometimes) - just a single, disabled option when
+  // there's no real second choice, rather than a second fake option that
+  // would silently do nothing on change.
   const showSpriteTypeOverride =
     targetSheet &&
     (targetSheet.type === "actor" || targetSheet.type === "actor_animated");
   const spriteTypeOptions: SpriteTypeOverrideOption[] = targetSheet
-    ? [
-        { value: undefined, label: TYPE_LABELS[targetSheet.type] },
-        { value: "static", label: l10n("FIELD_FIXED_DIRECTION") },
-      ]
+    ? showSpriteTypeOverride
+      ? [
+          { value: undefined, label: TYPE_LABELS[targetSheet.type] },
+          { value: "static", label: l10n("FIELD_FIXED_DIRECTION") },
+        ]
+      : [{ value: undefined, label: TYPE_LABELS[targetSheet.type] }]
     : [];
   const currentSpriteTypeOption =
     spriteTypeOptions.find((o) => o.value === targetSheet?.defaultSpriteType) ||
@@ -215,20 +221,15 @@ const SpriteAnimationSettingsPanel: FC<SpriteAnimationSettingsPanelProps> = ({
         </>
       )}
       <FormField name="animationType" label={l10n("FIELD_ANIMATION_TYPE")}>
-        {showSpriteTypeOverride ? (
-          <Select
-            name="animationType"
-            value={currentSpriteTypeOption}
-            options={spriteTypeOptions}
-            onChange={(newValue: SpriteTypeOverrideOption) =>
-              onEditDefaultSpriteType(newValue.value)
-            }
-          />
-        ) : (
-          <div className="SpriteAnimationSettingsPanel__TypeLabel">
-            {targetSheet ? TYPE_LABELS[targetSheet.type] : ""}
-          </div>
-        )}
+        <Select
+          name="animationType"
+          value={currentSpriteTypeOption}
+          options={spriteTypeOptions}
+          isDisabled={!showSpriteTypeOverride}
+          onChange={(newValue: SpriteTypeOverrideOption) =>
+            onEditDefaultSpriteType(newValue.value)
+          }
+        />
       </FormField>
       <FormField name="spriteAnimSpeed" label={l10n("FIELD_ANIMATION_SPEED")}>
         <AnimationSpeedSelect
