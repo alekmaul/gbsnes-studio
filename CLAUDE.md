@@ -1514,26 +1514,49 @@ asked for all of it removed: "it is not working, you don't understand what I wan
 
 Reverted in full: the `src/components/sprites/` directory, `compileSnesSprites.ts` and its
 test, the Path A editor panels (`SpriteAnimationSettingsPanel.tsx`, and
-`SpriteAnimationsPanel.tsx` restored to its pre-Path-A flat, ungrouped form), `SpritesPage.js`
-restored to its pre-Path-A shape (`ImageViewer` + `SpriteFramesPanel` + `FilesSidebar` +
-the flat Animations list - no state grouping, no "+ Add Animation State"), the
-`SpriteAnimationState`/`SpriteSubState`/`SpriteFrame`/`MetaspriteTile` types and their 7
-reducers in `entitiesState.ts`, `SpriteSheet.animSpeed`/`defaultSpriteType` (both the type
-fields and their `compileSnesData.js`/engine wiring - the scene blob's per-slot OBJ table is
-back to `[24]` bytes, `sprite_anim_speed_for_slot` is gone from `scene.c`/`scene.h`/
+`SpriteAnimationsPanel.tsx` restored to its pre-Path-A flat, ungrouped form, then removed
+entirely - see the follow-up paragraph below), `SpritesPage.js` restored to its pre-Path-A
+shape, the `SpriteAnimationState`/`SpriteSubState`/`SpriteFrame`/`MetaspriteTile` types and
+their 7 reducers in `entitiesState.ts`, `SpriteSheet.animSpeed`/`defaultSpriteType` (both the
+type fields and their `compileSnesData.js`/engine wiring - the scene blob's per-slot OBJ table
+is back to `[24]` bytes, `sprite_anim_speed_for_slot` is gone from `scene.c`/`scene.h`/
 `script_cmds.c`), and the associated l10n keys/tests. The pre-existing, actually-shipped
 mechanism this reverts *to* - `SpriteSheet.type` (static/animated/actor/actor_animated) +
-`numFrames`, named via `getSpriteAnimations()` (`spriteAnimations.js`) and compiled by
-`compileSnesData.js` into the per-scene sprite tables `SceneAnimateActors` (`scene.c`)
-auto-cycles - is untouched and still exactly as documented elsewhere in this file. Also
-untouched: `SpriteState`/`states` (the "Set Sprite State" scripting event's own data,
-`eventPlayerSetState.js`/`eventActorSetState.js`/`SpriteStateSelect.js`) - a real, older,
-unrelated feature that happened to share the word "state" with Path A's unrelated
-per-sheet-default feature.
+`numFrames`, compiled by `compileSnesData.js` into the per-scene sprite tables
+`SceneAnimateActors` (`scene.c`) auto-cycles - is untouched and still exactly as documented
+elsewhere in this file. Also untouched: `SpriteState`/`states` (the "Set Sprite State"
+scripting event's own data, `eventPlayerSetState.js`/`eventActorSetState.js`/
+`SpriteStateSelect.js`) - a real, older, unrelated feature that happened to share the word
+"state" with Path A's unrelated per-sheet-default feature.
 
 Not reverted (unrelated real fixes that landed in the same commits as this work):
 `PlayerContactUpdate()`'s actor-script fallback fix (below) and the VRAM/dialogue-code work
 documented elsewhere in this file.
+
+**Follow-up, same week (user-found: "tu as laissé la partie frames et la partie animation
+dans la view sprites" - the Sprites page still showed a Frames panel and a flat Animations
+list after the revert above).** Those two panels (`SpriteFramesPanel.tsx`/`.css`, the flat,
+ungrouped `SpriteAnimationsPanel.tsx`) and the `getSpriteAnimations()` helper
+(`spriteAnimations.js`) actually **predate** Path A/B entirely (confirmed via `git log
+--follow`: commits `6a46373`/`68ca733`/`89e0608`, all well before `b4bc399`) - they were kept
+in the first revert pass on the reasoning that they're part of "the already-shipped
+mechanism," not Path A/B's own addition. Checking the real GB Studio 2.0.0-beta5 reference
+checkout directly (`SpritesPage.js`, `entitiesTypes.ts`, `loadSpriteData.js`) showed this
+reasoning was too generous: GB Studio 2.0.0-beta5 itself has **no** Frames/Animations UI at
+all - its own `SpritesPage.js` is exactly `ImageViewer` + `FilesSidebar`, nothing else; sprite
+type/frame-count there is purely file-derived data with no named-animation surface in the
+editor whatsoever. So this fork's own Frames/Animations panels, however old, are themselves a
+later *addition* beyond the real GB Studio baseline - and the user's explicit, literal
+instruction from the first revert ("only list, edit button as in V1.1.9") excludes them too.
+`SpritesPage.js` is now restored to the exact 2.0.0-beta5/v1.1.9 shape (confirmed byte-for-byte
+against the real 2.0.0-beta5 checkout) - just `ImageViewer` + `FilesSidebar`.
+`SpriteFramesPanel.tsx`/`.css`, `SpriteAnimationsPanel.tsx`, `spriteAnimations.js`, and
+`test/helpers/spriteAnimations.test.js` are deleted outright (a first attempt was blocked by
+Claude Code's own auto-mode permission classifier, "Irreversible Local Destruction" - not a
+project policy, just a sandbox guard that needed the user's explicit go-ahead to clear). The
+`.FilesSidebar__StatesDock` CSS rule and the `FIELD_FRAMES_FOR`/`FIELD_ANIMATIONS`/
+`FIELD_IDLE`/`FIELD_IDLE_DIR`/`FIELD_MOVING_DIR` l10n keys, both dead once those files are gone,
+are removed too.
 
 A future attempt at named/richer sprite animations should start fresh, not resume from this
 history.

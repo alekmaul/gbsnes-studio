@@ -104,14 +104,3 @@
 .FilesSidebar__ListItem--Active {
   background-color: var(--sidebar-selected-color);
 }
-
-.FilesSidebar__StatesDock {
-  position: fixed;
-  left: 0;
-  bottom: 0;
-  background-color: var(--sidebar-bg-color);
-  border-right: 1px solid var(--sidebar-edge-color);
-  border-top: 1px solid var(--sidebar-edge-color);
-  box-sizing: border-box;
-  overflow: auto;
-}
