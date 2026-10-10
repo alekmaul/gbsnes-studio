@@ -133,6 +133,25 @@ test("Should be able to move active actor relatively", () => {
   expect(output).toEqual([cmd(ACTOR_MOVE_RELATIVE), 5, 0, 6, 0, 0, 0]);
 });
 
+// useCollisions=true's wire-format byte was always compiled correctly -
+// the user-found bug this guards against was purely engine-side
+// (script_cmds.c's BEGIN_MOVE macro unconditionally set ACTOR_NOCLIP,
+// ignoring this exact byte - see CLAUDE.md). Existing coverage above only
+// exercised useCollisions=false; this closes that gap.
+test("Should set the useCollisions byte when moving relatively with collisions enabled", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.actorMoveRelative(5, 6, true, "horizontal");
+  expect(output).toEqual([cmd(ACTOR_MOVE_RELATIVE), 5, 0, 6, 0, 1, 0]);
+});
+
+test("Should set the useCollisions byte when moving to a position with collisions enabled", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.actorMoveTo(5, 6, true, "horizontal");
+  expect(output).toEqual([cmd(ACTOR_MOVE_TO), 5, 6, 1, 0]);
+});
+
 test("Should be able to move active actor to position defined by variables", () => {
   const output = [];
   const sb = new ScriptBuilder(output, { variables: ["0", "1"] });

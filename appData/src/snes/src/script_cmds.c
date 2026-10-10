@@ -796,35 +796,51 @@ void Script_ActorSetPos_b(void)
 }
 
 /* -------- scripted actor movement (SceneUpdateActors walks it) -------- */
-#define BEGIN_MOVE(dx, dy)                              \
+// v4 fix (user-found, real project "Path to Sample Town": a Turnip actor's
+// own On Update "bob" (ACTOR_MOVE_RELATIVE) walked straight through a
+// collision tile). useCollisions has been a real, compiled wire-format byte
+// since v2 (2.0.0-beta5) - compileEntityEvents/scriptBuilder.js already
+// emit it from the event's own "Use Collisions" checkbox - but every
+// BEGIN_MOVE call site below unconditionally OR'd in ACTOR_NOCLIP, so the
+// byte was read by nothing: every scripted Move To/Move Relative ignored
+// tile and actor collision entirely, regardless of what the author
+// actually checked in the editor. BEGIN_MOVE now takes useCollisions and
+// only sets ACTOR_NOCLIP when it's false, so a checked "Use Collisions"
+// move falls through to actor_try_move's normal npc_blocking/can_step
+// checks (already collision-aware and already handles a move stopping
+// partway - see ActorMoveAim's "Blocked - abandon the move" branch, never
+// exercised until now since NOCLIP always short-circuited past it).
+// moveType (horizontal/vertical/diagonal sequencing) is a separate,
+// unrelated field and stays deferred - not what this bug was about.
+#define BEGIN_MOVE(dx, dy, useCollisions)               \
     actor_move_dest_x = (dx);                           \
     actor_move_dest_y = (dy);                           \
-    actor_move_settings = ACTOR_MOVE_ENABLED | ACTOR_NOCLIP; \
+    actor_move_settings = ACTOR_MOVE_ENABLED | ((useCollisions) ? 0 : ACTOR_NOCLIP); \
     ADVANCE();                                          \
     script_action_complete = 0
 
-// ACTOR_MOVE_TO. args: x, y, useCollisions, moveType (v2: 2.0.0-beta5 appended
-// the last two - a collision-aware destination clamp and a horizontal/
-// vertical/diagonal move-type choice, neither implemented on this engine yet.
-// x/y are unchanged in meaning/position from v1.1.4; the two new trailing
-// bytes are consumed by ADVANCE()'s table-driven length below but otherwise
-// ignored for now - real wiring belongs with whichever genre needs it first
-// (v2 M5a Top Down / M5c Adventure).
+// ACTOR_MOVE_TO. args: x, y, useCollisions, moveType (v2: 2.0.0-beta5
+// appended the last two). moveType (horizontal/vertical/diagonal move
+// sequencing) is still not implemented on this engine - real wiring
+// belongs with whichever genre needs it first (v2 M5a Top Down / M5c
+// Adventure).
 void Script_ActorMoveTo_b(void)
 {
     BEGIN_MOVE(((s16)script_cmd_args[0] << 3) + 8,
-               ((s16)script_cmd_args[1] << 3) + 8);
+               ((s16)script_cmd_args[1] << 3) + 8,
+               script_cmd_args[2]);
 }
 
 // ACTOR_MOVE_RELATIVE. args: dxAbs, dxSign, dyAbs, dySign, useCollisions,
-// moveType - the last two are new in v2 (2.0.0-beta5), same deferred status
-// as ACTOR_MOVE_TO above; the first four are unchanged.
+// moveType - the last two are new in v2 (2.0.0-beta5); moveType is still
+// deferred, same as ACTOR_MOVE_TO above.
 void Script_ActorMoveRel_b(void)
 {
     s16 dx = (s16)script_cmd_args[0] << 3;
     s16 dy = (s16)script_cmd_args[2] << 3;
     BEGIN_MOVE(actors[script_actor].x + (script_cmd_args[1] ? -dx : dx),
-               actors[script_actor].y + (script_cmd_args[3] ? -dy : dy));
+               actors[script_actor].y + (script_cmd_args[3] ? -dy : dy),
+               script_cmd_args[4]);
 }
 
 // LAUNCH_PROJECTILE (v4). args: sprite_slot, dirVarHi, dirVarLo, speed,
@@ -903,12 +919,15 @@ void Script_PlayerBounce_b(void)
 }
 
 // ACTOR_MOVE_TO_VALUE. x/y arrive via LOAD_VECTORS (script_ptr_x/y), not
-// inline bytes. args: useCollisions, moveType - both new in v2, same
-// deferred status as ACTOR_MOVE_TO above.
+// inline bytes. args: useCollisions, moveType - both new in v2; moveType is
+// still deferred, same as ACTOR_MOVE_TO above. Compiles to a fixed
+// useCollisions=0 for now (eventActorMoveToVariables.js exposes no field
+// for it), so this one's observable behaviour is unchanged by this fix.
 void Script_ActorMoveToVal_b(void)
 {
     BEGIN_MOVE(((s16)VAR(script_ptr_x) << 3) + 8,
-               ((s16)VAR(script_ptr_y) << 3) + 8);
+               ((s16)VAR(script_ptr_y) << 3) + 8,
+               script_cmd_args[0]);
 }
 
 // ACTOR_PUSH. args: continuous (0 = push 2 tiles, 1 = slide to the scene edge

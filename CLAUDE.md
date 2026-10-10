@@ -1774,6 +1774,63 @@ for the method name (no match). Fixing it for real means upgrading `react-dnd` a
 major versions (a real API rewrite, not a drop-in bump) - out of scope for a warning-only,
 dev-mode-only issue.
 
+**Engine bug: Turnip actors in a real GB Studio 3.2.1 sample ("Path to Sample Town") walked
+straight through collision tiles despite their own On Update "bob" (`Move Relative`) having
+"Use Collisions" checked (user-found: "les actors turnip ne sont pas bloqués par les tiles à
+collisions comme le tile en pixel tile 59,13").** Confirmed directly against the real
+`snesgbs2` template's own project JSON before touching any code: every one of the Turnip's
+`Move Relative` calls (inside its "Turnip Movement" custom event) is authored with
+`"useCollisions": true` - this wasn't a project-authoring gap, the engine was just silently
+ignoring a real, user-checked setting. Root cause: `useCollisions` has compiled to a real
+wire-format byte since v2 (2.0.0-beta5) - `eventActorMoveRelative.js`'s own checkbox field,
+threaded through `scriptBuilder.js`'s `actorMoveRelative`/`actorMoveTo`/`actorMoveToVariables`
+exactly as documented - but `script_cmds.c`'s shared `BEGIN_MOVE` macro (used by all three
+opcodes' handlers) unconditionally OR'd `ACTOR_NOCLIP` into `actor_move_settings`, regardless
+of what that byte said. `actor_try_move`'s own NOCLIP branch (`if (actor_move_settings &
+ACTOR_NOCLIP) { ...; return; }`) short-circuits past the `npc_blocking`/`can_step` checks
+entirely before they ever run - so every scripted Move To/Move Relative on this engine ignored
+collision completely, no matter what a project author checked in the editor. The comment right
+above the macro had even already named this gap ("a collision-aware destination clamp...
+neither implemented on this engine yet") without anyone connecting it to a real reported bug
+until now.
+
+Fixed by giving `BEGIN_MOVE` a third parameter (`useCollisions`) and only OR'ing in
+`ACTOR_NOCLIP` when it's false, updating all three call sites
+(`Script_ActorMoveTo_b`/`Script_ActorMoveRel_b`/`Script_ActorMoveToVal_b`) to pass their own
+already-compiled byte (`script_cmd_args[2]`/`[4]`/`[0]` respectively - confirmed against each
+opcode's real `args_len` in the dispatch table). A collision-respecting move now falls through
+to `actor_try_move`'s existing, already-correct `npc_blocking`/`can_step` checks - including
+the "Blocked - abandon the move and let the script continue" branch in `ActorMoveAim`, which
+existed but had never actually been reachable until now, since NOCLIP always short-circuited
+past it for every scripted move on this engine. `moveType` (horizontal/vertical/diagonal move
+sequencing) is a separate field and stays deferred - unrelated to this bug.
+
+Verified with a real toolchain build + Mesen A/B, not just by reading code: a synthetic project
+(cloned from `test/projects/Test_Math`'s own assets, following this project's established
+"minimal repro" convention) with one actor doing a looping `Move Relative` toward a single
+painted wall tile, `useCollisions: true`. Two real gotchas hit and fixed while building this
+repro, worth remembering for the next one: (1) a fixture's own `_version`/`_release` fields
+matter - `Test_Math.gbsproj`'s `_version: 1` makes `migrateProject` run the *entire* legacy
+migration chain and silently drop the hand-authored `updateScript`/collisions, exactly the
+"pin to the latest known version" gotcha `compileSnesData.test.js`'s own synthetic fixtures
+already document; (2) `compileSnesData.js` derives a scene's *real* compiled width/height from
+its background image's own tile dimensions (`conv.tileW`/`tileH`), not from `scene.width`/
+`height` in the JSON - a collision bitmap built against the wrong width silently indexes the
+wrong tiles. **Before the fix**: the actor sailed through the wall entirely, ending up at tile
+73 after 600 frames (several unobstructed 8-tile loop iterations). **After the fix**: it
+stopped at tile 13 - exactly where `can_step`'s own "destination tile + one to the right" (for
+the 16px-wide sprite) footprint predicts for a wall at tile 15, confirmed by also reverting just
+this fix (`git stash`) and reproducing the "sails through" behavior again before restoring it -
+the same negative-control discipline every other engine-only fix in this file's history uses.
+Also discovered, while narrowing this down: the player's own default scene start position can
+sit directly in a test actor's path and get flagged by `npc_blocking` instead of the intended
+wall - moved it out of the way in the repro once this was noticed, not a real bug, just a
+reproduction-setup trap worth remembering. Tests: two new `scriptBuilder.test.js` cases closing
+a real gap in the existing coverage (every existing `actorMoveTo`/`actorMoveRelative` test only
+exercised `useCollisions: false` - the wire format for `true` was already correct before this
+fix, now it has its own byte-exact assertion too). Full suite green (150 suites), the real
+engine still compiles/links against the vendored toolchain.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,
