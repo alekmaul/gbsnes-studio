@@ -21,6 +21,15 @@ const getPixels = require("util").promisify(require("get-pixels"));
 const TILE = 8;
 const MAX_BG_COLORS = 16;
 
+// Real SNES OAM attribute byte bits, matching PVSnesLib's own sprite.h
+// OBJ_PAL/OBJ_PRIO/OBJ_FLIPX/OBJ_FLIPY macros exactly (confirmed against the
+// real vendored source, not guessed) - imageToMetaspriteData's `props` field
+// is meant to be used as a real OAM attribute byte directly.
+const OBJ_PAL = n => (n & 7) << 1;
+const OBJ_PRIO = n => (n & 3) << 4;
+const OBJ_FLIPX = 0x40;
+const OBJ_FLIPY = 0x80;
+
 /* ---- colour ---------------------------------------------------------- */
 
 // 8-bit R,G,B -> 15-bit BGR555 word (SNES CGRAM entry), 0bbbbbgggggrrrrr
@@ -266,7 +275,7 @@ const imageToBGData = async (filename, options = {}) => {
 const FRAME_SIZE = 16;
 
 const imageToSpriteData = async (filename, options = {}) => {
-  const { maxColors = 16 } = options;
+  const { maxColors = 16, animationTypeOverride } = options;
   const warnings = [];
   const pixels = await getPixels(filename);
   const [imgW, imgH] = pixels.shape;
@@ -289,6 +298,34 @@ const imageToSpriteData = async (filename, options = {}) => {
   } else if (sheetFrames >= 2 && sheetFrames <= 6) {
     frameCount = sheetFrames;
     spriteType = 0;
+  }
+  // Sprite Sheet editor's "Animation Type" field (SpriteSheet.animationType)
+  // re-interprets the same pixel rows under a different one of the 3 real
+  // types instead of changing how pixels are sliced - "fixed" always fits
+  // (re-labels a 3/6-frame sheet as a static auto-cycle of its own frames),
+  // "multi"/"multi_movement" need at least 3/6 real frames to pick from.
+  if (animationTypeOverride === "fixed" && spriteType !== 0) {
+    spriteType = 0;
+  } else if (animationTypeOverride === "multi") {
+    if (sheetFrames >= 3) {
+      frameCount = 3;
+      spriteType = 1;
+    } else {
+      warnings.push(
+        `Sprite ${filename} is set to "Four Directions" but only has ${sheetFrames} ` +
+          `16x16 frame(s) - needs at least 3. Falling back to auto-detected type.`
+      );
+    }
+  } else if (animationTypeOverride === "multi_movement") {
+    if (sheetFrames >= 6) {
+      frameCount = 6;
+      spriteType = 2;
+    } else {
+      warnings.push(
+        `Sprite ${filename} is set to "Four Directions + Movement" but only has ` +
+          `${sheetFrames} 16x16 frame(s) - needs at least 6. Falling back to auto-detected type.`
+      );
+    }
   }
   const scanW = Math.min(FRAME_SIZE * frameCount, imgW);
 
@@ -378,6 +415,257 @@ const imageToSpriteData = async (filename, options = {}) => {
   };
 };
 
+/*
+ * imageToMetaspriteData - M5 of the real-metasprite-support effort
+ * (SPRITE_EDITOR_PROGRESS.md). A JS port of PVSnesLib's own gfx4snes tool's
+ * metasprite_save() (tools/gfx4snes/src/metasprites.c, read from a real
+ * local checkout - not guessed), producing the same t_metasprite{dx,dy,tile,
+ * props} shape its generated .inc files declare (see sprite.h), but as a
+ * plain JS data structure rather than C source text - the C/asm emission
+ * itself is out of scope here (SPRITE_EDITOR_PROGRESS.md's M8).
+ *
+ * Deliberate differences from gfx4snes's own implementation, each one a
+ * considered choice, not an oversight:
+ *   - gfx4snes's real metasprite tile-map pass runs with tile reduction
+ *     explicitly OFF (`map_convertsnes(..., isnoreduction=1, ...)`, confirmed
+ *     in gfx4snes.c's real call site) - it only disables *reduction*, not
+ *     dedup, for implementation-simplicity reasons specific to its own
+ *     later VRAM-layout pass. This function dedupes real 8x8 tiles properly
+ *     (exact pixel match only, no flip-folding - see below), a real tile-
+ *     budget win gfx4snes's simplified path doesn't bother with, since this
+ *     function controls its own tile array end-to-end and doesn't inherit
+ *     gfx4snes's reasons to avoid it.
+ *   - No flip-folding during the initial tile dedup (unlike imageToBGData's
+ *     own dedupeFlips): composing a per-tile dedup-flip with a whole-
+ *     metasprite mirror-variant's own flip would need XOR-combining both
+ *     flip bits correctly per tile, real but non-trivial complexity for a
+ *     first pass. Exact-match dedup only; a metasprite's mirrored variant
+ *     flips the *whole panel* via OBJ_FLIPX/Y on each item's existing tile,
+ *     exactly matching gfx4snes's own real behaviour (it never re-derives
+ *     tile content for a flip variant either - see metasprites.c).
+ *   - `dtile` is a real index into this function's own `tiles[]` (actual
+ *     8x8 SNES tile data, consistent and ready for VRAM placement) - NOT
+ *     gfx4snes's own internal blockSize-granularity map index (which only
+ *     stays meaningful relative to a separate, differently-reconverted
+ *     tile-save pass downstream in the real tool; reusing that scheme here
+ *     would need replicating a quirk specific to its own pipeline, not a
+ *     real requirement of the t_metasprite format itself).
+ *   - Blank-tile skipping reads raw pixels directly for each candidate
+ *     sub-sprite's bounding box (every pixel maps to palette index 0),
+ *     rather than gfx4snes's own post-hoc tile-buffer scan - equivalent
+ *     result, simpler to reason about alongside the dedup pass above.
+ *   - A stale-looking doc comment on PVSnesLib's own t_metasprite struct
+ *     ("flip x/y will be added later") turned out NOT to reflect real
+ *     behaviour - metasprite_save()'s actual flip-variant code already sets
+ *     OBJ_FLIPX/OBJ_FLIPY in `props` today. Not a mistake on our side;
+ *     flagged here so a future reader doesn't trust that comment over the
+ *     real generator code.
+ *
+ * VRAM placement (ensuring a 16x16 sub-sprite's 4 real tiles land at the
+ * N,N+1,N+16,N+17 hardware-addressable offsets this engine's existing OBJ
+ * sheets rely on) is NOT handled here - that's compileSnesData.js's job
+ * (M8), the same way imageToSpriteData's own output isn't VRAM-placed
+ * until compileSnesData.js's placeTiles()/buildSceneSprites() run.
+ */
+const imageToMetaspriteData = async (filename, options = {}) => {
+  const {
+    maxColors = 16,
+    blockSize = 16, // OBJ sub-sprite size: 8, 16 or 32
+    metaWidth,
+    metaHeight,
+    priority = 0, // 0..3, OBJ_PRIO
+    paletteSlot = 0, // 0..7, OBJ_PAL
+    flip = 0 // bitmask: 1=flipX variant, 2=flipY variant, 4=flipX+Y variant
+  } = options;
+  const warnings = [];
+
+  if (![8, 16, 32].includes(blockSize)) {
+    throw new Error(`imageToMetaspriteData: blockSize must be 8, 16 or 32, got ${blockSize}`);
+  }
+  if (!metaWidth || !metaHeight || metaWidth % blockSize || metaHeight % blockSize) {
+    throw new Error(
+      `imageToMetaspriteData: metaWidth/metaHeight (${metaWidth}x${metaHeight}) must be ` +
+        `set and a multiple of blockSize (${blockSize})`
+    );
+  }
+
+  const pixels = await getPixels(filename);
+  const [imgW, imgH] = pixels.shape;
+
+  if (imgW % metaWidth !== 0 || imgH % metaHeight !== 0) {
+    warnings.push(
+      `Sprite ${filename} is ${imgW}x${imgH}, not an exact multiple of the ` +
+        `${metaWidth}x${metaHeight} metasprite size - trailing rows/columns are dropped`
+    );
+  }
+  const metaCols = Math.floor(imgW / metaWidth);
+  const metaRows = Math.floor(imgH / metaHeight);
+
+  // palette, scanned across the whole image
+  let { colors } = extractColors(pixels);
+  if (colors.length > maxColors) {
+    warnings.push(
+      `Sprite ${filename} has ${colors.length} colours, over the ${maxColors}-colour ` +
+        `limit for a sprite sheet - extra colours are snapped to the nearest kept colour. ` +
+        `Re-export as an indexed PNG with <= ${maxColors} colours.`
+    );
+    colors = colors.slice(0, maxColors);
+  }
+  const colorIndex = (r, g, b) => {
+    for (let i = 0; i < colors.length; i++) {
+      if (colors[i][0] === r && colors[i][1] === g && colors[i][2] === b) {
+        return i;
+      }
+    }
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < colors.length; i++) {
+      const d = dist2(colors[i], [r, g, b]);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  // Real 8x8 tile dedup across the whole sheet (exact pixel match only - see
+  // header comment for why no flip-folding here).
+  const tileW = Math.floor(imgW / TILE);
+  const tileH = Math.floor(imgH / TILE);
+  const tiles = [];
+  const tileIndexAt = []; // [ty][tx] -> index into tiles[]
+  const lookup = new Map();
+
+  const rowsAt = (tx, ty) => {
+    const rows = [];
+    for (let y = 0; y < TILE; y++) {
+      const row = [];
+      for (let x = 0; x < TILE; x++) {
+        row.push(
+          colorIndex(
+            pixels.get(tx * TILE + x, ty * TILE + y, 0),
+            pixels.get(tx * TILE + x, ty * TILE + y, 1),
+            pixels.get(tx * TILE + x, ty * TILE + y, 2)
+          )
+        );
+      }
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  for (let ty = 0; ty < tileH; ty++) {
+    tileIndexAt.push([]);
+    for (let tx = 0; tx < tileW; tx++) {
+      const rows = rowsAt(tx, ty);
+      const key = rowsKey(rows);
+      let index = lookup.get(key);
+      if (index === undefined) {
+        index = tiles.length;
+        tiles.push(tileFromIndices(rows));
+        lookup.set(key, index);
+      }
+      tileIndexAt[ty][tx] = index;
+    }
+  }
+
+  // Every pixel in a sub-sprite's bounding box maps to palette index 0.
+  const subSpriteIsBlank = (pxX, pxY) => {
+    for (let y = 0; y < blockSize; y++) {
+      for (let x = 0; x < blockSize; x++) {
+        const r = pixels.get(pxX + x, pxY + y, 0);
+        const g = pixels.get(pxX + x, pxY + y, 1);
+        const b = pixels.get(pxX + x, pxY + y, 2);
+        if (colorIndex(r, g, b) !== 0) {
+          return false;
+        }
+      }
+    }
+    return true;
+  };
+
+  const subCols = metaWidth / blockSize;
+  const subRows = metaHeight / blockSize;
+  const baseProps = OBJ_PAL(paletteSlot) | OBJ_PRIO(priority);
+
+  const metasprites = [];
+  for (let my = 0; my < metaRows; my++) {
+    for (let mx = 0; mx < metaCols; mx++) {
+      const originX = mx * metaWidth;
+      const originY = my * metaHeight;
+      const base = [];
+      for (let sy = 0; sy < subRows; sy++) {
+        for (let sx = 0; sx < subCols; sx++) {
+          const pxX = originX + sx * blockSize;
+          const pxY = originY + sy * blockSize;
+          if (subSpriteIsBlank(pxX, pxY)) {
+            continue;
+          }
+          // Hardware addresses a large OBJ's other tiles relative to the
+          // top-left one (N, N+1, N+16, N+17 for 16x16) - dtile is that
+          // top-left 8x8 tile's own deduped index; compileSnesData.js (M8)
+          // is responsible for actually laying tiles[] out so that holds.
+          const dtile = tileIndexAt[pxY / TILE][pxX / TILE];
+          base.push({
+            dx: sx * blockSize,
+            dy: sy * blockSize,
+            tile: dtile,
+            props: baseProps
+          });
+        }
+      }
+
+      const variants = { base };
+      // Mirror offsets within the metasprite's own box, same OBJ_FLIPX/Y +
+      // same tile indices gfx4snes's own flip-variant passes use - the
+      // hardware flips the tile's pixels at render time, nothing to re-derive.
+      if (flip & 1) {
+        variants.flipX = base.map(item => ({
+          ...item,
+          dx: metaWidth - blockSize - item.dx,
+          props: item.props | OBJ_FLIPX
+        }));
+      }
+      if (flip & 2) {
+        variants.flipY = base.map(item => ({
+          ...item,
+          dy: metaHeight - blockSize - item.dy,
+          props: item.props | OBJ_FLIPY
+        }));
+      }
+      if (flip & 4) {
+        variants.flipXY = base.map(item => ({
+          ...item,
+          dx: metaWidth - blockSize - item.dx,
+          dy: metaHeight - blockSize - item.dy,
+          props: item.props | OBJ_FLIPX | OBJ_FLIPY
+        }));
+      }
+      metasprites.push(variants);
+    }
+  }
+
+  const palette = paletteToBGR555(colors);
+  palette[0] = 0; // force transparent, matching imageToSpriteData's own convention
+  const tileBytes = [].concat(...tiles);
+
+  return {
+    tiles,
+    tileBytes,
+    palette,
+    paletteBytes: paletteBytes(palette),
+    colorCount: colors.length,
+    blockSize,
+    metaWidth,
+    metaHeight,
+    metaCols,
+    metaRows,
+    metasprites,
+    warnings
+  };
+};
+
 // 32 bytes of 4bpp planar data -> 8 rows of 8 palette indices (inverse of
 // tileFromIndices). Used to verify a conversion round-trips losslessly.
 const indicesFromTile = bytes => {
@@ -430,5 +718,6 @@ module.exports = {
   extractColors,
   imageToBGData,
   imageToSpriteData,
+  imageToMetaspriteData,
   decodeBGData
 };

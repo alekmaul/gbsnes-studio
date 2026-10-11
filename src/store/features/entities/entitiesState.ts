@@ -451,6 +451,19 @@ const removeSprite: CaseReducer<
   }
 };
 
+const editSpriteSheet: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    changes: Partial<SpriteSheet>;
+  }>
+> = (state, action) => {
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: action.payload.spriteSheetId,
+    changes: action.payload.changes,
+  });
+};
+
 const addSpriteState: CaseReducer<
   EntitiesState,
   PayloadAction<{
@@ -2053,6 +2066,8 @@ const entitiesSlice = createSlice({
     /**************************************************************************
      * Sprite States
      */
+
+    editSpriteSheet,
 
     addSpriteState: {
       reducer: addSpriteState,

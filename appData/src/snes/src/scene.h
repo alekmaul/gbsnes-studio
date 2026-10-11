@@ -39,13 +39,30 @@
 #define BG1_GFX_VRAM 0x2000
 #define BG1_MAP_VRAM 0x6800
 
-/* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [24]
+/* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [32]
  * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
  * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */
 extern u8 sprite_type_for_slot[SPRITE_SLOTS];
 extern u8 sprite_frames_for_slot[SPRITE_SLOTS];
 extern u8 sprite_pal_for_slot[SPRITE_SLOTS];
+/* Real-metasprite groundwork (SPRITE_EDITOR_PROGRESS.md M7) - how many real
+ * OAM hardware sprites one actor using this sheet slot needs. Every entry is
+ * compile-time 1 today (compileSnesData.js has no multi-tile metasprite data
+ * to size this from yet, M8) - scaffolding only, but already read for real
+ * by SceneInit's actor_oam_base[] prefix sum below, so the render loop is
+ * ready for a real per-slot cost the moment M8 starts emitting one. */
+extern u8 sprite_oam_ids_for_slot[SPRITE_SLOTS];
 extern const unsigned char *sprite_slot_for_index;
+
+/* Real per-actor OAM id base (SPRITE_EDITOR_PROGRESS.md M7) - a prefix sum
+ * over sprite_oam_ids_for_slot[], computed once in SceneInit, replacing the
+ * old incidental `i << 2` spacing (which reserved 4 ids/actor for no real
+ * reason and happened to make EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID
+ * collide - AVATAR_OID and PROJECTILE_OID_BASE were the literal same
+ * expression, a real pre-existing bug, fixed alongside this). Valid for
+ * indices 0..scene_num_actors (the only ones SceneRenderActors ever visits -
+ * see its own `i <= scene_num_actors` loop bound). */
+extern u16 actor_oam_base[MAX_ACTORS];
 
 /* v4 fix (user-found: swapping sprite sheets at runtime left frames_len
  * stale - see Script_ActorSetSprite_b/Script_PlayerSetSprite_b in

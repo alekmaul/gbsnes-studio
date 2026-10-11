@@ -112,6 +112,15 @@ export type SpriteState = {
   spriteSheetId: string;
 };
 
+// The 3 real values this engine can render, a subset of GB Studio's own 6
+// (fixed/fixed_movement/multi/multi_movement/platform_player/cursor) - the
+// other 3 have no backing here (no Platformer/Point-and-Click genre on this
+// top-down-only SNES fork). Maps 1:1 onto the already-shipped pixel-geometry
+// detection in snesgfx.js's imageToSpriteData: fixed -> SPRITE_STATIC,
+// multi -> SPRITE_ACTOR (3-frame, side auto-mirrored), multi_movement ->
+// SPRITE_ACTOR_ANIMATED (6-frame, same mirroring). See SPRITE_EDITOR_PROGRESS.md.
+export type SpriteAnimationType = "fixed" | "multi" | "multi_movement";
+
 export type SpriteSheet = {
   id: string;
   name: string;
@@ -122,6 +131,17 @@ export type SpriteSheet = {
   inode: string;
   _v: number;
   states?: SpriteState[];
+  // Overrides the auto-detected animationType derived from `type`/`numFrames`
+  // above; undefined keeps today's pure auto-detect behaviour unchanged.
+  animationType?: SpriteAnimationType;
+  // Authored editor metadata, not compiled into assets.c - this engine's
+  // actor collision is tile-based (can_step/npc_blocking), not per-sprite
+  // bounds. Kept for schema parity / a future hook, documented as inert.
+  // See SPRITE_EDITOR_PROGRESS.md.
+  boundsX?: number;
+  boundsY?: number;
+  boundsWidth?: number;
+  boundsHeight?: number;
 };
 
 // M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,

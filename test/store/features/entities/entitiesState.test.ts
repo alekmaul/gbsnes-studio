@@ -333,6 +333,38 @@ test("Should remove sprite sheets that are deleted while project is open", () =>
   expect(newState.spriteSheets.ids.length).toBe(0);
 });
 
+test("Should edit a sprite sheet's animationType override and bounds", () => {
+  const state: EntitiesState = {
+    ...initialState,
+    spriteSheets: {
+      entities: {
+        sprite1: {
+          ...dummySpriteSheet,
+          id: "sprite1",
+        },
+      },
+      ids: ["sprite1"],
+    },
+  };
+
+  const action = actions.editSpriteSheet({
+    spriteSheetId: "sprite1",
+    changes: {
+      animationType: "multi_movement",
+      boundsX: 0,
+      boundsY: 0,
+      boundsWidth: 16,
+      boundsHeight: 16,
+    },
+  });
+
+  const newState = reducer(state, action);
+  const sprite = newState.spriteSheets.entities["sprite1"];
+  expect(sprite?.animationType).toBe("multi_movement");
+  expect(sprite?.boundsWidth).toBe(16);
+  expect(sprite?.boundsHeight).toBe(16);
+});
+
 test("Should add a named state to a sprite sheet", () => {
   const state: EntitiesState = {
     ...initialState,

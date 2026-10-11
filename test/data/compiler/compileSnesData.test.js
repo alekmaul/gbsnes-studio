@@ -63,10 +63,10 @@ describe("compileSnesData - Test_Math fixture", () => {
   });
 
   // v2 M5a: the scene blob header gained a scene_type byte at position 6
-  // (after height, before the [24] sprite-slot table) - every offset past
+  // (after height, before the [32] sprite-slot table) - every offset past
   // height in the old (v1.1.4) layout shifts by +1 here. M6 (v4): a further
-  // [6]-byte parallax table follows the [24] sprite-slot table, shifting
-  // every offset past it by +6 on top of that. Projectiles follow-up (v4): a
+  // [6]-byte parallax table follows the sprite-slot table, shifting every
+  // offset past it by +6 on top of that. Projectiles follow-up (v4): a
   // further [6]-byte playerHit1/2/3ScriptIdx table follows *that*, shifting
   // every offset past it by +6 more on top of both. v4 fix (user-found: "the
   // triggers are not working when I press A"): every event_ptrs[] script
@@ -74,24 +74,30 @@ describe("compileSnesData - Test_Math fixture", () => {
   // bytes (little-endian) - a 1-byte index silently wrapped mod 256 once a
   // real multi-scene project's cumulative script count passed 255. This
   // shifts sceneScriptIdx (+1) and playerHit1/2/3ScriptIdx (+3) in the
-  // header, and every actor/trigger entry (+5/+1 bytes respectively).
-  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [24] sprite table + [6] parallax table + [6] playerHit table", () => {
+  // header, and every actor/trigger entry (+5/+1 bytes respectively). M7
+  // (SPRITE_EDITOR_PROGRESS.md): the sprite-slot table grew [24]->[32]
+  // (added sprite_oam_ids[8]), shifting every offset past it by +8 more.
+  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [32] sprite table + [6] parallax table + [6] playerHit table", () => {
     const blob = out.stats.sceneBlobs[0];
     expect(blob.slice(0, 3)).toEqual([0, 1, 0]); // bgIndex, numActors, numTriggers
     expect(blob.slice(5, 7)).toEqual([20, 18]); // w, h
     expect(blob[7]).toBe(0); // scene.type undefined -> defaults to 0 (Top Down)
-    // [8..31] per-scene OBJ slot table: sprite_type[8], sprite_frames[8], sprite_pal[8]
+    // [8..39] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
+    // sprite_pal[8], sprite_oam_ids[8]
     expect(blob.slice(24, 32)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]); // pal numbers
-    // [32..37] parallax table (MAX_PARALLAX_LAYERS*2): no parallax on this fixture
-    expect(blob.slice(32, 38)).toEqual([0, 0, 0, 0, 0, 0]);
-    // [38..43] playerHit1/2/3ScriptIdx (2 bytes each, little-endian): none
+    // every slot still costs exactly 1 real OAM id - no metasprite data
+    // exists yet to size this from (M8)
+    expect(blob.slice(32, 40)).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
+    // [40..45] parallax table (MAX_PARALLAX_LAYERS*2): no parallax on this fixture
+    expect(blob.slice(40, 46)).toEqual([0, 0, 0, 0, 0, 0]);
+    // [46..51] playerHit1/2/3ScriptIdx (2 bytes each, little-endian): none
     // authored on this fixture, but still real (nonzero, since index 0 is
     // the scene's own start script) event_ptrs[] indices pointing at
     // trivially-empty compiled scripts.
-    expect(blob.slice(38, 44)).toEqual([1, 0, 2, 0, 3, 0]);
-    // first actor entry starts right after the playerHit table (at 44)
+    expect(blob.slice(46, 52)).toEqual([1, 0, 2, 0, 3, 0]);
+    // first actor entry starts right after the playerHit table (at 52)
     // x, y, dir(down=1), move(static=1), spriteSlot, scriptIdx (2 bytes), ...
-    expect(blob.slice(44, 51)).toEqual([9, 7, 1, 1, 0, 4, 0]);
+    expect(blob.slice(52, 59)).toEqual([9, 7, 1, 1, 0, 4, 0]);
   });
 
   test("the actor's first TEXT resolves to a string index", () => {
@@ -172,12 +178,12 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
       warnings: () => {},
     });
     const blob = out.stats.sceneBlobs[0];
-    // header(8) + sprite-slot table(24) + parallax table(6) + playerHit
-    // table(6) + 0 actors + 0 triggers = 44 bytes before the ceil(w*h/8) =
+    // header(8) + sprite-slot table(32, M7) + parallax table(6) + playerHit
+    // table(6) + 0 actors + 0 triggers = 52 bytes before the ceil(w*h/8) =
     // 45-byte collision bitmap.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(44 + colLen);
-    const colByte = blob[44];
+    expect(blob.length).toBe(52 + colLen);
+    const colByte = blob[52];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).
     expect(colByte & (1 << 0)).toBeTruthy(); // tile 0: COLLISION_ALL
@@ -193,7 +199,7 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // so most of the "bitmap" ended up reading whatever raw per-tile bytes
     // happened to land within the first colLen indices (mostly garbage
     // relative to real tile positions), not real per-tile solidity.
-    expect(blob.slice(45, 44 + colLen)).toEqual(new Array(colLen - 1).fill(0));
+    expect(blob.slice(53, 52 + colLen)).toEqual(new Array(colLen - 1).fill(0));
   });
 });
 
@@ -268,9 +274,10 @@ describe("compileSnesData - actor.spriteType (v2, replaces movementType inferenc
       projectRoot: PROJECT_ROOT,
       warnings: () => {},
     });
-    // actor entry starts right after [8]+[24]+[6]+[6]=[44]; spriteType is
-    // byte 7 of the 10-byte prefix (x,y,dir,move,slot,scriptIdx(2B),spriteType,...)
-    const actorEntry = out.stats.sceneBlobs[0].slice(44, 54);
+    // actor entry starts right after [8]+[32]+[6]+[6]=[52] (M7 grew the
+    // sprite-slot table 24->32); spriteType is byte 7 of the 10-byte prefix
+    // (x,y,dir,move,slot,scriptIdx(2B),spriteType,...)
+    const actorEntry = out.stats.sceneBlobs[0].slice(52, 62);
     expect(actorEntry[7]).toBe(0); // SPRITE_STATIC despite movementType=randomWalk
   });
 });
@@ -365,7 +372,8 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    expect(out.stats.sceneBlobs[0].slice(32, 38)).toEqual([0, 0, 0, 0, 0, 0]);
+    // M7 shifted the parallax table 32->40 (sprite-slot table grew 24->32)
+    expect(out.stats.sceneBlobs[0].slice(40, 46)).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   test("layer heights convert to scanlines and the last layer fills the rest of the screen", async () => {
@@ -379,7 +387,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
         warnings: () => {},
       }
     );
-    const table = out.stats.sceneBlobs[0].slice(32, 38);
+    const table = out.stats.sceneBlobs[0].slice(40, 46);
     // layer 0: 4 tiles * 8 = 32 lines, shift 2
     // layer 1 (last): auto-extends to 224 - 32 = 192 lines, shift 1
     expect(table).toEqual([32, 2, 192, 1, 0, 0]);
@@ -390,7 +398,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    const table = out.stats.sceneBlobs[0].slice(32, 38);
+    const table = out.stats.sceneBlobs[0].slice(40, 46);
     // Single layer auto-extends to the full screen (224 lines); -1 as an
     // unsigned byte is 0xff (255), matching the engine's (s8) reinterpret.
     expect(table).toEqual([224, 255, 0, 0, 0, 0]);

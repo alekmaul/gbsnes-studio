@@ -124,7 +124,12 @@ static u8 sprites_hidden = 0;
 u8 sprite_type_for_slot[SPRITE_SLOTS];
 u8 sprite_frames_for_slot[SPRITE_SLOTS];
 u8 sprite_pal_for_slot[SPRITE_SLOTS];
+u8 sprite_oam_ids_for_slot[SPRITE_SLOTS]; /* M7 groundwork, see scene.h */
 const unsigned char *sprite_slot_for_index = 0;
+
+/* M7 groundwork, see scene.h - .bss isn't pre-zeroed either, SceneInit
+ * always fills every entry up to scene_num_actors before anything reads it. */
+u16 actor_oam_base[MAX_ACTORS];
 
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
  * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
@@ -170,10 +175,22 @@ static u16 player_hit_idx[3];
 #define PLAYER_IFRAMES 60 /* ~1s at 60fps - no visual flash during it (GB's
                               own "flash" cue) yet, a documented simplification */
 static u8 player_iframes = 0;
-/* One OAM id block per pool slot, right after the emote's own (EMOTE_OID is
- * defined further down, next to SceneRenderActors - this just documents the
- * relationship). */
-#define PROJECTILE_OID_BASE ((u16)(MAX_ACTORS + 1) << 2)
+/* M7 fix (SPRITE_EDITOR_PROGRESS.md, found during the M7 OAM rework): this
+ * used to be `(u16)(MAX_ACTORS + 1) << 2` - the *literal same expression* as
+ * ui.c's AVATAR_OID, so the dialogue avatar and projectile pool slot 0
+ * silently shared one hardware OAM id (both written every frame, SceneUpdate
+ * then UIUpdate in game.c's main loop). One OAM id per pool slot, right
+ * after the emote's own (EMOTE_OID, defined further down next to
+ * SceneRenderActors) - now genuinely distinct from AVATAR_OID because both
+ * are derived from the same tight, no-`<<2`-gaps scheme instead of two
+ * independently-hand-picked constants that happened to collide. All three
+ * (EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID) assume every actor costs
+ * exactly 1 OAM id (true today - see actor_oam_base[]'s own comment in
+ * SceneInit); once M8 lets an actor cost more, these need to become
+ * runtime values derived from the real actor_oam_base[scene_num_actors]
+ * total instead of compile-time constants - flagged, not silently assumed
+ * to still work. */
+#define PROJECTILE_OID_BASE ((u16)(MAX_ACTORS + 1))
 
 /* SCENE_PUSH_STATE / SCENE_POP_STATE / SCENE_STATE_RESET / SCENE_POP_ALL_STATE.
  * A small stack of (scene, player tile pos, player facing) snapshots, e.g. for
@@ -737,16 +754,18 @@ void SceneInit(void)
     scene_type = s[7];
     p = s + 8;
 
-    /* [24] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
-     * sprite_pal[8] - see compileSnesData.js. */
+    /* [32] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
+     * sprite_pal[8], sprite_oam_ids[8] (M7 groundwork, see scene.h) -
+     * see compileSnesData.js. */
     for (i = 0; i < SPRITE_SLOTS; i++)
     {
         sprite_type_for_slot[i] = p[i];
         sprite_frames_for_slot[i] = p[SPRITE_SLOTS + i];
         sprite_pal_for_slot[i] = p[2 * SPRITE_SLOTS + i];
+        sprite_oam_ids_for_slot[i] = p[3 * SPRITE_SLOTS + i];
     }
     sprite_slot_for_index = scene_sprite_slot_ptrs[scene_index];
-    p += 3 * SPRITE_SLOTS;
+    p += 4 * SPRITE_SLOTS;
 
     /* M6 (v4): [MAX_PARALLAX_LAYERS*2] banded X-axis parallax table - see
      * compileSnesData.js and parallax.c. lines=0 in slot 0 means no
@@ -979,8 +998,34 @@ void SceneInit(void)
         actors[i].active = 0;
         actors[i].update_ctx = UPDATE_CTX_NONE;
         /* Hide the unused OAM slots once here - SceneRenderActors only walks
-         * 0..scene_num_actors every frame, so it never touches these again. */
-        oamSetVisible((u16)i << 2, OBJ_HIDE);
+         * 0..scene_num_actors every frame, so it never touches these again.
+         * M7 groundwork: plain `i`, not the old `i << 2` - correct as long as
+         * every sprite_oam_ids_for_slot[] entry stays 1 (true until M8 ships
+         * real multi-tile metasprite costs). Once a cost can exceed 1, this
+         * needs to hide up through the real worst-case high-water-mark id
+         * instead of MAX_ACTORS-1, not just drop the shift - flagging now so
+         * M8 doesn't have to rediscover this call site. */
+        oamSetVisible((u16)i, OBJ_HIDE);
+    }
+
+    /* M7 groundwork (SPRITE_EDITOR_PROGRESS.md) - real per-actor OAM id
+     * base, a prefix sum over sprite_oam_ids_for_slot[] (just read above),
+     * replacing the old incidental `i << 2` spacing. Every entry of that
+     * table is compile-time 1 today (M8 hasn't started emitting real
+     * multi-tile metasprite costs yet), so this computes exactly
+     * actor_oam_base[i] == i - byte-for-byte equivalent OAM positions to
+     * before, just without the wasted `<<2` gaps. Reclaiming that space is
+     * what lets EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID below finally be
+     * genuinely distinct instead of two of them colliding on hardware id 84
+     * (a real pre-existing bug, fixed here as a direct consequence of this
+     * rework, not a separate patch). actors[i].frame_offset>>1 is this
+     * actor's sprite slot - same lookup sprite_pal_for_slot[] already uses
+     * in SceneRenderActors. */
+    j = 0;
+    for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
+    {
+        actor_oam_base[i] = j;
+        j += sprite_oam_ids_for_slot[actors[i].frame_offset >> 1];
     }
 
     /* On Update subsystem (v4): fresh pool for this scene (a previous
@@ -1002,7 +1047,9 @@ void SceneInit(void)
     for (i = 0; i < MAX_PROJECTILES; i++)
     {
         projectiles[i].active = 0;
-        oamSetVisible(PROJECTILE_OID_BASE + ((u16)i << 2), OBJ_HIDE);
+        /* M7: plain + i, not + (i << 2) - each projectile is still exactly
+         * 1 OAM entry; the old spacing was as incidental as the actor one. */
+        oamSetVisible(PROJECTILE_OID_BASE + i, OBJ_HIDE);
     }
     /* Contact-damage iframes shouldn't carry across a scene switch either. */
     player_iframes = 0;
@@ -2744,7 +2791,11 @@ static void SceneUpdateEmote(void)
     }
 }
 
-#define EMOTE_OID ((u16)MAX_ACTORS << 2)
+/* M7: plain MAX_ACTORS, not `<< 2` - see PROJECTILE_OID_BASE's own comment
+ * above for why (the old spacing was incidental, not a real reservation,
+ * and masked a real id collision between this and AVATAR_OID/
+ * PROJECTILE_OID_BASE). */
+#define EMOTE_OID ((u16)MAX_ACTORS)
 
 // M7-cont. sprite frames. A 3-frame SPRITE_ACTOR sheet has one pose per
 // direction (down = frame_offset, up = +ACTOR_UP_TILE0, side = +ACTOR_SIDE_TILE0,
@@ -2811,7 +2862,7 @@ static void SceneRenderActors(void)
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
         ACTOR *a = &actors[i];
-        oid = (u16)i << 2;
+        oid = actor_oam_base[i]; /* M7: real per-actor base, see scene.h */
         x_rel = a->x - scroll_x - 8;
         y_rel = a->y - scroll_y - 16;
         /* v4 fix (user-found, No$sns: "the rock and duck [show up] at the
@@ -2986,7 +3037,7 @@ void ProjectilesUpdate(void)
         u8 tile, flip;
 
         if (!projectiles[i].active) continue;
-        oid = PROJECTILE_OID_BASE + ((u16)i << 2);
+        oid = PROJECTILE_OID_BASE + i; /* M7: plain + i, see the define's own comment */
 
         if (projectiles[i].ttl)
         {

@@ -23,7 +23,7 @@
  * pointer).
  *
  * v2 M5a scene genre dispatch: the scene blob header gained a scene_type byte
- * (position 6, after height, before the [24] sprite-slot table) - read here
+ * (position 6, after height, before the [32] sprite-slot table) - read here
  * from the denormalized scene's own `type` field (a string "0".."4", GB
  * Studio 2.0's real scene.type numbering - see states.h in the engine for
  * the same values). No genre-specific compile-time behaviour is needed here
@@ -483,9 +483,11 @@ const compileSnesData = async (
   const allSpriteIds = Array.from(new Set([].concat(...sceneSpriteIds, ...sceneAvatarIds)));
   for (let i = 0; i < allSpriteIds.length; i++) {
     const id = allSpriteIds[i];
+    const sheet = spriteById(id);
     // eslint-disable-next-line no-await-in-loop
     const conv = await snesgfx.imageToSpriteData(
-      assetFilename(projectRoot, "sprites", spriteById(id))
+      assetFilename(projectRoot, "sprites", sheet),
+      { animationTypeOverride: sheet.animationType }
     );
     conv.warnings.forEach(warnings);
     spriteConv[id] = conv;
@@ -624,6 +626,12 @@ const compileSnesData = async (
     const frames = new Array(SPRITE_SLOTS).fill(1);
     const pals = [];
     for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
+    // M7 groundwork (SPRITE_EDITOR_PROGRESS.md): how many real OAM hardware
+    // sprites one actor using this slot needs. Always 1 today - nothing
+    // here calls imageToMetaspriteData yet (M8) - but scene.c's SceneInit
+    // already reads this for real (actor_oam_base[]'s prefix sum), so M8
+    // only has to change this one array, no engine-side change needed.
+    const oamIds = new Array(SPRITE_SLOTS).fill(1);
 
     const objPalColours = {}; // objPal -> this scene's claimed colour list
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
@@ -649,7 +657,7 @@ const compileSnesData = async (
       if (k === 0) writePal(2, conv.paletteBytes);
     });
 
-    return { sheet, palBytes, types, frames, pals };
+    return { sheet, palBytes, types, frames, pals, oamIds };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -888,15 +896,16 @@ const compileSnesData = async (
       );
     });
 
-    // per-scene OBJ-slot tables, read by SceneInit straight after w/h
+    // per-scene OBJ-slot tables, read by SceneInit straight after w/h.
+    // [32] now, not [24] - M7 (SPRITE_EDITOR_PROGRESS.md) added oamIds[8].
     const spr = sceneSprites[sceneIndex];
-    const sprSlotBytes = [].concat(spr.types, spr.frames, spr.pals);
+    const sprSlotBytes = [].concat(spr.types, spr.frames, spr.pals, spr.oamIds);
 
     // M6 (v4): banded X-axis parallax scrolling, driven by the SNES's own
     // HDMA (setParallaxScrolling/HDMATable16, appData/src/snes/src/parallax.c)
     // instead of a second BG layer - matches GB Studio 3.x's real model (N
     // stacked bands on the SAME background, not two independent layers).
-    // Fixed-size table (MAX_PARALLAX_LAYERS * 2 bytes), matching the [24]
+    // Fixed-size table (MAX_PARALLAX_LAYERS * 2 bytes), matching the [32]
     // sprite-slot table's own "always present, zero-filled when unused"
     // convention. lines=0 in the first entry means "no parallax" to the
     // engine (skip HDMA, plain bgSetScroll as before).
@@ -946,7 +955,7 @@ const compileSnesData = async (
       w,
       h,
       sceneTypeDec(scene.type), // v2 M5a: genre dispatch byte
-      sprSlotBytes, // [24] sprite_type[8], sprite_frames[8], sprite_pal[8]
+      sprSlotBytes, // [32] sprite_type[8], sprite_frames[8], sprite_pal[8], sprite_oam_ids[8]
       parallaxBytes, // [6] M6 (v4): up to 3 {lines, shift} parallax bands
       // [6] Projectiles (v4, follow-up): On Player Hit script indices,
       // collision group 1/2/3 - see playerHit1/2/3ScriptIdx above.
@@ -1171,7 +1180,7 @@ const compileSnesData = async (
 
 /* one OBJ tile sheet + 8-palette CGRAM image + PLAYER_SET_SPRITE slot map per
  * scene (deduped); SceneInit uploads scene_index's and fills the mutable
- * sprite_*_for_slot[] from the scene blob's [24] slot table. The tile / palette
+ * sprite_*_for_slot[] from the scene blob's [32] slot table. The tile / palette
  * blobs (and the backgrounds + UI font below) are defined in src/data/*.as -
  * one superfree section each - not in assets.c. */
 ${sprTiles.arrays.map((_, i) => `extern const unsigned char scene_spr_${i}[${SPR_TILES_SIZE}];`).join("\n")}
