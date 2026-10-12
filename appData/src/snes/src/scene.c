@@ -131,6 +131,27 @@ const unsigned char *sprite_slot_for_index = 0;
  * always fills every entry up to scene_num_actors before anything reads it. */
 u16 actor_oam_base[MAX_ACTORS];
 
+/* M8.3 (SPRITE_EDITOR_PROGRESS.md): a slot's "extra" poses (anything beyond
+ * its own primary/frame-0 pose, which still always lives at a fixed address
+ * derived from the slot number itself - see actor_render_tile's own `fo`)
+ * used to be at a fixed, compile-time offset from `fo` (ACTOR_UP_TILE0 etc,
+ * now removed) - every slot's "up" pose 96 tiles past its "down" pose, no
+ * matter what. Now each slot's real extra poses are packed on demand, per
+ * scene, by compileSnesData.js's createScenePacker() (packSceneSprites.js),
+ * so their VRAM address varies and has to be read back at runtime instead.
+ * Each byte is a HALF-tile-base (real tile index = value << 1 - every
+ * packer placement is 2-aligned, so this fits the full 0-511 tile range in
+ * one byte); 0 = this pose was never placed for this slot (fewer real
+ * frames than the pose needs) - never actually read in that case, since
+ * sprite_frames_for_slot[]/direction gating already decide whether a given
+ * pose is ever asked for. Filled by SceneInit from the scene blob's own
+ * trailing [40] table (after the collision bitmap - see its own comment). */
+u8 extra_pose_down_b[SPRITE_SLOTS];
+u8 extra_pose_up_a[SPRITE_SLOTS];
+u8 extra_pose_up_b[SPRITE_SLOTS];
+u8 extra_pose_side_a[SPRITE_SLOTS];
+u8 extra_pose_side_b[SPRITE_SLOTS];
+
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
  * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
  * is small enough this is cheaper than maintaining a list). sprite_slot is
@@ -182,15 +203,40 @@ static u8 player_iframes = 0;
  * then UIUpdate in game.c's main loop). One OAM id per pool slot, right
  * after the emote's own (EMOTE_OID, defined further down next to
  * SceneRenderActors) - now genuinely distinct from AVATAR_OID because both
- * are derived from the same tight, no-`<<2`-gaps scheme instead of two
- * independently-hand-picked constants that happened to collide. All three
- * (EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID) assume every actor costs
- * exactly 1 OAM id (true today - see actor_oam_base[]'s own comment in
- * SceneInit); once M8 lets an actor cost more, these need to become
- * runtime values derived from the real actor_oam_base[scene_num_actors]
- * total instead of compile-time constants - flagged, not silently assumed
- * to still work. */
-#define PROJECTILE_OID_BASE ((u16)(MAX_ACTORS + 1))
+ * are derived from the same tight scheme instead of two independently-hand-
+ * picked constants that happened to collide. All three (EMOTE_OID/
+ * PROJECTILE_OID_BASE/AVATAR_OID) assume every actor costs exactly 1 OAM id
+ * (true today - see actor_oam_base[]'s own comment in SceneInit); once an
+ * actor can cost more, these need to become runtime values derived from the
+ * real actor_oam_base[scene_num_actors] total instead of compile-time
+ * constants - flagged, not silently assumed to still work.
+ *
+ * M8.3 correction (SPRITE_EDITOR_PROGRESS.md, user-found: snesgbs2's Sample
+ * Town - 9 actors on screen at once - rendered no sprites at all): the
+ * `<< 2` this comment's own first line describes as "the literal same
+ * expression" was dropped here (and from EMOTE_OID/AVATAR_OID/the
+ * actor_oam_base[] prefix sum below) on the theory that it was "incidental
+ * `i << 2` spacing... reserved 4 ids/actor for no real reason." That theory
+ * was wrong - confirmed by reading PVSnesLib's own real oamSet/oamSetEx/
+ * oamSetVisible asm (sprites.asm) directly: every `id` parameter these
+ * functions take is a **byte offset** into the real OAM shadow buffer
+ * (`oamMemory`), not a plain sprite index - oamSet's own prologue does
+ * `tax` on the raw 16-bit `id` then `sta.l oamMemory+0,x`, and oamSetEx's
+ * `id >> 4` computation for the packed high-attribute table only produces
+ * the right byte (4 sprites/byte, so byte = id/16 when id is itself
+ * already sprite*4) under exactly this same assumption. Passing a plain
+ * sprite count (0,1,2,...) instead of a byte offset (0,4,8,...) makes each
+ * actor's OAM write partially overlap the next one's 4-byte slot - which
+ * is exactly why only the very first field (X) of actor 0 ever looked
+ * right in a real multi-actor Mesen check: Y/tile/attr all live at byte
+ * offsets a later actor's own (wrongly 1-apart, not 4-apart) write then
+ * clobbers. The real id-84 collision this comment documents was never
+ * about removing `<<2` - 84 was always `(MAX_ACTORS+1) << 2`, i.e. this
+ * exact value once `<<2` is restored; the actual pre-M7 bug was that
+ * PROJECTILE_OID_BASE and AVATAR_OID were independently hand-picked
+ * *equal* expressions, not that either was wrong to scale by 4. `<<2` is
+ * restored here and on every other OID derived the same way. */
+#define PROJECTILE_OID_BASE ((u16)(MAX_ACTORS + 1) << 2)
 
 /* SCENE_PUSH_STATE / SCENE_POP_STATE / SCENE_STATE_RESET / SCENE_POP_ALL_STATE.
  * A small stack of (scene, player tile pos, player facing) snapshots, e.g. for
@@ -999,33 +1045,47 @@ void SceneInit(void)
         actors[i].update_ctx = UPDATE_CTX_NONE;
         /* Hide the unused OAM slots once here - SceneRenderActors only walks
          * 0..scene_num_actors every frame, so it never touches these again.
-         * M7 groundwork: plain `i`, not the old `i << 2` - correct as long as
-         * every sprite_oam_ids_for_slot[] entry stays 1 (true until M8 ships
-         * real multi-tile metasprite costs). Once a cost can exceed 1, this
-         * needs to hide up through the real worst-case high-water-mark id
-         * instead of MAX_ACTORS-1, not just drop the shift - flagging now so
-         * M8 doesn't have to rediscover this call site. */
-        oamSetVisible((u16)i, OBJ_HIDE);
+         * M8.3 correction: `i << 2`, not plain `i` - oamSetVisible's `id` is
+         * a byte offset (4 bytes/sprite), same fix as PROJECTILE_OID_BASE's
+         * own comment explains (M7 mistakenly dropped this). Correct as long
+         * as every sprite_oam_ids_for_slot[] entry stays 1 (true today -
+         * nothing yet emits a real multi-tile-per-pose cost); once a cost
+         * can exceed 1, this needs to hide up through the real worst-case
+         * high-water-mark id instead of MAX_ACTORS-1. */
+        oamSetVisible((u16)i << 2, OBJ_HIDE);
     }
 
     /* M7 groundwork (SPRITE_EDITOR_PROGRESS.md) - real per-actor OAM id
-     * base, a prefix sum over sprite_oam_ids_for_slot[] (just read above),
-     * replacing the old incidental `i << 2` spacing. Every entry of that
-     * table is compile-time 1 today (M8 hasn't started emitting real
-     * multi-tile metasprite costs yet), so this computes exactly
-     * actor_oam_base[i] == i - byte-for-byte equivalent OAM positions to
-     * before, just without the wasted `<<2` gaps. Reclaiming that space is
-     * what lets EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID below finally be
-     * genuinely distinct instead of two of them colliding on hardware id 84
-     * (a real pre-existing bug, fixed here as a direct consequence of this
-     * rework, not a separate patch). actors[i].frame_offset>>1 is this
-     * actor's sprite slot - same lookup sprite_pal_for_slot[] already uses
-     * in SceneRenderActors. */
+     * base, a prefix sum over sprite_oam_ids_for_slot[] (just read above).
+     * actors[i].frame_offset>>1 is this actor's sprite slot - same lookup
+     * sprite_pal_for_slot[] already uses in SceneRenderActors.
+     *
+     * M8.3 correction (user-found: snesgbs2's Sample Town, 9 actors on
+     * screen at once, rendered no sprites at all): this prefix sum used to
+     * accumulate in units of 1 (`j += sprite_oam_ids_for_slot[...]`,
+     * producing actor_oam_base[i] == i), on the theory that the pre-M7
+     * `i << 2` spacing it replaced was "incidental" and "wasted" space, not
+     * a real requirement. That was wrong - PVSnesLib's own oamSet/oamSetEx/
+     * oamSetVisible asm (sprites.asm) takes `id` as a **byte offset** into
+     * the real OAM shadow buffer (4 bytes/sprite: X, Y, tile, attr), not a
+     * sprite index - oamSet's prologue does `tax` on the raw `id` then
+     * `sta.l oamMemory+0,x` directly, and oamSetEx's `id >> 4` (to find the
+     * packed-high-attribute-table byte, 4 sprites/byte) only lands on the
+     * right byte when `id` is already `spriteIndex * 4`. Passing a plain
+     * unscaled index made every actor's 4-byte OAM write overlap the next
+     * one's, corrupting Y/tile/attr while leaving X (byte 0 of actor 0's
+     * own slot, the only byte no other actor's write could reach) looking
+     * fine in isolation - exactly the "nothing renders" symptom this fix
+     * resolves. Every entry of sprite_oam_ids_for_slot[] is still 1 today
+     * (nothing yet emits a real >1 OAM-entries-per-pose cost), so this now
+     * computes exactly actor_oam_base[i] == i*4 - byte-for-byte equivalent
+     * to the original pre-M7 `i << 2` scheme, restoring it without losing
+     * the real per-slot-cost plumbing M7 built around it. */
     j = 0;
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
         actor_oam_base[i] = j;
-        j += sprite_oam_ids_for_slot[actors[i].frame_offset >> 1];
+        j += (u16)sprite_oam_ids_for_slot[actors[i].frame_offset >> 1] << 2;
     }
 
     /* On Update subsystem (v4): fresh pool for this scene (a previous
@@ -1047,9 +1107,11 @@ void SceneInit(void)
     for (i = 0; i < MAX_PROJECTILES; i++)
     {
         projectiles[i].active = 0;
-        /* M7: plain + i, not + (i << 2) - each projectile is still exactly
-         * 1 OAM entry; the old spacing was as incidental as the actor one. */
-        oamSetVisible(PROJECTILE_OID_BASE + i, OBJ_HIDE);
+        /* M8.3 correction: `+ (i << 2)`, not plain `+ i` - same byte-offset
+         * fix as PROJECTILE_OID_BASE's own comment and actor_oam_base[]'s
+         * prefix sum above (M7 mistakenly dropped this). Each projectile is
+         * still exactly 1 real OAM entry. */
+        oamSetVisible(PROJECTILE_OID_BASE + ((u16)i << 2), OBJ_HIDE);
     }
     /* Contact-damage iframes shouldn't carry across a scene switch either. */
     player_iframes = 0;
@@ -1077,6 +1139,22 @@ void SceneInit(void)
     for (; j < SCENE_COL_BYTES; j++)
     {
         scene_col[j] = 0;
+    }
+    p += col_bytes;
+
+    /* M8.3: [40] extra-pose half-tile-base table - 5 arrays of SPRITE_SLOTS
+     * bytes (down-B, up-A, up-B, side-A, side-B), appended at the very end
+     * of the scene blob (after the collision bitmap, whose own length is
+     * variable) - see compileSnesData.js's own comment at this table's
+     * emission for why it lives here instead of alongside the [32]
+     * sprite-slot table above. */
+    for (i = 0; i < SPRITE_SLOTS; i++)
+    {
+        extra_pose_down_b[i] = p[i];
+        extra_pose_up_a[i] = p[SPRITE_SLOTS + i];
+        extra_pose_up_b[i] = p[2 * SPRITE_SLOTS + i];
+        extra_pose_side_a[i] = p[3 * SPRITE_SLOTS + i];
+        extra_pose_side_b[i] = p[4 * SPRITE_SLOTS + i];
     }
 
     actor_move_settings = 0;
@@ -2791,21 +2869,30 @@ static void SceneUpdateEmote(void)
     }
 }
 
-/* M7: plain MAX_ACTORS, not `<< 2` - see PROJECTILE_OID_BASE's own comment
- * above for why (the old spacing was incidental, not a real reservation,
- * and masked a real id collision between this and AVATAR_OID/
- * PROJECTILE_OID_BASE). */
-#define EMOTE_OID ((u16)MAX_ACTORS)
+/* M8.3 correction - see PROJECTILE_OID_BASE's own comment above: `<<2` is
+ * required (oamSet's `id` is a byte offset, not a sprite index), restored
+ * here after M7 mistakenly dropped it. */
+#define EMOTE_OID ((u16)MAX_ACTORS << 2)
 
-// M7-cont. sprite frames. A 3-frame SPRITE_ACTOR sheet has one pose per
-// direction (down = frame_offset, up = +ACTOR_UP_TILE0, side = +ACTOR_SIDE_TILE0,
-// flipped when dir_x<0). A 6-frame SPRITE_ACTOR_ANIMATED sheet adds a 2nd walk
-// pose per direction in the "_B" regions; SceneAnimateActors toggles
-// actors[i].frame 0<->1 while the actor moves. A 6-frame sheet on a non-moving
-// actor is SPRITE_STATIC with frames_len 6 - actors[i].frame (0..5) then picks
-// the sheet frame directly, in the order down-A, down-B, up-A, up-B, side-A,
-// side-B. Facing for the ACTOR/ANIMATED cases is derived from dir_x/dir_y fresh
-// every call, matching the GB engine's SceneRenderActor_b.
+// M7-cont. sprite frames, M8.3 (SPRITE_EDITOR_PROGRESS.md) VRAM addressing.
+// A 3-frame SPRITE_ACTOR sheet has one pose per direction (down =
+// frame_offset, up/side read from extra_pose_up_a[]/extra_pose_side_a[],
+// flipped when dir_x<0). A 6-frame SPRITE_ACTOR_ANIMATED sheet adds a 2nd
+// walk pose per direction (the "_b" arrays); SceneAnimateActors toggles
+// actors[i].frame 0<->1 while the actor moves. A 6-frame sheet on a
+// non-moving actor is SPRITE_STATIC with frames_len 6 - actors[i].frame
+// (0..5) then picks the sheet frame directly, in the order down-A, down-B,
+// up-A, up-B, side-A, side-B. Facing for the ACTOR/ANIMATED cases is derived
+// from dir_x/dir_y fresh every call, matching the GB engine's
+// SceneRenderActor_b.
+// M8.3: every pose beyond the primary/frame-0 one (which still always
+// lives at `fo` itself, unchanged) used to be `fo + <fixed compile-time
+// offset>` (ACTOR_UP_TILE0 etc, a project-wide constant - any slot's "up"
+// pose was always exactly 96 tiles past its own "down" pose). Now each
+// slot's real extra poses are packed on demand, per scene, so their VRAM
+// address varies per slot and is read back from the extra_pose_*[] arrays
+// (SceneInit) instead - `<<1` converts the stored half-tile-base back to a
+// real tile index (every packer placement is 2-aligned, see scene.h).
 // Perf: takes the caller's already-computed ACTOR* directly (its one call
 // site, in SceneRenderActors, already has one) instead of an index it
 // would have to re-derive `actors[i]` from all over again - same
@@ -2813,10 +2900,16 @@ static void SceneUpdateEmote(void)
 // applied here since `frame` alone was re-indexed up to 5 times in the
 // SPRITE_STATIC cycle below. Runs for every actor, every frame,
 // uncapped - unlike SceneAnimateActors (throttled to 1-in-8 frames).
-static u8 actor_render_tile(ACTOR *a, u8 *flip_out)
+// M8.3: returns a real VRAM tile index, not a slot-relative byte - an extra
+// pose packed into the dynamic region (tiles 96-511) can exceed 255, so this
+// (and every variable that carries its result - see SceneRenderActors'
+// `tile`) must stay u16 the whole way to oamSet's own u16 gfxoffset param.
+// A u8 here would silently truncate any pose placed past tile 255.
+static u16 actor_render_tile(ACTOR *a, u8 *flip_out)
 {
     u8 fo = a->frame_offset;
     u8 st = a->sprite_type;
+    u8 slot = fo >> 1;
     u8 pose_b = 0;
     u8 frame = a->frame;
 
@@ -2825,11 +2918,11 @@ static u8 actor_render_tile(ACTOR *a, u8 *flip_out)
         *flip_out = a->flip;
         if (a->frames_len <= 1) return fo;
         /* 6-frame manual/auto cycle */
-        if (frame == 1) return fo + ACTOR_DOWN_B_TILE0;
-        if (frame == 2) return fo + ACTOR_UP_TILE0;
-        if (frame == 3) return fo + ACTOR_UP_B_TILE0;
-        if (frame == 4) return fo + ACTOR_SIDE_TILE0;
-        if (frame == 5) return fo + ACTOR_SIDE_B_TILE0;
+        if (frame == 1) return (u16)extra_pose_down_b[slot] << 1;
+        if (frame == 2) return (u16)extra_pose_up_a[slot] << 1;
+        if (frame == 3) return (u16)extra_pose_up_b[slot] << 1;
+        if (frame == 4) return (u16)extra_pose_side_a[slot] << 1;
+        if (frame == 5) return (u16)extra_pose_side_b[slot] << 1;
         return fo;
     }
 
@@ -2841,21 +2934,24 @@ static u8 actor_render_tile(ACTOR *a, u8 *flip_out)
     if (a->dir_y < 0) /* up */
     {
         *flip_out = 0;
-        return fo + (pose_b ? ACTOR_UP_B_TILE0 : ACTOR_UP_TILE0);
+        return (u16)(pose_b ? extra_pose_up_b[slot] : extra_pose_up_a[slot]) << 1;
     }
     if (a->dir_x != 0) /* side */
     {
         *flip_out = a->dir_x < 0 ? 1 : 0;
-        return fo + (pose_b ? ACTOR_SIDE_B_TILE0 : ACTOR_SIDE_TILE0);
+        return (u16)(pose_b ? extra_pose_side_b[slot] : extra_pose_side_a[slot]) << 1;
     }
     /* down / idle */
     *flip_out = 0;
-    return fo + (pose_b ? ACTOR_DOWN_B_TILE0 : 0);
+    return pose_b ? (u16)extra_pose_down_b[slot] << 1 : fo;
 }
 
 static void SceneRenderActors(void)
 {
-    u8 i, flip, tile;
+    u8 i, flip;
+    u16 tile; /* M8.3: a packed extra-pose address can exceed 255 (tiles
+               * 96-511) - oamSet's own gfxoffset param is u16, this just
+               * has to stay wide the whole way there. */
     u16 oid;
     s16 x_rel, y_rel;
     /* Only the used slots - SceneInit hid slots > scene_num_actors once. */
@@ -3037,7 +3133,7 @@ void ProjectilesUpdate(void)
         u8 tile, flip;
 
         if (!projectiles[i].active) continue;
-        oid = PROJECTILE_OID_BASE + i; /* M7: plain + i, see the define's own comment */
+        oid = PROJECTILE_OID_BASE + ((u16)i << 2); /* M8.3: byte offset, see the define's own comment */
 
         if (projectiles[i].ttl)
         {

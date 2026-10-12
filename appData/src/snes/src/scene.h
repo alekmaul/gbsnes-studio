@@ -24,7 +24,8 @@
  * named here instead of repeating hex literals so the two can't silently
  * drift apart again. BG3's own two regions (UI_FONT_VRAM/UI_MAP_VRAM) are
  * ui.c-local, not needed outside that file, but follow the exact same map:
- *   OBJ gfx   0x0000-0x0FFF (256 4bpp tiles, SPR_TILES_SIZE)
+ *   OBJ gfx   0x0000-0x1FFF (512 4bpp tiles, SPR_TILES_SIZE - M8.3 grew this
+ *             from 256 to the full 2-OBJ-page budget, SPRITE_EDITOR_PROGRESS.md)
  *   BG1 gfx   0x2000-0x5FFF (1024 4bpp tiles - targets/snes.js
  *             maxTilesetTiles, also the real ceiling: a tilemap cell's own
  *             tile-index field is only 10 bits, snesgfx.js's packed
@@ -53,6 +54,19 @@ extern u8 sprite_pal_for_slot[SPRITE_SLOTS];
  * ready for a real per-slot cost the moment M8 starts emitting one. */
 extern u8 sprite_oam_ids_for_slot[SPRITE_SLOTS];
 extern const unsigned char *sprite_slot_for_index;
+
+/* M8.3 (SPRITE_EDITOR_PROGRESS.md) - a slot's "extra" poses (anything beyond
+ * its own primary/frame-0 pose), packed on demand per scene instead of at a
+ * fixed compile-time offset - see scene.c's own header comment on these and
+ * on actor_render_tile. Each byte is a HALF-tile-base (real VRAM tile index
+ * = value << 1 - every placement from compileSnesData.js's
+ * createScenePacker() is already 2-aligned, so the full 0-511 tile range
+ * fits in one byte); 0 = this pose was never placed for this slot. */
+extern u8 extra_pose_down_b[SPRITE_SLOTS];
+extern u8 extra_pose_up_a[SPRITE_SLOTS];
+extern u8 extra_pose_up_b[SPRITE_SLOTS];
+extern u8 extra_pose_side_a[SPRITE_SLOTS];
+extern u8 extra_pose_side_b[SPRITE_SLOTS];
 
 /* Real per-actor OAM id base (SPRITE_EDITOR_PROGRESS.md M7) - a prefix sum
  * over sprite_oam_ids_for_slot[], computed once in SceneInit, replacing the

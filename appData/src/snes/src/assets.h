@@ -6,7 +6,7 @@
 
 /* tile / palette / map blobs are defined in src/data/*.as (superfree sections),
  * not in assets.c - see compileSnesData.js. */
-extern const unsigned char scene_spr_0[8192];
+extern const unsigned char scene_spr_0[16384];
 extern const unsigned char scene_spr_pal_0[256];
 extern const unsigned char *const scene_spr_ptrs[2];
 extern const unsigned char *const scene_spr_pal_ptrs[2];
@@ -52,7 +52,7 @@ extern const unsigned char *const scenes[];
 #define NUM_BGS 2
 #define NUM_SPRITE_SHEETS 1
 #define SPRITE_SLOTS 8
-#define SPR_TILES_SIZE 8192
+#define SPR_TILES_SIZE 16384
 #define SPR_PAL_SIZE   256
 #define UI_FONT_SIZE  3760
 #define UI_PAL_SIZE   8
@@ -64,11 +64,6 @@ extern const unsigned char *const scenes[];
 #define NUM_EMOTES 8
 #define AVATAR_TILE0 64
 #define NUM_AVATARS 1
-#define ACTOR_UP_TILE0 96
-#define ACTOR_SIDE_TILE0 128
-#define ACTOR_DOWN_B_TILE0 160
-#define ACTOR_UP_B_TILE0 192
-#define ACTOR_SIDE_B_TILE0 224
 #define NUM_STRINGS   8
 #define START_SCENE 0
 #define START_X 10

@@ -151,14 +151,19 @@ static u8 ui_ov_step_pending;
 static u8 ui_ov_step_row0;
 static u8 ui_ov_step_row1;
 
-/* M7 fix (SPRITE_EDITOR_PROGRESS.md): this used to be
- * `(u16)(MAX_ACTORS + 1) << 2` - the *literal same expression* as scene.c's
- * PROJECTILE_OID_BASE, so the dialogue avatar and projectile pool slot 0
- * silently shared one hardware OAM id. Now placed right after the whole
- * projectile pool instead of overlapping its first slot - see
- * PROJECTILE_OID_BASE's own comment in scene.c for the full story and the
- * same "assumes every actor costs 1 OAM id" caveat for M8. */
-#define AVATAR_OID ((u16)(MAX_ACTORS + 1 + MAX_PROJECTILES))
+/* M7 fix (SPRITE_EDITOR_PROGRESS.md): this used to be the *literal same
+ * expression* as scene.c's PROJECTILE_OID_BASE, so the dialogue avatar and
+ * projectile pool slot 0 silently shared one hardware OAM id. Now placed
+ * right after the whole projectile pool instead of overlapping its first
+ * slot - see PROJECTILE_OID_BASE's own comment in scene.c for the full
+ * story and the same "assumes every actor costs 1 OAM id" caveat.
+ *
+ * M8.3 correction (SPRITE_EDITOR_PROGRESS.md): `<<2` is required - oamSet's
+ * `id` is a byte offset into the real OAM shadow buffer, not a sprite
+ * index (see PROJECTILE_OID_BASE's own comment in scene.c for the real
+ * PVSnesLib asm this was verified against) - restored here after M7
+ * mistakenly dropped it. */
+#define AVATAR_OID ((u16)(MAX_ACTORS + 1 + MAX_PROJECTILES) << 2)
 
 /*--------------------------------------------------------------------------- */
 

@@ -69,6 +69,7 @@
 import fs from "fs-extra";
 import Path from "path";
 import snesgfx from "./snesgfx";
+import { createScenePacker } from "./packSceneSprites";
 import { buildMapEngineBackground, METATILE_PROP_WORDS } from "./snesMapEngine";
 import compileEntityEvents from "./compileEntityEvents";
 import { snesFixedAssets } from "./snesFixedAssets";
@@ -572,27 +573,41 @@ const compileSnesData = async (
     });
   };
 
-  // Frame 0 (4 tiles) always goes in slot k's pose-A region. The rest depend on
-  // the sprite type:
-  //   3-frame SPRITE_ACTOR         -> [down, up, side]: frame 1 = up, 2 = side
-  //   everything else (2-6 frames) -> frame f into the f-th of
-  //     [down-A, down-B, up-A, up-B, side-A, side-B] - the exact regions the
-  //     engine's SPRITE_ACTOR_ANIMATED walk cycle and its SPRITE_STATIC
-  //     auto-cycle both read by frame number.
-  const ANIM_FRAME_SLOT0 = [
-    null,
-    fixed.ACTOR_DOWN_B_SLOT0,
-    fixed.ACTOR_UP_SLOT0,
-    fixed.ACTOR_UP_B_SLOT0,
-    fixed.ACTOR_SIDE_SLOT0,
-    fixed.ACTOR_SIDE_B_SLOT0,
-  ];
+  // M8.3 (SPRITE_EDITOR_PROGRESS.md): every actor sheet's "extra" poses
+  // (anything beyond its own primary/frame-0 pose, which still always lives
+  // at this sheet's own slot k - see placeTiles(k, ...) below, unchanged)
+  // are packed into one of 5 parallel per-slot arrays, matched 1:1 to the
+  // engine's own extra_pose_down_b/up_a/up_b/side_a/side_b globals
+  // (scene.c). Each stored byte is a HALF-tile-base (real VRAM tile index =
+  // value*2) - every createScenePacker() placement is already 2-aligned, so
+  // this fits the full 0-511 tile range in one byte (0 = unused: this pose
+  // was never placed for this slot, matching frames_len/sprite_type always
+  // gating whether the engine ever actually reads it).
+  const EXTRA_POSE_KEYS = ["downB", "upA", "upB", "sideA", "sideB"];
 
-  // Build one scene's OBJ sheet (8 KB) + palette image (256 B) + per-slot
-  // type/frames/palette arrays, starting from the fixed emote/placeholder sheet.
+  // Build one scene's OBJ sheet (16 KB, 512 tiles - 2 full OBJ "name tables",
+  // see CLAUDE.md's "Fixed VRAM layout" entry) + palette image (256 B) +
+  // per-slot type/frames/palette/extra-pose arrays. Tiles 0-95 (placeholder +
+  // emotes + avatars) keep their exact fixed addresses, unchanged since M5c/
+  // M7 - see snesFixedAssets.js's own header comment. Tiles 96-511 are
+  // packed on demand by createScenePacker() instead of 5 fixed 32-tile
+  // regions always reserved regardless of real per-scene demand (the
+  // pre-M8.3 scheme) - see packSceneSprites.js.
+  const SHEET_TOTAL_TILES = 512;
+  const SHEET_RESERVED_TILES = 96; // pair0 (primary poses) + pair1 (emotes) + pair2 (avatars)
   const buildSceneSprites = (sceneIndex) => {
     const sceneName = scenes[sceneIndex].name || `#${sceneIndex}`;
-    const sheet = fixed.spriteTiles.slice(); // emotes (32-63) + placeholder (0)
+    const packer = createScenePacker({
+      totalTiles: SHEET_TOTAL_TILES,
+      reservedTiles: SHEET_RESERVED_TILES
+    });
+    const sheet = packer.sheet; // all-zero, SHEET_TOTAL_TILES*32 bytes long
+    // Copy in the fixed 0-95 prefix (placeholder + emotes; avatars are
+    // written below, into this same reserved range) - createScenePacker()
+    // never allocates there (reservedTiles), so this can't collide with it.
+    for (let i = 0; i < SHEET_RESERVED_TILES * 32; i++) {
+      sheet[i] = fixed.spriteTiles[i] || 0;
+    }
     const palBytes = new Array(NUM_OBJ_PALS * OBJ_PAL_SIZE).fill(0);
     const writePal = (objPal, bytes) => {
       const base = objPal * OBJ_PAL_SIZE;
@@ -606,17 +621,6 @@ const compileSnesData = async (
         for (let b = 0; b < 32; b++) sheet[dst[ti] * 32 + b] = tile[b];
       });
     };
-    const placeFrames = (k, tiles, spriteType) => {
-      const nFrames = Math.min(tiles.length >> 2, 6);
-      if (spriteType === 1) {
-        placeTiles(fixed.ACTOR_UP_SLOT0 + k, tiles.slice(4, 8));
-        placeTiles(fixed.ACTOR_SIDE_SLOT0 + k, tiles.slice(8, 12));
-        return;
-      }
-      for (let f = 1; f < nFrames; f++) {
-        placeTiles(ANIM_FRAME_SLOT0[f] + k, tiles.slice(f * 4, f * 4 + 4));
-      }
-    };
 
     writePal(0, fixed.spritePaletteBytes); // placeholder (empty slot 0)
     writePal(1, fixed.emotePaletteBytes); // OBJ palette 1 = emotes
@@ -626,12 +630,21 @@ const compileSnesData = async (
     const frames = new Array(SPRITE_SLOTS).fill(1);
     const pals = [];
     for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
-    // M7 groundwork (SPRITE_EDITOR_PROGRESS.md): how many real OAM hardware
-    // sprites one actor using this slot needs. Always 1 today - nothing
-    // here calls imageToMetaspriteData yet (M8) - but scene.c's SceneInit
-    // already reads this for real (actor_oam_base[]'s prefix sum), so M8
-    // only has to change this one array, no engine-side change needed.
+    // Every actor is still exactly 1 real OAM hardware sprite per frame -
+    // M8.3 only changes WHERE that one sprite's tile data lives in VRAM
+    // (dynamic per-scene packing instead of a fixed compile-time offset),
+    // not how many OAM entries it costs. actor_oam_base[]'s own prefix sum
+    // (scene.c, M7 groundwork) is unaffected.
     const oamIds = new Array(SPRITE_SLOTS).fill(1);
+    const extraPose = {};
+    EXTRA_POSE_KEYS.forEach((key) => {
+      extraPose[key] = new Array(SPRITE_SLOTS).fill(0);
+    });
+    const placeExtraPose = (key, k, tiles) => {
+      const base = packer.alloc(tiles, `${sceneName} slot ${k} (${key})`);
+      if (base === null) return; // over budget - packer already warned once
+      extraPose[key][k] = base >> 1; // half-tile-base, fits a u8
+    };
 
     const objPalColours = {}; // objPal -> this scene's claimed colour list
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
@@ -645,8 +658,21 @@ const compileSnesData = async (
         objPalColours[objPal] = conv.colors.slice(); // scene-local copy - conv
         // is shared/cached across every scene that uses this sprite sheet
       }
-      placeTiles(k, tiles.slice(0, 4));
-      placeFrames(k, tiles, conv.spriteType);
+      placeTiles(k, tiles.slice(0, 4)); // primary/frame-0 pose: unchanged, fixed slot k
+      const nFrames = Math.min(tiles.length >> 2, 6);
+      if (conv.spriteType === 1) {
+        // 3-frame SPRITE_ACTOR: [down, up, side] - frame 1 = up, frame 2 = side.
+        placeExtraPose("upA", k, tiles.slice(4, 8));
+        placeExtraPose("sideA", k, tiles.slice(8, 12));
+      } else {
+        // everything else (2-6 frames): frame f into the f-th of
+        // [down-A(already placed above), down-B, up-A, up-B, side-A, side-B] -
+        // the exact poses the engine's SPRITE_ACTOR_ANIMATED walk cycle and
+        // its SPRITE_STATIC auto-cycle both read by frame number.
+        for (let f = 1; f < nFrames; f++) {
+          placeExtraPose(EXTRA_POSE_KEYS[f - 1], k, tiles.slice(f * 4, f * 4 + 4));
+        }
+      }
       types[k] = conv.spriteType;
       frames[k] = conv.frameCount;
       writePal(objPal, palBytesFor(objPalColours[objPal]));
@@ -657,7 +683,10 @@ const compileSnesData = async (
       if (k === 0) writePal(2, conv.paletteBytes);
     });
 
-    return { sheet, palBytes, types, frames, pals, oamIds };
+    packer.warnings.forEach((w) => warnings(`Scene '${sceneName}': ${w}`));
+
+    const extraPoseBytes = [].concat(...EXTRA_POSE_KEYS.map((key) => extraPose[key]));
+    return { sheet, palBytes, types, frames, pals, oamIds, extraPoseBytes };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -964,7 +993,16 @@ const compileSnesData = async (
       u16b(playerHit3ScriptIdx),
       actorEntries,
       triggerEntries,
-      collisions
+      collisions,
+      // [40] M8.3 (SPRITE_EDITOR_PROGRESS.md): extra-pose half-tile-base
+      // table - 5 arrays of SPRITE_SLOTS bytes (down-B, up-A, up-B, side-A,
+      // side-B), read by SceneInit right after the collision bitmap (whose
+      // length is itself variable, so this has to come last rather than
+      // sit at a fixed offset the way the [32] sprite-slot table does).
+      // Appended at the very end specifically so it doesn't shift any
+      // existing byte-offset test (header/sprite-table/parallax/playerHit/
+      // actor/trigger entries are all unaffected by this table's own size).
+      spr.extraPoseBytes
     );
   });
 
@@ -1268,11 +1306,6 @@ extern const unsigned char *const scenes[${scenes.length}];
 #define NUM_EMOTES ${fixed.NUM_EMOTES}
 #define AVATAR_TILE0 ${fixed.AVATAR_TILE0}
 #define NUM_AVATARS ${maxAvatars}
-#define ACTOR_UP_TILE0 ${fixed.ACTOR_UP_TILE0}
-#define ACTOR_SIDE_TILE0 ${fixed.ACTOR_SIDE_TILE0}
-#define ACTOR_DOWN_B_TILE0 ${fixed.ACTOR_DOWN_B_TILE0}
-#define ACTOR_UP_B_TILE0 ${fixed.ACTOR_UP_B_TILE0}
-#define ACTOR_SIDE_B_TILE0 ${fixed.ACTOR_SIDE_B_TILE0}
 #define NUM_STRINGS   ${nStr}
 #define START_SCENE ${startSceneIndex}
 #define START_X ${startX}

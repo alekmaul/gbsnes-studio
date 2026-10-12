@@ -180,9 +180,12 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     const blob = out.stats.sceneBlobs[0];
     // header(8) + sprite-slot table(32, M7) + parallax table(6) + playerHit
     // table(6) + 0 actors + 0 triggers = 52 bytes before the ceil(w*h/8) =
-    // 45-byte collision bitmap.
+    // 45-byte collision bitmap, which is itself followed by the [40]
+    // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md) -
+    // appended at the very end of the blob specifically so it never shifts
+    // any of the fixed-offset assertions above/below it.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen);
+    expect(blob.length).toBe(52 + colLen + 40);
     const colByte = blob[52];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).

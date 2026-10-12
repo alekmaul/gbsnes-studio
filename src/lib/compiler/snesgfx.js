@@ -274,19 +274,19 @@ const imageToBGData = async (filename, options = {}) => {
 // count and the frame-count-only type.
 const FRAME_SIZE = 16;
 
-const imageToSpriteData = async (filename, options = {}) => {
-  const { maxColors = 16, animationTypeOverride } = options;
-  const warnings = [];
-  const pixels = await getPixels(filename);
-  const [imgW, imgH] = pixels.shape;
-  if (imgW < 16 || imgH < 16) {
-    warnings.push(`Sprite ${filename} is ${imgW}x${imgH}, smaller than 16x16`);
-  }
-  const sheetFrames = Math.floor(imgW / FRAME_SIZE);
-  // frame count -> sprite_type: 3 = SPRITE_ACTOR (directional), 6 =
-  // SPRITE_ACTOR_ANIMATED (walk cycle), any other 2..6 = SPRITE_STATIC that
-  // auto-cycles all its frames (GB Studio's "animated" type, e.g. a 2-frame
-  // duck, a 4-frame torch). 1 frame or >6 = frame 0 only.
+// Shared by imageToSpriteData and imageToActorMetaspriteData (M8.1) so the
+// two never silently drift apart on what a given sheet width / animationType
+// override actually means.
+//   frame count -> sprite_type: 3 = SPRITE_ACTOR (directional), 6 =
+//   SPRITE_ACTOR_ANIMATED (walk cycle), any other 2..6 = SPRITE_STATIC that
+//   auto-cycles all its frames (GB Studio's "animated" type, e.g. a 2-frame
+//   duck, a 4-frame torch). 1 frame or >6 = frame 0 only.
+// The Sprite Sheet editor's "Animation Type" field (SpriteSheet.animationType)
+// re-interprets the same pixel rows under a different one of the 3 real
+// types instead of changing how pixels are sliced - "fixed" always fits
+// (re-labels a 3/6-frame sheet as a static auto-cycle of its own frames),
+// "multi"/"multi_movement" need at least 3/6 real frames to pick from.
+const detectActorFrameCountAndType = (sheetFrames, animationTypeOverride, filename, warnings) => {
   let frameCount = 1;
   let spriteType = 0;
   if (sheetFrames === 6) {
@@ -299,11 +299,6 @@ const imageToSpriteData = async (filename, options = {}) => {
     frameCount = sheetFrames;
     spriteType = 0;
   }
-  // Sprite Sheet editor's "Animation Type" field (SpriteSheet.animationType)
-  // re-interprets the same pixel rows under a different one of the 3 real
-  // types instead of changing how pixels are sliced - "fixed" always fits
-  // (re-labels a 3/6-frame sheet as a static auto-cycle of its own frames),
-  // "multi"/"multi_movement" need at least 3/6 real frames to pick from.
   if (animationTypeOverride === "fixed" && spriteType !== 0) {
     spriteType = 0;
   } else if (animationTypeOverride === "multi") {
@@ -327,6 +322,24 @@ const imageToSpriteData = async (filename, options = {}) => {
       );
     }
   }
+  return { frameCount, spriteType };
+};
+
+const imageToSpriteData = async (filename, options = {}) => {
+  const { maxColors = 16, animationTypeOverride } = options;
+  const warnings = [];
+  const pixels = await getPixels(filename);
+  const [imgW, imgH] = pixels.shape;
+  if (imgW < 16 || imgH < 16) {
+    warnings.push(`Sprite ${filename} is ${imgW}x${imgH}, smaller than 16x16`);
+  }
+  const sheetFrames = Math.floor(imgW / FRAME_SIZE);
+  const { frameCount, spriteType } = detectActorFrameCountAndType(
+    sheetFrames,
+    animationTypeOverride,
+    filename,
+    warnings
+  );
   const scanW = Math.min(FRAME_SIZE * frameCount, imgW);
 
   // palette: colour 0 (top-left pixel / transparent) first, then the rest,
@@ -475,7 +488,14 @@ const imageToMetaspriteData = async (filename, options = {}) => {
     metaHeight,
     priority = 0, // 0..3, OBJ_PRIO
     paletteSlot = 0, // 0..7, OBJ_PAL
-    flip = 0 // bitmask: 1=flipX variant, 2=flipY variant, 4=flipX+Y variant
+    flip = 0, // bitmask: 1=flipX variant, 2=flipY variant, 4=flipX+Y variant
+    // M8.1: per-metasprite-cell override of `flip`, indexed the same way
+    // `metasprites[]` is pushed (linear index = my*metaCols+mx). Needed
+    // because an actor sheet's directions don't all mirror the same way -
+    // e.g. "side" needs a flipX variant (for facing left) but "down"/"up"
+    // never do. Undefined entries (or no array at all) fall back to the
+    // global `flip` above, so existing non-actor callers are unaffected.
+    perIndexFlip
   } = options;
   const warnings = [];
 
@@ -617,24 +637,26 @@ const imageToMetaspriteData = async (filename, options = {}) => {
       }
 
       const variants = { base };
+      const linearIndex = my * metaCols + mx;
+      const cellFlip = Array.isArray(perIndexFlip) ? perIndexFlip[linearIndex] || 0 : flip;
       // Mirror offsets within the metasprite's own box, same OBJ_FLIPX/Y +
       // same tile indices gfx4snes's own flip-variant passes use - the
       // hardware flips the tile's pixels at render time, nothing to re-derive.
-      if (flip & 1) {
+      if (cellFlip & 1) {
         variants.flipX = base.map(item => ({
           ...item,
           dx: metaWidth - blockSize - item.dx,
           props: item.props | OBJ_FLIPX
         }));
       }
-      if (flip & 2) {
+      if (cellFlip & 2) {
         variants.flipY = base.map(item => ({
           ...item,
           dy: metaHeight - blockSize - item.dy,
           props: item.props | OBJ_FLIPY
         }));
       }
-      if (flip & 4) {
+      if (cellFlip & 4) {
         variants.flipXY = base.map(item => ({
           ...item,
           dx: metaWidth - blockSize - item.dx,
@@ -663,6 +685,80 @@ const imageToMetaspriteData = async (filename, options = {}) => {
     metaRows,
     metasprites,
     warnings
+  };
+};
+
+/*
+ * imageToActorMetaspriteData - M8.1 of the real-metasprite-support effort
+ * (SPRITE_EDITOR_PROGRESS.md). Thin wrapper around imageToMetaspriteData
+ * that derives metaWidth/metaHeight/blockSize from an actor sheet's own
+ * frame layout (same detection imageToSpriteData uses, shared via
+ * detectActorFrameCountAndType above so the two paths can't drift), instead
+ * of taking them as free-form options the way the core function does.
+ *
+ * GB Studio actor sheets are a single row of 16x16 frames; each frame is one
+ * metasprite cell (metaWidth=metaHeight=blockSize=16px, i.e. exactly the
+ * existing 2x2-tile OBJ block this engine already renders per direction/
+ * pose). The "side" pose's left-facing mirror is a real OBJ_FLIPX variant
+ * (today's engine always derives it from the same "side" tiles - see
+ * actor_render_tile - there is no per-sheet choice to not mirror it), so
+ * only the side/side-B cells get a flipX variant generated; down/up/down-B/
+ * up-B never do (matching this project's own "flipLeft is always on, not a
+ * user choice" scoping decision).
+ */
+const imageToActorMetaspriteData = async (filename, options = {}) => {
+  const { maxColors = 16, animationTypeOverride, priority = 0, paletteSlot = 0 } = options;
+  const warnings = [];
+  const pixels = await getPixels(filename);
+  const [imgW] = pixels.shape;
+  const sheetFrames = Math.floor(imgW / FRAME_SIZE);
+  const { frameCount, spriteType } = detectActorFrameCountAndType(
+    sheetFrames,
+    animationTypeOverride,
+    filename,
+    warnings
+  );
+
+  // spriteType 1 (SPRITE_ACTOR: down,up,side) -> side is index 2.
+  // spriteType 2 (SPRITE_ACTOR_ANIMATED: down-a,down-b,up-a,up-b,side-a,
+  // side-b) -> side poses are indices 4,5. spriteType 0 (static/auto-cycle)
+  // never mirrors - every frame is its own authored pose, not a direction.
+  let sideFrameIndices = [];
+  if (spriteType === 1) {
+    sideFrameIndices = [2];
+  } else if (spriteType === 2) {
+    sideFrameIndices = [4, 5];
+  }
+  const perIndexFlip = new Array(sheetFrames).fill(0);
+  sideFrameIndices.forEach(i => {
+    perIndexFlip[i] = 1; // flipX variant only
+  });
+
+  const result = await imageToMetaspriteData(filename, {
+    maxColors,
+    blockSize: FRAME_SIZE,
+    metaWidth: FRAME_SIZE,
+    metaHeight: FRAME_SIZE,
+    priority,
+    paletteSlot,
+    perIndexFlip
+  });
+
+  // Actor sheets are always a single row - only the real frameCount cells
+  // (left-to-right) are meaningful; a sheet wider than it needs to be for
+  // its detected type (e.g. extra unused columns) is trimmed here rather
+  // than carrying dead metasprite entries forward.
+  const metasprites = result.metasprites.slice(0, frameCount);
+
+  return {
+    ...result,
+    metasprites,
+    metaCols: frameCount,
+    metaRows: 1,
+    frameCount,
+    spriteType,
+    sideFrameIndices,
+    warnings: [...warnings, ...result.warnings]
   };
 };
 
@@ -719,5 +815,6 @@ module.exports = {
   imageToBGData,
   imageToSpriteData,
   imageToMetaspriteData,
+  imageToActorMetaspriteData,
   decodeBGData
 };

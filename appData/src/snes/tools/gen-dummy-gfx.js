@@ -367,6 +367,12 @@ const dummyParallax = [0, 0, 0, 0, 0, 0]; // MAX_PARALLAX_LAYERS(3) * 2, no para
 // per-actor hit1/2/3_idx placeholders below.
 const dummyPlayerHit0 = [EV_SCENE0, EV_SCENE0, EV_SCENE0];
 const dummyPlayerHit1 = [EV_SCENE1, EV_SCENE1, EV_SCENE1];
+// M8.3 (SPRITE_EDITOR_PROGRESS.md): [40] extra-pose half-tile-base table (5
+// arrays of SPRITE_SLOTS(8) bytes), appended at the very end of the scene
+// blob - see compileSnesData.js's own comment at this table's emission.
+// All zero here: neither dummy scene's slot-0 sheet (SPRITE_STATIC, 1
+// frame) ever needs an "extra" pose beyond its own primary one.
+const dummyExtraPoses = new Array(5 * 8).fill(0);
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
@@ -377,12 +383,13 @@ const scene0 = [
   EV_EMPTY, // On Update subsystem (v4): no update script authored - see EV_EMPTY above
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
   50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
-  ...collision
+  ...collision,
+  ...dummyExtraPoses
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {
@@ -410,7 +417,13 @@ const repoSrc = path.resolve(__dirname, "..", "src");
   const fixed = await snesFixedAssets();
   const uiFont = fixed.uiFont;
   const uiPal = fixed.uiPaletteBytes;
-  const sprSheet = fixed.spriteTiles;
+  // M8.3 (SPRITE_EDITOR_PROGRESS.md): pad the fixed 256-tile prefix
+  // (placeholder/emotes/avatars, tiles 0-95 real, 96-255 always zero now)
+  // out to the full 512-tile, 2-OBJ-page budget - matches
+  // compileSnesData.js's own buildSceneSprites exactly, see its comment.
+  // Neither dummy scene ever needs an "extra" pose (both use a 1-frame
+  // SPRITE_STATIC sheet), so the dynamic region (96-511) stays all zero.
+  const sprSheet = fixed.spriteTiles.concat(new Array(512 * 32 - fixed.spriteTiles.length).fill(0));
   const emotePal = fixed.emotePaletteBytes;
   const UI_FILL_TILE = fixed.UI_FILL_TILE;
   const NUM_UI_GLYPHS = fixed.NUM_UI_GLYPHS;
@@ -536,11 +549,6 @@ extern const unsigned char *const scenes[];
 #define NUM_EMOTES ${fixed.NUM_EMOTES}
 #define AVATAR_TILE0 ${fixed.AVATAR_TILE0}
 #define NUM_AVATARS 1
-#define ACTOR_UP_TILE0 ${fixed.ACTOR_UP_TILE0}
-#define ACTOR_SIDE_TILE0 ${fixed.ACTOR_SIDE_TILE0}
-#define ACTOR_DOWN_B_TILE0 ${fixed.ACTOR_DOWN_B_TILE0}
-#define ACTOR_UP_B_TILE0 ${fixed.ACTOR_UP_B_TILE0}
-#define ACTOR_SIDE_B_TILE0 ${fixed.ACTOR_SIDE_B_TILE0}
 #define NUM_STRINGS   ${uiStrings.length}
 #define START_SCENE 0
 #define START_X 10

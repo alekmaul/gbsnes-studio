@@ -16,7 +16,11 @@ import fs from "fs";
 import Path from "path";
 import os from "os";
 import { PNG } from "pngjs";
-import { imageToSpriteData, imageToMetaspriteData } from "../../../src/lib/compiler/snesgfx";
+import {
+  imageToSpriteData,
+  imageToMetaspriteData,
+  imageToActorMetaspriteData
+} from "../../../src/lib/compiler/snesgfx";
 
 const tmpDir = fs.mkdtempSync(Path.join(os.tmpdir(), "snesgfx-test-"));
 
@@ -229,5 +233,59 @@ describe("imageToMetaspriteData (SPRITE_EDITOR_PROGRESS.md M5 - real metasprite 
     await expect(
       imageToMetaspriteData(file, { blockSize: 12, metaWidth: 16, metaHeight: 16 })
     ).rejects.toThrow(/blockSize must be 8, 16 or 32/);
+  });
+});
+
+describe("imageToActorMetaspriteData (SPRITE_EDITOR_PROGRESS.md M8.1)", () => {
+  test("6-frame sheet: SPRITE_ACTOR_ANIMATED, only the two side poses (indices 4,5) get a flipX variant", async () => {
+    const file = Path.join(tmpDir, "actormeta6.png");
+    writeFramesPng(file, 6);
+    const conv = await imageToActorMetaspriteData(file);
+    expect(conv.frameCount).toBe(6);
+    expect(conv.spriteType).toBe(2); // SPRITE_ACTOR_ANIMATED
+    expect(conv.metaCols).toBe(6);
+    expect(conv.metaRows).toBe(1);
+    expect(conv.metasprites.length).toBe(6);
+    expect(conv.sideFrameIndices).toEqual([4, 5]);
+    [0, 1, 2, 3].forEach(i => {
+      expect(conv.metasprites[i].flipX).toBeUndefined();
+    });
+    [4, 5].forEach(i => {
+      expect(conv.metasprites[i].flipX).toBeDefined();
+      expect(conv.metasprites[i].flipX[0].tile).toBe(conv.metasprites[i].base[0].tile);
+    });
+  });
+
+  test("3-frame sheet: SPRITE_ACTOR, only the side pose (index 2) gets a flipX variant", async () => {
+    const file = Path.join(tmpDir, "actormeta3.png");
+    writeFramesPng(file, 3);
+    const conv = await imageToActorMetaspriteData(file);
+    expect(conv.frameCount).toBe(3);
+    expect(conv.spriteType).toBe(1); // SPRITE_ACTOR
+    expect(conv.metasprites.length).toBe(3);
+    expect(conv.sideFrameIndices).toEqual([2]);
+    expect(conv.metasprites[0].flipX).toBeUndefined();
+    expect(conv.metasprites[1].flipX).toBeUndefined();
+    expect(conv.metasprites[2].flipX).toBeDefined();
+  });
+
+  test('"fixed" override on a 6-frame sheet: SPRITE_STATIC, no flipX variants at all', async () => {
+    const file = Path.join(tmpDir, "actormeta6-fixed.png");
+    writeFramesPng(file, 6);
+    const conv = await imageToActorMetaspriteData(file, { animationTypeOverride: "fixed" });
+    expect(conv.frameCount).toBe(6);
+    expect(conv.spriteType).toBe(0); // SPRITE_STATIC
+    expect(conv.sideFrameIndices).toEqual([]);
+    conv.metasprites.forEach(m => expect(m.flipX).toBeUndefined());
+  });
+
+  test("a single 16x16 frame: frame 0 only, no flip variant", async () => {
+    const file = Path.join(tmpDir, "actormeta1.png");
+    writeFramesPng(file, 1);
+    const conv = await imageToActorMetaspriteData(file);
+    expect(conv.frameCount).toBe(1);
+    expect(conv.spriteType).toBe(0);
+    expect(conv.metasprites.length).toBe(1);
+    expect(conv.sideFrameIndices).toEqual([]);
   });
 });

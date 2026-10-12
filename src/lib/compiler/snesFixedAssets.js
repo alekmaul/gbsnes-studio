@@ -4,20 +4,21 @@
  * real data compiler (compileSnesData.js) and the throwaway generator
  * (appData/src/snes/tools/gen-dummy-gfx.js) so both emit byte-identical data.
  *
- * OBJ sheet layout (8 KB, 256 tiles = the whole first OBJ name page, 16-wide
- * grid): slot k -> tiles 2k, 2k+1, 2k+16, 2k+17. Regions (all 8-slot / 32-tile):
+ * This module only builds the FIXED prefix of the per-scene OBJ sheet (16-wide
+ * tile grid): slot k -> tiles 2k, 2k+1, 2k+16, 2k+17.
  *   0-31    actor "down" pose A  (slot 0 seeded with the placeholder)
  *   32-63   the 8 emotes
  *   64-95   up to 8 dialogue avatars
- *   96-127  actor "up" pose A
- *   128-159 actor "side" pose A
- *   160-191 actor "down" pose B   \  M7-cont. phase 2: the 2nd walk-cycle pose
- *   192-223 actor "up" pose B      >  of a 6-frame SPRITE_ACTOR_ANIMATED sheet
- *   224-255 actor "side" pose B   /   (3-frame SPRITE_ACTOR sheets use only "A")
- * The direction regions are appended (not interleaved into slots 0-7) because
- * placeTiles' fixed `16 + 2*slot` bottom-row offset only stays collision-free
- * for 8 slots per region - see AVATAR_SLOT0 for what happens otherwise. The
- * sheet is now full (256 tiles); anything more would need the 2nd OBJ page.
+ * These 96 tiles stay at these exact addresses - unchanged since M5c/M7.
+ * Everything past tile 96 (up to the real 512-tile, 2-OBJ-page budget - see
+ * CLAUDE.md's "Fixed VRAM layout" entry) is now dynamically packed PER SCENE
+ * by compileSnesData.js's own createScenePacker() (M8.3,
+ * SPRITE_EDITOR_PROGRESS.md) - not built here, since it depends on which
+ * actor sheets and how many real frames each one actually uses in a given
+ * scene. Used to be 5 fixed 32-tile "pose" regions (down/up/side x A/B,
+ * always fully reserved regardless of real demand, capping out at 256 tiles
+ * total) - see packSceneSprites.js's own header comment for the real
+ * replacement and CLAUDE.md for the migration history.
  *
  * OBJ palettes (8, CGRAM 128..255, 16 colours each): palette 1 = the emotes,
  * palette 2 = the dialogue avatars, so actor sprite slots draw their own
@@ -81,28 +82,24 @@ const AVATAR_TILE0 = 64; // OBJ grid tile of avatar 0
 // per-feature Mesen checks because they didn't screenshot emotes and avatars
 // in the same run.
 const AVATAR_SLOT0 = 32;
-// Direction frames (M7-cont. phase 1): a 3-frame actor sheet's "up"/"side"
-// frames get their OWN 8-slot regions, appended after the existing 96-tile
-// sheet (actors 0-31, emotes 32-63, avatars 64-95) rather than growing the
-// 0-7 actor slot range itself - placeTiles' `16 + 2*slot` bottom-row offset
-// only stays collision-free for slots 0-7 in one region (see AVATAR_SLOT0
-// above for what happens when that's violated), so a 4th/5th region reusing
-// the same 8-slot addressing is far safer than trying to widen the existing
-// one. "down" (frame 0) keeps using the actor's existing frame_offset
-// unchanged - only sprites with 3 real frames populate these.
-const ACTOR_UP_TILE0 = 96;
-const ACTOR_SIDE_TILE0 = 128;
-const ACTOR_UP_SLOT0 = ACTOR_UP_TILE0 / 2; // 48 - placeTiles(slot,...) input
-const ACTOR_SIDE_SLOT0 = ACTOR_SIDE_TILE0 / 2; // 64
-// Phase 2 - the "B" (2nd walk pose) region of each direction, for a 6-frame
-// SPRITE_ACTOR_ANIMATED sheet. A 3-frame sheet leaves these zero.
-const ACTOR_DOWN_B_TILE0 = 160;
-const ACTOR_UP_B_TILE0 = 192;
-const ACTOR_SIDE_B_TILE0 = 224;
-const ACTOR_DOWN_B_SLOT0 = ACTOR_DOWN_B_TILE0 / 2; // 80
-const ACTOR_UP_B_SLOT0 = ACTOR_UP_B_TILE0 / 2; // 96
-const ACTOR_SIDE_B_SLOT0 = ACTOR_SIDE_B_TILE0 / 2; // 112
-const SHEET_TILES = 256; // fills the whole first OBJ name page
+// M8.3 (SPRITE_EDITOR_PROGRESS.md): the fixed "down"/"up"/"side" x "A"/"B"
+// pose regions that used to live right after this (tiles 96-255, 5 x 8-slot
+// regions, ACTOR_UP_TILE0/ACTOR_SIDE_TILE0/ACTOR_DOWN_B_TILE0/ACTOR_UP_B_TILE0/
+// ACTOR_SIDE_B_TILE0) are gone - every actor sheet's "extra" poses (anything
+// beyond its own primary/frame-0 pose, which still always lives at this
+// sheet's own slot k, unchanged) are now packed on demand, per scene, across
+// the full tiles-96-511 space by compileSnesData.js's own
+// createScenePacker() (packSceneSprites.js) - see that module and
+// compileSnesData.js's buildSceneSprites for the real placement logic, and
+// scene.c's extra_pose_down_b/up_a/up_b/side_a/side_b arrays (SceneInit-
+// loaded per scene) for how the engine reads it back at a runtime address
+// instead of a compile-time offset. This let a scene's real extra-pose
+// budget grow from a fixed 160 tiles (always reserved, regardless of
+// demand) to up to 416 tiles, packed only as needed.
+const SHEET_TILES = 256; // fills most of the first OBJ name page (0-95 are
+// real: placeholder + emotes + avatars; 96-255 are always zero here now -
+// compileSnesData.js pads this base out to the full 512-tile budget and
+// packs the dynamic region itself, see the comment above).
 
 // 8-bit r,g,b (0..31 each) -> BGR555 low/high bytes
 const palBytes = colours => {
@@ -451,17 +448,7 @@ const snesFixedAssets = async ({ uiAssetDir, emoteFilenames, fontFilename } = {}
     NUM_EMOTES: numEmotes,
     EMOTE_TILE0,
     AVATAR_TILE0,
-    AVATAR_SLOT0,
-    ACTOR_UP_TILE0,
-    ACTOR_SIDE_TILE0,
-    ACTOR_UP_SLOT0,
-    ACTOR_SIDE_SLOT0,
-    ACTOR_DOWN_B_TILE0,
-    ACTOR_UP_B_TILE0,
-    ACTOR_SIDE_B_TILE0,
-    ACTOR_DOWN_B_SLOT0,
-    ACTOR_UP_B_SLOT0,
-    ACTOR_SIDE_B_SLOT0
+    AVATAR_SLOT0
   };
 };
 

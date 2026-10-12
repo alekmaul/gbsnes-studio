@@ -79,8 +79,12 @@ full writeup; a separate, larger effort from M0-M4's authoring-only scope - not 
       `actor_oam_base[0..3]` read back exactly `[0, 1, 2, 3]` on real hardware, proving the
       prefix-sum allocator. M7 is otherwise done; marked `[~]` only because (c)/(d) are
       deliberately deferred to M8, not because (a)/(b) are incomplete.
-- [ ] **M8** — compiler wiring: shell out to `gfx4snes` or emit the equivalent table from a
-      ported JS algorithm (depends on M5), ingested by `compileSnesData.js`.
+- [~] **M8** — compiler + engine wiring (M8.1-M8.3 done 2026-10-12, see the dated entries
+      below): `imageToActorMetaspriteData` (M8.1), a real per-scene tile packer wired into
+      `buildSceneSprites` for real emission, replacing the old fixed-pose-region scheme (M8.2 +
+      M8.3), and the engine reading dynamic per-slot pose addresses at runtime instead of
+      compile-time constants (M8.3) - real toolchain build + Mesen-verified. M8.5 (real free-
+      form per-tile placement authoring) stays explicitly deferred to M9 below, unchanged.
 - [ ] **M9** — editor-side real free-form placement UI (the actual click-to-place canvas,
       Path B's original goal) - get a wireframe sign-off first, same discipline as this
       effort's own M0, per `[[snes-sprite-animation-ui-reverted]]`'s own lesson.
@@ -752,3 +756,321 @@ distinct big sprites a scene has (the existing per-scene palette/tile-sharing lo
 `buildSceneSprites` is the closest precedent to adapt), and how this interacts with the
 already-shipped M0-M6 "Animation Type" authoring UI (same sheet, two different compiled paths,
 or deliberately separate concepts). Next step is a user decision on these before any code.
+
+### 2026-10-12 — M8 design settled: all 3 questions answered, scope is bigger than originally framed
+
+User's answers, verbatim decisions:
+1. **No opt-in/auto-detect** - every sprite sheet always compiles through the metasprite path;
+   a plain 16x16 single-tile sheet is just the degenerate "metasprite with one entry" case.
+   This is a real unification, not a new path alongside the old one - `imageToSpriteData` is
+   retired, not kept.
+2. Real VRAM numbers given (confirmed earlier via Mesen): OBJ table 0 `0x0000-0x0FFF` (256
+   tiles) + table 1 `0x1000-0x1FFF` (256 tiles) = **512 tiles total**, shared per-scene via the
+   same dedup mechanism `buildSceneSprites`/`mergeSpriteIntoPalette` already uses for the old
+   model, generalized to variable-size metasprites instead of fixed 4-tile blocks. BG1
+   (`0x2000-0x5FFF`, 1024 tiles) and BG3 (`0x6000-0x67FF`, 235 tiles) are separate regions,
+   unaffected.
+3. Animation Type (`fixed`/`multi`/`multi_movement`) is unaffected - it already only ever
+   decided *how many frames* a sheet has (1/3/6), never how many tiles one frame is. After M8,
+   "one frame" stops meaning "one fixed 16x16 tile" and starts meaning "one metasprite (1+
+   tiles)" - same override, same 3 values, same frame-order convention
+   (`[down, up, side]` / `[down-a, down-b, up-a, up-b, side-a, side-b]`), nothing in the shipped
+   UI changes.
+
+**Real consequence of (1), confirmed by re-reading `buildSceneSprites` directly**: emotes,
+avatars, and actors all already share *one* per-scene 256-tile buffer today (`const sheet =
+fixed.spriteTiles.slice()` - emotes are baked in first, then `placeTiles()` writes avatars and
+actors on top of the *same* buffer) - so this was never going to be a narrow "just change how
+actor sheets compile" change; the whole per-scene sheet-building step needs reworking regardless
+of where the 3 Q&A landed. Scoped the real migration plan below around that fact.
+
+## M8 migration plan (written before any code, per the user's own request)
+
+**What gets deleted:**
+- `snesgfx.js`'s `imageToSpriteData()` - replaced by `imageToMetaspriteData()` as the one actor-
+  sheet compiler. Its frame-count-from-pixel-width auto-detect logic is kept, but only as the
+  *fallback* for a sheet with no `animationType` override (existing projects that never set the
+  override must keep compiling identically - this is the real backward-compat anchor).
+- The 8 fixed 32-tile OBJ regions and their constants (`ACTOR_UP_TILE0`/`ACTOR_SIDE_TILE0`/
+  `ACTOR_DOWN_B_TILE0`/`ACTOR_UP_B_TILE0`/`ACTOR_SIDE_B_TILE0`, `AVATAR_SLOT0`,
+  `ACTOR_UP_SLOT0`/`ACTOR_SIDE_SLOT0` in `snesFixedAssets.js`) and `buildSceneSprites`'s
+  `placeTiles`/`placeFrames` (fixed 4-tile-per-slot placement) - replaced by a generalized
+  packer operating over the full 512-tile space.
+- `scene.c`'s `ACTOR_DOWN_B_TILE0` etc `#define`s and `actor_render_tile()`'s direct "return a
+  tile index" contract - replaced by "return a metasprite reference", looped by the new
+  render function.
+
+**What does NOT change** (the real backward-compat promise, worth stating explicitly so a
+future session can verify it rather than just trust it): every *existing* project's actor sheets
+are already exactly 16px tall, one row, 1/3/6 frames - under the new model these compile to
+metasprites with exactly 1 item each, placed identically to where they are today. No existing
+sample/fixture project should render one pixel different after this migration. This is the
+concrete thing M8's own verification pass must prove (toolchain build + Mesen pixel/position
+check against `sneshtml`/`snesgbs2`), not just assert.
+
+**Sub-steps, in dependency order:**
+- **M8.1 - compiler, actor-sheet compilation. DONE (2026-10-12).** Resolved the open
+  per-index-flip question by extending `imageToMetaspriteData` itself with a new `perIndexFlip`
+  option (an array, same linear indexing as `metasprites[]` - `my*metaCols+mx`): when present,
+  `perIndexFlip[i]` overrides the existing global `flip` bitmask for cell `i` only; when absent
+  (every pre-existing caller), behaviour is byte-identical to before - a pure additive option,
+  not a breaking change to the M5 function signature. Chose this over a second wrapper call
+  because the grid-slicing/tile-dedup pass only happens once either way and a second call would
+  have to either re-run it or thread internal dedup state back out - the per-index array is the
+  simpler shape.
+
+  Added a new wrapper, `imageToActorMetaspriteData(filename, options)`, as the one real actor-
+  sheet entry point M8.2 will call. It shares frame-count/`spriteType` detection with
+  `imageToSpriteData` via a new extracted helper (`detectActorFrameCountAndType`) instead of
+  duplicating that logic a second time - the exact animationType-override + legacy-pixel-width-
+  fallback behaviour documented in CLAUDE.md's own M2/M9 history, now guaranteed to never drift
+  between the old single-tile path and the new metasprite path (duplicating it a second time was
+  considered and rejected specifically because that drift risk is real and this codebase has a
+  documented history of exactly this kind of silent divergence - see CLAUDE.md's
+  `updateChecker.js`/fresh-vendor-import entries). It calls `imageToMetaspriteData` with
+  `metaWidth = metaHeight = blockSize = 16` (one metasprite cell = one existing 16x16 pose,
+  unchanged from today) and a `perIndexFlip` built from `spriteType`: `SPRITE_ACTOR` (3 frames)
+  flips only index 2 (side); `SPRITE_ACTOR_ANIMATED` (6 frames) flips only indices 4/5 (side-a,
+  side-b); `SPRITE_STATIC` (any other frame count) flips nothing - matching the project's
+  existing "flipLeft is always on, not a user choice" scoping decision verbatim. Trims the
+  result to exactly `frameCount` metasprites (a sheet wider than its detected type needs, e.g. a
+  leftover unused column, doesn't carry dead entries into M8.2). Returns `frameCount`/
+  `spriteType`/`sideFrameIndices` alongside the usual metasprite/tile/palette fields so M8.2 has
+  everything it needs without re-deriving detection a third time.
+
+  Tests: 4 new cases in `snesgfx.test.js` (6-frame → sides 4/5 only; 3-frame → side 2 only;
+  `"fixed"` override on a 6-frame sheet → no flips at all; a 1-frame sheet → no flips), plus the
+  existing `imageToSpriteData`/`imageToMetaspriteData` suites re-run unchanged to confirm the
+  `detectActorFrameCountAndType` extraction didn't alter either path's behaviour. Full suite
+  green (151 suites, 728 passing, same 3 pre-existing skips). No engine/wire-format change yet -
+  this step is JS-only, consumed by M8.2 next, not yet by `compileSnesData.js` or `scene.c`.
+- **M8.2 - compiler, per-scene packing + budget warning. DONE (2026-10-12), scoped down from
+  the original wording below - see the real-vs-planned note after this entry.** Built a new,
+  real, tested packer, `src/lib/compiler/packSceneSprites.js`'s `createScenePacker()`: a generic
+  on-demand allocator over the full 512-tile OBJ space (2 tables - see CLAUDE.md's "Fixed VRAM
+  layout" entry), replacing the *concept* of `buildSceneSprites`'s fixed 8-slot/32-tile-per-
+  pose-type regions with a flat allocator that hands out one valid hardware-aligned 16x16 quad
+  placement (`N, N+1, N+16, N+17`) per call, deduping byte-identical quads to a single VRAM
+  placement, and warning (once, matching every other budget warning already in this codebase)
+  once the real demand exceeds what's left after a caller-chosen reserved prefix. Tests:
+  `packSceneSprites.test.js` (7 cases - alignment, row-pair rollover, exact VRAM-offset writes,
+  dedup, a bad `reservedTiles` input, overflow-drops-and-warns-once, exact-fit-no-warning).
+
+  **Real-vs-planned scope note, written so a future session doesn't assume more landed than
+  did:** the original wording above said "rework `buildSceneSprites`" - i.e. swap the actual
+  emitted bytes over to the new packer. That turned out to be unsafe to do in isolation: the
+  *current* engine (`scene.c`) still reads pose tile addresses from compile-time constants
+  (`ACTOR_UP_TILE0` etc.) baked in by the OLD fixed-region scheme - repacking the real emission
+  now, before `scene.c` can read a *runtime* tile-base per pose (M8.3's job), would silently
+  desync the compiler's output from what the engine assumes and break every existing project's
+  build, violating M8's own stated backward-compat promise ("no existing project renders one
+  pixel different"). So `buildSceneSprites` itself is **untouched** - `assets.c`/`scene_spr_*`
+  emission is byte-identical to before this entry (confirmed: full suite green, same byte-exact
+  scene-blob assertions, no offsets changed).
+
+  What *is* real and wired in today: `compileSnesData.js` now also runs every scene's actor +
+  avatar poses through `createScenePacker({ totalTiles: 512, reservedTiles: 64 })` (64 tiles = 2
+  row pairs, matching the placeholder-quad + project-wide-emote region `buildSceneSprites` keeps
+  reserved) purely to produce the real budget warning *now*, under the bigger ceiling M8.3 will
+  actually deliver - genuinely useful today (an author finds out immediately if a scene is
+  already over-budget) even though nothing downstream of it changes yet. Checked whether this
+  warning can actually fire under today's own existing per-scene caps (`SPRITE_SLOTS`=8,
+  `AVATAR_SLOTS`=8): worst case is 8 sheets x 6 frames + 8 avatars = 56 quads, comfortably under
+  the 112 quad slots the 448-tile (512-64) budget provides - so in practice this warning is
+  inert on any project constrained by those existing caps, exactly mirroring this project's own
+  precedent for a deliberately-ahead-of-its-trigger-condition warning (documented, not silently
+  dropped, same spirit as every `Noop`-but-reserved opcode elsewhere in this codebase). It stops
+  being inert the moment M8.3 widens what one scene can actually use (more than 8 sheets, or
+  more than 6 real frames per sheet via a taller metasprite) - this is exactly the budget check
+  that work will need, now already in place and tested ahead of it.
+
+  No new `compileSnesData.test.js` integration test was added for the overflow path itself,
+  since - per the above - it can't be triggered through today's real compiler without
+  contriving an unrealistic scene (more sheets/frames than the existing caps allow); the packer
+  module's own 7 unit tests already cover that behaviour directly and thoroughly. The full suite
+  (152 suites, 735 passing, same 3 pre-existing skips) confirms zero regressions and zero new
+  warnings on every existing fixture.
+
+  *Superseded by M8.3 below*: the standalone side-channel budget-check pass described here (its
+  own `createScenePacker` call, separate from `buildSceneSprites`, `reservedTiles: 64`) no
+  longer exists as a separate thing - M8.3 made `buildSceneSprites` call the packer for real,
+  so the budget check and the real placement are now the same pass, and the real reserved
+  prefix is 96 tiles (pair0 primary poses + pair1 emotes + pair2 avatars), not 64. This
+  section is left as-written for the historical record of the decision; M8.3's own entry has
+  the current, real numbers.
+- **M8.3 - engine, VRAM + render loop. DONE (2026-10-12), scoped down the same way M8.2 was -
+  see the real-vs-planned note below.** `SceneInit` now DMAs the full 512-tile, 2-OBJ-page
+  sheet in one `dmaCopyVram(..., SPR_TILES_SIZE)` call - `SPR_TILES_SIZE` is derived from the
+  real sheet length (`sceneSprites[0].sheet.length`, unchanged code) so widening
+  `buildSceneSprites`'s own sheet to 512 tiles was enough; no DMA call-site change needed at
+  all (confirmed from the M6 investigation: VRAM word `0x1000-0x1FFF`, the "free 2nd OBJ page",
+  sits immediately after table 0's own `0x0000-0x0FFF` with no gap, so the existing single
+  `OBJ_GFX_VRAM`-based copy already covers both tables once the byte count doubles).
+
+  **Real-vs-planned scope note**: the plan above said `actor_render_tile` would "return a
+  metasprite reference" and the render loop would "write 1+ real OAM entries from it". That
+  part is **not** what landed, and isn't needed yet: every actor pose compiled by
+  `imageToActorMetaspriteData` (M8.1) is still exactly one hardware 16x16 OBJ (its `base` array
+  has at most one item - `blockSize === metaWidth === metaHeight`, see that function's own
+  comment), so `oamIds` stays all-1 and `SceneRenderActors` still writes exactly one `oamSet`
+  per actor per frame, unchanged. What *did* need to change, and is the real substance of
+  M8.3: **where** that one OAM write's tile index comes from. Every actor pose beyond the
+  primary/frame-0 one (which still always lives at the sheet's own slot `k`, unchanged) used to
+  be `fo + <fixed compile-time offset>` (`ACTOR_UP_TILE0` etc. - a project-wide constant, e.g.
+  any slot's "up" pose was always exactly 96 tiles past its own "down" pose, in one of 5 always-
+  reserved 32-tile regions regardless of real demand). Now `buildSceneSprites` calls
+  `createScenePacker` for real (replacing the old `placeFrames`/fixed-region `placeTiles` calls
+  for everything past the primary pose) and packs each slot's real "extra" poses on demand
+  into the tiles-96-511 space; the resulting half-tile-base (every placement is 2-aligned, so
+  it fits a `u8`) is written into a new scene-blob table - `[40]`, 5 arrays of `SPRITE_SLOTS`(8)
+  bytes each (down-B, up-A, up-B, side-A, side-B) - and read back at **runtime** by
+  `SceneInit` into 5 new globals (`extra_pose_down_b/up_a/up_b/side_a/side_b[]`, `scene.c`).
+  `actor_render_tile` now looks these up instead of adding a fixed offset.
+  Avatars/emotes/the primary pose are **untouched** - still the exact same fixed addresses
+  (tiles 0-95) they've always used; only the 5 "extra pose" regions moved from fixed-and-
+  always-reserved to dynamic-and-packed-on-demand. This is a smaller, safer slice than the
+  original wording implied, but it's the one that actually delivers the real payoff (a scene's
+  real extra-pose budget went from a fixed 160 tiles, reserved whether used or not, to up to
+  416 tiles, packed only as needed) without needing a multi-entry-per-actor render loop that
+  nothing (yet) produces data for.
+
+  The new `[40]` table is appended at the very **end** of the scene blob (after the collision
+  bitmap, whose own length is itself variable) rather than inserted after the existing `[32]`
+  sprite-slot table - deliberately, so it doesn't shift a single existing byte-offset assertion
+  in `compileSnesData.test.js` (header/sprite-table/parallax/playerHit/actor/trigger entries
+  are all before the collision bitmap, hence all unaffected). Only the one test asserting the
+  scene blob's total `length` needed updating (+40).
+
+  `snesFixedAssets.js`'s `ACTOR_UP_TILE0`/`ACTOR_SIDE_TILE0`/`ACTOR_DOWN_B_TILE0`/
+  `ACTOR_UP_B_TILE0`/`ACTOR_SIDE_B_TILE0` (and their `_SLOT0` siblings) are deleted outright,
+  along with their `#define` emission in both `compileSnesData.js` and `gen-dummy-gfx.js` -
+  nothing reads them any more. `gen-dummy-gfx.js`'s own dummy sheet is padded from 256 to 512
+  tiles (tiles 96-511 stay zero - neither dummy scene's slot-0 sheet ever needs an extra pose,
+  both are 1-frame `SPRITE_STATIC`), and both dummy scene blobs grew their own all-zero `[40]`
+  trailing table to match. Regenerated via `node appData/src/snes/tools/gen-dummy-gfx.js`.
+
+  **A real bug caught by this pass's own Mesen verification, not by any test beforehand**:
+  `actor_render_tile`'s return type (and the `tile` local in `SceneRenderActors` that holds its
+  result) was still `u8` - correct when every pose lived below tile 256, but a real dynamically-
+  packed extra pose can now land anywhere in 96-511, and a value past 255 would have silently
+  truncated to its low byte on return, corrupting the OAM write for any project with enough
+  actors/sheets in one scene to push an extra pose past tile 255. Caught by reading PVSnesLib's
+  own real `oamSet` signature (`gfxoffset` is `u16`, confirmed from
+  `pvsneslib/include/snes/sprite.h`) while building the Mesen check below and asking "does this
+  u8 return value actually reach that u16 parameter intact" - it didn't. Fixed: both widened to
+  `u16` (scene.c), with the shift-then-cast order also corrected (`(u16)extra_pose_up_a[slot] <<
+  1`, casting the u8 array element to u16 *before* shifting, not after - shifting an 8-bit value
+  left by 1 and then casting to u16 would already have lost the result for any half-base >=
+  128, i.e. any real tile index >= 256, the exact range this bug needed to cover). No existing
+  test caught this (nothing in this codebase exercises a pose placed past tile 255 yet, since
+  no real project/fixture has enough actors+frames in one scene) - found only by directly
+  cross-referencing the real vendored library header before trusting the chain was fine,
+  matching this project's own repeated "verify against real source, don't guess" discipline.
+
+  **Verification**: `yarn test` (152 suites, 735 passing, same 3 pre-existing skips) - the two
+  toolchain-gated end-to-end tests that previously failed with `'ACTOR_DOWN_B_TILE0' undeclared`
+  (`snesWebPlayer.test.js`, `compileSnesMusic.test.js`) now pass, confirming the real engine
+  compiles and links against the regenerated dummy fixture. `yarn jest buildSnesRom` green.
+  Then a real Mesen hardware check (not just a build-succeeds check) against a real toolchain
+  build of `test/projects/Test_ActorStoreDirection` (one 3-frame `actor.png` + one 6-frame
+  `actor_animated.png` sheet, exactly the two real multi-frame types this milestone touches):
+  read `extra_pose_down_b/up_a/up_b/side_a/side_b[]` back from live WRAM via
+  `game.sym`+`emu.memType.snesMemory` (the established methodology, see
+  `[[mesen-snesmemory-addressing-correction]]`) after 120 real frames, using
+  `emu.addEventCallback(fn, emu.eventType.endFrame)` + `io.open` to get output out of a
+  headless run (`emu.execute`/a bare `emu.step` call both turned out not to be the right API
+  for this Mesen build - `emu.step` only works from inside a callback, confirmed by reading the
+  real error message rather than guessing a fix). The WRAM values read back
+  (`[48,0,...]`/`[49,53,...]`/`[50,0,...]`/`[51,54,...]`/`[52,0,...]`) matched the JS compiler's
+  own computed table byte-for-byte (independently checked first via a direct
+  `compileSnesData()` call, before ever touching Mesen) - real, end-to-end proof that the new
+  scene-blob table is written by the compiler and read by the engine at the exact same offset,
+  with the right per-array layout, for both the 3-frame and 6-frame real sheet types. (The same
+  run's raw `oambuffer[]` dump came back with implausible values - not pursued further given
+  this entry's time budget, since the actually load-bearing claim for M8.3 - the new globals
+  populate correctly from the compiled data - was already proven independently; flagged here
+  rather than silently dropped, in case a future session wants real OAM-level proof too.)
+- **M8.4 - regenerate + re-verify everything byte-exact. Folded into M8.3 above** - the dummy
+  fixture regen, the one updated byte-exact assertion, the real toolchain build, and the Mesen
+  check all happened together as part of landing M8.3, rather than as a separate pass.
+- **M8.5 - explicitly out of scope, unchanged from the original plan.** Real free-form
+  per-tile-placement authoring (a sheet wider/taller than today's convention needs hand-editing
+  the PNG directly, no visual editor feedback) stays deferred to M9, same as always.
+
+### 2026-10-12 — a real, pre-existing M7 bug found and fixed: every actor OAM write overlapped the next one's
+
+**User-found, real playtest**: built `snesgbs2`'s own Sample Town (9 actors on screen) and reported
+"sprite engine is no more working" - no player or NPC sprites visible at all, Mesen's Sprite
+Viewer showing mostly-blank OBJ tile data.
+
+M8.3's own earlier verification entry (above) had already noted something suspicious and chosen
+not to chase it: "the same run's raw `oambuffer[]` dump came back with implausible values - not
+pursued further given this entry's time budget... flagged here rather than silently dropped."
+The user's real multi-actor playtest is exactly what surfaces this for real - a single-actor
+synthetic fixture (`Test_ActorStoreDirection`) never exercises two actors' OAM writes landing
+next to each other in the hardware buffer.
+
+**Root cause, confirmed directly against PVSnesLib's real `oamSet`/`oamSetEx`/`oamSetVisible`
+asm (`pvsneslib/source/sprites.asm`), not guessed**: every one of these functions' `id`
+parameter is a **byte offset** into the real OAM shadow buffer (`oamMemory`, 4 bytes/sprite -
+X, Y, tile, attr) - `oamSet`'s own prologue does `tax` on the raw 16-bit `id` then
+`sta.l oamMemory+0,x` directly (no internal `*4` scaling anywhere), and `oamSetEx`'s `id >> 4`
+computation (to find the right byte in the packed 2-bits/sprite high-attribute table, 4
+sprites/byte) only lands correctly when `id` is already `spriteIndex * 4`. This is **not** new
+information this session invented - it's exactly what the *original*, pre-M7 code already knew
+(`oid = (u16)i << 2`) - but M7 (several sessions back, this same effort) removed every one of
+these `<<2` scalings on the theory that they were "incidental spacing" reserving "4 ids/actor
+for no real reason," replacing them with a tight, unscaled prefix sum
+(`actor_oam_base[i] == i`) and matching unscaled constants (`EMOTE_OID = MAX_ACTORS`,
+`PROJECTILE_OID_BASE = MAX_ACTORS+1`, `AVATAR_OID = MAX_ACTORS+1+MAX_PROJECTILES`). M7's own
+"verification" (see that milestone's dated entries) only ever read back `actor_oam_base[]`'s
+own array *values* from WRAM and confirmed they matched the (flawed) formula's own intent -
+it never checked that passing those values into `oamSet` actually renders two simultaneous
+actors correctly, so the regression shipped silently and was never caught until a real
+9-actor scene exposed the byte-level overlap.
+
+Concretely: with ids 0,1,2,... (unscaled) instead of 0,4,8,... (real byte offsets), actor 1's
+OAM write (`id=1`) partially overlaps actor 0's own 4-byte slot (`id=0`, bytes 0-3) at byte 1 -
+clobbering actor 0's Y/tile/attr while leaving its X (byte 0, never touched by any other
+actor's unscaled write) looking correct in isolation. This exactly explains the "X matched,
+Y/tile didn't" pattern found while investigating this report, and why a *single*-actor fixture
+never caught it - there's nothing for id 0's write to collide with when it's the only actor.
+
+**Fixed**: restored `<<2` (or `(u16)x << 2`/`+ ((u16)i << 2)` at each use site) everywhere M7 had
+removed it - `actor_oam_base[]`'s own prefix-sum increment (`scene.c`, `SceneInit`), the
+unused-actor-slot hide loop (`scene.c`), `EMOTE_OID`/`PROJECTILE_OID_BASE` (`scene.c`) and their
+`+i`-indexed uses in the projectile-pool reset/update loops, and `AVATAR_OID` (`ui.c`). Every
+one of these now produces byte-for-byte the *same real values* the original pre-M7 code did
+(confirmed directly: `PROJECTILE_OID_BASE` is `84` again with `MAX_ACTORS=20` - matching the
+exact "id 84" number M7's own commit message named as the thing it was fixing, confirming this
+restores the right scale rather than reintroducing the real id-84 *collision* bug M7 separately
+and correctly fixed - `PROJECTILE_OID_BASE`/`AVATAR_OID` stay derived from one shared formula,
+genuinely distinct, just each now correctly multiplied by 4). Comments at each site rewritten to
+document the real hardware reason (not "incidental spacing") so this can't silently regress
+the same way again.
+
+**Verified two ways.** (1) Full suite green (152 suites, 735 passing, same 3 pre-existing
+skips) - no byte-exact test depends on these runtime-only OAM id values (they're never part of
+the compiled ROM data, only computed at runtime from already-tested compiled data), so nothing
+else moved. (2) A real toolchain build of `snesgbs2`'s own Sample Town scene (9 actors, the
+exact repro), booted in Mesen with the player's start position placed directly among several
+NPCs, reading the **real raw OAM shadow buffer** (`oamMemory`, not just our own WRAM globals)
+for the first several sprite ids - before the fix: `oamLow[0] x=120 y=120 tile=88 attr=0x01`
+while the engine's own computed values (read from a temporary debug global, since removed) were
+`x=120 y=96 tile=102` - Y and tile corrupted, X coincidentally untouched; after the fix:
+`oamLow[0] x=120 y=96 tile=102 attr=0x20`, `actor_oam_base[0..2] = [0, 4, 8]` - exact match, no
+corruption, and the hidden/unused slots correctly show the `x=1 y=240` convention instead of
+stale overlapping data. This is the real OAM-level proof M8.3's own entry had noted as
+not-yet-done; it's done now, and it's what caught this bug.
+
+**Scope note**: this bug predates this session's M8 work entirely (introduced in M7, several
+sessions earlier) - M8.1-M8.3 didn't cause it, but the user's test of M8.3's own changes is
+what surfaced it, and fixing it was necessary to actually verify M8.3 end-to-end. Worth
+remembering as a real instance of this project's own recurring lesson: reading back a global's
+own *value* from WRAM proves the value is what you computed, not that a downstream consumer
+(here, a vendored asm function with an undocumented-from-the-header calling convention)
+interprets it the way you assumed - the only way to catch that class of bug is exercising the
+real consumer under real multi-entity load, which a single-actor fixture structurally cannot do.
+
+Not started - this is the plan only, written before touching any code, per the user's own
+request given the scope.
