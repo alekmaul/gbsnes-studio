@@ -19,7 +19,8 @@ import { PNG } from "pngjs";
 import {
   imageToSpriteData,
   imageToMetaspriteData,
-  imageToActorMetaspriteData
+  imageToActorMetaspriteData,
+  imageToFreeformMetaspriteData
 } from "../../../src/lib/compiler/snesgfx";
 
 const tmpDir = fs.mkdtempSync(Path.join(os.tmpdir(), "snesgfx-test-"));
@@ -287,5 +288,118 @@ describe("imageToActorMetaspriteData (SPRITE_EDITOR_PROGRESS.md M8.1)", () => {
     expect(conv.spriteType).toBe(0);
     expect(conv.metasprites.length).toBe(1);
     expect(conv.sideFrameIndices).toEqual([]);
+  });
+});
+
+describe("imageToFreeformMetaspriteData (SPRITE_EDITOR_PROGRESS.md M9.3)", () => {
+  // 32x32 source: a blank 16x16 region at (0,0) [background/transparent],
+  // a solid red 16x16 region at (16,0), a solid blue 16x16 region at (0,16).
+  const makeFixture = (file) => {
+    writeRectsPng(file, 32, 32, [
+      { x: 16, y: 0, w: 16, h: 16, color: [200, 50, 50] },
+      { x: 0, y: 16, w: 16, h: 16, color: [50, 50, 200] }
+    ]);
+  };
+
+  test("resolves one placed tile to a real quad of 4 deduped sub-tiles", async () => {
+    const file = Path.join(tmpDir, "freeform_basic.png");
+    makeFixture(file);
+    const tileId = "t1";
+    const conv = await imageToFreeformMetaspriteData(file, {
+      frames: [{ id: "m0", tiles: [tileId] }],
+      tiles: {
+        [tileId]: { id: tileId, x: 0, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false }
+      }
+    });
+    expect(conv.metaspriteFrames.length).toBe(1);
+    expect(conv.metaspriteFrames[0].length).toBe(1);
+    const placed = conv.metaspriteFrames[0][0];
+    expect(placed.dx).toBe(0);
+    expect(placed.dy).toBe(0);
+    expect(placed.flipX).toBe(false);
+    expect(placed.flipY).toBe(false);
+    expect(placed.priority).toBe(false);
+    // the solid red 16x16 region is 4 identical 8x8 tiles -> all 4 quad
+    // entries resolve to the SAME deduped tile index.
+    expect(placed.quad).toEqual([placed.quad[0], placed.quad[0], placed.quad[0], placed.quad[0]]);
+    expect(conv.tiles.length).toBe(1); // only 1 unique tile in the whole sheet so far
+  });
+
+  test("two tiles referencing the same source region dedupe to the same quad, even across frames", async () => {
+    const file = Path.join(tmpDir, "freeform_dedupe.png");
+    makeFixture(file);
+    const conv = await imageToFreeformMetaspriteData(file, {
+      frames: [
+        { id: "m0", tiles: ["a"] },
+        { id: "m1", tiles: ["b"] }
+      ],
+      tiles: {
+        a: { id: "a", x: 0, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
+        b: { id: "b", x: 32, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false }
+      }
+    });
+    expect(conv.metaspriteFrames[0][0].quad).toEqual(conv.metaspriteFrames[1][0].quad);
+    expect(conv.tiles.length).toBe(1);
+  });
+
+  test("two distinct source regions dedupe at the real 8x8 sub-tile level, not just whole-quad", async () => {
+    const file = Path.join(tmpDir, "freeform_subtile_dedupe.png");
+    // red region at (16,0) and blue at (0,16) share no pixels - this proves
+    // each quad gets its own distinct sub-tiles (4 + 4 = 8 total), the
+    // negative-control half of the dedupe claim above.
+    makeFixture(file);
+    const conv = await imageToFreeformMetaspriteData(file, {
+      frames: [{ id: "m0", tiles: ["red", "blue"] }],
+      tiles: {
+        red: { id: "red", x: 0, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
+        blue: { id: "blue", x: 16, y: 0, sliceX: 0, sliceY: 16, flipX: false, flipY: false, priority: false }
+      }
+    });
+    const [redTile] = conv.metaspriteFrames[0][0].quad;
+    const [blueTile] = conv.metaspriteFrames[0][1].quad;
+    expect(redTile).not.toBe(blueTile);
+    expect(conv.tiles.length).toBe(2);
+  });
+
+  test("carries flipX/flipY/priority through untouched", async () => {
+    const file = Path.join(tmpDir, "freeform_flags.png");
+    makeFixture(file);
+    const conv = await imageToFreeformMetaspriteData(file, {
+      frames: [{ id: "m0", tiles: ["t1"] }],
+      tiles: {
+        t1: { id: "t1", x: 8, y: -4, sliceX: 16, sliceY: 0, flipX: true, flipY: true, priority: true }
+      }
+    });
+    const placed = conv.metaspriteFrames[0][0];
+    expect(placed.dx).toBe(8);
+    expect(placed.dy).toBe(-4);
+    expect(placed.flipX).toBe(true);
+    expect(placed.flipY).toBe(true);
+    expect(placed.priority).toBe(true);
+  });
+
+  test("a tile sliced partly off the source image edge doesn't throw - out-of-bounds reads as transparent", async () => {
+    const file = Path.join(tmpDir, "freeform_oob.png");
+    makeFixture(file);
+    const conv = await imageToFreeformMetaspriteData(file, {
+      frames: [{ id: "m0", tiles: ["t1"] }],
+      tiles: {
+        // sliceX=24 means this tile's right half (x 32..39) is past the
+        // 32px-wide source image entirely.
+        t1: { id: "t1", x: 0, y: 0, sliceX: 24, sliceY: 0, flipX: false, flipY: false, priority: false }
+      }
+    });
+    expect(conv.metaspriteFrames[0].length).toBe(1);
+    expect(conv.warnings).toEqual([]);
+  });
+
+  test("an empty frame (no tiles placed yet) produces an empty placement list, not an error", async () => {
+    const file = Path.join(tmpDir, "freeform_empty.png");
+    makeFixture(file);
+    const conv = await imageToFreeformMetaspriteData(file, {
+      frames: [{ id: "m0", tiles: [] }, undefined],
+      tiles: {}
+    });
+    expect(conv.metaspriteFrames).toEqual([[], []]);
   });
 });

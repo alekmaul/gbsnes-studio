@@ -1315,3 +1315,47 @@ clean with the same `npx tsc@5.4.5` command; full suite still green (152 suites,
 Next: **M9.3** (compiler - turn an authored tile list into real VRAM data) and **M9.4** (engine
 - the real multi-OAM render loop, M7's deferred (c)/(d)) are what actually make a metasprite
 sheet render in-game; nothing from M9.1/M9.2 is consumed by the compiler or engine yet.
+
+### 2026-10-13 — M9.3 (conversion function) done, not yet wired into real compilation
+
+`imageToFreeformMetaspriteData()` (`snesgfx.js`) - the real compiler-side counterpart to M9.1's
+data model: takes a sheet's own `metasprites`/`metaspriteTiles` (the editor's authored tile
+placements, M9.2) and produces real VRAM-ready data - one deduped 8x8 tile set for the WHOLE
+sheet (shared across every frame and every placed tile, so identical source regions anywhere
+reuse the same tiles), and a per-frame placement list (`{dx, dy, quad: [tl,tr,bl,br tile
+indices], flipX, flipY, priority}`) ready for a real multi-OAM render loop.
+
+Each placed tile is still always a 16x16 region (`METASPRITE_TILE_SIZE`, M9.1) - one real
+hardware `OBJ_LARGE` block, 4 real 8x8 sub-tiles - matching every other actor pose on this
+engine (M8.1's `imageToActorMetaspriteData`, M8.3's single-OAM-per-pose path). Dedup is real
+per-8x8-sub-tile dedup, not just whole-quad dedup: two placed tiles sharing some but not all of
+their 4 sub-tiles each still get their own quad, reusing whichever sub-tiles a third placement
+also happens to match - tested directly (a red-region tile and a blue-region tile, which share
+zero pixels, correctly produce 2 distinct tiles, not false-deduped). Out-of-bounds slices (a
+tile placed partly past a ragged source image's own edge - the editor's canvas doesn't
+constrain `sliceX`/`sliceY` to the image bounds) read as transparent rather than throwing.
+
+**Deliberately not wired into `compileSnesData.js`'s real emission yet** - same reasoning as
+M8.2's own `createScenePacker`: the real consumer (a multi-OAM-per-actor render loop, M7's own
+deferred (c)/(d) - the engine still only ever writes exactly one `oamSet` per actor per frame
+today) doesn't exist, so wiring this into the real build now would produce compiled data
+nothing reads, with no way to verify it's actually correct end-to-end. Landing the real,
+isolated, tested conversion function first (this entry) and the paired compiler-wiring +
+engine render loop together next (M9.4) keeps every intermediate commit buildable, the same
+discipline M8.2/M8.3 already established.
+
+Tests: 6 new cases in `snesgfx.test.js` (single placed tile resolves to a real quad, cross-frame
+dedup of the same source region, per-sub-tile dedup confirmed with a real negative control,
+flip/priority pass-through, out-of-bounds tolerance, an empty frame produces an empty list not
+an error). Full suite green (152 suites, 759 passing, same 3 pre-existing skips). Lint clean
+(the one `no-continue` hit in `snesgfx.js` is the same pre-existing M5-era line already
+confirmed unrelated earlier in this effort).
+
+Next: **M9.4** - the paired step that actually makes any of this render: `compileSnesData.js`
+wiring (real VRAM packing via `createScenePacker`, replacing the primary-pose-only placement a
+metaspriteMode sheet currently still falls back to) and the engine's real multi-OAM render
+loop (consuming M7's `actor_oam_base[]` for a real per-slot cost instead of the always-1
+placeholder, M7's own deferred scanline-budget warning). The biggest, riskiest remaining step -
+real engine C changes, byte-exact scene-blob format growth, a real toolchain build, Mesen
+verification - matching every other "paired compiler+engine change" milestone's own history in
+this file.

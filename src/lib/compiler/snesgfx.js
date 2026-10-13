@@ -762,6 +762,155 @@ const imageToActorMetaspriteData = async (filename, options = {}) => {
   };
 };
 
+/*
+ * imageToFreeformMetaspriteData - M9.3 (SPRITE_EDITOR_PROGRESS.md). Compiles
+ * a SpriteSheet's AUTHORED tile placements (SpriteSheet.metasprites/
+ * metaspriteTiles - M9.1's data model, built by the free-form editor, M9.2)
+ * into real VRAM-ready tile data: one deduped 8x8 tile set for the whole
+ * sheet, shared across every frame and every placed tile (so identical
+ * source regions reuse the same VRAM tiles even across different frames),
+ * plus a per-frame placement list ready for a real multi-OAM render loop.
+ *
+ * Not yet wired into compileSnesData.js's real emission - that needs a
+ * paired engine change (a real multi-OAM-per-actor render loop, M7's own
+ * deferred (c)/(d) items) that doesn't exist yet, matching the M8.2/M8.3
+ * precedent of landing real, tested compiler output ahead of its engine
+ * consumer rather than wiring into a build the engine can't read yet.
+ *
+ * Each placed tile is always a 16x16 region (METASPRITE_TILE_SIZE,
+ * entitiesState.ts) - one real hardware OBJ_LARGE block, 4 real 8x8
+ * sub-tiles (TL,TR,BL,BR) - matching every other actor pose on this engine
+ * (imageToActorMetaspriteData above, and the single-OAM-per-pose render
+ * path M8.3 built). Dedup is a real per-8x8-tile dedup (not just whole-quad
+ * dedup): two placed 16x16 tiles that share some but not all of their 4
+ * sub-tiles still each get their own quad, reusing whichever of the 4
+ * sub-tiles a third placement also happens to match.
+ */
+const imageToFreeformMetaspriteData = async (filename, options = {}) => {
+  const { frames, tiles, maxColors = 16 } = options;
+  const warnings = [];
+  const pixels = await getPixels(filename);
+  const [imgW, imgH] = pixels.shape;
+
+  let { colors } = extractColors(pixels);
+  if (colors.length > maxColors) {
+    warnings.push(
+      `Sprite ${filename} has ${colors.length} colours, over the ${maxColors}-colour ` +
+        `limit for a sprite sheet - extra colours are snapped to the nearest kept colour. ` +
+        `Re-export as an indexed PNG with <= ${maxColors} colours.`
+    );
+    colors = colors.slice(0, maxColors);
+  }
+  const colorIndex = (r, g, b) => {
+    for (let i = 0; i < colors.length; i++) {
+      if (colors[i][0] === r && colors[i][1] === g && colors[i][2] === b) {
+        return i;
+      }
+    }
+    let best = 0;
+    let bestD = Infinity;
+    for (let i = 0; i < colors.length; i++) {
+      const d = dist2(colors[i], [r, g, b]);
+      if (d < bestD) {
+        bestD = d;
+        best = i;
+      }
+    }
+    return best;
+  };
+
+  // Out-of-bounds pixels (a tile placed partly/fully off the edge of a
+  // ragged-sized source PNG) read as index 0 (transparent) rather than
+  // throwing - the editor's own canvas doesn't constrain sliceX/sliceY to
+  // the image bounds today, so the compiler has to tolerate it gracefully.
+  const tileAt = (tx, ty) => {
+    const rows = [];
+    for (let y = 0; y < TILE; y++) {
+      const row = [];
+      for (let x = 0; x < TILE; x++) {
+        const px = tx * TILE + x;
+        const py = ty * TILE + y;
+        const inBounds = px < imgW && py < imgH;
+        row.push(
+          inBounds
+            ? colorIndex(pixels.get(px, py, 0), pixels.get(px, py, 1), pixels.get(px, py, 2))
+            : 0
+        );
+      }
+      rows.push(row);
+    }
+    return rows;
+  };
+
+  const tileList = [];
+  const tileLookup = new Map();
+  const internTile = (tx, ty) => {
+    const rows = tileAt(tx, ty);
+    const key = rowsKey(rows);
+    let index = tileLookup.get(key);
+    if (index === undefined) {
+      index = tileList.length;
+      tileList.push(tileFromIndices(rows));
+      tileLookup.set(key, index);
+    }
+    return index;
+  };
+
+  // Which 16x16 source regions are actually placed anywhere (several tiles/
+  // frames commonly reference the same sliceX/sliceY) - quadCache ensures
+  // each distinct region's 4 sub-tiles are only interned once.
+  const quadCache = new Map(); // "sliceX,sliceY" -> [tlIdx, trIdx, blIdx, brIdx]
+  const quadFor = (sliceX, sliceY) => {
+    const key = `${sliceX},${sliceY}`;
+    let quad = quadCache.get(key);
+    if (!quad) {
+      const tx = sliceX / TILE;
+      const ty = sliceY / TILE;
+      quad = [
+        internTile(tx, ty),
+        internTile(tx + 1, ty),
+        internTile(tx, ty + 1),
+        internTile(tx + 1, ty + 1)
+      ];
+      quadCache.set(key, quad);
+    }
+    return quad;
+  };
+
+  const tileLookupById = tiles || {};
+  const metaspriteFrames = (frames || []).map(metasprite =>
+    ((metasprite && metasprite.tiles) || [])
+      .map(tileId => {
+        const t = tileLookupById[tileId];
+        if (!t) {
+          return null;
+        }
+        return {
+          dx: t.x,
+          dy: t.y,
+          quad: quadFor(t.sliceX, t.sliceY), // [tlIdx,trIdx,blIdx,brIdx] into tiles[] below
+          flipX: !!t.flipX,
+          flipY: !!t.flipY,
+          priority: !!t.priority
+        };
+      })
+      .filter(t => t)
+  );
+
+  const palette = paletteToBGR555(colors);
+  palette[0] = 0; // force transparent, matching every other converter in this file
+
+  return {
+    tiles: tileList,
+    tileBytes: [].concat(...tileList),
+    palette,
+    paletteBytes: paletteBytes(palette),
+    colorCount: colors.length,
+    metaspriteFrames, // [frameIndex] -> [{dx,dy,quad,flipX,flipY,priority}]
+    warnings
+  };
+};
+
 // 32 bytes of 4bpp planar data -> 8 rows of 8 palette indices (inverse of
 // tileFromIndices). Used to verify a conversion round-trips losslessly.
 const indicesFromTile = bytes => {
@@ -816,5 +965,6 @@ module.exports = {
   imageToSpriteData,
   imageToMetaspriteData,
   imageToActorMetaspriteData,
+  imageToFreeformMetaspriteData,
   decodeBGData
 };
