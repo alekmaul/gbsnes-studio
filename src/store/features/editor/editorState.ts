@@ -81,6 +81,15 @@ export interface EditorState {
   filesSidebarWidth: number;
   navigatorSplitSizes: number[];
   focusSceneId: string;
+  // M9 (SPRITE_EDITOR_PROGRESS.md) - the free-form metasprite canvas's own
+  // transient editing state, matching GB Studio's real editor.selectedMetaspriteTileIds/
+  // editor.spriteTileSelection fields. metaspriteTool picks what a click on the
+  // canvas does; spriteTileSelection is the pending "stamp" picked from the
+  // tile palette (undefined = no stamp pending, normal select/drag mode).
+  selectedMetaspriteTileIds: string[];
+  selectedMetaspriteFrameIndex: number;
+  metaspriteTool: "select" | "place" | "erase";
+  spriteTileSelection?: { x: number; y: number; width: number; height: number };
 }
 
 export const initialState: EditorState = {
@@ -125,6 +134,10 @@ export const initialState: EditorState = {
   clipboardVariables: [],
   navigatorSplitSizes: [300, 100, 100],
   focusSceneId: "",
+  selectedMetaspriteTileIds: [],
+  selectedMetaspriteFrameIndex: 0,
+  metaspriteTool: "select",
+  spriteTileSelection: undefined,
 };
 
 const editorSlice = createSlice({
@@ -458,6 +471,48 @@ const editorSlice = createSlice({
 
     setFocusSceneId: (state, action: PayloadAction<string>) => {
       state.focusSceneId = action.payload;
+    },
+
+    setSelectedMetaspriteTileId: (state, action: PayloadAction<string>) => {
+      state.selectedMetaspriteTileIds = action.payload ? [action.payload] : [];
+    },
+    setSelectedMetaspriteTileIds: (state, action: PayloadAction<string[]>) => {
+      state.selectedMetaspriteTileIds = action.payload;
+    },
+    toggleSelectedMetaspriteTileId: (state, action: PayloadAction<string>) => {
+      if (state.selectedMetaspriteTileIds.includes(action.payload)) {
+        state.selectedMetaspriteTileIds = state.selectedMetaspriteTileIds.filter(
+          (id) => id !== action.payload
+        );
+      } else {
+        state.selectedMetaspriteTileIds = [
+          ...state.selectedMetaspriteTileIds,
+          action.payload,
+        ];
+      }
+    },
+    resetSelectedMetaspriteTileIds: (state) => {
+      state.selectedMetaspriteTileIds = [];
+    },
+    setSelectedMetaspriteFrameIndex: (state, action: PayloadAction<number>) => {
+      state.selectedMetaspriteFrameIndex = action.payload;
+      state.selectedMetaspriteTileIds = [];
+    },
+    setMetaspriteTool: (
+      state,
+      action: PayloadAction<EditorState["metaspriteTool"]>
+    ) => {
+      state.metaspriteTool = action.payload;
+      if (action.payload !== "place") {
+        state.spriteTileSelection = undefined;
+      }
+    },
+    setSpriteTileSelection: (
+      state,
+      action: PayloadAction<EditorState["spriteTileSelection"]>
+    ) => {
+      state.spriteTileSelection = action.payload;
+      state.metaspriteTool = action.payload ? "place" : "select";
     },
   },
   extraReducers: (builder) =>

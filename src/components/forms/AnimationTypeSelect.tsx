@@ -7,6 +7,9 @@ import { Select } from "../ui/form/Select";
 // a deliberate subset of GB Studio's own 6 animationType values. "fixed" ->
 // SPRITE_STATIC, "multi" -> SPRITE_ACTOR, "multi_movement" ->
 // SPRITE_ACTOR_ANIMATED (snesgfx.js's imageToSpriteData animationTypeOverride).
+// M9's free-form metasprite mode is a SEPARATE flag (SpriteSheet.metaspriteMode)
+// layered on top of whichever of these 3 shapes is chosen here, not a 4th
+// value of this select - see entitiesTypes.ts's own comment.
 
 interface AnimationTypeSelectProps {
   name: string;

@@ -53,6 +53,8 @@ import {
   Background,
   SpriteSheet,
   SpriteState,
+  Metasprite,
+  MetaspriteTile,
   Music,
   Font,
   Emote,
@@ -541,6 +543,410 @@ const removeSpriteState: CaseReducer<
       },
     });
   }
+};
+
+/**************************************************************************
+ * Metasprites (M9, SPRITE_EDITOR_PROGRESS.md) - free-form per-tile editing
+ * for a SpriteSheet with animationType "metasprite". Every reducer below
+ * addresses a frame by its existing frame-order index (frameIndex), not a
+ * separately-created metasprite id - frame count/meaning is still driven
+ * entirely by animationType (see SpriteAnimationType's own comment in
+ * entitiesTypes.ts), so a metasprite frame object is created on demand, the
+ * first time a tile is placed into it, rather than through its own
+ * add-frame action.
+ */
+
+// 16px - the single tile granularity every metasprite tile is sliced/placed
+// at, matching imageToActorMetaspriteData's own blockSize=16 (M8.1) and the
+// OBJ_LARGE 16x16 size this engine's render path already exclusively uses
+// for every actor (scene.c's SceneRenderActors) - a free-form metasprite
+// composes MULTIPLE of the same 16x16 building block per frame instead of
+// exactly one, not a different (e.g. 8x8) block size.
+const METASPRITE_TILE_SIZE = 16;
+
+const ensureMetaspriteFrame = (
+  spriteSheet: SpriteSheet,
+  frameIndex: number
+): Metasprite[] => {
+  const metasprites = [...(spriteSheet.metasprites || [])];
+  while (metasprites.length <= frameIndex) {
+    metasprites.push({ id: uuid(), tiles: [] });
+  }
+  return metasprites;
+};
+
+const addMetaspriteTile: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    frameIndex: number;
+    metaspriteTileId: string;
+    x: number;
+    y: number;
+    sliceX: number;
+    sliceY: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metasprites = ensureMetaspriteFrame(
+    spriteSheet,
+    action.payload.frameIndex
+  );
+  const metasprite = metasprites[action.payload.frameIndex];
+  const tile: MetaspriteTile = {
+    id: action.payload.metaspriteTileId,
+    x: action.payload.x,
+    y: action.payload.y,
+    sliceX: action.payload.sliceX,
+    sliceY: action.payload.sliceY,
+    flipX: false,
+    flipY: false,
+    priority: false,
+  };
+  metasprites[action.payload.frameIndex] = {
+    ...metasprite,
+    tiles: [...metasprite.tiles, tile.id],
+  };
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: {
+      metasprites,
+      metaspriteTiles: {
+        ...(spriteSheet.metaspriteTiles || {}),
+        [tile.id]: tile,
+      },
+    },
+  });
+};
+
+const editMetaspriteTiles: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    metaspriteTileIds: string[];
+    changes: Partial<MetaspriteTile>;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  action.payload.metaspriteTileIds.forEach((id) => {
+    if (metaspriteTiles[id]) {
+      metaspriteTiles[id] = { ...metaspriteTiles[id], ...action.payload.changes };
+    }
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metaspriteTiles },
+  });
+};
+
+const moveMetaspriteTiles: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    metaspriteTiles: { metaspriteTileId: string; x: number; y: number }[];
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  action.payload.metaspriteTiles.forEach(({ metaspriteTileId, x, y }) => {
+    if (metaspriteTiles[metaspriteTileId]) {
+      metaspriteTiles[metaspriteTileId] = {
+        ...metaspriteTiles[metaspriteTileId],
+        x,
+        y,
+      };
+    }
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metaspriteTiles },
+  });
+};
+
+const moveMetaspriteTilesRelative: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    metaspriteTileIds: string[];
+    x: number;
+    y: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  action.payload.metaspriteTileIds.forEach((id) => {
+    const tile = metaspriteTiles[id];
+    if (tile) {
+      metaspriteTiles[id] = {
+        ...tile,
+        x: tile.x + action.payload.x,
+        y: tile.y + action.payload.y,
+      };
+    }
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metaspriteTiles },
+  });
+};
+
+// Mirrors the selection as a group around its own combined bounding box
+// (not each tile flipped in place) - matches GB Studio's own real
+// flipXMetaspriteTiles/flipYMetaspriteTiles behaviour (checked directly
+// against gb-studio-3.2.1's entitiesState.ts), the intuitive "flip this
+// pose" result for a multi-tile selection.
+const flipXMetaspriteTiles: CaseReducer<
+  EntitiesState,
+  PayloadAction<{ spriteSheetId: string; metaspriteTileIds: string[] }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const tiles = action.payload.metaspriteTileIds
+    .map((id) => metaspriteTiles[id])
+    .filter((tile): tile is MetaspriteTile => !!tile);
+  if (tiles.length === 0) {
+    return;
+  }
+  const leftEdge = tiles.reduce((memo, tile) => Math.min(memo, tile.x), Infinity);
+  const rightEdge =
+    tiles.reduce((memo, tile) => Math.max(memo, tile.x), -Infinity) +
+    METASPRITE_TILE_SIZE;
+  const mirrorX = leftEdge + (rightEdge - leftEdge) / 2;
+  tiles.forEach((tile) => {
+    const middleX = tile.x + METASPRITE_TILE_SIZE / 2;
+    const flippedMiddleX = mirrorX + (mirrorX - middleX);
+    metaspriteTiles[tile.id] = {
+      ...tile,
+      flipX: !tile.flipX,
+      x: flippedMiddleX - METASPRITE_TILE_SIZE / 2,
+    };
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metaspriteTiles },
+  });
+};
+
+const flipYMetaspriteTiles: CaseReducer<
+  EntitiesState,
+  PayloadAction<{ spriteSheetId: string; metaspriteTileIds: string[] }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const tiles = action.payload.metaspriteTileIds
+    .map((id) => metaspriteTiles[id])
+    .filter((tile): tile is MetaspriteTile => !!tile);
+  if (tiles.length === 0) {
+    return;
+  }
+  const topEdge = tiles.reduce((memo, tile) => Math.min(memo, tile.y), Infinity);
+  const bottomEdge =
+    tiles.reduce((memo, tile) => Math.max(memo, tile.y), -Infinity) +
+    METASPRITE_TILE_SIZE;
+  const mirrorY = topEdge + (bottomEdge - topEdge) / 2;
+  tiles.forEach((tile) => {
+    const middleY = tile.y + METASPRITE_TILE_SIZE / 2;
+    const flippedMiddleY = mirrorY + (mirrorY - middleY);
+    metaspriteTiles[tile.id] = {
+      ...tile,
+      flipY: !tile.flipY,
+      y: flippedMiddleY - METASPRITE_TILE_SIZE / 2,
+    };
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metaspriteTiles },
+  });
+};
+
+const sendMetaspriteTilesToFront: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    metaspriteTileIds: string[];
+    frameIndex: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metasprites = [...(spriteSheet.metasprites || [])];
+  const metasprite = metasprites[action.payload.frameIndex];
+  if (!metasprite) {
+    return;
+  }
+  const idsSet = new Set(action.payload.metaspriteTileIds);
+  metasprites[action.payload.frameIndex] = {
+    ...metasprite,
+    tiles: [
+      ...metasprite.tiles.filter((id) => !idsSet.has(id)),
+      ...metasprite.tiles.filter((id) => idsSet.has(id)),
+    ],
+  };
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metasprites },
+  });
+};
+
+const sendMetaspriteTilesToBack: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    metaspriteTileIds: string[];
+    frameIndex: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metasprites = [...(spriteSheet.metasprites || [])];
+  const metasprite = metasprites[action.payload.frameIndex];
+  if (!metasprite) {
+    return;
+  }
+  const idsSet = new Set(action.payload.metaspriteTileIds);
+  metasprites[action.payload.frameIndex] = {
+    ...metasprite,
+    tiles: [
+      ...metasprite.tiles.filter((id) => idsSet.has(id)),
+      ...metasprite.tiles.filter((id) => !idsSet.has(id)),
+    ],
+  };
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metasprites },
+  });
+};
+
+const removeMetaspriteTiles: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    metaspriteTileIds: string[];
+    frameIndex: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const idsSet = new Set(action.payload.metaspriteTileIds);
+  const metasprites = [...(spriteSheet.metasprites || [])];
+  const metasprite = metasprites[action.payload.frameIndex];
+  if (metasprite) {
+    metasprites[action.payload.frameIndex] = {
+      ...metasprite,
+      tiles: metasprite.tiles.filter((id) => !idsSet.has(id)),
+    };
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  idsSet.forEach((id) => {
+    delete metaspriteTiles[id];
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metasprites, metaspriteTiles },
+  });
+};
+
+// Drops any placed tile whose box no longer overlaps the sheet's own
+// canvasWidth/Height at all (e.g. after a drag or canvas resize) - mirrors
+// GB Studio's own removeMetaspriteTilesOutsideCanvas, called after a drag
+// completes.
+const removeMetaspriteTilesOutsideCanvas: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    frameIndex: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const canvasWidth = spriteSheet.canvasWidth || METASPRITE_TILE_SIZE;
+  const canvasHeight = spriteSheet.canvasHeight || METASPRITE_TILE_SIZE;
+  const metasprites = [...(spriteSheet.metasprites || [])];
+  const metasprite = metasprites[action.payload.frameIndex];
+  if (!metasprite) {
+    return;
+  }
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const keptIds = metasprite.tiles.filter((id) => {
+    const tile = metaspriteTiles[id];
+    if (!tile) {
+      return false;
+    }
+    const inBounds =
+      tile.x + METASPRITE_TILE_SIZE > -canvasWidth / 2 &&
+      tile.x < canvasWidth / 2 &&
+      tile.y + METASPRITE_TILE_SIZE > 0 &&
+      tile.y < canvasHeight;
+    if (!inBounds) {
+      delete metaspriteTiles[id];
+    }
+    return inBounds;
+  });
+  metasprites[action.payload.frameIndex] = {
+    ...metasprite,
+    tiles: keptIds,
+  };
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metasprites, metaspriteTiles },
+  });
 };
 
 const loadFont: CaseReducer<
@@ -2087,6 +2493,38 @@ const entitiesSlice = createSlice({
 
     editSpriteState,
     removeSpriteState,
+
+    /**************************************************************************
+     * Metasprites
+     */
+
+    addMetaspriteTile: {
+      reducer: addMetaspriteTile,
+      prepare: (payload: {
+        spriteSheetId: string;
+        frameIndex: number;
+        x: number;
+        y: number;
+        sliceX: number;
+        sliceY: number;
+      }) => {
+        return {
+          payload: {
+            ...payload,
+            metaspriteTileId: uuid(),
+          },
+        };
+      },
+    },
+    editMetaspriteTiles,
+    moveMetaspriteTiles,
+    moveMetaspriteTilesRelative,
+    flipXMetaspriteTiles,
+    flipYMetaspriteTiles,
+    sendMetaspriteTilesToFront,
+    sendMetaspriteTilesToBack,
+    removeMetaspriteTiles,
+    removeMetaspriteTilesOutsideCanvas,
 
     /**************************************************************************
      * Engine Field Values

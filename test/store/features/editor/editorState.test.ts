@@ -376,3 +376,74 @@ test("Should focus on newly added custom event", () => {
   expect(newState.scene).toBe("");
   expect(newState.entityId).toBe(action.payload.customEventId);
 });
+
+describe("metasprite canvas UI state (M9, SPRITE_EDITOR_PROGRESS.md)", () => {
+  test("Should set a single selected metasprite tile id", () => {
+    const state: EditorState = { ...initialState, selectedMetaspriteTileIds: ["a"] };
+    const newState = reducer(state, actions.setSelectedMetaspriteTileId("b"));
+    expect(newState.selectedMetaspriteTileIds).toEqual(["b"]);
+  });
+
+  test("Should clear the selection when setting an empty id", () => {
+    const state: EditorState = { ...initialState, selectedMetaspriteTileIds: ["a"] };
+    const newState = reducer(state, actions.setSelectedMetaspriteTileId(""));
+    expect(newState.selectedMetaspriteTileIds).toEqual([]);
+  });
+
+  test("Should toggle a tile id in and out of the selection", () => {
+    const state: EditorState = { ...initialState, selectedMetaspriteTileIds: ["a"] };
+    const added = reducer(state, actions.toggleSelectedMetaspriteTileId("b"));
+    expect(added.selectedMetaspriteTileIds).toEqual(["a", "b"]);
+    const removed = reducer(added, actions.toggleSelectedMetaspriteTileId("a"));
+    expect(removed.selectedMetaspriteTileIds).toEqual(["b"]);
+  });
+
+  test("Should reset the selected tile ids", () => {
+    const state: EditorState = { ...initialState, selectedMetaspriteTileIds: ["a", "b"] };
+    const newState = reducer(state, actions.resetSelectedMetaspriteTileIds());
+    expect(newState.selectedMetaspriteTileIds).toEqual([]);
+  });
+
+  test("Should switch frame and clear the tile selection", () => {
+    const state: EditorState = {
+      ...initialState,
+      selectedMetaspriteFrameIndex: 0,
+      selectedMetaspriteTileIds: ["a"],
+    };
+    const newState = reducer(state, actions.setSelectedMetaspriteFrameIndex(2));
+    expect(newState.selectedMetaspriteFrameIndex).toBe(2);
+    expect(newState.selectedMetaspriteTileIds).toEqual([]);
+  });
+
+  test("Should switch tool and clear any pending tile stamp when leaving place mode", () => {
+    const state: EditorState = {
+      ...initialState,
+      metaspriteTool: "place",
+      spriteTileSelection: { x: 0, y: 0, width: 16, height: 16 },
+    };
+    const newState = reducer(state, actions.setMetaspriteTool("select"));
+    expect(newState.metaspriteTool).toBe("select");
+    expect(newState.spriteTileSelection).toBeUndefined();
+  });
+
+  test("Should picking a tile selection switch the tool to place", () => {
+    const state: EditorState = { ...initialState, metaspriteTool: "select" };
+    const newState = reducer(
+      state,
+      actions.setSpriteTileSelection({ x: 16, y: 0, width: 16, height: 16 })
+    );
+    expect(newState.metaspriteTool).toBe("place");
+    expect(newState.spriteTileSelection).toEqual({ x: 16, y: 0, width: 16, height: 16 });
+  });
+
+  test("Should clearing the tile selection switch the tool back to select", () => {
+    const state: EditorState = {
+      ...initialState,
+      metaspriteTool: "place",
+      spriteTileSelection: { x: 16, y: 0, width: 16, height: 16 },
+    };
+    const newState = reducer(state, actions.setSpriteTileSelection(undefined));
+    expect(newState.metaspriteTool).toBe("select");
+    expect(newState.spriteTileSelection).toBeUndefined();
+  });
+});

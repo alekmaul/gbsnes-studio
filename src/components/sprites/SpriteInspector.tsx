@@ -15,6 +15,9 @@ import {
 } from "../ui/form/FormLayout";
 import { EditableText } from "../ui/form/EditableText";
 import { CoordinateInput } from "../ui/form/CoordinateInput";
+import { CheckboxField } from "../ui/form/CheckboxField";
+import { Button } from "../ui/buttons/Button";
+import { FlexGrow } from "../ui/spacing/Spacing";
 import { AnimationTypeSelect } from "../forms/AnimationTypeSelect";
 import { SpriteSheetSelectButton } from "../forms/SpriteSheetSelectButton";
 import { SpriteAnimationType } from "../../store/features/entities/entitiesTypes";
@@ -42,6 +45,17 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
   );
   const spriteState = selectedStateId
     ? sprite?.states?.find((s) => s.id === selectedStateId)
+    : undefined;
+  const selectedTileIds = useSelector(
+    (state: RootState) => state.editor.selectedMetaspriteTileIds
+  );
+  const frameIndex = useSelector(
+    (state: RootState) => state.editor.selectedMetaspriteFrameIndex
+  );
+  const selectedTileId =
+    selectedTileIds.length > 0 ? selectedTileIds[0] : undefined;
+  const selectedTile = selectedTileId
+    ? sprite?.metaspriteTiles?.[selectedTileId]
     : undefined;
 
   if (!sprite) {
@@ -74,6 +88,106 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
     );
   };
 
+  const editTiles = (changes: Record<string, unknown>) => {
+    dispatch(
+      entitiesActions.editMetaspriteTiles({
+        spriteSheetId: id,
+        metaspriteTileIds: selectedTileIds,
+        changes,
+      })
+    );
+  };
+
+  const onFlipX = () => {
+    dispatch(
+      entitiesActions.flipXMetaspriteTiles({
+        spriteSheetId: id,
+        metaspriteTileIds: selectedTileIds,
+      })
+    );
+  };
+
+  const onFlipY = () => {
+    dispatch(
+      entitiesActions.flipYMetaspriteTiles({
+        spriteSheetId: id,
+        metaspriteTileIds: selectedTileIds,
+      })
+    );
+  };
+
+  // M9 (SPRITE_EDITOR_PROGRESS.md) - a selected metasprite tile shows its
+  // own fields INSTEAD of the sheet-level panel below, matching GB Studio's
+  // own real SpriteEditor.tsx (one selected tile <-> the sheet panel, never
+  // both at once).
+  if (selectedTile && selectedTileId) {
+    return (
+      <Sidebar>
+        <SidebarColumn>
+          <FormContainer>
+            <FormHeader>
+              {l10n(
+                selectedTileIds.length > 1
+                  ? "FIELD_SPRITE_TILES"
+                  : "FIELD_SPRITE_TILE"
+              )}
+            </FormHeader>
+
+            {selectedTileIds.length === 1 && (
+              <FormRow>
+                <CoordinateInput
+                  name="tileX"
+                  coordinate="x"
+                  value={selectedTile.x}
+                  onChange={(e) => editTiles({ x: castEventValue(e) })}
+                />
+                <CoordinateInput
+                  name="tileY"
+                  coordinate="y"
+                  value={selectedTile.y}
+                  onChange={(e) => editTiles({ y: castEventValue(e) })}
+                />
+              </FormRow>
+            )}
+
+            <FormRow>
+              <Button
+                size="small"
+                variant={selectedTile.flipX ? "primary" : "normal"}
+                onClick={onFlipX}
+                title={l10n("FIELD_FLIP_HORIZONTAL")}
+              >
+                ⇋
+              </Button>
+              <Button
+                size="small"
+                variant={selectedTile.flipY ? "primary" : "normal"}
+                onClick={onFlipY}
+                title={l10n("FIELD_FLIP_VERTICAL")}
+              >
+                ⇅
+              </Button>
+              <FlexGrow />
+            </FormRow>
+
+            <FormDivider />
+
+            <FormRow>
+              <CheckboxField
+                name="priority"
+                label={l10n("FIELD_DISPLAY_BEHIND_BACKGROUND")}
+                checked={selectedTile.priority}
+                onChange={(e) =>
+                  editTiles({ priority: e.currentTarget.checked })
+                }
+              />
+            </FormRow>
+          </FormContainer>
+        </SidebarColumn>
+      </Sidebar>
+    );
+  }
+
   return (
     <Sidebar>
       <SidebarColumn>
@@ -93,20 +207,34 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
             <FormField
               name="canvasSize"
               label={l10n("FIELD_CANVAS_SIZE")}
-              info={l10n("FIELD_CANVAS_SIZE_NOTE")}
+              info={
+                sprite.metaspriteMode
+                  ? l10n("FIELD_METASPRITE_CANVAS_SIZE_NOTE")
+                  : l10n("FIELD_CANVAS_SIZE_NOTE")
+              }
             >
               <FormRow>
                 <CoordinateInput
                   name="canvasWidth"
                   coordinate="w"
-                  value={16}
-                  disabled
+                  value={sprite.metaspriteMode ? sprite.canvasWidth || 16 : 16}
+                  min={16}
+                  max={128}
+                  disabled={!sprite.metaspriteMode}
+                  onChange={(e) =>
+                    editSheet({ canvasWidth: castEventValue(e) })
+                  }
                 />
                 <CoordinateInput
                   name="canvasHeight"
                   coordinate="h"
-                  value={16}
-                  disabled
+                  value={sprite.metaspriteMode ? sprite.canvasHeight || 16 : 16}
+                  min={16}
+                  max={128}
+                  disabled={!sprite.metaspriteMode}
+                  onChange={(e) =>
+                    editSheet({ canvasHeight: castEventValue(e) })
+                  }
                 />
               </FormRow>
             </FormField>
@@ -183,6 +311,17 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
                 }
               />
             </FormField>
+          </FormRow>
+
+          <FormRow>
+            <CheckboxField
+              name="metaspriteMode"
+              label={l10n("FIELD_ANIMATION_TYPE_METASPRITE")}
+              checked={!!sprite.metaspriteMode}
+              onChange={(e) =>
+                editSheet({ metaspriteMode: e.currentTarget.checked })
+              }
+            />
           </FormRow>
 
           {spriteState && (

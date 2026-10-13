@@ -443,6 +443,407 @@ test("Should remove a named state from a sprite sheet", () => {
   expect(newState.spriteSheets.entities["sprite1"]?.states).toEqual([]);
 });
 
+describe("metasprites (M9, SPRITE_EDITOR_PROGRESS.md)", () => {
+  test("Should add a tile to a frame, creating the frame on demand", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: { ...dummySpriteSheet, id: "sprite1", metaspriteMode: true },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.addMetaspriteTile({
+      spriteSheetId: "sprite1",
+      frameIndex: 0,
+      x: 0,
+      y: 0,
+      sliceX: 16,
+      sliceY: 0,
+    });
+
+    const newState = reducer(state, action);
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.length).toBe(1);
+    const tileId = sheet?.metasprites?.[0].tiles[0] as string;
+    expect(tileId).toBeTruthy();
+    expect(sheet?.metaspriteTiles?.[tileId]).toEqual({
+      id: tileId,
+      x: 0,
+      y: 0,
+      sliceX: 16,
+      sliceY: 0,
+      flipX: false,
+      flipY: false,
+      priority: false,
+    });
+  });
+
+  test("Should place a 2nd frame's first tile without disturbing frame 0", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: { ...dummySpriteSheet, id: "sprite1", metaspriteMode: true },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const state1 = reducer(
+      state,
+      actions.addMetaspriteTile({
+        spriteSheetId: "sprite1",
+        frameIndex: 0,
+        x: 0,
+        y: 0,
+        sliceX: 0,
+        sliceY: 0,
+      })
+    );
+    const newState = reducer(
+      state1,
+      actions.addMetaspriteTile({
+        spriteSheetId: "sprite1",
+        frameIndex: 2,
+        x: 16,
+        y: 0,
+        sliceX: 32,
+        sliceY: 0,
+      })
+    );
+
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.length).toBe(3);
+    expect(sheet?.metasprites?.[0].tiles.length).toBe(1);
+    expect(sheet?.metasprites?.[1].tiles.length).toBe(0);
+    expect(sheet?.metasprites?.[2].tiles.length).toBe(1);
+  });
+
+  test("Should move tiles to absolute positions", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["tile1"] }],
+            metaspriteTiles: {
+              tile1: {
+                id: "tile1",
+                x: 0,
+                y: 0,
+                sliceX: 0,
+                sliceY: 0,
+                flipX: false,
+                flipY: false,
+                priority: false,
+              },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.moveMetaspriteTiles({
+      spriteSheetId: "sprite1",
+      metaspriteTiles: [{ metaspriteTileId: "tile1", x: 32, y: -16 }],
+    });
+
+    const newState = reducer(state, action);
+    const tile = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles?.tile1;
+    expect(tile?.x).toBe(32);
+    expect(tile?.y).toBe(-16);
+  });
+
+  test("Should nudge selected tiles by a relative offset", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["tile1"] }],
+            metaspriteTiles: {
+              tile1: {
+                id: "tile1",
+                x: 10,
+                y: 10,
+                sliceX: 0,
+                sliceY: 0,
+                flipX: false,
+                flipY: false,
+                priority: false,
+              },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.moveMetaspriteTilesRelative({
+      spriteSheetId: "sprite1",
+      metaspriteTileIds: ["tile1"],
+      x: -2,
+      y: 5,
+    });
+
+    const newState = reducer(state, action);
+    const tile = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles?.tile1;
+    expect(tile?.x).toBe(8);
+    expect(tile?.y).toBe(15);
+  });
+
+  test("Should flip a single tile horizontally in place (mirrors around its own center)", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["tile1"] }],
+            metaspriteTiles: {
+              tile1: {
+                id: "tile1",
+                x: 0,
+                y: 0,
+                sliceX: 0,
+                sliceY: 0,
+                flipX: false,
+                flipY: false,
+                priority: false,
+              },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.flipXMetaspriteTiles({
+      spriteSheetId: "sprite1",
+      metaspriteTileIds: ["tile1"],
+    });
+
+    const newState = reducer(state, action);
+    const tile = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles?.tile1;
+    expect(tile?.flipX).toBe(true);
+    expect(tile?.x).toBe(0); // a single tile mirrors around its own center -> unchanged position
+  });
+
+  test("Should flip a 2-tile selection as a group, mirroring position around the pair's shared center", () => {
+    // two 16px tiles side by side: x=0 and x=16 (a 32px-wide pose)
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["left", "right"] }],
+            metaspriteTiles: {
+              left: {
+                id: "left",
+                x: 0,
+                y: 0,
+                sliceX: 0,
+                sliceY: 0,
+                flipX: false,
+                flipY: false,
+                priority: false,
+              },
+              right: {
+                id: "right",
+                x: 16,
+                y: 0,
+                sliceX: 16,
+                sliceY: 0,
+                flipX: false,
+                flipY: false,
+                priority: false,
+              },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.flipXMetaspriteTiles({
+      spriteSheetId: "sprite1",
+      metaspriteTileIds: ["left", "right"],
+    });
+
+    const newState = reducer(state, action);
+    const tiles = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles;
+    // the pair swaps sides: the tile that was at x=0 is now at x=16, and vice versa
+    expect(tiles?.left.x).toBe(16);
+    expect(tiles?.right.x).toBe(0);
+    expect(tiles?.left.flipX).toBe(true);
+    expect(tiles?.right.flipX).toBe(true);
+  });
+
+  test("Should reorder tiles to front/back within a frame without touching other frames", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["a", "b", "c"] }],
+            metaspriteTiles: {
+              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+              b: { id: "b", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+              c: { id: "c", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const toFront = reducer(
+      state,
+      actions.sendMetaspriteTilesToFront({
+        spriteSheetId: "sprite1",
+        metaspriteTileIds: ["a"],
+        frameIndex: 0,
+      })
+    );
+    expect(toFront.spriteSheets.entities["sprite1"]?.metasprites?.[0].tiles).toEqual([
+      "b",
+      "c",
+      "a",
+    ]);
+
+    const toBack = reducer(
+      toFront,
+      actions.sendMetaspriteTilesToBack({
+        spriteSheetId: "sprite1",
+        metaspriteTileIds: ["a"],
+        frameIndex: 0,
+      })
+    );
+    expect(toBack.spriteSheets.entities["sprite1"]?.metasprites?.[0].tiles).toEqual([
+      "a",
+      "b",
+      "c",
+    ]);
+  });
+
+  test("Should remove selected tiles from both the frame's list and the sheet's tile map", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["a", "b"] }],
+            metaspriteTiles: {
+              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+              b: { id: "b", x: 16, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.removeMetaspriteTiles({
+      spriteSheetId: "sprite1",
+      metaspriteTileIds: ["a"],
+      frameIndex: 0,
+    });
+
+    const newState = reducer(state, action);
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.[0].tiles).toEqual(["b"]);
+    expect(sheet?.metaspriteTiles?.a).toBeUndefined();
+    expect(sheet?.metaspriteTiles?.b).toBeDefined();
+  });
+
+  test("Should drop a tile that ends up entirely outside the sheet's canvas bounds", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            canvasWidth: 16,
+            canvasHeight: 16,
+            metasprites: [{ id: "meta1", tiles: ["inside", "outside"] }],
+            metaspriteTiles: {
+              inside: { id: "inside", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+              outside: { id: "outside", x: 200, y: 200, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.removeMetaspriteTilesOutsideCanvas({
+      spriteSheetId: "sprite1",
+      frameIndex: 0,
+    });
+
+    const newState = reducer(state, action);
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.[0].tiles).toEqual(["inside"]);
+    expect(sheet?.metaspriteTiles?.inside).toBeDefined();
+    expect(sheet?.metaspriteTiles?.outside).toBeUndefined();
+  });
+
+  test("Should bulk-edit a multi-tile selection's shared fields (e.g. priority)", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta1", tiles: ["a", "b"] }],
+            metaspriteTiles: {
+              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+              b: { id: "b", x: 16, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const action = actions.editMetaspriteTiles({
+      spriteSheetId: "sprite1",
+      metaspriteTileIds: ["a", "b"],
+      changes: { priority: true },
+    });
+
+    const newState = reducer(state, action);
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metaspriteTiles?.a.priority).toBe(true);
+    expect(sheet?.metaspriteTiles?.b.priority).toBe(true);
+  });
+});
+
 test("Should add new music track if loaded while project is open", () => {
   const state: EntitiesState = {
     ...initialState,

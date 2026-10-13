@@ -9,6 +9,10 @@ import { SpritePreview } from "../../components/sprites/SpritePreview";
 import { SpriteSheetPanel } from "../../components/sprites/SpriteSheetPanel";
 import { SpriteFramesStrip } from "../../components/sprites/SpriteFramesStrip";
 import { SpriteInspector } from "../../components/sprites/SpriteInspector";
+import { MetaspriteToolbar } from "../../components/sprites/MetaspriteToolbar";
+import { MetaspriteCanvas } from "../../components/sprites/MetaspriteCanvas";
+import { MetaspriteTilePalette } from "../../components/sprites/MetaspriteTilePalette";
+import { MetaspriteFramesTimeline } from "../../components/sprites/MetaspriteFramesTimeline";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import navigationActions from "../../store/features/navigation/navigationActions";
 import electronActions from "../../store/features/electron/electronActions";
@@ -61,6 +65,10 @@ const SpritesPage = () => {
   const selectedSprite =
     allSprites.find((s) => s.id === navigationId) || allSprites[0];
   const selectedId = selectedSprite?.id || "";
+  const isMetasprite = !!selectedSprite?.metaspriteMode;
+  const frameIndex = useSelector(
+    (state) => state.editor.selectedMetaspriteFrameIndex
+  );
 
   const [selectedStateId, setSelectedStateId] = useState("");
 
@@ -122,9 +130,20 @@ const SpritesPage = () => {
           height: windowHeight - 38,
         }}
       >
-        <SpritePreview id={selectedId} />
-        <SpriteSheetPanel id={selectedId} />
-        <SpriteFramesStrip id={selectedId} />
+        {isMetasprite ? (
+          <>
+            <MetaspriteToolbar id={selectedId} frameIndex={frameIndex} />
+            <MetaspriteCanvas id={selectedId} />
+            <MetaspriteTilePalette id={selectedId} />
+            <MetaspriteFramesTimeline id={selectedId} />
+          </>
+        ) : (
+          <>
+            <SpritePreview id={selectedId} />
+            <SpriteSheetPanel id={selectedId} />
+            <SpriteFramesStrip id={selectedId} />
+          </>
+        )}
       </CenterColumn>
       <SplitPaneHorizontalDivider onMouseDown={startRightPaneResize} />
       <div
