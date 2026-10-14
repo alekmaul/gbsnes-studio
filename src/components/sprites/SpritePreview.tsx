@@ -29,9 +29,9 @@ const Wrapper = styled.div`
   min-height: 0;
 `;
 
-const CanvasFrame = styled.div`
-  width: 128px;
-  height: 128px;
+const CanvasFrame = styled.div<{ canvasSize: number }>`
+  width: ${(props) => Math.max(128, props.canvasSize)}px;
+  height: ${(props) => Math.max(128, props.canvasSize)}px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -43,8 +43,8 @@ const CanvasFrame = styled.div`
   border: 1px solid ${(props) => props.theme.colors.sidebar.border};
 
   canvas {
-    width: 64px;
-    height: 64px;
+    width: ${(props) => props.canvasSize}px;
+    height: ${(props) => props.canvasSize}px;
     image-rendering: pixelated;
   }
 `;
@@ -70,6 +70,13 @@ export const SpritePreview: FC<SpritePreviewProps> = ({ id }) => {
   const sprite = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, id)
   );
+  // User-found: the app toolbar's own zoom button already updates
+  // state.editor.zoomSprite when on the Sprites page, but nothing here
+  // read it back - the preview was stuck at a fixed 4x (64px) regardless.
+  // zoomSprite is a percentage (100 = 1x); 16 is this sheet's own fixed
+  // frame size (every sprite frame on this engine is 16x16).
+  const zoomSprite = useSelector((state: RootState) => state.editor.zoomSprite);
+  const canvasSize = Math.round(16 * (zoomSprite / 100));
   const maxFrame = sprite
     ? Math.max(0, framesPerDirection(sprite.type, sprite.numFrames) - 1)
     : 0;
@@ -108,7 +115,7 @@ export const SpritePreview: FC<SpritePreviewProps> = ({ id }) => {
 
   return (
     <Wrapper>
-      <CanvasFrame>
+      <CanvasFrame canvasSize={canvasSize}>
         <SpriteSheetCanvas spriteSheetId={id} direction="down" frame={frame} />
       </CanvasFrame>
       <Transport>

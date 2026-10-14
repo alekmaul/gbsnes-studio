@@ -16,6 +16,7 @@ import { MetaspriteFramesTimeline } from "../../components/sprites/MetaspriteFra
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import navigationActions from "../../store/features/navigation/navigationActions";
 import electronActions from "../../store/features/electron/electronActions";
+import editorActions from "../../store/features/editor/editorActions";
 import { Button } from "../../components/ui/buttons/Button";
 import { HelpIcon } from "../../components/ui/icons/Icons";
 import l10n from "../../lib/helpers/l10n";
@@ -74,7 +75,16 @@ const SpritesPage = () => {
 
   useEffect(() => {
     setSelectedStateId("");
-  }, [selectedId]);
+    // User-found: "when elephant is selected, i see nothing" - the free-form
+    // canvas's frame index (and pending tile-stamp pick) live in global
+    // editor state, not per-sprite, so switching sheets kept whatever frame
+    // index was last active - easily a frame the newly-selected sheet has
+    // no tiles on (or doesn't even have), making the canvas look empty even
+    // though an earlier frame has real content. Reset both on every sheet
+    // switch, same as selectedStateId just above.
+    dispatch(editorActions.setSelectedMetaspriteFrameIndex(0));
+    dispatch(editorActions.setSpriteTileSelection(undefined));
+  }, [selectedId, dispatch]);
 
   const [leftPaneWidth, , startLeftPaneResize] = useResizable({
     initialSize: 220,

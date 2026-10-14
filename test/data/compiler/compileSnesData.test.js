@@ -181,11 +181,12 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // header(8) + sprite-slot table(32, M7) + parallax table(6) + playerHit
     // table(6) + 0 actors + 0 triggers = 52 bytes before the ceil(w*h/8) =
     // 45-byte collision bitmap, which is itself followed by the [40]
-    // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md) -
-    // appended at the very end of the blob specifically so it never shifts
-    // any of the fixed-offset assertions above/below it.
+    // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md) and
+    // then the [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4) -
+    // both appended at the very end of the blob specifically so neither
+    // ever shifts any of the fixed-offset assertions above/below them.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40);
+    expect(blob.length).toBe(52 + colLen + 40 + 16);
     const colByte = blob[52];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).
@@ -203,6 +204,128 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // happened to land within the first colLen indices (mostly garbage
     // relative to real tile positions), not real per-tile solidity.
     expect(blob.slice(53, 52 + colLen)).toEqual(new Array(colLen - 1).fill(0));
+  });
+});
+
+describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", () => {
+  // Mirrors this project's own established "minimal repro" convention: a
+  // from-scratch project with one actor on a metaspriteMode sprite sheet,
+  // reusing Test_Math's real static.png (16x16, a single real tile region)
+  // as the source - two placed tiles both referencing that same region (a
+  // plain stacked 16x16+16x16 = effectively a 16x32 composed sprite), which
+  // also exercises cross-tile VRAM dedup (two tiles, same source region,
+  // should collapse to the same packed quad).
+  const w = 20;
+  const h = 18;
+  const makeProject = () => ({
+    _version: "2.0.0",
+    _release: "6",
+    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
+    variables: [],
+    spriteSheets: [
+      {
+        id: "meta0",
+        filename: "static.png",
+        numFrames: 1,
+        metaspriteMode: true,
+        animationType: "fixed",
+        canvasWidth: 16,
+        canvasHeight: 32,
+        metaspriteTiles: {
+          top: { id: "top", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+          bottom: { id: "bottom", x: 0, y: 16, sliceX: 0, sliceY: 0, flipX: true, flipY: false, priority: true },
+        },
+        metasprites: [{ id: "frame0", tiles: ["top", "bottom"] }],
+      },
+    ],
+    scenes: [
+      {
+        id: "s0",
+        name: "metaspriteTest",
+        backgroundId: "bg",
+        width: w,
+        height: h,
+        actors: [{ id: "a0", x: 1, y: 1, spriteSheetId: "meta0", script: [] }],
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("two tiles sharing a source region dedupe to the same VRAM quad, with correct dx/dy/flags", async () => {
+    const warnings = [];
+    const out = await compileSnesData(makeProject(), {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    const blob = out.stats.sceneBlobs[0];
+    // header(8) + sprite-slot(32) + parallax(6) + playerHit(6) + 1 actor
+    // (19 bytes/entry) + 0 triggers = 71 bytes before the collision bitmap,
+    // then [40] extra-pose, then the per-slot metasprite section (same
+    // layout the collision-bitmap test above documents, +19 for this
+    // scene's 1 actor). This fixture sets no project/scene-wide player
+    // sprite sheet, so the one actor's own sheet fills slot 0 (not slot 1 -
+    // there's no separate "player" entry reserving slot 0 when nothing
+    // configures one), confirmed directly against the real compiled bytes.
+    const colLen = Math.ceil((w * h) / 8);
+    const metaOffset = 8 + 32 + 6 + 6 + 19 + 0 + colLen + 40;
+
+    const slot0Len = blob[metaOffset] | (blob[metaOffset + 1] << 8);
+    expect(slot0Len).toBeGreaterThan(0);
+    const payload = blob.slice(metaOffset + 2, metaOffset + 2 + slot0Len);
+    // every other slot (1-7) is untouched -> [0,0] each.
+    for (let k = 1; k < 8; k++) {
+      const off = metaOffset + 2 + slot0Len + (k - 1) * 2;
+      expect(blob[off] | (blob[off + 1] << 8)).toBe(0);
+    }
+    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2);
+    // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
+    // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
+    // own convention - offset is relative to the start of the payload).
+    const frameOffset0 = payload[0] | (payload[1] << 8);
+    expect(frameOffset0).toBe(2);
+    const entryCount = payload[frameOffset0];
+    expect(entryCount).toBe(2);
+
+    const entryBytes = (i) => payload.slice(frameOffset0 + 1 + i * 4, frameOffset0 + 1 + i * 4 + 4);
+    const toS8 = (b) => (b >= 128 ? b - 256 : b);
+
+    const [dxTop, dyTop, baseTop, flagsTop] = entryBytes(0);
+    // canvasWidth=16 -> dx = tile.x(0) - 16/2 = -8, matching the legacy
+    // actor_render_tile anchor exactly. canvasHeight=32 -> dy = tile.y(0) -
+    // 32 = -32 (the top tile sits a full 16px above the legacy -16 anchor).
+    expect(toS8(dxTop)).toBe(-8);
+    expect(toS8(dyTop)).toBe(-32);
+    expect(flagsTop).toBe(0); // no flip/priority authored on "top"
+
+    const [dxBottom, dyBottom, baseBottom, flagsBottom] = entryBytes(1);
+    expect(toS8(dxBottom)).toBe(-8);
+    // tile.y(16) - canvasHeight(32) = -16, exactly the legacy single-tile
+    // anchor - the "bottom" tile of a 16x32 composed sprite lands exactly
+    // where a plain 16x16 legacy sprite would.
+    expect(toS8(dyBottom)).toBe(-16);
+    expect(flagsBottom).toBe(1 | 4); // flipX + priority authored on "bottom"
+
+    // Both tiles reference the exact same source region (sliceX=0,sliceY=0,
+    // static.png's only 16x16 area) - createScenePacker.alloc() should
+    // dedupe them to the identical VRAM placement.
+    expect(baseTop).toBe(baseBottom);
+
+    expect(warnings).toEqual([]);
+  });
+
+  test("sprite_oam_ids_for_slot (M7) gets a real 2-entry cost for this slot, not the placeholder 1", async () => {
+    const out = await compileSnesData(makeProject(), {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    // sprite_oam_ids[8] is the 4th of the 4 parallel [8]-byte arrays inside
+    // the [32]-byte sprite-slot table (sprite_type/frames/pal/oam_ids),
+    // starting right after the header's own 8 bytes.
+    const oamIdsOffset = 8 + 3 * 8;
+    expect(blob[oamIdsOffset]).toBe(2); // slot 0 = this actor's own sheet
   });
 });
 

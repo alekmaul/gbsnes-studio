@@ -131,6 +131,14 @@ const unsigned char *sprite_slot_for_index = 0;
  * always fills every entry up to scene_num_actors before anything reads it. */
 u16 actor_oam_base[MAX_ACTORS];
 
+/* M9.4 - see scene.h's own comment. All computed fresh in SceneInit, right
+ * after the actor_oam_base[] prefix-sum loop, before anything else reads
+ * them. */
+u16 actor_oam_total;
+u16 emote_oid;
+u16 projectile_oid_base;
+u16 avatar_oid;
+
 /* M8.3 (SPRITE_EDITOR_PROGRESS.md): a slot's "extra" poses (anything beyond
  * its own primary/frame-0 pose, which still always lives at a fixed address
  * derived from the slot number itself - see actor_render_tile's own `fo`)
@@ -151,6 +159,10 @@ u8 extra_pose_up_a[SPRITE_SLOTS];
 u8 extra_pose_up_b[SPRITE_SLOTS];
 u8 extra_pose_side_a[SPRITE_SLOTS];
 u8 extra_pose_side_b[SPRITE_SLOTS];
+/* M9.4 - see scene.h's own comment. .bss isn't pre-zeroed either, so
+ * SceneInit always writes every entry (NULL or a real pointer) before
+ * SceneRenderActors ever reads one. */
+const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
 
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
  * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
@@ -205,11 +217,13 @@ static u8 player_iframes = 0;
  * SceneRenderActors) - now genuinely distinct from AVATAR_OID because both
  * are derived from the same tight scheme instead of two independently-hand-
  * picked constants that happened to collide. All three (EMOTE_OID/
- * PROJECTILE_OID_BASE/AVATAR_OID) assume every actor costs exactly 1 OAM id
- * (true today - see actor_oam_base[]'s own comment in SceneInit); once an
- * actor can cost more, these need to become runtime values derived from the
- * real actor_oam_base[scene_num_actors] total instead of compile-time
- * constants - flagged, not silently assumed to still work.
+ * PROJECTILE_OID_BASE/AVATAR_OID) assumed every actor costs exactly 1 OAM id
+ * - flagged here, at the time, as needing to become real runtime values the
+ * moment that stopped being true. M9.4 (SPRITE_EDITOR_PROGRESS.md) is that
+ * moment: all three are now real u16 globals (projectile_oid_base, emote_oid,
+ * avatar_oid - scene.h), computed once in SceneInit right after the
+ * actor_oam_base[] prefix-sum loop from its own real running total
+ * (actor_oam_total), not compile-time constants anymore.
  *
  * M8.3 correction (SPRITE_EDITOR_PROGRESS.md, user-found: snesgbs2's Sample
  * Town - 9 actors on screen at once - rendered no sprites at all): the
@@ -235,8 +249,9 @@ static u8 player_iframes = 0;
  * exact value once `<<2` is restored; the actual pre-M7 bug was that
  * PROJECTILE_OID_BASE and AVATAR_OID were independently hand-picked
  * *equal* expressions, not that either was wrong to scale by 4. `<<2` is
- * restored here and on every other OID derived the same way. */
-#define PROJECTILE_OID_BASE ((u16)(MAX_ACTORS + 1) << 2)
+ * restored here and on every other OID derived the same way (now via
+ * projectile_oid_base, a real runtime value - see this comment's own first
+ * paragraph and scene.h). */
 
 /* SCENE_PUSH_STATE / SCENE_POP_STATE / SCENE_STATE_RESET / SCENE_POP_ALL_STATE.
  * A small stack of (scene, player tile pos, player facing) snapshots, e.g. for
@@ -718,6 +733,14 @@ u8 frames_len_for(u8 sprite_type, u8 slot)
     if (sprite_type == SPRITE_ACTOR_ANIMATED) return 2;
     if (sprite_type == SPRITE_STATIC)
     {
+        /* M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite) sheet's
+         * "fixed" animationType has no 2-6 cap - its real frame count is
+         * however many frames were authored, read straight from
+         * sprite_frames_for_slot[] (compileSnesData.js already clamps it to
+         * 255 there). Only ever true for a metaspriteMode slot - every
+         * legacy sheet still falls through to the capped check below,
+         * unchanged. */
+        if (metasprite_frame_base[slot]) return sprite_frames_for_slot[slot];
         /* n == 3 is a directional SPRITE_ACTOR sheet (its 3 frames are laid
          * out down/up/side, not for a linear cycle) - leave it at frame 0. */
         u8 n = sprite_frames_for_slot[slot];
@@ -1043,16 +1066,16 @@ void SceneInit(void)
         actors[i].enabled = 0;
         actors[i].active = 0;
         actors[i].update_ctx = UPDATE_CTX_NONE;
-        /* Hide the unused OAM slots once here - SceneRenderActors only walks
-         * 0..scene_num_actors every frame, so it never touches these again.
-         * M8.3 correction: `i << 2`, not plain `i` - oamSetVisible's `id` is
-         * a byte offset (4 bytes/sprite), same fix as PROJECTILE_OID_BASE's
-         * own comment explains (M7 mistakenly dropped this). Correct as long
-         * as every sprite_oam_ids_for_slot[] entry stays 1 (true today -
-         * nothing yet emits a real multi-tile-per-pose cost); once a cost
-         * can exceed 1, this needs to hide up through the real worst-case
-         * high-water-mark id instead of MAX_ACTORS-1. */
-        oamSetVisible((u16)i << 2, OBJ_HIDE);
+        /* M9.4: no longer hides this slot's own OAM id here (i<<2) - that
+         * only ever worked because EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID
+         * were fixed constants always placed right after MAX_ACTORS' worth
+         * of ids. Now that those are real per-scene values (can be smaller
+         * than MAX_ACTORS*4), a flat 0..MAX_ACTORS-1 sweep here could either
+         * clobber a lower-numbered emote/projectile/avatar id before it's
+         * even computed, or (just as bad) stop short of a stale id a
+         * previous, bigger-cast scene left visible. See the single
+         * actor_oam_total..hardware-ceiling sweep below instead, done once
+         * real OIDs are known. */
     }
 
     /* M7 groundwork (SPRITE_EDITOR_PROGRESS.md) - real per-actor OAM id
@@ -1087,6 +1110,37 @@ void SceneInit(void)
         actor_oam_base[i] = j;
         j += (u16)sprite_oam_ids_for_slot[actors[i].frame_offset >> 1] << 2;
     }
+    /* M9.4 (SPRITE_EDITOR_PROGRESS.md): real runtime OIDs, replacing the old
+     * MAX_ACTORS-derived compile-time constants - see scene.h's own comment.
+     * `j` here is this loop's own final running total: the real byte-offset
+     * just past the last actor's OAM range THIS SCENE actually uses. Placed
+     * back-to-back (emote, then the whole projectile pool, then avatar),
+     * same tight scheme the old constants used, just computed instead of
+     * hand-picked. Unlike the old fixed constants, these are now genuinely
+     * scene-relative - a scene with fewer actors than MAX_ACTORS-1 gets
+     * smaller values than the old 80/84/100, not the same ones (only a
+     * scene using every one of the MAX_ACTORS-1 real actor slots would
+     * land back on those exact old numbers). */
+    actor_oam_total = j;
+    emote_oid = actor_oam_total;
+    projectile_oid_base = emote_oid + 4;
+    avatar_oid = projectile_oid_base + ((u16)MAX_PROJECTILES << 2);
+
+    /* Because these are now scene-relative, a scene switch from a
+     * bigger-cast scene to a smaller one can leave a stale, still-visible
+     * sprite stranded at an OAM id this scene's own actor_oam_total..
+     * avatar_oid range no longer reaches (e.g. an avatar visible right as
+     * SWITCH_SCENE fires, landing at a higher id than the new scene's own,
+     * smaller avatar_oid). Sweep everything from this scene's own real
+     * total through the full 128-sprite hardware ceiling unconditionally -
+     * emote/projectile/avatar's own per-frame update routines immediately
+     * re-establish the right state for whichever of those ids this scene
+     * actually uses, same "hide now, let the owning subsystem redraw next
+     * frame" reasoning the old per-actor-slot loop above already used. */
+    for (j = actor_oam_total; j < ((u16)128 << 2); j += 4)
+    {
+        oamSetVisible(j, OBJ_HIDE);
+    }
 
     /* On Update subsystem (v4): fresh pool for this scene (a previous
      * scene's contexts point at bytecode addresses that are meaningless
@@ -1111,7 +1165,7 @@ void SceneInit(void)
          * fix as PROJECTILE_OID_BASE's own comment and actor_oam_base[]'s
          * prefix sum above (M7 mistakenly dropped this). Each projectile is
          * still exactly 1 real OAM entry. */
-        oamSetVisible(PROJECTILE_OID_BASE + ((u16)i << 2), OBJ_HIDE);
+        oamSetVisible(projectile_oid_base + ((u16)i << 2), OBJ_HIDE);
     }
     /* Contact-damage iframes shouldn't carry across a scene switch either. */
     player_iframes = 0;
@@ -1143,11 +1197,12 @@ void SceneInit(void)
     p += col_bytes;
 
     /* M8.3: [40] extra-pose half-tile-base table - 5 arrays of SPRITE_SLOTS
-     * bytes (down-B, up-A, up-B, side-A, side-B), appended at the very end
-     * of the scene blob (after the collision bitmap, whose own length is
-     * variable) - see compileSnesData.js's own comment at this table's
-     * emission for why it lives here instead of alongside the [32]
-     * sprite-slot table above. */
+     * bytes (down-B, up-A, up-B, side-A, side-B), appended after the
+     * collision bitmap (whose own length is variable) - see
+     * compileSnesData.js's own comment at this table's emission for why it
+     * lives here instead of alongside the [32] sprite-slot table above. The
+     * M9.4 metasprite-frame-data section (below) is now the real last thing
+     * in the scene blob instead. */
     for (i = 0; i < SPRITE_SLOTS; i++)
     {
         extra_pose_down_b[i] = p[i];
@@ -1155,6 +1210,21 @@ void SceneInit(void)
         extra_pose_up_b[i] = p[2 * SPRITE_SLOTS + i];
         extra_pose_side_a[i] = p[3 * SPRITE_SLOTS + i];
         extra_pose_side_b[i] = p[4 * SPRITE_SLOTS + i];
+    }
+    p += 5 * SPRITE_SLOTS;
+
+    /* M9.4 (SPRITE_EDITOR_PROGRESS.md): [2*SPRITE_SLOTS] trailing per-slot
+     * free-form metasprite frame data - see scene.h's own comment on
+     * metasprite_frame_base and compileSnesData.js's emission. Self-skipping
+     * (slotByteLen covers this slot's whole frameOffset table + entry data),
+     * so no separate size bookkeeping is needed here - p always ends up
+     * exactly past the end of the scene blob once this loop finishes. */
+    for (i = 0; i < SPRITE_SLOTS; i++)
+    {
+        u16 slotByteLen = p[0] | ((u16)p[1] << 8);
+        p += 2;
+        metasprite_frame_base[i] = slotByteLen ? p : 0;
+        p += slotByteLen;
     }
 
     actor_move_settings = 0;
@@ -2869,10 +2939,10 @@ static void SceneUpdateEmote(void)
     }
 }
 
-/* M8.3 correction - see PROJECTILE_OID_BASE's own comment above: `<<2` is
- * required (oamSet's `id` is a byte offset, not a sprite index), restored
- * here after M7 mistakenly dropped it. */
-#define EMOTE_OID ((u16)MAX_ACTORS << 2)
+/* M8.3 correction - see the PROJECTILE_OID_BASE comment above (scene.h's
+ * emote_oid doc): `<<2` is required (oamSet's `id` is a byte offset, not a
+ * sprite index), restored here after M7 mistakenly dropped it. M9.4: a real
+ * runtime value (emote_oid, scene.h) instead of a compile-time constant. */
 
 // M7-cont. sprite frames, M8.3 (SPRITE_EDITOR_PROGRESS.md) VRAM addressing.
 // A 3-frame SPRITE_ACTOR sheet has one pose per direction (down =
@@ -2946,6 +3016,60 @@ static u16 actor_render_tile(ACTOR *a, u8 *flip_out)
     return pose_b ? (u16)extra_pose_down_b[slot] << 1 : fo;
 }
 
+/* M9.4 (SPRITE_EDITOR_PROGRESS.md): resolves which authored metasprite
+ * frame index an actor's current pose/direction maps to - the SAME index
+ * space a metaspriteMode sheet's own frames are authored in
+ * (entitiesTypes.ts/MetaspriteFramesTimeline.tsx: a "fixed"/"multi"/
+ * "multi_movement" metasprite sheet follows the exact same frame
+ * convention a legacy sheet's own frames already do), confirmed directly
+ * against actor_render_tile's own SPRITE_STATIC branch above: frame 0-5
+ * already resolve to pose index 0-5 in exactly this order (primary,
+ * down-B, up-A, up-B, side-A, side-B) - so no remapping is needed between
+ * authoring and this lookup.
+ * Deliberately duplicated from actor_render_tile rather than refactored
+ * into it - that function is the single most bug-history-documented piece
+ * of this file (three real OAM X/Y-wraparound bugs and a priority-layer
+ * bug, all recorded as comments right there); this keeps the legacy path
+ * provably untouched, and this new function only ever has to resolve a
+ * plain pose INDEX, not a real VRAM tile address. */
+static u8 actor_metasprite_pose(ACTOR *a, u8 *flip_out)
+{
+    u8 st = a->sprite_type;
+    u8 pose_b = 0;
+
+    if (st == SPRITE_STATIC)
+    {
+        *flip_out = a->flip;
+        return a->frame;
+    }
+    if (st == SPRITE_ACTOR_ANIMATED && (a->frame & 1))
+    {
+        pose_b = 1;
+    }
+    /* SPRITE_ACTOR (a "multi" metasprite sheet) authors exactly 3 COMPACT
+     * frames (down,up,side - MetaspriteFramesTimeline.tsx's own
+     * frameCountFor), not 6 - compileSnesData.js's encodeMetaspriteSlot
+     * packs sheet.metasprites[] 1:1 with no gap-filling, so this has to
+     * return compact indices {0,1,2} for that type, not the 6-slot
+     * numbering SPRITE_ACTOR_ANIMATED's own 6 real authored frames already
+     * naturally match. Caught before the side-mirroring verification below
+     * - reading pose index 4 against a 3-entry frameOffset table would have
+     * read past the real data. */
+    if (a->dir_y < 0) /* up */
+    {
+        *flip_out = 0;
+        return (st == SPRITE_ACTOR) ? 1 : (pose_b ? 3 : 2);
+    }
+    if (a->dir_x != 0) /* side */
+    {
+        *flip_out = a->dir_x < 0 ? 1 : 0;
+        return (st == SPRITE_ACTOR) ? 2 : (pose_b ? 5 : 4);
+    }
+    /* down / idle */
+    *flip_out = 0;
+    return (st == SPRITE_ACTOR) ? 0 : (pose_b ? 1 : 0);
+}
+
 static void SceneRenderActors(void)
 {
     u8 i, flip;
@@ -2954,11 +3078,24 @@ static void SceneRenderActors(void)
                * has to stay wide the whole way there. */
     u16 oid;
     s16 x_rel, y_rel;
+    u8 slot; /* M9.4: hoisted so both the metasprite and legacy branches
+              * below (and the disabled/hidden branch) share one lookup. */
+    /* M9.4: a metasprite actor's own per-tile render locals. Declared here
+     * (not in a nested block) matching this function's own existing flat
+     * declaration style. */
+    u8 meta_pose, meta_mirror, meta_j, meta_n, meta_flags;
+    u8 meta_flip_x, meta_flip_y, meta_pri, meta_visible;
+    s8 meta_dx, meta_dy;
+    s16 meta_x, meta_y;
+    u16 meta_tile, meta_oid, meta_frame_off;
+    const unsigned char *meta_base;
+    const unsigned char *meta_e;
     /* Only the used slots - SceneInit hid slots > scene_num_actors once. */
     for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
         ACTOR *a = &actors[i];
         oid = actor_oam_base[i]; /* M7: real per-actor base, see scene.h */
+        slot = a->frame_offset >> 1;
         x_rel = a->x - scroll_x - 8;
         y_rel = a->y - scroll_y - 16;
         /* v4 fix (user-found, No$sns: "the rock and duck [show up] at the
@@ -3011,7 +3148,121 @@ static void SceneRenderActors(void)
          * this target's real NTSC visible height (also used verbatim by
          * cam_max_y two lines below/game.c's cam_max_y - no named constant
          * exists for it here). */
-        if (a->enabled && !sprites_hidden &&
+        if (metasprite_frame_base[slot])
+        {
+            /* M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite)
+             * actor - loop over this frame's own placed tiles instead of
+             * the single oamSet the legacy branch below still does
+             * unchanged. See scene.h's metasprite_frame_base comment for
+             * the wire format and encodeMetaspriteSlot (compileSnesData.js)
+             * for how it's built. */
+            if (a->enabled && !sprites_hidden)
+            {
+                meta_pose = actor_metasprite_pose(a, &flip);
+                /* User-asked (M9.4): a "multi"/"multi_movement" sheet's
+                 * side pose auto-mirrors the whole placed-tile set for the
+                 * opposite facing direction, matching the existing
+                 * single-tile convention every other actor sheet already
+                 * has (actor_render_tile's own dir_x<0 hardware hflip).
+                 * SPRITE_STATIC's `flip` is a separate, per-actor manual
+                 * flip control (a->flip) - XORed into each tile's own
+                 * flipX below with no position change, not this same
+                 * whole-composition mirror (never asked for, and a
+                 * position-mirror for a non-directional sheet has no
+                 * "opposite side" to mirror toward). */
+                meta_mirror = (a->sprite_type != SPRITE_STATIC) && flip;
+                meta_base = metasprite_frame_base[slot];
+                meta_frame_off = meta_base[(u16)meta_pose * 2] |
+                                  ((u16)meta_base[(u16)meta_pose * 2 + 1] << 8);
+                meta_e = meta_base + meta_frame_off;
+                meta_n = *meta_e++;
+                /* Avoids a comma-operator increment clause
+                 * (`meta_j++, meta_e += 4`) - untested syntax on this
+                 * engine, no existing loop anywhere in this file uses one.
+                 * Ruled out as the cause of this change's own real Mesen
+                 * bug (that was compileSnesData.js's spriteTypeForActor,
+                 * see its own comment) by testing this rewrite in
+                 * isolation first and seeing the exact same symptom
+                 * persist - kept anyway, advancing meta_e explicitly costs
+                 * nothing and avoids relying on untested syntax. */
+                for (meta_j = 0; meta_j < meta_n; meta_j++)
+                {
+                    meta_dx = (s8)meta_e[0];
+                    meta_dy = (s8)meta_e[1];
+                    meta_tile = (u16)meta_e[2] << 1;
+                    meta_flags = meta_e[3];
+                    meta_flip_x = meta_flags & 1;
+                    meta_flip_y = (meta_flags & 2) ? 1 : 0;
+                    meta_pri = (meta_flags & 4) ? 3 : 2;
+                    if (meta_mirror)
+                    {
+                        /* Mirrors this tile's own position around the
+                         * canvas's horizontal center (dx is already
+                         * center-relative - see compileSnesData.js's own
+                         * dx = tile.x - canvasWidth/2) and flips its pixels
+                         * to match - a rigid mirror of the whole
+                         * composition, not a per-tile-independent flip. */
+                        meta_dx = (s8)(-(s16)meta_dx - 16);
+                        meta_flip_x = meta_flip_x ? 0 : 1;
+                    }
+                    else if (a->sprite_type == SPRITE_STATIC && a->flip)
+                    {
+                        meta_flip_x = meta_flip_x ? 0 : 1;
+                    }
+                    meta_x = a->x - scroll_x + meta_dx;
+                    meta_y = a->y - scroll_y + meta_dy;
+                    meta_oid = oid + ((u16)meta_j << 2);
+                    /* Same off-screen culling / OAM X/Y-wraparound safety
+                     * this function's own single-tile path below needs
+                     * (see its extensive comment) - a wide/tall composed
+                     * sprite's outer tiles can cross these bounds even when
+                     * the actor's own anchor doesn't, so each tile needs
+                     * its own check, not just the actor's.
+                     * Deliberately NOT a single 4-term && chain, matching
+                     * this engine's own established defensive convention
+                     * for new code (the documented 816-tcc 3+-term &&/||
+                     * miscompile class - can_step/in_box/col_solid's own
+                     * fix history) - though the real bug hit during this
+                     * change's own Mesen verification turned out to be
+                     * elsewhere (compileSnesData.js's spriteTypeForActor,
+                     * see its own comment), not this chain; kept this way
+                     * anyway since it costs nothing and matches precedent. */
+                    meta_visible = 1;
+                    if (meta_x <= -32) meta_visible = 0;
+                    if (meta_x >= 256) meta_visible = 0;
+                    if (meta_y <= -32) meta_visible = 0;
+                    if (meta_y >= 224) meta_visible = 0;
+                    if (meta_visible)
+                    {
+                        oamSetEx(meta_oid, OBJ_LARGE, OBJ_SHOW);
+                        oamSet(meta_oid, (u16)meta_x, (u16)meta_y, meta_pri,
+                               meta_flip_x, meta_flip_y, meta_tile,
+                               sprite_pal_for_slot[slot]);
+                    }
+                    else
+                    {
+                        oamSetVisible(meta_oid, OBJ_HIDE);
+                    }
+                    meta_e += 4;
+                }
+                /* Hide this actor's own unused trailing sub-ids (this
+                 * frame has fewer tiles than this slot's own cross-frame
+                 * worst case, sprite_oam_ids_for_slot[slot]) so a smaller
+                 * frame never leaves a stale sprite from a bigger one. */
+                for (; meta_j < sprite_oam_ids_for_slot[slot]; meta_j++)
+                {
+                    oamSetVisible(oid + ((u16)meta_j << 2), OBJ_HIDE);
+                }
+            }
+            else
+            {
+                for (meta_j = 0; meta_j < sprite_oam_ids_for_slot[slot]; meta_j++)
+                {
+                    oamSetVisible(oid + ((u16)meta_j << 2), OBJ_HIDE);
+                }
+            }
+        }
+        else if (a->enabled && !sprites_hidden &&
             x_rel > -32 && x_rel < 256 &&
             y_rel > -32 && y_rel < 224)
         {
@@ -3073,14 +3324,14 @@ static void SceneRenderActors(void)
         ACTOR *ea = &actors[emote_actor];
         // v4 fix: oamSetEx before oamSet - same X-MSB-clobbering reasoning
         // as the actor oamSet above.
-        oamSetEx(EMOTE_OID, OBJ_LARGE, OBJ_SHOW);
-        oamSet(EMOTE_OID, ea->x - scroll_x - 8,
+        oamSetEx(emote_oid, OBJ_LARGE, OBJ_SHOW);
+        oamSet(emote_oid, ea->x - scroll_x - 8,
                ea->y - scroll_y - 32, 2, 0, 0,
                EMOTE_TILE0 + emote_id * 2, 1);
     }
     else
     {
-        oamSetVisible(EMOTE_OID, OBJ_HIDE);
+        oamSetVisible(emote_oid, OBJ_HIDE);
     }
 }
 
@@ -3133,7 +3384,7 @@ void ProjectilesUpdate(void)
         u8 tile, flip;
 
         if (!projectiles[i].active) continue;
-        oid = PROJECTILE_OID_BASE + ((u16)i << 2); /* M8.3: byte offset, see the define's own comment */
+        oid = projectile_oid_base + ((u16)i << 2); /* M8.3: byte offset, see scene.h's own comment; M9.4: a real runtime value */
 
         if (projectiles[i].ttl)
         {

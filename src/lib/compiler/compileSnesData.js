@@ -110,6 +110,15 @@ const ensureSnesUiAssets = async (projectRoot, warnings) => {
 
 const clampByte = (n) => Math.max(0, Math.min(255, n | 0));
 
+// M9.4 (SPRITE_EDITOR_PROGRESS.md): a signed byte (s8, -128..127), two's
+// -complement encoded for scene.c's own (s8)e[0]-style cast to read back -
+// used for a free-form metasprite tile's dx/dy, which can be negative
+// (a tile placed left of / above the actor's own anchor).
+const toS8Byte = (n) => {
+  const clamped = Math.max(-128, Math.min(127, Math.round(n)));
+  return clamped & 0xff;
+};
+
 // A per-scene/actor/trigger script reference (event_ptrs[] index) is a
 // project-wide index shared across every scene's scripts, cumulatively
 // pushed as compilation proceeds scene by scene - so it routinely exceeds
@@ -485,11 +494,23 @@ const compileSnesData = async (
   for (let i = 0; i < allSpriteIds.length; i++) {
     const id = allSpriteIds[i];
     const sheet = spriteById(id);
+    // M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite) sheet's
+    // authored tile placements (sheet.metasprites/metaspriteTiles) go
+    // through a different conversion - imageToFreeformMetaspriteData, not
+    // imageToSpriteData's pixel-geometry frame-count inference, since a
+    // free-form sheet's frame content isn't "N 16x16 columns in a row"
+    // anymore. buildSceneSprites (below) branches on sheet.metaspriteMode
+    // to know which shape of conv object it's looking at.
     // eslint-disable-next-line no-await-in-loop
-    const conv = await snesgfx.imageToSpriteData(
-      assetFilename(projectRoot, "sprites", sheet),
-      { animationTypeOverride: sheet.animationType }
-    );
+    const conv = sheet.metaspriteMode
+      ? await snesgfx.imageToFreeformMetaspriteData(
+          assetFilename(projectRoot, "sprites", sheet),
+          { frames: sheet.metasprites, tiles: sheet.metaspriteTiles }
+        )
+      : await snesgfx.imageToSpriteData(
+          assetFilename(projectRoot, "sprites", sheet),
+          { animationTypeOverride: sheet.animationType }
+        );
     conv.warnings.forEach(warnings);
     spriteConv[id] = conv;
   }
@@ -585,6 +606,44 @@ const compileSnesData = async (
   // gating whether the engine ever actually reads it).
   const EXTRA_POSE_KEYS = ["downB", "upA", "upB", "sideA", "sideB"];
 
+  // M9.4 (SPRITE_EDITOR_PROGRESS.md): metaspriteMode is orthogonal to
+  // animationType - a Free-form sheet can still be "fixed"/"multi"/
+  // "multi_movement" (entitiesTypes.ts), it only changes what one frame's
+  // *content* is, not how many frames there are or what they mean. So
+  // sprite_type_for_slot needs no new value for a metasprite-mode slot -
+  // same 3 real engine sprite types as the legacy path, just driven
+  // directly from the authored animationType instead of inferred from a
+  // sheet's own pixel width the way detectActorFrameCountAndType does for
+  // a plain sheet (snesgfx.js).
+  const animationTypeToSpriteType = (animationType) => {
+    if (animationType === "multi") return 1; // SPRITE_ACTOR
+    if (animationType === "multi_movement") return 2; // SPRITE_ACTOR_ANIMATED
+    return 0; // "fixed", or unset - SPRITE_STATIC
+  };
+
+  // M9.4: encodes one metasprite-mode slot's per-frame tile-placement data -
+  // see scene.h's own metasprite_frame_base comment for the full wire
+  // format. frameBlocks[frameIndex] is an array of already-VRAM-placed
+  // {dx, dy, halfTileBase, flags} entries (packer.alloc() already ran by
+  // the time this is called). Returns just the slot's own payload bytes
+  // (the frameOffset table + entry blocks) - the caller prefixes a u16
+  // slotByteLen when assembling the final per-slot bytes.
+  const encodeMetaspriteSlot = (frameBlocks) => {
+    const frameBytes = frameBlocks.map((entries) =>
+      [].concat(
+        entries.length,
+        ...entries.map((e) => [e.dx, e.dy, e.halfTileBase & 0xff, e.flags & 0xff])
+      )
+    );
+    let offset = frameBlocks.length * 2; // bytes, right after the frameOffset table itself
+    const frameOffsets = [];
+    frameBytes.forEach((bytes) => {
+      frameOffsets.push(...u16b(offset));
+      offset += bytes.length;
+    });
+    return [].concat(frameOffsets, ...frameBytes);
+  };
+
   // Build one scene's OBJ sheet (16 KB, 512 tiles - 2 full OBJ "name tables",
   // see CLAUDE.md's "Fixed VRAM layout" entry) + palette image (256 B) +
   // per-slot type/frames/palette/extra-pose arrays. Tiles 0-95 (placeholder +
@@ -630,11 +689,14 @@ const compileSnesData = async (
     const frames = new Array(SPRITE_SLOTS).fill(1);
     const pals = [];
     for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
-    // Every actor is still exactly 1 real OAM hardware sprite per frame -
-    // M8.3 only changes WHERE that one sprite's tile data lives in VRAM
-    // (dynamic per-scene packing instead of a fixed compile-time offset),
-    // not how many OAM entries it costs. actor_oam_base[]'s own prefix sum
-    // (scene.c, M7 groundwork) is unaffected.
+    // A legacy (non-metaspriteMode) actor is still exactly 1 real OAM
+    // hardware sprite per frame - M8.3 only changes WHERE that one sprite's
+    // tile data lives in VRAM (dynamic per-scene packing instead of a fixed
+    // compile-time offset), not how many OAM entries it costs.
+    // M9.4: a metaspriteMode slot's real cost (set below, in the per-slot
+    // loop) is its own worst-case simultaneous-tile count across its
+    // frames - actor_oam_base[]'s prefix sum (scene.c, M7 groundwork) reads
+    // this array generically either way, no change needed there.
     const oamIds = new Array(SPRITE_SLOTS).fill(1);
     const extraPose = {};
     EXTRA_POSE_KEYS.forEach((key) => {
@@ -645,14 +707,73 @@ const compileSnesData = async (
       if (base === null) return; // over budget - packer already warned once
       extraPose[key][k] = base >> 1; // half-tile-base, fits a u8
     };
+    // M9.4: null = not metasprite-mode/empty for this slot (-> [0,0] in the
+    // final blob); a real slot's own encodeMetaspriteSlot() payload bytes
+    // otherwise, set in the per-slot loop below.
+    const metaspriteSlotBytes = new Array(SPRITE_SLOTS).fill(null);
 
     const objPalColours = {}; // objPal -> this scene's claimed colour list
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
+      const sheet = spriteById(id);
       const conv = spriteConv[id];
       const objPal = objPalForSlot(k);
+      if (sheet.metaspriteMode) {
+        // M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite) sheet -
+        // every placed tile (every frame, including frame 0) goes through
+        // packer.alloc() uniformly, unlike the legacy branch below where
+        // frame 0 always lives at a fixed placeTiles(k, ...) address. See
+        // encodeMetaspriteSlot's own comment for the wire format.
+        let tilesPool = conv.tiles;
+        if (objPalColours[objPal]) {
+          const label = sheet.filename || sheet.name || id;
+          tilesPool = mergeSpriteIntoPalette(objPalColours[objPal], conv, label, sceneName);
+        } else {
+          objPalColours[objPal] = conv.colors.slice();
+        }
+        writePal(objPal, palBytesFor(objPalColours[objPal]));
+
+        // dx/dy are precomputed here (not left as raw editor-space
+        // coordinates) so scene.c's render loop can add them straight onto
+        // a->x/a->y with no extra per-slot geometry lookup. The legacy
+        // anchor (actor_render_tile's own -8/-16) is a 16x16 sprite
+        // *horizontally centered*, *bottom-anchored* on the actor's own
+        // position - generalized here to "centered on canvasWidth, anchored
+        // to the bottom of canvasHeight" so a 16x16 canvas with one tile at
+        // editor-space (0,0) reproduces the exact legacy -8/-16 byte-for-byte.
+        const canvasWidth = sheet.canvasWidth || 16;
+        const canvasHeight = sheet.canvasHeight || 16;
+        let maxEntriesPerFrame = 0;
+        const frameBlocks = (conv.metaspriteFrames || []).map((frameTiles) => {
+          const entries = frameTiles
+            .map((t) => {
+              const quadBytes = t.quad.map((idx) => tilesPool[idx]);
+              const base = packer.alloc(
+                quadBytes,
+                `${sceneName} slot ${k} (metasprite)`
+              );
+              if (base === null) return null; // over budget - packer already warned once
+              return {
+                dx: toS8Byte(t.dx - canvasWidth / 2),
+                dy: toS8Byte(t.dy - canvasHeight),
+                halfTileBase: base >> 1,
+                flags: (t.flipX ? 1 : 0) | (t.flipY ? 2 : 0) | (t.priority ? 4 : 0)
+              };
+            })
+            .filter(Boolean);
+          maxEntriesPerFrame = Math.max(maxEntriesPerFrame, entries.length);
+          return entries;
+        });
+
+        types[k] = animationTypeToSpriteType(sheet.animationType);
+        frames[k] = Math.min(Math.max(1, frameBlocks.length), 255);
+        oamIds[k] = Math.max(1, maxEntriesPerFrame);
+        metaspriteSlotBytes[k] = encodeMetaspriteSlot(frameBlocks);
+        return;
+      }
+
       let tiles = conv.tiles;
       if (objPalColours[objPal]) {
-        const label = spriteById(id).filename || spriteById(id).name || id;
+        const label = sheet.filename || sheet.name || id;
         tiles = mergeSpriteIntoPalette(objPalColours[objPal], conv, label, sceneName);
       } else {
         objPalColours[objPal] = conv.colors.slice(); // scene-local copy - conv
@@ -686,7 +807,18 @@ const compileSnesData = async (
     packer.warnings.forEach((w) => warnings(`Scene '${sceneName}': ${w}`));
 
     const extraPoseBytes = [].concat(...EXTRA_POSE_KEYS.map((key) => extraPose[key]));
-    return { sheet, palBytes, types, frames, pals, oamIds, extraPoseBytes };
+    // M9.4 (SPRITE_EDITOR_PROGRESS.md): per-slot free-form metasprite frame
+    // data - [slotByteLen(u16 LE), ...payload] per slot, slotByteLen=0 (no
+    // payload bytes) for a slot that isn't metasprite-mode or has no tiles
+    // placed yet. See scene.h's metasprite_frame_base comment and
+    // encodeMetaspriteSlot above for the exact format; scene.c's SceneInit
+    // parses this section right after extraPoseBytes.
+    const metaspriteBytes = [].concat(
+      ...metaspriteSlotBytes.map((payload) =>
+        payload ? [].concat(u16b(payload.length), payload) : [0, 0]
+      )
+    );
+    return { sheet, palBytes, types, frames, pals, oamIds, extraPoseBytes, metaspriteBytes };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -705,7 +837,26 @@ const compileSnesData = async (
   // auto-cycling sprite. Uses the same shared spriteTypeDec() helper Game
   // Boy's own compileData.js calls, rather than the v1.1.4 heuristic this
   // replaces (which only had movementType to infer from).
+  //
+  // M9.4 bug found via Mesen verification: this is a SEPARATE place from
+  // buildSceneSprites' own `types[k]` (sprite_type_for_slot) that computes
+  // essentially the same thing - the compiled ACTOR ENTRY's own byte 7
+  // (actors[i].sprite_type at runtime), which SceneRenderActors/
+  // actor_metasprite_pose/frames_len_for all dispatch on directly, not the
+  // slot table (the slot table only backs the PLAYER's sprite_type, which
+  // has no actor-entry byte of its own). A metaspriteMode sheet's conv
+  // object (imageToFreeformMetaspriteData) has no `frameCount` field at
+  // all, so spriteTypeDec(_, undefined) silently fell through to 0
+  // (SPRITE_STATIC) regardless of the sheet's real animationType - stayed
+  // hidden for a "fixed" sheet (0 is also the right answer there) and only
+  // surfaced once a "multi" sheet's actor read pose index 0 (down) no
+  // matter which way it was actually facing. Must agree with `types[k]`
+  // exactly - both ultimately come from the same sheet.animationType. */
   const spriteTypeForActor = (id, actorSpriteType) => {
+    const sheet = spriteById(id);
+    if (sheet && sheet.metaspriteMode) {
+      return animationTypeToSpriteType(sheet.animationType);
+    }
     const conv = spriteConv[id];
     return spriteTypeDec(actorSpriteType, conv ? conv.frameCount : 1);
   };
@@ -1002,7 +1153,11 @@ const compileSnesData = async (
       // Appended at the very end specifically so it doesn't shift any
       // existing byte-offset test (header/sprite-table/parallax/playerHit/
       // actor/trigger entries are all unaffected by this table's own size).
-      spr.extraPoseBytes
+      spr.extraPoseBytes,
+      // [2*SPRITE_SLOTS] M9.4: per-slot free-form metasprite frame data -
+      // see buildSceneSprites' own comment above. Appended after
+      // extraPoseBytes for the same "never shifts an earlier offset" reason.
+      spr.metaspriteBytes
     );
   });
 

@@ -323,6 +323,13 @@ describe("imageToFreeformMetaspriteData (SPRITE_EDITOR_PROGRESS.md M9.3)", () =>
     // entries resolve to the SAME deduped tile index.
     expect(placed.quad).toEqual([placed.quad[0], placed.quad[0], placed.quad[0], placed.quad[0]]);
     expect(conv.tiles.length).toBe(1); // only 1 unique tile in the whole sheet so far
+    // M9.4: `colors` (raw RGB list, same order as `palette`/`colorCount`) is
+    // needed by compileSnesData.js's mergeSpriteIntoPalette the same way
+    // imageToSpriteData's own `colors` field already is.
+    expect(conv.colors.length).toBe(conv.colorCount);
+    expect(conv.colors).toEqual(
+      expect.arrayContaining([[200, 50, 50]])
+    );
   });
 
   test("two tiles referencing the same source region dedupe to the same quad, even across frames", async () => {

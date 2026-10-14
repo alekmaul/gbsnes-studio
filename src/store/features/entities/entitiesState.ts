@@ -564,11 +564,27 @@ const removeSpriteState: CaseReducer<
 // exactly one, not a different (e.g. 8x8) block size.
 const METASPRITE_TILE_SIZE = 16;
 
+// The FIRST time a sheet's `metasprites` array is created (it's still
+// undefined), seed it with as many empty frames as the image's own
+// numFrames already implies - not just 1 - before growing further. Without
+// this, placing a tile directly into (say) frame 2 of a 3-frame sheet
+// would create an array of length 3 with frames 0-1 genuinely missing
+// (not just empty) the moment metasprites.length becomes the frame-count
+// source of truth (MetaspriteFramesTimeline.tsx's frameCountFor), silently
+// hiding frames the author never asked to lose.
+const seedMetasprites = (spriteSheet: SpriteSheet): Metasprite[] =>
+  spriteSheet.metasprites
+    ? [...spriteSheet.metasprites]
+    : Array.from({ length: Math.max(1, spriteSheet.numFrames || 1) }, () => ({
+        id: uuid(),
+        tiles: [],
+      }));
+
 const ensureMetaspriteFrame = (
   spriteSheet: SpriteSheet,
   frameIndex: number
 ): Metasprite[] => {
-  const metasprites = [...(spriteSheet.metasprites || [])];
+  const metasprites = seedMetasprites(spriteSheet);
   while (metasprites.length <= frameIndex) {
     metasprites.push({ id: uuid(), tiles: [] });
   }
@@ -946,6 +962,81 @@ const removeMetaspriteTilesOutsideCanvas: CaseReducer<
   spriteSheetsAdapter.updateOne(state.spriteSheets, {
     id: spriteSheet.id,
     changes: { metasprites, metaspriteTiles },
+  });
+};
+
+// User-found gap, traced all the way back to this effort's very first
+// request ("how can I add a frame... for example explosion"): frame count
+// was still entirely derived from animationType (M9.1's own corrected
+// design) with no way to grow it. Real addition, scoped to exactly the one
+// case where growing it actually makes sense: "fixed" (SPRITE_STATIC,
+// auto-cycle, no directional meaning) - "multi"/"multi_movement" stay
+// locked at 3/6 real poses, since adding a "5th direction" has no engine
+// meaning. Deliberately does NOT touch SpriteSheet.numFrames - confirmed
+// directly in loadSpriteData.js that numFrames is recomputed from the real
+// PNG's pixel width on every asset rescan (project reload, file-watcher),
+// silently overwriting anything stored there; metasprites.length is never
+// touched by that scan, so it's the only field that can safely be the
+// frame-count source of truth once metaspriteMode is on (see
+// MetaspriteFramesTimeline.tsx's own frameCountFor()).
+const addMetaspriteFrame: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const metasprites = seedMetasprites(spriteSheet);
+  metasprites.push({ id: uuid(), tiles: [] });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: { metasprites },
+  });
+};
+
+const removeMetaspriteFrame: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    frameIndex: number;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  // Same seeding as addMetaspriteFrame/ensureMetaspriteFrame - a sheet
+  // whose metasprites array was never created yet (no tile placed, "+"
+  // never clicked) still has to seed from numFrames first, or removing
+  // frame 2 of an untouched 3-frame sheet would find nothing there to
+  // remove and silently no-op.
+  const metasprites = seedMetasprites(spriteSheet);
+  const removed = metasprites[action.payload.frameIndex];
+  if (!removed) {
+    return;
+  }
+  metasprites.splice(action.payload.frameIndex, 1);
+  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  removed.tiles.forEach((id) => {
+    delete metaspriteTiles[id];
+  });
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: {
+      // Always at least 1 frame left, matching every other sprite type's
+      // own "frame 0 always exists" convention.
+      metasprites: metasprites.length ? metasprites : [{ id: uuid(), tiles: [] }],
+      metaspriteTiles,
+    },
   });
 };
 
@@ -2525,6 +2616,8 @@ const entitiesSlice = createSlice({
     sendMetaspriteTilesToBack,
     removeMetaspriteTiles,
     removeMetaspriteTilesOutsideCanvas,
+    addMetaspriteFrame,
+    removeMetaspriteFrame,
 
     /**************************************************************************
      * Engine Field Values

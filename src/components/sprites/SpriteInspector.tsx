@@ -30,6 +30,24 @@ import l10n from "../../lib/helpers/l10n";
 // Bounding Box is stored but inert, Animation Type only offers the 3 real
 // values, and "selected state" is this fork's own whole-sheet-swap feature.
 
+// User-asked: canvas width/height steps must move by whole tiles (16px) -
+// every tile placed on the free-form canvas snaps to a 16px grid already
+// (MetaspriteCanvas.tsx's own snap()), so a canvas size that isn't itself a
+// multiple of 16 would just leave a partial, unusable strip at the edge.
+// The native <input type="number"> step=16 covers the spinner
+// arrows/scroll-wheel, but castEventValue only rounds to a whole integer
+// when step is 1 or unset (see its own source) - it never snaps to an
+// arbitrary step - so a typed/pasted value still needs its own rounding.
+const CANVAS_SIZE_STEP = 16;
+const snapCanvasSize = (value: unknown): number => {
+  const n = typeof value === "number" ? value : Number(value);
+  if (!Number.isFinite(n)) {
+    return 16;
+  }
+  const snapped = Math.round(n / CANVAS_SIZE_STEP) * CANVAS_SIZE_STEP;
+  return Math.min(128, Math.max(16, snapped));
+};
+
 interface SpriteInspectorProps {
   id: string;
   selectedStateId: string;
@@ -220,9 +238,10 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
                   value={sprite.metaspriteMode ? sprite.canvasWidth || 16 : 16}
                   min={16}
                   max={128}
+                  step={CANVAS_SIZE_STEP}
                   disabled={!sprite.metaspriteMode}
                   onChange={(e) =>
-                    editSheet({ canvasWidth: castEventValue(e) })
+                    editSheet({ canvasWidth: snapCanvasSize(castEventValue(e)) })
                   }
                 />
                 <CoordinateInput
@@ -231,9 +250,10 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
                   value={sprite.metaspriteMode ? sprite.canvasHeight || 16 : 16}
                   min={16}
                   max={128}
+                  step={CANVAS_SIZE_STEP}
                   disabled={!sprite.metaspriteMode}
                   onChange={(e) =>
-                    editSheet({ canvasHeight: castEventValue(e) })
+                    editSheet({ canvasHeight: snapCanvasSize(castEventValue(e)) })
                   }
                 />
               </FormRow>

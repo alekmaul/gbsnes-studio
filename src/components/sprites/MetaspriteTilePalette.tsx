@@ -7,6 +7,7 @@ import editorActions from "../../store/features/editor/editorActions";
 import electronActions from "../../store/features/electron/electronActions";
 import { assetFilename } from "../../lib/helpers/gbstudio";
 import { Button } from "../ui/buttons/Button";
+import { ZoomButton } from "../ui/buttons/ZoomButton";
 import { SplitPaneHeader } from "../ui/splitpane/SplitPaneHeader";
 import l10n from "../../lib/helpers/l10n";
 
@@ -19,9 +20,12 @@ import l10n from "../../lib/helpers/l10n";
 // the user asked for on the wireframe before signing off.
 
 const TILE_SIZE = 16;
+const ZOOM_MIN = 100;
+const ZOOM_MAX = 1600;
+const ZOOM_STEP = 100;
 
 const Wrapper = styled.div`
-  height: 150px;
+  height: 190px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -36,6 +40,18 @@ const Body = styled.div`
   display: flex;
   align-items: flex-start;
   gap: 10px;
+`;
+
+// Mirrors SpriteSheetPanel's own Body row - user-asked: the Edit button must
+// stay in the same place it's always been (a footer row, right-aligned)
+// rather than move into the header when Free-form is toggled on and this
+// panel replaces SpriteSheetPanel.
+const Footer = styled.div`
+  flex-shrink: 0;
+  display: flex;
+  justify-content: flex-end;
+  padding: 8px 14px;
+  border-top: 1px solid ${(props) => props.theme.colors.sidebar.border};
 `;
 
 const Grid = styled.div`
@@ -68,20 +84,12 @@ const Cell = styled.div<CellProps>`
   }
 `;
 
-const HeaderRight = styled.div`
-  display: flex;
-  align-items: center;
-  gap: 6px;
-`;
-
 interface MetaspriteTilePaletteProps {
   id: string;
-  zoom?: number;
 }
 
 export const MetaspriteTilePalette: FC<MetaspriteTilePaletteProps> = ({
   id,
-  zoom = 2,
 }) => {
   const dispatch = useDispatch();
   const projectRoot = useSelector(
@@ -94,6 +102,14 @@ export const MetaspriteTilePalette: FC<MetaspriteTilePaletteProps> = ({
     (state: RootState) => state.editor.spriteTileSelection
   );
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+  // Local zoom, not state.editor.zoomSprite - this panel shows the WHOLE
+  // source sheet at once (can be much bigger than one 16x16 frame), a
+  // different sizing need than the single-frame preview/canvas that field
+  // drives (SpritePreview.tsx/MetaspriteCanvas.tsx). 400% (4x) default -
+  // large enough to click a tile reliably without being the full panel's
+  // own former hardcoded 4x.
+  const [zoomPct, setZoomPct] = useState(400);
+  const zoom = zoomPct / 100;
 
   if (!sprite) {
     return null;
@@ -141,15 +157,27 @@ export const MetaspriteTilePalette: FC<MetaspriteTilePaletteProps> = ({
     );
   };
 
+  const onZoomIn = () =>
+    setZoomPct((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP));
+  const onZoomOut = () =>
+    setZoomPct((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP));
+  const onZoomReset = () => setZoomPct(400);
+
   return (
     <Wrapper>
-      <SplitPaneHeader collapsed={false}>
+      <SplitPaneHeader
+        collapsed={false}
+        buttons={
+          <ZoomButton
+            zoom={zoomPct}
+            size="small"
+            onZoomIn={onZoomIn}
+            onZoomOut={onZoomOut}
+            onZoomReset={onZoomReset}
+          />
+        }
+      >
         {l10n("FIELD_TILES")} — {sprite.filename}
-        <HeaderRight>
-          <Button size="small" onClick={onEdit}>
-            {l10n("ASSET_EDIT")}
-          </Button>
-        </HeaderRight>
       </SplitPaneHeader>
       <Body>
         <Grid
@@ -186,6 +214,11 @@ export const MetaspriteTilePalette: FC<MetaspriteTilePaletteProps> = ({
           ))}
         </Grid>
       </Body>
+      <Footer>
+        <Button size="small" onClick={onEdit}>
+          {l10n("ASSET_EDIT")}
+        </Button>
+      </Footer>
     </Wrapper>
   );
 };

@@ -68,6 +68,21 @@ extern u8 extra_pose_up_b[SPRITE_SLOTS];
 extern u8 extra_pose_side_a[SPRITE_SLOTS];
 extern u8 extra_pose_side_b[SPRITE_SLOTS];
 
+/* M9.4 (SPRITE_EDITOR_PROGRESS.md): a slot using a free-form metasprite
+ * sheet (Sprites page "Free-form (Metasprite)" mode) gets a real pointer
+ * straight into the scene blob's own trailing per-slot frame-data section
+ * (appended after extra_pose_side_b's own [40] table - see compileSnesData.js
+ * and SceneInit's own parsing comment). NULL for every slot not using the
+ * feature - the single existing condition SceneRenderActors branches on to
+ * fall back to the untouched legacy single-OAM-per-pose path. Format per
+ * slot: [frameOffset(u16) * sprite_frames_for_slot[slot]] (direct-indexed,
+ * relative to the start of this slot's own frameOffset table), then for
+ * each frame [entryCount(u8), entry*4 bytes {dx(s8),dy(s8),halfTileBase(u8),
+ * flags(u8)}]. A pointer directly into the scene blob's own ROM-resident
+ * data is safe for the scene's whole lifetime - the same pattern
+ * sprite_slot_for_index already uses. */
+extern const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
+
 /* Real per-actor OAM id base (SPRITE_EDITOR_PROGRESS.md M7) - a prefix sum
  * over sprite_oam_ids_for_slot[], computed once in SceneInit, replacing the
  * old incidental `i << 2` spacing (which reserved 4 ids/actor for no real
@@ -77,6 +92,25 @@ extern u8 extra_pose_side_b[SPRITE_SLOTS];
  * indices 0..scene_num_actors (the only ones SceneRenderActors ever visits -
  * see its own `i <= scene_num_actors` loop bound). */
 extern u16 actor_oam_base[MAX_ACTORS];
+
+/* M9.4 (SPRITE_EDITOR_PROGRESS.md): EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID
+ * used to be compile-time constants derived from MAX_ACTORS, correct only
+ * because every actor_oam_base[] entry cost exactly 1 OAM id (4 bytes) -
+ * the moment a real metasprite slot costs more, the real actor total can
+ * exceed that fixed assumption while the old constants stayed put,
+ * corrupting whichever of these came "right after" actors in the old
+ * scheme. Now real runtime values, computed once in SceneInit right after
+ * the actor_oam_base[] prefix-sum loop: actor_oam_total is that loop's own
+ * final running total (the real byte-offset just past the last actor's
+ * OAM range); emote/projectile/avatar are each placed right after the
+ * previous one, same tight back-to-back scheme as before, just computed
+ * instead of hand-picked. On every scene that exists today (every
+ * sprite_oam_ids_for_slot[] entry still 1 everywhere), these compute to
+ * the exact same values the old constants had. */
+extern u16 actor_oam_total;
+extern u16 emote_oid;
+extern u16 projectile_oid_base;
+extern u16 avatar_oid;
 
 /* v4 fix (user-found: swapping sprite sheets at runtime left frames_len
  * stale - see Script_ActorSetSprite_b/Script_PlayerSetSprite_b in

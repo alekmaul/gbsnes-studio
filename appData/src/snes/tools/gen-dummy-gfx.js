@@ -373,6 +373,12 @@ const dummyPlayerHit1 = [EV_SCENE1, EV_SCENE1, EV_SCENE1];
 // All zero here: neither dummy scene's slot-0 sheet (SPRITE_STATIC, 1
 // frame) ever needs an "extra" pose beyond its own primary one.
 const dummyExtraPoses = new Array(5 * 8).fill(0);
+// M9.4 (SPRITE_EDITOR_PROGRESS.md): [2*SPRITE_SLOTS] per-slot free-form
+// metasprite frame data, appended after dummyExtraPoses - see
+// compileSnesData.js's own comment at this table's emission and scene.h's
+// comment on metasprite_frame_base. All-zero `slotByteLen` here: neither
+// dummy scene uses metaspriteMode on any sheet.
+const dummyMetasprites = new Array(2 * 8).fill(0);
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
@@ -384,12 +390,13 @@ const scene0 = [
   32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
   50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
   ...collision,
-  ...dummyExtraPoses
+  ...dummyExtraPoses,
+  ...dummyMetasprites
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

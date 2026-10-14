@@ -905,6 +905,10 @@ const imageToFreeformMetaspriteData = async (filename, options = {}) => {
     tileBytes: [].concat(...tileList),
     palette,
     paletteBytes: paletteBytes(palette),
+    colors, // raw 8-bit [r,g,b] list, same order as the palette - M9.4:
+    // needed by compileSnesData.js's mergeSpriteIntoPalette the same way
+    // imageToSpriteData's own `colors` field already is, for a metasprite
+    // sheet forced to share an OBJ palette register with another sheet.
     colorCount: colors.length,
     metaspriteFrames, // [frameIndex] -> [{dx,dy,quad,flipX,flipY,priority}]
     warnings

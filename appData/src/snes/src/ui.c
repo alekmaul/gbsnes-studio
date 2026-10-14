@@ -8,6 +8,7 @@
 #include "ui.h"
 #include "assets.h"
 #include "script_runner.h"
+#include "scene.h" /* M9.4: avatar_oid (real runtime value, was AVATAR_OID) */
 
 /* provided by game.c */
 extern u16 prev_joy;
@@ -160,10 +161,11 @@ static u8 ui_ov_step_row1;
  *
  * M8.3 correction (SPRITE_EDITOR_PROGRESS.md): `<<2` is required - oamSet's
  * `id` is a byte offset into the real OAM shadow buffer, not a sprite
- * index (see PROJECTILE_OID_BASE's own comment in scene.c for the real
+ * index (see the projectile_oid_base comment in scene.h for the real
  * PVSnesLib asm this was verified against) - restored here after M7
- * mistakenly dropped it. */
-#define AVATAR_OID ((u16)(MAX_ACTORS + 1 + MAX_PROJECTILES) << 2)
+ * mistakenly dropped it. M9.4: avatar_oid (scene.h) is now a real runtime
+ * value, computed once in SceneInit from the scene's own real actor OAM
+ * total - no longer a MAX_ACTORS-derived compile-time constant. */
 
 /*--------------------------------------------------------------------------- */
 
@@ -656,12 +658,12 @@ static void ui_render_avatar(void)
     if (show)
     {
         /* box top-left: TXT_COL0*8, TXT_ROW0*8 */
-        oamSet(AVATAR_OID, TXT_COL0 * 8, TXT_ROW0 * 8, 2, 0, 0, ui_avatar_tile, 2);
-        oamSetEx(AVATAR_OID, OBJ_LARGE, OBJ_SHOW);
+        oamSet(avatar_oid, TXT_COL0 * 8, TXT_ROW0 * 8, 2, 0, 0, ui_avatar_tile, 2);
+        oamSetEx(avatar_oid, OBJ_LARGE, OBJ_SHOW);
     }
     else
     {
-        oamSetVisible(AVATAR_OID, OBJ_HIDE);
+        oamSetVisible(avatar_oid, OBJ_HIDE);
     }
 }
 

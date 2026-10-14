@@ -1,4 +1,4 @@
-import React, { FC } from "react";
+import React, { FC, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import styled from "styled-components";
 import { RootState } from "../../store/configureStore";
@@ -6,6 +6,7 @@ import { spriteSheetSelectors } from "../../store/features/entities/entitiesStat
 import electronActions from "../../store/features/electron/electronActions";
 import { assetFilename } from "../../lib/helpers/gbstudio";
 import { Button } from "../ui/buttons/Button";
+import { ZoomButton } from "../ui/buttons/ZoomButton";
 import { SplitPaneHeader } from "../ui/splitpane/SplitPaneHeader";
 import l10n from "../../lib/helpers/l10n";
 
@@ -13,6 +14,18 @@ import l10n from "../../lib/helpers/l10n";
 // same mechanism src/components/assets/ImageViewer.js already uses for
 // Backgrounds (electronActions.openFile opens the project's default external
 // image editor). See SPRITE_EDITOR_PROGRESS.md.
+//
+// User-asked: a zoom control of its own, on the right of this panel's own
+// header - deliberately local component state, not the shared
+// state.editor.zoomSprite the app toolbar's own zoom button drives
+// (SpritePreview.tsx/MetaspriteCanvas.tsx) - this strip shows the WHOLE
+// sheet at once, a different sizing need than a single 16x16 frame, so
+// sharing one zoom value between them would fight over what either one
+// actually wants.
+
+const ZOOM_MIN = 25;
+const ZOOM_MAX = 800;
+const ZOOM_STEP = 25;
 
 const Wrapper = styled.div`
   flex-shrink: 0;
@@ -29,12 +42,11 @@ const Body = styled.div`
 const Strip = styled.div`
   flex-shrink: 0;
   max-height: 48px;
-  overflow: hidden;
+  overflow: auto;
   border: 1px solid ${(props) => props.theme.colors.sidebar.border};
 
   img {
     display: block;
-    height: 32px;
     image-rendering: pixelated;
   }
 `;
@@ -61,6 +73,7 @@ export const SpriteSheetPanel: FC<SpriteSheetPanelProps> = ({ id }) => {
   const sprite = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, id)
   );
+  const [zoom, setZoom] = useState(100);
 
   if (!sprite) {
     return null;
@@ -75,9 +88,24 @@ export const SpriteSheetPanel: FC<SpriteSheetPanelProps> = ({ id }) => {
     );
   };
 
+  const onZoomIn = () => setZoom((z) => Math.min(ZOOM_MAX, z + ZOOM_STEP));
+  const onZoomOut = () => setZoom((z) => Math.max(ZOOM_MIN, z - ZOOM_STEP));
+  const onZoomReset = () => setZoom(100);
+
   return (
     <Wrapper>
-      <SplitPaneHeader collapsed={false}>
+      <SplitPaneHeader
+        collapsed={false}
+        buttons={
+          <ZoomButton
+            zoom={zoom}
+            size="small"
+            onZoomIn={onZoomIn}
+            onZoomOut={onZoomOut}
+            onZoomReset={onZoomReset}
+          />
+        }
+      >
         {l10n("FIELD_SPRITE_SHEET")}
       </SplitPaneHeader>
       <Body>
@@ -87,6 +115,7 @@ export const SpriteSheetPanel: FC<SpriteSheetPanelProps> = ({ id }) => {
             src={`file://${assetFilename(projectRoot, "sprites", sprite)}?_v=${
               sprite._v || 0
             }`}
+            style={{ height: `${Math.round(32 * (zoom / 100))}px` }}
           />
         </Strip>
         <Name>

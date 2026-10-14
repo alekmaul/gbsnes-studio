@@ -842,6 +842,142 @@ describe("metasprites (M9, SPRITE_EDITOR_PROGRESS.md)", () => {
     expect(sheet?.metaspriteTiles?.a.priority).toBe(true);
     expect(sheet?.metaspriteTiles?.b.priority).toBe(true);
   });
+
+  test("Should add a frame to the end of an already-populated metasprites array", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            animationType: "fixed",
+            metasprites: [{ id: "meta1", tiles: [] }],
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const newState = reducer(state, actions.addMetaspriteFrame({ spriteSheetId: "sprite1" }));
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.length).toBe(2);
+    expect(sheet?.metasprites?.[1].tiles).toEqual([]);
+  });
+
+  test("Should seed from numFrames the first time a frame is added to an untouched sheet", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            animationType: "fixed",
+            numFrames: 3,
+            // metasprites never created - no tile placed, "+" never clicked yet.
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const newState = reducer(state, actions.addMetaspriteFrame({ spriteSheetId: "sprite1" }));
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    // 3 real image-implied frames preserved, plus the 1 newly added one.
+    expect(sheet?.metasprites?.length).toBe(4);
+  });
+
+  test("Should remove the selected frame and its own tiles", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            animationType: "fixed",
+            metasprites: [
+              { id: "meta0", tiles: ["a"] },
+              { id: "meta1", tiles: ["b"] },
+              { id: "meta2", tiles: [] },
+            ],
+            metaspriteTiles: {
+              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+              b: { id: "b", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const newState = reducer(
+      state,
+      actions.removeMetaspriteFrame({ spriteSheetId: "sprite1", frameIndex: 1 })
+    );
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.map((m) => m.id)).toEqual(["meta0", "meta2"]);
+    expect(sheet?.metaspriteTiles?.a).toBeDefined(); // frame 0's own tile untouched
+    expect(sheet?.metaspriteTiles?.b).toBeUndefined(); // the removed frame's own tile is gone
+  });
+
+  test("Should seed from numFrames before removing a frame from an untouched sheet", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            animationType: "fixed",
+            numFrames: 3,
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const newState = reducer(
+      state,
+      actions.removeMetaspriteFrame({ spriteSheetId: "sprite1", frameIndex: 2 })
+    );
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.length).toBe(2);
+  });
+
+  test("Should never remove the last remaining frame - keeps exactly one empty frame instead", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            animationType: "fixed",
+            metasprites: [{ id: "meta0", tiles: ["a"] }],
+            metaspriteTiles: {
+              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const newState = reducer(
+      state,
+      actions.removeMetaspriteFrame({ spriteSheetId: "sprite1", frameIndex: 0 })
+    );
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.metasprites?.length).toBe(1);
+    expect(sheet?.metasprites?.[0].tiles).toEqual([]);
+  });
 });
 
 test("Should add new music track if loaded while project is open", () => {

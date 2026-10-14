@@ -76,6 +76,7 @@ full writeup; a separate, larger effort from M0-M4's authoring-only scope - not 
       per-scene table, every entry compile-time 1 today) replaces the old incidental `i << 2`
       spacing in `SceneRenderActors`/the emote/projectile/avatar OID macros. Toolchain build +
       full test suite + a real Mesen run all verified now (see the dated entry below) -
+      full test suite + a real Mesen run all verified now (see the dated entry below) -
       `actor_oam_base[0..3]` read back exactly `[0, 1, 2, 3]` on real hardware, proving the
       prefix-sum allocator. M7 is otherwise done; marked `[~]` only because (c)/(d) are
       deliberately deferred to M8, not because (a)/(b) are incomplete.
@@ -85,9 +86,11 @@ full writeup; a separate, larger effort from M0-M4's authoring-only scope - not 
       M8.3), and the engine reading dynamic per-slot pose addresses at runtime instead of
       compile-time constants (M8.3) - real toolchain build + Mesen-verified. M8.5 (real free-
       form per-tile placement authoring) stays explicitly deferred to M9 below, unchanged.
-- [ ] **M9** — editor-side real free-form placement UI (the actual click-to-place canvas,
-      Path B's original goal) - get a wireframe sign-off first, same discipline as this
-      effort's own M0, per `[[snes-sprite-animation-ui-reverted]]`'s own lesson.
+- [x] **M9** — editor-side real free-form placement UI (M9.1-M9.3) + real compiler/engine
+      wiring so it actually renders in a built ROM (M9.4, steps 1-6 of its own 7-step plan -
+      see the dated entries below) - Mesen-verified on real hardware for both a static 2-tile
+      composition and a directional side-pose auto-mirror. M9.4's own step 7 (an OAM/scanline
+      budget warning, pure diagnostics) is the one still-open piece.
 - [x] **M10** — migration decision: **coexist, don't replace** - see the dated entry below. Every
       existing project's sheets keep rendering through the untouched legacy fixed-frame path;
       free-form metasprites are a new, separate opt-in per-sheet mode.
@@ -1359,3 +1362,336 @@ placeholder, M7's own deferred scanline-budget warning). The biggest, riskiest r
 real engine C changes, byte-exact scene-blob format growth, a real toolchain build, Mesen
 verification - matching every other "paired compiler+engine change" milestone's own history in
 this file.
+
+### 2026-10-14 — two real bugs found by the user testing M9.2, and a genuine gap closed
+
+**Two UI bugs, found by the user clicking through the running app** (exactly the manual
+verification step this entry's own earlier "not done / honestly flagged" note called out):
+1. `MetaspriteTilePalette.tsx`'s "Edit" button was nested as a JSX *child* of
+   `SplitPaneHeader`, but that component takes right-aligned content through a separate
+   `buttons` prop, not children - the button landed inside the title's own flex-grow span and
+   wrapped onto its own line instead of sitting at the right of the header row. Fixed by using
+   `buttons={...}` correctly.
+2. A fresh metasprite sheet's default 16x16 canvas rendered at the old zoom=2 default - 32x32
+   real screen px, functionally invisible and unusable. Bumped to zoom=8 for the canvas, zoom=4
+   for the (potentially much bigger) tile palette.
+
+**A real, confirmed capability gap, traced to this whole effort's very first request** ("how
+can I add a frame... for example explosion, I want to add a new frame" - the question that
+originally kicked off this entire multi-day effort): M9.2 deliberately shipped with no way to
+add/remove a frame, on the theory that frame count should stay entirely driven by
+`animationType`. The user pushed back directly ("how can I add a frame to a current animation,
+I can't?"), which was the right call - for `animationType: "fixed"` sheets specifically (a
+plain auto-cycling frame set, no directional meaning), there's no real reason frame count has
+to stay locked.
+
+Implemented for real: `addMetaspriteFrame`/`removeMetaspriteFrame` reducers, +/- buttons in
+`MetaspriteFramesTimeline.tsx`, shown only for `animationType === "fixed"` sheets (`"multi"`/
+`"multi_movement"` stay locked at their real 3/6 poses - those frames each mean something
+specific to the engine, down/up/side or two walk poses per direction, so there's no
+well-defined way to "add a 5th direction"). Deliberately does **not** touch
+`SpriteSheet.numFrames` - confirmed directly in `loadSpriteData.js` that `numFrames` is
+recomputed from the real PNG's pixel width on every asset rescan (project reload, file
+watcher), so anything stored there would silently revert on the next rescan.
+`metasprites.length` becomes the real frame-count source of truth instead, once metaspriteMode
+is on for a Fixed sheet - never touched by that scan, so it's the only field that can safely
+hold an author-driven count.
+
+**A real seeding bug caught before it shipped, not by a test that happened to already cover
+it**: the first time a sheet's `metasprites` array is created (no tile ever placed, "+" never
+clicked), naively starting it at length 1 (or whatever one `addMetaspriteTile` call happens to
+touch) would make `metasprites.length` - now the authoritative frame count - **silently
+disagree with and override** the real frame count the image's own pixel width already implies,
+making already-existing frames the author never asked to lose simply vanish the moment any
+frame-array-creating action ran. Fixed with a shared `seedMetasprites()` helper: the first time
+any of `ensureMetaspriteFrame`/`addMetaspriteFrame`/`removeMetaspriteFrame` would create the
+array from scratch, it seeds `Math.max(1, numFrames)` empty frames first, so every
+already-implied frame survives untouched before the requested add/remove is applied on top.
+
+Tests: 5 new cases in `entitiesState.test.ts` (plain add, seed-then-add on an untouched sheet,
+plain remove with its own tiles cleaned up, seed-then-remove on an untouched sheet, removing
+the last frame leaves exactly one empty frame rather than zero). Doc: `docs/sprites.md` gained
+a full "Free-form (Metasprite) mode" section - what's real today, how to place/edit tiles, the
+Fixed-only add/remove-frame rule and why, and an explicit "what's not built yet" list (nothing
+here compiles into the ROM yet) so a reader isn't misled into thinking this is further along
+than it is. Full suite green (152 suites, 764 passing, same 3 pre-existing skips); re-verified
+clean with the now-established `npx tsc@5.4.5` check.
+
+### 2026-10-13/14 — M9.4 (real rendering) planned and steps 1-4 landed
+
+Entered plan mode for M9.4 ("the biggest, riskiest remaining step", per this doc's own M9.3
+entry) - the real wiring that makes a composed free-form sprite actually show up in Build ROM /
+Play / Mesen, not just the editor's own canvas. Matched M8's own precedent (a written migration
+plan reviewed before any engine code). Two research agents (compiler-side and engine-side) plus
+a design-validation Plan agent grounded the design in the real current code before anything was
+written. Two real corrections to this doc's own earlier record came out of that research:
+
+1. The "second OBJ bank at 0x1000-0x1FFF" described in M8's own entries below isn't two
+   separately-managed VRAM regions after all - `game.c` makes exactly one `oamInitGfxSet` call
+   for the whole 512-tile OBJ budget (`0x0000-0x1FFF`), confirmed by reading the real call site
+   directly. No new VRAM-layout engineering was needed for M9.4 as a result.
+2. `packSceneSprites.js`'s `createScenePacker.alloc(quad)` - already real, already in production
+   use for packing every actor's extra animation poses (`buildSceneSprites`) - turned out to be
+   exactly the right, already-proven primitive for placing a free-form tile's quad too. No new
+   packer needed.
+
+A third finding changed scope for the worse before it got fixed: `EMOTE_OID`/
+`PROJECTILE_OID_BASE`/`AVATAR_OID` were still `MAX_ACTORS`-derived compile-time constants,
+correct only because every actor cost exactly 1 OAM id - M7's own comments had already flagged
+this as needing to become a runtime value "the moment a real per-slot cost can exceed 1." That
+moment is this milestone, so converting them was folded in as required, not optional.
+
+User decision (`AskUserQuestion`): a `multi`/`multi_movement` free-form sheet's "side" pose
+should auto-mirror for the opposite facing direction, matching every existing actor sheet's own
+convention, rather than always rendering exactly as authored.
+
+Plan approved; implementation proceeding in the order the plan lays out (each step independently
+buildable + bootable, matching M8.2/M8.3's own "paired compiler+engine change" discipline):
+
+**Step 1 (done)** - `imageToFreeformMetaspriteData` (`snesgfx.js`) gained a `colors` field (raw
+RGB list, same shape `imageToSpriteData` already returns) - needed by `compileSnesData.js`'s
+existing `mergeSpriteIntoPalette` scene-palette-sharing logic, which the real detection step
+(step 5) will need. One-line, additive. Test: `snesgfx.test.js`.
+
+**Step 2 (done)** - scene-blob format growth: a new `[2*SPRITE_SLOTS]` (16-byte) trailing
+section, appended after the existing `[40]`-byte extra-pose table - same "always append at the
+very end, never shifts an earlier offset assertion" discipline every prior scene-blob growth in
+this project's history has followed. Every slot currently emits `[0,0]` (no real detection wired
+yet - that's step 5). One existing test needed updating (`compileSnesData.test.js`'s total
+blob-length assertion, `+16`) - the exact "mechanical, single shifted assertion" outcome the plan
+predicted. `yarn test` + `yarn jest buildSnesRom` green.
+
+**Step 3 (done)** - `scene.c`/`scene.h` parse the new section into a new
+`metasprite_frame_base[SPRITE_SLOTS]` pointer table (a real pointer straight into the scene
+blob's own ROM-resident data - the same pattern `sprite_slot_for_index` already uses, confirmed
+safe for the whole scene's lifetime). Self-skipping format (`slotByteLen` covers each slot's own
+frame-offset table + entry data), so no separate bookkeeping needed. Render loop untouched -
+every slot is still `NULL` from step 2's placeholder data, so behavior is provably unchanged.
+`gen-dummy-gfx.js` (the committed engine-tree dummy fixture `assets.c` used by `buildSnesRom`'s
+own standalone toolchain test) regenerated to match the new trailing section's shape, following
+the same "regenerate the committed dummy fixture" discipline M7's `[24]->[32]` growth used.
+
+**Step 4 (done)** - `EMOTE_OID`/`PROJECTILE_OID_BASE`/`AVATAR_OID` became real runtime `u16`
+globals (`actor_oam_total`, `emote_oid`, `projectile_oid_base`, `avatar_oid` - `scene.h`),
+computed once in `SceneInit` right after the existing `actor_oam_base[]` prefix-sum loop, from
+that loop's own real running total - not `MAX_ACTORS`-derived constants anymore. `ui.c` gained
+`#include "scene.h"` for `avatar_oid`.
+
+**A real correctness gap found and fixed while implementing this, not just planned**: the old
+per-"unused actor slot" hide loop in `SceneInit` only ever cleared OAM ids up to
+`(MAX_ACTORS-1)<<2` (76) - but under the OLD fixed-constant scheme that was fine, since
+`EMOTE_OID`/etc. were ALWAYS 80/84/100 regardless of a scene's real actor count. Once they became
+real per-scene values, a **smaller** scene (fewer actors than the one before it) can compute a
+**smaller** `emote_oid`/`avatar_oid` than a previous, bigger-cast scene did - meaning a sprite
+left visible at the old scene's higher OAM id (e.g. a dialogue avatar on screen right as
+`SWITCH_SCENE` fires) would never get cleared by the new scene's own narrower sweep, stranding a
+stale, stuck sprite on screen indefinitely. Fixed by replacing the whole per-actor-slot hide call
+with a single unconditional sweep from the real `actor_oam_total` through the full 128-sprite
+hardware ceiling, done once `actor_oam_total`/`avatar_oid` are known - covers emote/projectile/
+avatar's own range AND any stale leftover from a differently-shaped previous scene in one pass,
+the same "hide now, let the owning subsystem redraw next frame" reasoning the old loop already
+used, just no longer bounded by a fixed, now-wrong ceiling.
+
+Also corrected a wrong claim made in an early draft of this very entry's own code comments
+(caught before it could mislead the Mesen verification below): "these compute to the exact same
+values the old constants had" is only true for a scene using every one of the `MAX_ACTORS-1`
+real actor slots - for any smaller scene (i.e. almost all of them), the new values are smaller
+than 80/84/100, not identical. Fixed in the comments directly.
+
+**Mesen-verified** (real toolchain build of `test/projects/Test_ActorInvoke`, 1 scene, 5 NPC
+actors + the player = 6 real actors, read via `emu.memType.snesMemory` + the raw `game.sym`
+address per `[[mesen-snesmemory-addressing-correction]]`, a temp test file deleted after use per
+this project's own convention): `actor_oam_total=24, emote_oid=24, projectile_oid_base=28,
+avatar_oid=44` - exactly `6*4`/`+4`/`+16` as derived, confirming both the runtime computation
+and the new sweep are correct on real hardware, and empirically settling the "not the same as
+the old constants" correction above (24 vs. the old 80).
+
+Full suite green throughout (152 suites, 764 passing, same 3 pre-existing skips) at every step;
+`yarn jest buildSnesRom` green after every C change.
+
+Next: **step 5** - the real wiring: `compileSnesData.js` detection + quad packing + byte
+encoding for a `metaspriteMode` sheet, paired with `scene.c`'s `frames_len_for` lift,
+`actor_metasprite_pose`, and the real `SceneRenderActors` multi-entry branch. See the plan file's
+own "Implementation order" for steps 5-7 (real wiring, side-pose auto-mirroring, the OAM budget
+warning).
+
+### 2026-10-13 — zoom controls wired for real, plus an in-canvas hint for the pick-then-place flow
+
+User feedback after trying the shipped M9.2/M9.3 work, four points in one message: a request
+for a zoom control on the "Sprite Sheet" panel; a report that the app toolbar's own zoom button
+("top left") seemed non-functional on this page; continued confusion about how free-form mode
+actually works; and a question about the frame strip's +/- buttons.
+
+**`state.editor.zoomSprite` was real but had zero consumers on the Sprites page.** The app
+toolbar's `ZoomButton` (`AppToolbar.tsx`) already dispatches `editorActions.zoomIn/zoomOut/
+zoomReset({section: "sprites"})` and `zoomForSection("sprites", editor)`
+(`lib/helpers/gbstudio.js`) already correctly returns `editor.zoomSprite` - confirmed by
+grepping every component under `src/components/sprites/` for `zoomSprite` before this round:
+zero matches. The field updated correctly in Redux; nothing on screen ever changed because
+nothing read it back. Wired it into the two single-frame views that field is the right fit for:
+- `SpritePreview.tsx` - `CanvasFrame` now takes a `canvasSize` prop (`16 * zoomSprite/100`,
+  floored at 128px for a sane minimum) instead of a fixed 64px, replacing both the outer frame
+  and the inner `<canvas>` sizing.
+- `MetaspriteCanvas.tsx` - dropped its own local `zoom` prop entirely in favour of reading
+  `state.editor.zoomSprite / 100` directly.
+
+**Two further zoom controls, deliberately local state, not `zoomSprite`.** `SpriteSheetPanel.tsx`
+("Sprite Sheet" panel, the strip showing the *whole* raw PNG) and `MetaspriteTilePalette.tsx`
+("Tiles" panel, same whole-sheet view in free-form mode) both show the entire sheet at once -
+a different sizing need from a single 16x16 frame, so sharing one Redux field between all four
+would make any one view's zoom fight the others'. Added a local `useState` zoom to each, with
+its own `ZoomButton` (the same reusable component `AppToolbar.tsx` already uses) placed via
+`SplitPaneHeader`'s real `buttons` prop - the exact mechanism the 2026-10-14 entry above already
+had to learn the hard way for the Edit button, applied correctly from the start this time.
+`SpriteSheetPanel.tsx`'s zoom scales the strip's `<img height>` (was a hardcoded 32px);
+`MetaspriteTilePalette.tsx`'s replaces its own old hardcoded `zoom = 4` default outright (every
+call site already passed no `zoom` prop, confirmed by grep, so this was a pure improvement with
+no caller to update).
+
+**In-canvas hint for "I still do not understand how to use free form mode."** The existing
+`docs/sprites.md` section explains the pick-a-tile-then-click-to-place workflow, but a doc
+nobody necessarily opens isn't the same as the UI itself saying so. Added a small `Hint` label
+directly under `MetaspriteCanvas`'s own canvas area, shown only while the frame has zero placed
+tiles and no tile is currently picked from the palette (`FIELD_METASPRITE_HINT`: "Click a tile
+below in Tiles to pick it, then click here to place it") - it disappears the moment either
+condition changes (a tile gets picked, showing the existing stamp-ghost cue instead, or a tile
+gets placed), so it only ever shows exactly when it's needed.
+
+**Frame +/- buttons: clarified via tooltip rather than redesigned.** The ambiguous "I still can
+see the +/- at the bottom middle, for the frames" was read as "I can see them, but don't know
+what they do" rather than a request to remove them (they're real, working, user-requested
+functionality from the immediately preceding entry). Replaced their generic `ASSET_ADD`/
+`DIALOG_DELETE` tooltip text (shared, unrelated l10n keys - never written to describe *this*
+button) with two new, specific keys: `FIELD_ADD_FRAME` ("Add Frame (Fixed sheets only)") and
+`FIELD_REMOVE_FRAME` ("Remove Frame") - the "(Fixed sheets only)" suffix on Add exists because
+these buttons are hidden entirely for `multi`/`multi_movement` sheets, so a user who only ever
+sees them on a Fixed sheet would otherwise have no on-screen clue that the scope is deliberate,
+not a bug.
+
+New l10n keys added to `en.json` only, matching this effort's own established precedent (every
+other M9 string - `FIELD_TILES`, `FIELD_SPRITE_FRAMES`, etc. - is `en.json`-only too; the other
+13 locales pick up the English fallback until a translation pass, same as any other
+in-progress feature per `node src/lang/list_missing.js`).
+
+Verified: full suite green (152 suites, 764 passing, same 3 pre-existing skips); a real
+`npx -y -p typescript@5.4.5 tsc --noEmit` run shows the same pre-existing, unrelated errors as
+before this round (`Splash.tsx`, `ActorEditor.tsx`, `SceneEditor.tsx`, `validation.ts`,
+`buildGameMiddleware.ts` - none under `src/components/sprites/`) and no new ones. Not yet
+re-driven in a real `npm start` window by the user for this specific round - the established
+discipline on this effort is to treat that as the actual pass/fail gate for anything UI-shaped,
+so this entry's fixes should be treated as "implemented and statically verified," not yet
+"confirmed working," until the user tries them again.
+
+### 2026-10-14 — M9.4 steps 5-6: the real wiring lands - a free-form metasprite actually renders
+
+**Step 5 - compiler + engine wiring, together.** `compileSnesData.js` now dispatches a
+`metaspriteMode` sheet to `imageToFreeformMetaspriteData` instead of `imageToSpriteData`
+(confirmed via the plan's own earlier research this needed no change to that function itself).
+`buildSceneSprites` gained a parallel branch: for each frame, for each placed tile, the entry's
+`quad` indices are resolved back to real tile byte-arrays and fed to the *same*
+`createScenePacker.alloc()` already used for legacy extra poses - exactly the already-proven
+primitive the plan identified, reused with zero changes to `packSceneSprites.js`. `oamIds[k]`
+becomes the slot's own real worst-case simultaneous-tile count across its frames;
+`metaspriteSlotBytes[k]` holds the new per-slot payload, assembled via a new
+`encodeMetaspriteSlot()` helper matching the scene-blob format from step 2.
+
+**A real geometry bug caught before writing any engine code**, by re-deriving the dx/dy math
+by hand rather than trusting the already-approved plan: the plan's own byte table said
+`dx = tile.x` ("already canvas-center-relative"), but legacy `actor_render_tile`'s anchor is
+`x_rel = a->x - scroll_x - 8` - a *horizontally centered*, not left-edge-relative, 16px sprite.
+A bare `tile.x` (0 for the one default tile position) would have put every composed sprite 8px
+too far right compared to a legacy sprite in the exact same spot. Fixed to
+`dx = tile.x - canvasWidth/2` (matching Y's own already-correct `dy = tile.y - canvasHeight`,
+a *bottom*-anchored, not top-edge-relative, convention) - verified by hand for both the
+default 16x16 single-tile case (reproduces the legacy -8/-16 exactly) and a wider composed
+case, then later confirmed correct again empirically via Mesen (see below).
+
+**Engine side**: `frames_len_for` lifts its hardcoded 2-6 frame cap for `SPRITE_STATIC` only
+when `metasprite_frame_base[slot]` is set (every legacy sheet untouched). A new
+`actor_metasprite_pose()` resolves which authored frame index an actor's current pose/
+direction maps to - deliberately duplicated from `actor_render_tile` rather than refactored
+into it, keeping the single most bug-history-documented function in this file provably
+untouched. `SceneRenderActors` branches per actor on `metasprite_frame_base[slot]`: when set,
+loops over that frame's placed-tile entries, one `oamSetEx`+`oamSet` pair per entry (not
+PVSnesLib's own `oamMetaDraw16`/`Dyn16`, per the plan's own reasoning - this engine has never
+used that API and its real semantics aren't verifiable from the vendored headers alone), hides
+any of the actor's own unused trailing sub-ids in both branches, and - per the user's earlier
+decision - mirrors a `multi`/`multi_movement` sheet's whole side-pose tile set (position
+negated around the canvas's own horizontal center, each tile's own flipX XORed) when facing
+the opposite direction.
+
+**Two real bugs found via Mesen verification, neither caught by the unit tests** (both unit
+tests only ever exercised a `"fixed"`/`SPRITE_STATIC` sheet, which happened to mask both):
+
+1. **`actor_metasprite_pose()`'s own compact-index bug.** It returned the legacy 6-slot pose
+   numbering (0=primary, 2=up, 4=side, ...) for `SPRITE_ACTOR`, mirroring
+   `SPRITE_ACTOR_ANIMATED`'s own real numbering - but a `"multi"` sheet only ever authors 3
+   *compact* frames (`MetaspriteFramesTimeline.tsx`'s own `frameCountFor`), and
+   `encodeMetaspriteSlot` packs `sheet.metasprites[]` 1:1 with no gap-filling. Reading pose
+   index 4 against a 3-entry frameOffset table would have read past the real data. Fixed to
+   return compact `{0,1,2}` for `SPRITE_ACTOR` specifically (`SPRITE_ACTOR_ANIMATED`'s own 6
+   real authored frames already match the 6-slot numbering, no change needed there).
+2. **`spriteTypeForActor` - a second, independent place computing essentially the same value,
+   found desynced from `buildSceneSprites`' own `types[k]`.** Every actor's own compiled
+   `sprite_type` byte (`p[7]` in its scene-blob entry - what `SceneRenderActors`/
+   `actor_metasprite_pose`/`frames_len_for` all actually dispatch on at runtime, *not* the
+   slot table, which only ever backs the player's own sprite_type) is computed by this
+   separate, pre-existing function via `spriteTypeDec(actorSpriteType, conv.frameCount)`. A
+   metaspriteMode sheet's `conv` (from `imageToFreeformMetaspriteData`) has no `frameCount`
+   field at all, so this silently fell through to 0 (`SPRITE_STATIC`) regardless of the
+   sheet's real `animationType` - invisible for a `"fixed"` sheet (0 is coincidentally also
+   the right answer there, which is exactly why the step-5 unit test and first Mesen check
+   both looked clean) and only surfaced once a `"multi"` sheet's actor read pose 0 (down) no
+   matter which way it was actually facing, confirmed via a dedicated debug global read live
+   in Mesen (`dbgPose=0`, not the expected `2`). Fixed by making `spriteTypeForActor` return
+   `animationTypeToSpriteType(sheet.animationType)` directly for a metaspriteMode sheet,
+   bypassing both `actor.spriteType`'s per-actor override and the nonexistent `conv.frameCount`
+   - now guaranteed to agree with `types[k]`, since both ultimately read the same
+   `sheet.animationType`.
+
+**Two further precautions taken, neither the actual bug but kept anyway**: the per-tile
+off-screen cull check was first written as a single 4-term `&&` chain
+(`meta_x > -32 && meta_x < 256 && meta_y > -32 && meta_y < 224`) - this engine's own documented
+816-tcc miscompile class (a 3+-term `&&`/`||` chain mis-linking its false branch,
+`can_step`/`in_box`/`col_solid`'s own fix history) was the first suspect when entry1 of a
+2-tile frame kept silently going through the hide path. Rewritten as nested single-condition
+ifs building an explicit `meta_visible` flag anyway (matches established precedent, costs
+nothing), but rebuilding+re-testing with *only* that fix applied reproduced the exact same
+symptom - ruling it out before chasing the real cause (bug 2 above). Likewise the per-tile
+loop's `for (meta_j = 0; meta_j < meta_n; meta_j++, meta_e += 4)` comma-operator increment -
+untested syntax on this engine, no other loop here uses one - was rewritten to advance `meta_e`
+explicitly in the loop body; also tested in isolation, also didn't change the symptom. Neither
+was the real bug, but both are real, permanent, zero-cost hardening kept in the final code -
+and the methodology (test each suspect in isolation rather than changing several things and
+guessing which one mattered) is worth remembering for the next time a "should obviously work"
+trace doesn't match reality.
+
+**Real-hardware verification, two separate fixtures, both via temp test files deleted after
+use per this project's convention** (`emu.memType.snesMemory` + raw `game.sym` addresses for
+WRAM, `emu.memType.snesSpriteRam` - newly discovered via a quick `emu.memType` key probe - for
+the real post-DMA OAM table, 180-frame settle before sampling):
+- A `"fixed"`/`SPRITE_STATIC` sheet, one actor, two 16x16 tiles stacked into a 16x32 canvas:
+  both OAM entries appeared at `actor_oam_base[i]`/`+4`, 16px apart vertically (matching the
+  authored dy difference exactly), same X, same deduped VRAM tile (confirming cross-tile
+  dedup survives the real engine, not just the JS packer in isolation) - `{oid:4, x0:80,y0:56,
+  t0:96,a0:38, x1:80,y1:72,t1:96,a1:38}`.
+- A `"multi"`/`SPRITE_ACTOR` sheet, two actors (one facing left, one right) sharing one slot:
+  both read `sprite_oam_ids_for_slot[1]=2` and resolved pose=2 (side) correctly after the
+  `spriteTypeForActor` fix; entry order never changes (same two tiles, same VRAM dedup) but
+  the facing-left actor's entries swap relative X order and every attribute byte differs by
+  exactly one bit (the hflip bit) from the facing-right actor's - `r0.x-r1.x=-16` unmirrored,
+  `l0.x-l1.x=+16` mirrored, confirming the auto-mirror transform is correct on real hardware,
+  not just in the dx-arithmetic derivation.
+
+Tests: `compileSnesData.test.js` gained two new cases under "Free-form (Metasprite) sheet real
+wiring (M9.4)" - byte-exact dx/dy/flags/dedup assertions for a 2-tile fixture, and
+`sprite_oam_ids_for_slot`'s real 2-entry cost - built against `Test_Math`'s own real
+`static.png` fixture (reused as a source PNG, not its intended legacy role). `snesgfx.test.js`
+gained a `colors` field assertion. Full suite green (152 suites, 766 passing, same 3
+pre-existing skips) throughout every intermediate step; `yarn jest buildSnesRom` green after
+every C change, per this project's own "never land a non-bootable intermediate commit"
+discipline.
+
+Next: M9.4's own step 7 (an OAM/scanline hardware-budget warning, pure diagnostics, no
+engine/compiler behavior change) is the one remaining piece of the approved plan, not done in
+this round.

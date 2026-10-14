@@ -6,6 +6,7 @@ import { spriteSheetSelectors } from "../../store/features/entities/entitiesStat
 import entitiesActions from "../../store/features/entities/entitiesActions";
 import editorActions from "../../store/features/editor/editorActions";
 import { assetFilename } from "../../lib/helpers/gbstudio";
+import l10n from "../../lib/helpers/l10n";
 
 // M9 (SPRITE_EDITOR_PROGRESS.md) - the free-form metasprite click-to-place
 // canvas. Center column, top: replaces SpritePreview for a sheet with
@@ -82,16 +83,34 @@ const StampGhost = styled.div`
   outline: 1px dashed rgba(255, 255, 255, 0.6);
 `;
 
+const Hint = styled.div`
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translate(-50%, 8px);
+  width: 220px;
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.4;
+  color: ${(props) => props.theme.colors.secondaryText};
+  pointer-events: none;
+  white-space: normal;
+`;
+
 interface MetaspriteCanvasProps {
   id: string;
-  zoom?: number;
 }
 
-export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({
-  id,
-  zoom = 2,
-}) => {
+export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
   const dispatch = useDispatch();
+  // User-found: the app toolbar's own zoom button (top of the window, next
+  // to the section picker) already exists and correctly updates
+  // state.editor.zoomSprite when on the Sprites page (zoomForSection,
+  // lib/helpers/gbstudio.js) - it just had nothing reading that value back
+  // out on this page, so it looked completely non-functional. zoomSprite is
+  // a percentage (100 = 1x), same convention as every other section's own
+  // zoom field.
+  const zoom = useSelector((state: RootState) => state.editor.zoomSprite / 100);
   const areaRef = useRef<HTMLDivElement>(null);
   const projectRoot = useSelector(
     (state: RootState) => state.document?.root || ""
@@ -139,6 +158,37 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({
         sprite._v || 0
       }`
     : "";
+
+  // User-found: a placed tile showed several neighbouring frames squeezed
+  // into its own box instead of just the one picked - backgroundPosition
+  // was scaled by zoom (correct) but backgroundSize was left at "auto" (the
+  // image's real, unscaled pixel size), so a box zoomed up to e.g. 64x64
+  // (TILE_SIZE * 4) exposed 64 real sheet pixels - 4 tiles' worth - not one
+  // tile zoomed in. The background image itself must scale by zoom too, the
+  // same way MetaspriteTilePalette's plain <img> already does via explicit
+  // width/height. Needs the sheet's real pixel size, which (unlike that
+  // palette, which renders a visible <img> with its own onLoad) nothing
+  // here loads - track it the same way, off a throwaway Image().
+  const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+  useEffect(() => {
+    if (!imageUrl) {
+      return undefined;
+    }
+    let cancelled = false;
+    const img = new Image();
+    img.onload = () => {
+      if (!cancelled) {
+        setNaturalSize({ width: img.naturalWidth, height: img.naturalHeight });
+      }
+    };
+    img.src = imageUrl;
+    return () => {
+      cancelled = true;
+    };
+  }, [imageUrl]);
+  const backgroundSize = `${naturalSize.width * zoom}px ${
+    naturalSize.height * zoom
+  }px`;
 
   const toCanvasPoint = useCallback(
     (clientX: number, clientY: number) => {
@@ -414,7 +464,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({
                 backgroundPosition: `${-tile.sliceX * zoom}px ${
                   -tile.sliceY * zoom
                 }px`,
-                backgroundSize: "auto",
+                backgroundSize,
                 transform: `scale(${tile.flipX ? -1 : 1}, ${
                   tile.flipY ? -1 : 1
                 })`,
@@ -434,6 +484,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({
               backgroundPosition: `${-spriteTileSelection.x * zoom}px ${
                 -spriteTileSelection.y * zoom
               }px`,
+              backgroundSize,
             }}
           />
         )}
@@ -446,6 +497,9 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({
               height: marquee.height * zoom,
             }}
           />
+        )}
+        {tileIds.length === 0 && !spriteTileSelection && (
+          <Hint>{l10n("FIELD_METASPRITE_HINT")}</Hint>
         )}
       </CanvasArea>
     </Wrapper>
