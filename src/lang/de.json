@@ -236,7 +236,6 @@
   "FIELD_HIGH": "Hoch",
   "FIELD_BOUNCE_NOTE": "Betrifft nur Plattformszenen",
   "FIELD_WEAPON_SPRITE": "Waffe Sprite Sheet",
-  "FIELD_WORK_IN_PROGRESS": "In Arbeit",
   "FIELD_PERSIST_BETWEEN_SCENES": "Zwischen den Szenen verharren",
   "FIELD_PERSIST_BETWEEN_SCENES_WARNING": "Hinweis: Einige Ereignisse wie Projektile und Sprite-Sheet-Änderungen funktionieren derzeit nicht, wenn sie in einem Eingabeskript verwendet werden, das zwischen den Szenen beibehalten wird.",
   "FIELD_ALLOW_FASTFORWARD": "Vorspulen von Text bei gedrückten Tasten",

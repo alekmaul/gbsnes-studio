@@ -16,10 +16,7 @@ interface SceneTypeOption {
 export const options: SceneTypeOption[] = [
   { value: "0", label: l10n("GAMETYPE_TOP_DOWN") },
   { value: "1", label: l10n("GAMETYPE_PLATFORMER") },
-  {
-    value: "2",
-    label: `${l10n("GAMETYPE_ADVENTURE")} (${l10n("FIELD_WORK_IN_PROGRESS")})`,
-  },
+  { value: "2", label: l10n("GAMETYPE_ADVENTURE") },
   { value: "3", label: l10n("GAMETYPE_SHMUP") },
   { value: "4", label: l10n("GAMETYPE_POINT_N_CLICK") },
 ];

@@ -237,7 +237,6 @@
   "FIELD_HIGH": "Alto",
   "FIELD_BOUNCE_NOTE": "Afeta apenas as cenas da plataforma",
   "FIELD_WEAPON_SPRITE": "Sprite Sheet De Armas",
-  "FIELD_WORK_IN_PROGRESS": "Trabalho em Progresso",
   "FIELD_PERSIST_BETWEEN_SCENES": "Persistir Entre As Cenas",
   "FIELD_PERSIST_BETWEEN_SCENES_WARNING": "Nota: Alguns eventos, como projéteis e alterações no sprite sheet, atualmente não funcionam quando usados em um script de entrada que persiste entre as cenas.",
   "FIELD_ALLOW_FASTFORWARD": "Avançar o texto enquanto os botões são pressionados",

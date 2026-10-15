@@ -237,7 +237,6 @@
   "FIELD_HIGH": "Alto",
   "FIELD_BOUNCE_NOTE": "Este evento funciona apenas em projectos de 'Platforma'",
   "FIELD_WEAPON_SPRITE": "Sprites de Armas",
-  "FIELD_WORK_IN_PROGRESS": "Work in Progress",
   "FIELD_PERSIST_BETWEEN_SCENES": "Persistir entre Mapas",
   "FIELD_PERSIST_BETWEEN_SCENES_WARNING": "Nota: Alguns eventos como os 'Projécteis' e as alterações de Sprites podem não funcionar quando usadas juntamente com um 'Script Associado a Clique de Botão' que persiste entre Mapas.",
   "FIELD_ALLOW_FASTFORWARD": "Avanço rápido de texto e diálogo.",
