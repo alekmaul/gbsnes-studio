@@ -379,6 +379,15 @@ const dummyExtraPoses = new Array(5 * 8).fill(0);
 // comment on metasprite_frame_base. All-zero `slotByteLen` here: neither
 // dummy scene uses metaspriteMode on any sheet.
 const dummyMetasprites = new Array(2 * 8).fill(0);
+// Adventure genre, Option 1 (box-sweep collision): [4] trailing player
+// collision-bounds bytes (left, right, top, bottom - signed), appended
+// after dummyMetasprites - see compileSnesData.js's own emission and
+// scene.h's comment on player_bounds_*. Neither dummy scene uses the
+// Adventure genre (both are SCENE_TYPE_TOPDOWN above), so these are never
+// actually read - the values reproduce the legacy centered-16x16 box
+// (compileSnesData.js's own documented default for no authored bounds)
+// rather than being meaningless, in case that ever changes.
+const dummyPlayerBounds = [-8 & 0xff, 7, -16 & 0xff, 0xff]; // left,right,top,bottom
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
@@ -391,12 +400,13 @@ const scene0 = [
   50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
   ...collision,
   ...dummyExtraPoses,
-  ...dummyMetasprites
+  ...dummyMetasprites,
+  ...dummyPlayerBounds
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

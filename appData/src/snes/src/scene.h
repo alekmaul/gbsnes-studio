@@ -83,6 +83,14 @@ extern u8 extra_pose_side_b[SPRITE_SLOTS];
  * sprite_slot_for_index already uses. */
 extern const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
 
+/* Adventure genre, Option 1 (box-sweep collision) - the player's real
+ * collision bounding box, signed byte offsets from actors[0].x/actors[0].y
+ * (left/top are typically negative, right/bottom typically small positive -
+ * see compileSnesData.js's own conversion from the SpriteSheet's authored
+ * boundsX/Y/Width/Height). Parsed once per scene load, read only by
+ * Update_Adventure - every other genre is unaffected. */
+extern s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bounds_bottom;
+
 /* Real per-actor OAM id base (SPRITE_EDITOR_PROGRESS.md M7) - a prefix sum
  * over sprite_oam_ids_for_slot[], computed once in SceneInit, replacing the
  * old incidental `i << 2` spacing (which reserved 4 ids/actor for no real

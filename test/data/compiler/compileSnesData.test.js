@@ -181,12 +181,13 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // header(8) + sprite-slot table(32, M7) + parallax table(6) + playerHit
     // table(6) + 0 actors + 0 triggers = 52 bytes before the ceil(w*h/8) =
     // 45-byte collision bitmap, which is itself followed by the [40]
-    // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md) and
-    // then the [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4) -
-    // both appended at the very end of the blob specifically so neither
+    // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md), the
+    // [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4), and finally
+    // the [4] player collision-bounds bytes (Adventure genre, Option 1) -
+    // all three appended at the very end of the blob specifically so none
     // ever shifts any of the fixed-offset assertions above/below them.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40 + 16);
+    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4);
     const colByte = blob[52];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).
@@ -279,7 +280,9 @@ describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", ()
       const off = metaOffset + 2 + slot0Len + (k - 1) * 2;
       expect(blob[off] | (blob[off + 1] << 8)).toBe(0);
     }
-    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2);
+    // +4: Adventure genre Option 1's trailing player collision-bounds bytes,
+    // appended after the metasprite table - see its own test below.
+    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4);
     // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
     // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
     // own convention - offset is relative to the start of the payload).
@@ -702,6 +705,91 @@ describe("compileSnesData - per-scene Player Sprite Sheet override (v4)", () => 
     expect(out.assetsH).toContain("PLAYER_SPRITE_SLOT");
     expect(out.assetsH).not.toContain("PLAYER_SPRITE_TYPE");
     expect(out.assetsH).not.toContain("PLAYER_SPRITE_PAL");
+  });
+});
+
+describe("compileSnesData - Adventure genre Option 1: player collision bounds (v4)", () => {
+  // The player's own SpriteSheet.boundsX/Y/Width/Height (SpriteInspector.tsx,
+  // already fully authorable - see entitiesTypes.ts's "kept for schema
+  // parity... not compiled into assets.c" comment this closes) become the
+  // scene blob's trailing [4] bytes (left, right, top, bottom - signed),
+  // read by scene.c's Update_Adventure box-sweep. Always the last 4 bytes
+  // of the blob (appended after the M9.4 metasprite table), regardless of
+  // genre - compiled unconditionally for every scene, same precedent as
+  // every other Engine-Fields-style "only one genre reads it" value.
+  const PLAYER_ID = "581d34d0-9591-4e6e-a609-1d94f203b0cd";
+
+  const baseProject = (spriteSheet) => ({
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+      playerSpriteSheetId: PLAYER_ID,
+    },
+    backgrounds: [
+      { id: "bg", filename: "placeholder.png", width: 20, height: 18 },
+    ],
+    spriteSheets: [spriteSheet],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "adventure",
+        type: "2", // Adventure
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [],
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("authored boundsX/Y/Width/Height compile to the exact signed left/right/top/bottom bytes", async () => {
+    const project = baseProject({
+      id: PLAYER_ID,
+      filename: "static.png",
+      type: "static",
+      boundsX: 2,
+      boundsY: 3,
+      boundsWidth: 10,
+      boundsHeight: 12,
+    });
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    // canvasWidth/Height default to 16 (not metaspriteMode) - same anchor
+    // formula already Mesen-verified for M9.4 metasprite tiles:
+    // left = boundsX - canvasWidth/2 = 2 - 8 = -6 (250)
+    // right = left + boundsWidth - 1 = -6 + 9 = 3
+    // top = boundsY - canvasHeight = 3 - 16 = -13 (243)
+    // bottom = top + boundsHeight - 1 = -13 + 11 = -2 (254)
+    const tail = blob.slice(-4);
+    expect([...tail]).toEqual([250, 3, 243, 254]);
+  });
+
+  test("no authored bounds default to the legacy centered-16x16 box, not zeros", async () => {
+    const project = baseProject({
+      id: PLAYER_ID,
+      filename: "static.png",
+      type: "static",
+    });
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    // left=-8(248), right=7, top=-16(240), bottom=-1(255) - reproduces the
+    // legacy actor_render_tile -8/-16 anchor exactly, same values
+    // gen-dummy-gfx.js's own dummyPlayerBounds uses for the same reason.
+    const tail = blob.slice(-4);
+    expect([...tail]).toEqual([248, 7, 240, 255]);
   });
 });
 

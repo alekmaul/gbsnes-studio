@@ -257,6 +257,30 @@ force-blanked frame on a no-fade scene load (imperceptible); a `SWITCH_SCENE` fa
 unchanged (it ramps from black via `FadeUpdate` regardless). Verified in Mesen frame-by-frame:
 old build showed the full logo at ~f20 then the curtain; new build is clean black → curtain →
 `OVERLAY_MOVE_TO` wipe → logo.
+**HDMA channel 3 mis-armed by `setModeHdmaReset()`, corrupting INIDISP - the real cause of the
+SnesJs web-player "flashing lines then black screen" bug (user-found, reproduced even on an
+empty project).** Despite its name, PVSnesLib's `setModeHdmaReset(channel)` does not disable a
+channel - it *enables* HDMA on it (a real `$420C` write) with an unconfigured B-bus target that
+defaults to `$2100` (INIDISP). `SceneInit()` called it on every scene load whenever parallax was
+inactive (meant to clear the sticky HDMA channel 3 left over from a previous parallax scene),
+arming a channel that then garbage-wrote into the screen-brightness/force-blank register once
+per scanline for the rest of the game. Root-caused by instrumenting the SnesJs core's own
+register writes in a headless offscreen Electron capture (monkey-patched the PPU register
+write path, captured JS call stacks on the offending `$2100` writes, traced them to
+`Snes.handleHdma`) - confirmed in both the SnesJs web player and Mesen. Fixed with a direct
+`REG_HDMAEN = 0` (scene.c; `$420C` is write-only, no shadow to read-modify-write, and no other
+HDMA channel is used anywhere in this engine). See `[[snes-hdma-and-obj-priority-bugs]]` for
+the companion OBJ-priority bug found in the same investigation. **Re-verified 2026-10-15**
+(user asked to "fix SnesJs flashing/garbled lines" again, apparently going by a stale
+recollection of this already-fixed bug): built the real `sneshtml` sample (Logo intro, the
+scene originally affected) through the real toolchain and diffed the SnesJs web player against
+Mesen frame-by-frame over 400 real frames (headless Electron with `requestAnimationFrame`
+overridden via a preload script so frames could be pumped deterministically instead of fighting
+Chromium's hidden-page rAF throttling) - zero transient-spike anomalies in either emulator, and
+the two tracked each other's per-row brightness almost exactly throughout the Logo curtain
+reveal. The bug does not currently reproduce; this fix was simply never folded into this file's
+own prose until now, even though it predates this document's "M9 editor asset feedback" entry
+immediately below by about three weeks.
 **M9 editor asset feedback (done).** Two more editor spots were GB-hardcoded and are now
 target-aware via `getTarget(settings.target)`: the **Backgrounds page size warnings**
 (`src/components/assets/ImageViewer.js` → `src/lib/helpers/assetWarnings.js`) used a fixed
@@ -1845,6 +1869,65 @@ a real gap in the existing coverage (every existing `actorMoveTo`/`actorMoveRela
 exercised `useCollisions: false` - the wire format for `true` was already correct before this
 fix, now it has its own byte-exact assertion too). Full suite green (150 suites), the real
 engine still compiles/links against the vendored toolchain.
+
+**Adventure genre: real box-sweep collision + real diagonal trig (Option 1, user-chosen after a
+3-option scoping pass - see memory `snes-adventure-genre-wip.md`).** `Update_Adventure`'s old
+collision test was a single narrow point per axis, with diagonal movement approximated by
+alternating which axis moves each frame (not real trig). Ported GB Studio 3.2.1's real
+`adventure_update` (`gb-studio-3.2.1/appData/src/gb/src/states/adventure.c`, read directly, not
+paraphrased) instead: real 8-angle selection from the d-pad combo, real sine-table trig
+(`point_translate_angle`, table ported verbatim from GB's `math.c`) for diagonal movement, and a
+real box-sweep against the player's own authored collision bounds - sweeping every tile row/
+column the box's leading edge spans and snapping flush against a wall instead of a binary
+all-or-nothing block. **The one deliberate deviation from GB's own code, Option 1's whole
+point**: GB's sweep tests a specific `COLLISION_LEFT/RIGHT/TOP/BOTTOM` flag on the tile ahead;
+this engine's `col_solid()` stays the flat, non-directional predicate it's always been
+(established since M4c) - the sweep *shape* is GB-accurate, *what counts as blocked* stays this
+fork's existing "solid blocks from every direction" rule, the same simplification Platformer's
+own collision already documents. Keeping `col_solid()`/`scene_col[]` untouched means every other
+genre (`can_step`/`npc_blocking`, Platformer, Shmup) is provably unaffected - confirmed with a
+real negative-control Mesen boot of the `sneshtml` sample's Top Down "Outside" scene, unchanged.
+
+Data flow: the player's collision box now comes from the SpriteSheet's own `boundsX/Y/Width/
+Height` (`SpriteInspector.tsx` - already fully authorable/visualized, just never compiled
+anywhere; `entitiesTypes.ts`'s own comment said as much). `compileSnesData.js` resolves the
+player's sheet per scene (`playerSpriteIdForScene`/`spriteById`, already-existing closures) and
+converts the authoring-canvas-space box into actor-relative `left/right/top/bottom` offsets with
+the *same* anchor formula already Mesen-verified for M9.4 metasprite tiles (`canvasWidth/2`
+horizontally centered, `canvasHeight` bottom-anchored) - not GB's own 7/8-based formula, which
+assumes a different actor-position anchor and would be wrong here. Appended as a new trailing
+`[4]` scene-blob section (after the M9.4 metasprite table), same "append-only, never shift an
+earlier offset" discipline every prior scene-blob growth in this file has followed. No authored
+bounds -> the documented default (0,0,16,16) reproduces the legacy centered-16x16 box
+(`left=-8,right=7,top=-16,bottom=-1`) rather than a degenerate zero-size one.
+
+**A real, self-caught bug before this ever reached Mesen**: GB's own formula
+(`pos.x += (SIN(angle)*speed)>>7`) applies that `>>7` directly to a position already kept in
+1/16px fixed point - this engine's `move_speed` is calibrated in whole pixels/frame instead
+(`MOVEMENT_SPEED_LOOKUP`), a scale GB's literal formula was never calibrated for. The first
+version of the port applied GB's `>>7` up front, every frame, before accumulating into the new
+`adv_frac_x/y` remainder - which truncates to exactly 0 at the player's own default `move_speed`
+of 1, for every angle (max `|sine_wave|` is 127, always < 128), forever - reintroducing the
+exact freeze the accumulator exists to prevent, just one layer deeper than the naive no-
+accumulator version would have. Caught by hand-deriving the real numbers before ever launching
+Mesen (not by the emulator run itself), fixed by accumulating the raw, unshifted `sine*speed`
+product and applying the single `>>7` once, when extracting each frame's whole-pixel delta,
+instead of before summing.
+
+**Verified in Mesen, real hardware**: a synthetic Adventure-genre scene (`Test_Math`'s own
+assets, a solid wall column at tile x=10) driven diagonally via `emu.setInput` at the player's
+real default speed (1) - smooth, non-frozen progress on both axes from frame 1 (`48,48` ->
+`49,49` -> `50,50`...), `x` settling at exactly `72` the instant it reaches the wall (hand-
+derived expected value, confirmed byte-exact) and never exceeding it for the rest of a 420-frame
+window, while `y` kept advancing independently past that point (sliding along the wall) -
+exactly the smoother-than-the-old-point-test behaviour this option was chosen for. One real
+Mesen gotcha hit along the way, worth remembering for the next session: `emu.setInput()` called
+from an `endFrame` callback never took effect (the CPU had already polled input earlier in the
+same frame) - the Lua API docs say as much ("recommended to use this function within a callback
+for the inputPolled event"), fixed by moving the `setInput` call to an `inputPolled` callback
+instead, confirmed by reading back the real `joy` WRAM global (0 before the fix, the real
+pressed-buttons bitmask after). Tests: two new byte-exact `compileSnesData.test.js` cases (an
+authored-bounds case and the no-bounds-default case).
 
 ## Tests
 

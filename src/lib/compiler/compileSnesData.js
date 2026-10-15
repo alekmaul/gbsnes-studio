@@ -1169,6 +1169,37 @@ const compileSnesData = async (
       );
     });
 
+    // Adventure genre, Option 1 (box-sweep collision): the player's real
+    // collision bounding box, authored on the SpriteSheet itself
+    // (boundsX/Y/Width/Height - SpriteInspector.tsx, already fully
+    // authorable/visualized, but never compiled anywhere before now - see
+    // entitiesTypes.ts's own "kept for schema parity... not compiled into
+    // assets.c" comment). Resolved per-scene the same way the player's own
+    // OBJ sheet already is (playerSpriteIdForScene/spriteById, both already
+    // used elsewhere in this function, e.g. the OAM-budget warning below).
+    // Converted from SpriteInspector's canvas-pixel authoring space into
+    // actor-relative offsets with the *same* anchor formula already
+    // Mesen-verified for M9.4 metasprite tiles (canvasWidth/2 horizontally
+    // centered, canvasHeight bottom-anchored) - not GB's own 7/8-based
+    // formula, which assumes GB's different actor-position anchor and
+    // would be wrong here. No sheet resolved -> the documented defaults
+    // (0,0,16,16) reproduce the legacy centered-16x16 box instead of zeros.
+    const playerSheetForBounds = spriteById(playerSpriteIdForScene(scene));
+    const boundsCanvasW = (playerSheetForBounds && playerSheetForBounds.canvasWidth) || 16;
+    const boundsCanvasH = (playerSheetForBounds && playerSheetForBounds.canvasHeight) || 16;
+    const boundsX = (playerSheetForBounds && playerSheetForBounds.boundsX) || 0;
+    const boundsY = (playerSheetForBounds && playerSheetForBounds.boundsY) || 0;
+    const boundsW = (playerSheetForBounds && playerSheetForBounds.boundsWidth) || 16;
+    const boundsH = (playerSheetForBounds && playerSheetForBounds.boundsHeight) || 16;
+    const playerBoundsLeft = boundsX - boundsCanvasW / 2;
+    const playerBoundsTop = boundsY - boundsCanvasH;
+    const playerBoundsBytes = [
+      toS8Byte(playerBoundsLeft),
+      toS8Byte(playerBoundsLeft + boundsW - 1),
+      toS8Byte(playerBoundsTop),
+      toS8Byte(playerBoundsTop + boundsH - 1)
+    ];
+
     return [].concat(
       bgIndex,
       (scene.actors || []).length,
@@ -1199,7 +1230,13 @@ const compileSnesData = async (
       // [2*SPRITE_SLOTS] M9.4: per-slot free-form metasprite frame data -
       // see buildSceneSprites' own comment above. Appended after
       // extraPoseBytes for the same "never shifts an earlier offset" reason.
-      spr.metaspriteBytes
+      spr.metaspriteBytes,
+      // [4] Adventure genre, Option 1: the player's collision bounding box
+      // (left, right, top, bottom - signed byte offsets from actors[0].x/y),
+      // computed above. Appended last, after metaspriteBytes, for the same
+      // "never shifts an earlier offset" reason every prior scene-blob
+      // growth in this file has followed.
+      playerBoundsBytes
     );
   });
 

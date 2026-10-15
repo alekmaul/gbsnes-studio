@@ -164,6 +164,12 @@ u8 extra_pose_side_b[SPRITE_SLOTS];
  * SceneRenderActors ever reads one. */
 const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
 
+/* Adventure genre, Option 1 (box-sweep collision) - see scene.h's own
+ * comment. .bss isn't pre-zeroed either, but SceneInit always writes all
+ * four from the scene blob's trailing bytes before Update_Adventure (the
+ * only reader) can ever run. */
+s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bounds_bottom;
+
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
  * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
  * is small enough this is cheaper than maintaining a list). sprite_slot is
@@ -712,7 +718,13 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  *                       hit3_idx (2B), update_idx (2B)
  *   triggers (7 bytes each): tile_x, tile_y, w, h, type, script_idx (2B)
  *   collision bitmap: ceil(width * height / 8) bytes, row-major, bit set = solid
+ *   (trailing, variable-length, appended in this order - see each one's own
+ *   parsing comment below rather than fixed offsets here): M8.3's [40]
+ *   extra-pose table, M9.4's [2*SPRITE_SLOTS] metasprite-frame table, then
+ *   Adventure genre Option 1's [4] player collision-bounds bytes (left,
+ *   right, top, bottom - signed, see scene.h's player_bounds_* comment)
  *
+
  * Every *_idx/script_idx field is a 2-byte little-endian event_ptrs[] index
  * (v4 fix, user-found: "the triggers are not working when I press A" in a
  * real multi-scene project) - it's a project-wide index shared across every
@@ -1227,6 +1239,16 @@ void SceneInit(void)
         p += slotByteLen;
     }
 
+    /* Adventure genre, Option 1: [4] trailing player collision-bounds bytes
+     * (left, right, top, bottom - signed, see scene.h's player_bounds_*
+     * comment and compileSnesData.js's own emission). The real last thing
+     * in the scene blob now. */
+    player_bounds_left = (s8)p[0];
+    player_bounds_right = (s8)p[1];
+    player_bounds_top = (s8)p[2];
+    player_bounds_bottom = (s8)p[3];
+    p += 4;
+
     actor_move_settings = 0;
     check_triggers = 1;
     /* A fresh scene's own starting tile must always be re-checked, even if
@@ -1740,17 +1762,125 @@ void Update_PointNClick(void)
  * SceneCheckTriggers - see that function's own M5c comment for why). */
 static s16 adv_last_trigger_tx = -1;
 static s16 adv_last_trigger_ty = -1;
-// Diagonal-move parity toggle (user-found comparing against B's real
-// adventure.c, same class of bug already fixed in Point and Click - see
-// Update_PointNClick's own comment for the full reasoning): B normalises
-// diagonal speed via point_translate_angle() (real trig); this engine moved
-// both axes at full move_speed every frame a diagonal was held, covering
-// sqrt(2) (~41%) more ground per frame than a straight move. Fixed with the
-// same integer-only "alternate one axis per frame" trick, applied to the
-// *final* dir_x/dir_y (after the wall-collision checks below, not at input
-// time) so a diagonal move that got partially blocked by a wall still
-// alternates correctly on whichever axis is actually still moving.
-static u8 adv_diag_toggle = 0;
+
+// Adventure genre, Option 1 (box-sweep collision + real diagonal trig,
+// replacing the old integer "alternate one axis per frame" diagonal
+// approximation and the old single-point collision test - see CLAUDE.md).
+// Sub-pixel remainder accumulators for the real trig delta below - each
+// holds a running sum of raw (unshifted) sine_wave[angle]*move_speed
+// products, with the final /128 (>>7, same divisor GB's own
+// point_translate_angle uses) applied once per frame when extracting that
+// frame's whole-pixel delta, not before accumulating (see Update_Adventure's
+// own comment on why the order matters: shifting first truncates to exactly
+// 0 at the player's default move_speed of 1, for every angle, forever).
+// Local to this genre only - actors[0].x/y themselves stay plain whole-pixel
+// ints, read by every other system (rendering/scripts/triggers/save data)
+// unchanged.
+static s16 adv_frac_x = 0;
+static s16 adv_frac_y = 0;
+
+// Real sine table, ported verbatim from GB Studio 3.2.1's own
+// appData/src/gb/src/core/math.c (int8_t sine_wave[256], amplitude ~127).
+// Adventure only ever selects one of the 8 angles 32 apart (0/45/.../315 in
+// this table's 256-units-per-turn scale), so no general SIN/COS macro layer
+// is added - the two call sites below index this table directly (COS(a) is
+// GB's own sine_wave[a+64] phase shift).
+static const s8 sine_wave[256] = {
+       0,   3,   6,   9,  12,  16,  19,  22,  25,  28,  31,  34,  37,  40,  43,  46,
+      49,  51,  54,  57,  60,  63,  65,  68,  71,  73,  76,  78,  81,  83,  85,  88,
+      90,  92,  94,  96,  98, 100, 102, 104, 106, 107, 109, 111, 112, 113, 115, 116,
+     117, 118, 120, 121, 122, 122, 123, 124, 125, 125, 126, 126, 126, 127, 127, 127,
+     127, 127, 127, 127, 126, 126, 126, 125, 125, 124, 123, 122, 122, 121, 120, 118,
+     117, 116, 115, 113, 112, 111, 109, 107, 106, 104, 102, 100,  98,  96,  94,  92,
+      90,  88,  85,  83,  81,  78,  76,  73,  71,  68,  65,  63,  60,  57,  54,  51,
+      49,  46,  43,  40,  37,  34,  31,  28,  25,  22,  19,  16,  12,   9,   6,   3,
+       0,  -3,  -6,  -9, -12, -16, -19, -22, -25, -28, -31, -34, -37, -40, -43, -46,
+     -49, -51, -54, -57, -60, -63, -65, -68, -71, -73, -76, -78, -81, -83, -85, -88,
+     -90, -92, -94, -96, -98,-100,-102,-104,-106,-107,-109,-111,-112,-113,-115,-116,
+    -117,-118,-120,-121,-122,-122,-123,-124,-125,-125,-126,-126,-126,-127,-127,-127,
+    -127,-127,-127,-127,-126,-126,-126,-125,-125,-124,-123,-122,-122,-121,-120,-118,
+    -117,-116,-115,-113,-112,-111,-109,-107,-106,-104,-102,-100, -98, -96, -94, -92,
+     -90, -88, -85, -83, -81, -78, -76, -73, -71, -68, -65, -63, -60, -57, -54, -51,
+     -49, -46, -43, -40, -37, -34, -31, -28, -25, -22, -19, -16, -12,  -9,  -6,  -3
+};
+#define ADV_ANGLE_0    0
+#define ADV_ANGLE_45   32
+#define ADV_ANGLE_90   64
+#define ADV_ANGLE_135  96
+#define ADV_ANGLE_180  128
+#define ADV_ANGLE_225  160
+#define ADV_ANGLE_270  192
+#define ADV_ANGLE_315  224
+
+// Sweeps the player's collision box's leading X edge (right if moving_right,
+// left otherwise) across every tile row the box's top..bottom spans at
+// tile_row0..tile_row1 (inclusive), testing this engine's existing flat
+// col_solid() - deliberately NOT GB's own directional COLLISION_LEFT/RIGHT
+// flags (Option 1's whole point, see CLAUDE.md: a solid tile blocks from
+// every direction here, same simplification Platformer's own collision
+// already documents). If any swept tile is solid, snaps candidate_x to sit
+// exactly one pixel short of it instead of cancelling the whole step - this
+// is what makes the sweep smoother than the point test it replaces (a fast
+// approach still advances right up to the wall, not stopping a whole tile
+// early). One condition per `if` throughout (816-tcc mis-links longer
+// boolean chains - this file's own established rule).
+static s16 adv_sweep_x(s16 candidate_x, s16 tile_row0, s16 tile_row1, u8 moving_right)
+{
+    s16 ty;
+    if (moving_right)
+    {
+        s16 tile_x = (candidate_x + player_bounds_right) >> 3;
+        for (ty = tile_row0; ty <= tile_row1; ty++)
+        {
+            if (col_solid(tile_x, ty))
+            {
+                return (tile_x << 3) - player_bounds_right - 1;
+            }
+        }
+    }
+    else
+    {
+        s16 tile_x = (candidate_x + player_bounds_left) >> 3;
+        for (ty = tile_row0; ty <= tile_row1; ty++)
+        {
+            if (col_solid(tile_x, ty))
+            {
+                return ((tile_x + 1) << 3) - player_bounds_left + 1;
+            }
+        }
+    }
+    return candidate_x;
+}
+
+// Same shape as adv_sweep_x, for the player's leading Y edge (bottom if
+// moving_down, top otherwise) across tile_col0..tile_col1.
+static s16 adv_sweep_y(s16 candidate_y, s16 tile_col0, s16 tile_col1, u8 moving_down)
+{
+    s16 tx;
+    if (moving_down)
+    {
+        s16 tile_y = (candidate_y + player_bounds_bottom) >> 3;
+        for (tx = tile_col0; tx <= tile_col1; tx++)
+        {
+            if (col_solid(tx, tile_y))
+            {
+                return (tile_y << 3) - player_bounds_bottom - 1;
+            }
+        }
+    }
+    else
+    {
+        s16 tile_y = (candidate_y + player_bounds_top) >> 3;
+        for (tx = tile_col0; tx <= tile_col1; tx++)
+        {
+            if (col_solid(tx, tile_y))
+            {
+                return ((tile_y + 1) << 3) - player_bounds_top + 1;
+            }
+        }
+    }
+    return candidate_y;
+}
 
 #define ADVENTURE_CAMERA_DEADZONE 8
 
@@ -1762,6 +1892,13 @@ void Start_Adventure(void)
     adv_last_trigger_tx = -1;
     adv_last_trigger_ty = -1;
 
+    // Sub-pixel diagonal-movement remainder (see its own comment above) -
+    // .bss isn't pre-zeroed on this toolchain, and a stale remainder
+    // carried in from whatever scene/genre ran before would bias the first
+    // frame or two of movement in a new scene.
+    adv_frac_x = 0;
+    adv_frac_y = 0;
+
     // GB's own Start_Adventure sets an 8px camera deadzone - ported for
     // real (v4), same value both axes.
     camera_deadzone_x = ADVENTURE_CAMERA_DEADZONE;
@@ -1770,28 +1907,23 @@ void Start_Adventure(void)
     camera_offset_y = 0;
 }
 
-// Narrow, direction-biased collision test - deliberately NOT the full 16x16
-// sprite or Top Down's 2-tile-wide can_step/npc_blocking footprint. GB's own
-// Adventure.c also narrows its hitbox well below the sprite's full width,
-// specifically so continuous 1px movement never has to reason about a
-// footprint spanning 3 tile columns/rows at once (a narrow single-point
-// test only ever touches one tile per axis, at any alignment). GB's exact
-// pixel bias assumes a different, top-left-based position convention than
-// this engine's centre-x/feet-y one (see gbs_types.h/SceneRenderActors) and
-// isn't Mesen-verifiable this session (the input-simulation gap - see
-// memory gbsnes-v2-migration), so this re-derives the same *idea* - a small,
-// direction-biased look-ahead point test - rather than copying GB's own
-// constants, which would risk porting a fencepost error with no way to
-// catch it interactively.
+// Adventure genre, Option 1 (box-sweep collision + real diagonal trig).
+// GB Studio 3.2.1's real adventure_update (gb-studio-3.2.1/appData/src/gb/
+// src/states/adventure.c) was read directly and ported: real 8-angle
+// selection + sine-table trig for diagonal movement (adv_frac_x/y above),
+// and a real box-sweep (adv_sweep_x/y above) against the player's own
+// authored collision bounds (player_bounds_*, from the SpriteSheet's
+// boundsX/Y/Width/Height - compileSnesData.js) instead of a single
+// direction-biased point test. The one deliberate deviation from GB's real
+// code: GB's sweep tests a specific COLLISION_LEFT/RIGHT/TOP/BOTTOM flag on
+// the tile ahead; this engine's collision bitmap has no directional bits
+// (established since M4c, same simplification Platformer's own collision
+// already documents), so the sweep tests the existing flat col_solid()
+// instead - the sweep *shape* is GB-accurate, what counts as "blocked"
+// stays this fork's existing rule. See CLAUDE.md for the full writeup.
 void Update_Adventure(void)
 {
-    s16 x = actors[0].x;
-    s16 y = actors[0].y;
-    s16 body_row = (y - 1) >> 3;  // just above the feet - avoids the exact
-                                   // tile-boundary case when y % 8 == 0
-    s16 feet_col = x >> 3;        // column under the horizontal centre
     s16 tile_x, tile_y;
-    s8 backup_dx, backup_dy;
     u8 input_x = 0, input_y = 0;
 
     actors[0].moving = 0;
@@ -1806,9 +1938,10 @@ void Update_Adventure(void)
     // only when the OTHER axis has input - both held keeps both (a real
     // diagonal), neither held keeps both as-is (facing persists while idle,
     // matching how actor_face/dir_x/dir_y already behave everywhere else in
-    // this engine). Ported from GB's own Adventure.c verbatim - it's plain
-    // control flow, not pixel-geometry-dependent, so there was nothing to
-    // re-derive here.
+    // this engine). dir_x/dir_y are now purely facing/input-intent - the
+    // box-sweep below is what actually blocks movement, so (unlike the old
+    // point-test version) nothing here ever needs to zero or restore them
+    // for collision reasons.
     if (input_x && !input_y) actors[0].dir_y = 0;
     else if (input_y && !input_x) actors[0].dir_x = 0;
 
@@ -1822,37 +1955,75 @@ void Update_Adventure(void)
         }
     }
 
-    // Saved so a fully-blocked step (below) can restore the player's
-    // intended facing rather than leaving it at 0,0 - matches GB's own
-    // `backup_dir`: bumping a wall should still visibly face into it, only
-    // the actual movement is cancelled.
-    backup_dx = actors[0].dir_x;
-    backup_dy = actors[0].dir_y;
-
-    if (actors[0].dir_x != 0)
-    {
-        s16 test_col = (x + actors[0].dir_x) >> 3;
-        if (col_solid(test_col, body_row))
-        {
-            actors[0].dir_x = 0;
-        }
-    }
-    if (actors[0].dir_y != 0)
-    {
-        s16 test_row = ((y + actors[0].dir_y) - 1) >> 3;
-        if (col_solid(feet_col, test_row))
-        {
-            actors[0].dir_y = 0;
-        }
-    }
-
+    // Matches GB's real behaviour, not a bug: `moving` (and so the walk
+    // animation) reflects whether a direction is held, independent of
+    // whether the sweep below actually produces any displacement - pushing
+    // against a wall still plays the walk animation, it just doesn't move.
     if (actors[0].moving)
     {
-        if (!actors[0].dir_x && !actors[0].dir_y)
+        u8 angle;
+        s16 dx, dy;
+
+        if (actors[0].dir_x < 0)
         {
-            actors[0].moving = 0;
-            actors[0].dir_x = backup_dx;
-            actors[0].dir_y = backup_dy;
+            if (actors[0].dir_y < 0) angle = ADV_ANGLE_315;
+            else if (actors[0].dir_y > 0) angle = ADV_ANGLE_225;
+            else angle = ADV_ANGLE_270;
+        }
+        else if (actors[0].dir_x > 0)
+        {
+            if (actors[0].dir_y < 0) angle = ADV_ANGLE_45;
+            else if (actors[0].dir_y > 0) angle = ADV_ANGLE_135;
+            else angle = ADV_ANGLE_90;
+        }
+        else if (actors[0].dir_y < 0)
+        {
+            angle = ADV_ANGLE_0;
+        }
+        else
+        {
+            angle = ADV_ANGLE_180;
+        }
+
+        // Real sub-pixel trig (GB's point_translate_angle: pos.x +=
+        // (SIN(angle)*speed)>>7, pos.y -= (COS(angle)*speed)>>7, COS(a) ==
+        // sine_wave[a+64]) - but GB applies that >>7 directly to a position
+        // already kept in 1/16px fixed point; this engine's move_speed is
+        // calibrated in whole pixels/frame instead (0/1/2/4/8 -
+        // MOVEMENT_SPEED_LOOKUP), a different scale GB's own formula was
+        // never calibrated for. Applying GB's >>7 up front, every frame,
+        // before accumulating would truncate to exactly 0 at the player's
+        // default move_speed of 1 for every angle (max |sine_wave| is 127,
+        // always < 128) - forever, not just occasionally - reintroducing
+        // the exact freeze this accumulator exists to prevent. Fixed by
+        // accumulating the raw, unshifted sine*speed product instead and
+        // only applying >>7 once, here, when extracting this frame's whole-
+        // pixel delta - mathematically the same single /128 GB's own
+        // formula performs, just deferred until after summing instead of
+        // applied (and the remainder discarded) every single frame.
+        // Arithmetic right-shift on a signed value floors correctly for a
+        // negative remainder too, so no special-casing is needed here.
+        adv_frac_x += (s16)sine_wave[angle] * actors[0].move_speed;
+        adv_frac_y -= (s16)sine_wave[(u8)(angle + 64)] * actors[0].move_speed;
+        dx = adv_frac_x >> 7;
+        dy = adv_frac_y >> 7;
+        adv_frac_x -= dx << 7;
+        adv_frac_y -= dy << 7;
+
+        // Step X then Step Y, in that order, matching GB's real code: Step
+        // Y's own column sweep uses actors[0].x *after* Step X has already
+        // written it, not the pre-move value.
+        if (dx != 0)
+        {
+            s16 tile_row0 = (actors[0].y + player_bounds_top) >> 3;
+            s16 tile_row1 = (actors[0].y + player_bounds_bottom) >> 3;
+            actors[0].x = adv_sweep_x(actors[0].x + dx, tile_row0, tile_row1, dx > 0);
+        }
+        if (dy != 0)
+        {
+            s16 tile_col0 = (actors[0].x + player_bounds_left) >> 3;
+            s16 tile_col1 = (actors[0].x + player_bounds_right) >> 3;
+            actors[0].y = adv_sweep_y(actors[0].y + dy, tile_col0, tile_col1, dy > 0);
         }
     }
 
@@ -1871,38 +2042,10 @@ void Update_Adventure(void)
     // player_iframes / hit_actor / collision_group (GB's own "touch an
     // enemy, flash, take no more damage for N frames" mechanic) - v4
     // follow-up: PlayerContactUpdate() now handles this, shared across every
-    // genre from SceneUpdate() rather than inline here (Adventure's own
-    // narrow collision test above never blocks the player from overlapping
-    // an actor, so this is the only place that damage can be detected).
-
-    // Gated on `moving`, not on dir_x/dir_y being nonzero: dir_x/dir_y are
-    // the actor's persistent *facing* (read by rendering and by
-    // SceneTryInteract) and stay whatever they last were on a frame with no
-    // input held - only `moving` reflects whether input was actually held
-    // THIS frame (and survives the wall-bump restore above unchanged: it
-    // was already cleared to 0 there). Gating on dir_x/dir_y directly would
-    // make the player drift forever in its last-faced direction after
-    // releasing the d-pad, and/or after a wall-bump restore reintroduces a
-    // nonzero dir with no movement intended - matches GB's own
-    // Adventure.c, which gates its own position update on `player.moving`.
-    if (actors[0].moving)
-    {
-        u8 move_x = actors[0].dir_x != 0;
-        u8 move_y = actors[0].dir_y != 0;
-        if (move_x && move_y)
-        {
-            adv_diag_toggle ^= 1;
-            if (adv_diag_toggle) move_y = 0; else move_x = 0;
-        }
-        if (move_x)
-        {
-            actors[0].x += (s16)actors[0].dir_x * actors[0].move_speed;
-        }
-        if (move_y)
-        {
-            actors[0].y += (s16)actors[0].dir_y * actors[0].move_speed;
-        }
-    }
+    // genre from SceneUpdate() rather than inline here (Adventure's own box
+    // sweep above is terrain-only and never blocks the player from
+    // overlapping an actor, so this is the only place that damage can be
+    // detected).
 }
 
 /* v2 M5d: Platformer genre pair (states.h) - the real work per the M4
@@ -2234,12 +2377,17 @@ void Update_Platform(void)
  * SceneTryInteract's own comment) - both were already correct for Shmup's
  * needs with zero Shmup-specific code, just never wired up.
  *
- * Collision uses the same narrow, direction-biased single-point test
- * Adventure already established (see its own comment) rather than GB's
+ * Collision uses a narrow, direction-biased single-point test - the same
+ * shape Adventure's own collision test used to use, before Adventure was
+ * upgraded to a real box-sweep against the player's own authored collision
+ * bounds (Option 1, see Update_Adventure's own comment) - rather than GB's
  * own per-direction pixel biases (which differ oddly by direction there -
  * e.g. a 2-tile look-ahead on one side, none on the other, tuned to GB's
  * own hitbox convention this engine doesn't share) - consistent with this
- * engine's own established style, not a guess at GB's exact intent.
+ * engine's own established style, not a guess at GB's exact intent. Shmup
+ * was never revisited when Adventure was upgraded - its own perpendicular-
+ * dodge check is a different enough shape (lateral dodge, not forward
+ * movement) that the two were never sharing code, only the same idea.
  *
  * Camera: GB's own Start_Shmup biases the view ahead of the scroll
  * direction with a fixed pixel camera_offset (no deadzone) - ported for
