@@ -1102,6 +1102,21 @@ Engine Field writes — each already has its own explanatory comment in `script_
 (M0–M13 on `v2`, M14–M18 on `v3`) lives in the roadmap artifact and Claude's memory
 (`gbsnes-v2-migration`), not duplicated here.
 
+**Sprites page: Free-form (Metasprite) mode.** A sprite sheet can compose a bigger pose out of
+several individually-placed 16×16 tiles (`metaspriteMode`/`metasprites`/`metaspriteTiles` on
+`SpriteSheet`) instead of one fixed block — a wide boss, a 16×32 character, an asymmetric prop
+— and it genuinely renders in a built ROM: `compileSnesData.js` packs each placed tile's quad
+through the same `createScenePacker` already used for legacy extra poses, and
+`SceneRenderActors` (`scene.c`) loops over a real multi-OAM-entry list per actor instead of the
+one fixed `oamSet` every other sprite still uses unchanged. A `multi`/`multi_movement` sheet's
+side pose auto-mirrors (position + pixels) for the opposite facing direction, matching every
+other actor sheet's own convention. A scene whose actors collectively need more than the
+SNES's real 128 hardware sprite slots gets a compile-time warning naming the scene, not a
+silent render failure. `SPRITE_EDITOR_PROGRESS.md` (repo root) has the full build-up history,
+including two real engine bugs (a pose-index mismatch for a 3-frame sheet, and a second,
+independent place computing an actor's own sprite type that had silently desynced from the
+slot table) found and fixed via real Mesen hardware verification, not just unit tests.
+
 **Custom-palette editor removed (user-driven).** The GB-heritage "Custom Palettes" feature
 (menu entry, page, per-scene/actor palette pickers, the "Colorize" paint tool, the
 `palettes`/`paletteIds`/`paletteId`/`tileColors` project fields, `customColorsEnabled` and

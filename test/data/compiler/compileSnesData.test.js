@@ -329,6 +329,87 @@ describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", ()
   });
 });
 
+describe("compileSnesData - OAM hardware-budget warning (M9.4 step 7)", () => {
+  // A metaspriteMode actor can now cost more than 1 real OAM id, so the
+  // 128-sprite hardware ceiling (never reachable before - every actor/
+  // emote/projectile/avatar cost exactly 1) genuinely can be exceeded by a
+  // scene leaning hard on big composed sprites. 7 tiles in one frame x
+  // snesTarget.maxActors (19) actors + the player, all sharing one slot
+  // (oamCostForId's own slot-0 fallback for an unconfigured player), well
+  // over 128 with emote/projectiles/avatar on top.
+  const w = 20;
+  const h = 18;
+  const makeProject = (actorCount, tilesPerFrame) => ({
+    _version: "2.0.0",
+    _release: "6",
+    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
+    variables: [],
+    spriteSheets: [
+      {
+        id: "meta0",
+        filename: "static.png",
+        numFrames: 1,
+        metaspriteMode: true,
+        animationType: "fixed",
+        canvasWidth: 16,
+        canvasHeight: 16 * tilesPerFrame,
+        metaspriteTiles: Object.fromEntries(
+          Array.from({ length: tilesPerFrame }, (_, i) => [
+            `t${i}`,
+            { id: `t${i}`, x: 0, y: i * 16, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+          ])
+        ),
+        metasprites: [
+          { id: "frame0", tiles: Array.from({ length: tilesPerFrame }, (_, i) => `t${i}`) },
+        ],
+      },
+    ],
+    scenes: [
+      {
+        id: "s0",
+        name: "oamBudgetTest",
+        backgroundId: "bg",
+        width: w,
+        height: h,
+        actors: Array.from({ length: actorCount }, (_, i) => ({
+          id: `a${i}`,
+          x: 1,
+          y: 1,
+          spriteSheetId: "meta0",
+          script: [],
+        })),
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("well under the real 128-id ceiling does not warn", async () => {
+    const warnings = [];
+    await compileSnesData(makeProject(4, 2), {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    // (4 actors + 1 player) * 2 + emote(1) + projectiles(4) + avatar(1) = 16
+    expect(warnings.some((w) => w.includes("hardware sprite slots"))).toBe(false);
+  });
+
+  test("over the real 128-id ceiling warns, naming the scene and the real total", async () => {
+    const warnings = [];
+    await compileSnesData(makeProject(snesTarget.maxActors, 7), {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    // (19 actors + 1 player) * 7 + emote(1) + projectiles(4) + avatar(1) = 146
+    const warning = warnings.find((w) => w.includes("hardware sprite slots"));
+    expect(warning).toBeTruthy();
+    expect(warning).toContain("oamBudgetTest");
+    expect(warning).toContain("146");
+    expect(warning).toContain("128");
+  });
+});
+
 describe("compileSnesData - scene_type (v2 M5a genre dispatch)", () => {
   const baseProject = {
     settings: { target: "snes", startSceneId: "s0", startX: 1, startY: 1 },

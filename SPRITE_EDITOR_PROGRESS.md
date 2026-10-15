@@ -87,10 +87,10 @@ full writeup; a separate, larger effort from M0-M4's authoring-only scope - not 
       compile-time constants (M8.3) - real toolchain build + Mesen-verified. M8.5 (real free-
       form per-tile placement authoring) stays explicitly deferred to M9 below, unchanged.
 - [x] **M9** — editor-side real free-form placement UI (M9.1-M9.3) + real compiler/engine
-      wiring so it actually renders in a built ROM (M9.4, steps 1-6 of its own 7-step plan -
-      see the dated entries below) - Mesen-verified on real hardware for both a static 2-tile
-      composition and a directional side-pose auto-mirror. M9.4's own step 7 (an OAM/scanline
-      budget warning, pure diagnostics) is the one still-open piece.
+      wiring so it actually renders in a built ROM (M9.4, all 7 steps of its own plan - see
+      the dated entries below) - Mesen-verified on real hardware for both a static 2-tile
+      composition and a directional side-pose auto-mirror, plus a real OAM hardware-budget
+      warning (step 7). This milestone is fully complete.
 - [x] **M10** — migration decision: **coexist, don't replace** - see the dated entry below. Every
       existing project's sheets keep rendering through the untouched legacy fixed-frame path;
       free-form metasprites are a new, separate opt-in per-sheet mode.
@@ -1695,3 +1695,46 @@ discipline.
 Next: M9.4's own step 7 (an OAM/scanline hardware-budget warning, pure diagnostics, no
 engine/compiler behavior change) is the one remaining piece of the approved plan, not done in
 this round.
+
+### 2026-10-15 — M9.4 step 7 (OAM hardware-budget warning) - M9.4 and M9 both fully complete
+
+The last piece of the approved M9.4 plan: a compile-time warning when a scene's worst-case
+simultaneous hardware sprite count exceeds the SNES's real 128-sprite OAM budget. Before this
+milestone every actor/emote/projectile/avatar cost exactly 1 OAM id, so 128 was never
+reachable by anything the compiler could see; a metaspriteMode actor can now cost several (one
+per placed tile in its biggest frame), so a scene leaning hard on big composed sprites
+genuinely can exceed it.
+
+`buildSceneSprites` (`compileSnesData.js`) sums the real worst-case cost per actor **instance**
+in `scene.actors` (not per distinct sheet - two actors sharing one costly metasprite sheet each
+pay that sheet's own `oamIds[k]` separately, matching `actor_oam_base[]`'s own real per-actor
+prefix sum in `scene.c`) plus the player (`oamCostForId(playerSpriteIdForScene(scene))`) plus a
+flat `1` (emote) + `MAX_PROJECTILES` (4, a new local JS mirror of `gbs_types.h`'s own
+`#define`, needed only here) + `1` (avatar). Warns, doesn't hard-cap - matching every other
+hardware-budget decision already in this codebase (VRAM tiles, 16-colour palettes, OBJ
+palette sharing, >8 sprite sheets/scene), all of which warn-and-continue rather than silently
+failing or blocking the build. A sheet that didn't fit this scene's 8 slots (the existing
+>8-sheets warning) is costed via the same slot-0 fallback the engine itself falls back to, for
+consistency between the warning and what would actually happen on real hardware.
+
+Deliberately left out, same as the plan itself called for: the separate, sharper 32-sprites-
+per-scanline hardware limit stays explicitly deferred (flagged twice already, M6/M7) - a
+compile-time estimate would need to reason about actors' real-time Y positions during actual
+gameplay, which this static compiler pass has no way to know; a loose, often-wrong bound isn't
+worth adding over leaving it undocumented-but-honest.
+
+Tests: two new cases in `compileSnesData.test.js` - a small scene (4 actors, 2 tiles/frame,
+total 16) confirms no false positive; `snesTarget.maxActors` (19) actors + the player on a
+7-tile-per-frame sheet (total 146) confirms the warning fires, names the scene, and reports
+the exact real total and the real 128 ceiling. Both built against a synthetic project reusing
+`Test_Math`'s own `static.png`/`placeholder.png` fixtures, same pattern every other M9.4 test
+this round used. Pure JS-side diagnostic, no engine/C change - no toolchain build or Mesen
+pass needed for this step specifically, unlike every other M9.4 step. Full suite green (152
+suites, 768 passing, same 3 pre-existing skips).
+
+`docs/sprites.md` updated to describe the warning as real instead of listing it under "what's
+not built yet".
+
+**M9.4, and with it the whole M9 milestone, is now fully complete** - a free-form (metasprite)
+sprite sheet can be authored, composed, and now genuinely renders in a built ROM, verified on
+real hardware, with a real warning if a scene pushes past what the hardware can actually show.

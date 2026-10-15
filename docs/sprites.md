@@ -118,9 +118,11 @@ Switching Free-form on for a Fixed sheet that already has several frames (from i
 width) keeps all of them - you're only ever adding to or removing from that starting point,
 never losing frames you haven't touched yet.
 
+If a scene's actors collectively need more hardware sprite slots than the SNES has (128 -
+shared with the dialogue avatar, emote bubble and the projectile pool), Build ROM warns and
+names the scene rather than letting sprites silently fail to render - use fewer simultaneous
+actors, or fewer tiles per metasprite frame, in that scene.
+
 ### What's not built yet
 
 - No way to resize or reorder frames other than add/remove at the end.
-- No in-editor warning if a scene's actors collectively need more hardware sprite slots than
-  the SNES has (128) - a very large scene leaning heavily on big composed sprites could hit
-  that ceiling; nothing currently warns about it ahead of time.

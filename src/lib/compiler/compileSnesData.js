@@ -296,6 +296,11 @@ const compileSnesData = async (
   // sheet is always slot 0; a scene's own actor sheets take 1..7. A scene that
   // needs more than 8 distinct sheets falls the extras back to slot 0.
   const SPRITE_SLOTS = 8;
+  // M9.4: mirrors gbs_types.h's own #define MAX_PROJECTILES 4 - needed here
+  // only for the OAM hardware-budget warning below (buildSceneSprites),
+  // which has to account for the whole projectile pool's own worst-case
+  // OAM cost alongside actors/emote/avatar.
+  const MAX_PROJECTILES = 4;
   const spriteSheets = projectData.spriteSheets || [];
   const spriteById = (id) => spriteSheets.find((s) => s.id === id);
   const isSprite = (id) => id && !!spriteById(id);
@@ -805,6 +810,43 @@ const compileSnesData = async (
     });
 
     packer.warnings.forEach((w) => warnings(`Scene '${sceneName}': ${w}`));
+
+    // M9.4 step 7 (SPRITE_EDITOR_PROGRESS.md): a real OAM hardware-budget
+    // warning - the SNES has exactly 128 real sprite slots total, and
+    // until now every actor/emote/projectile/avatar cost exactly 1, so
+    // this ceiling was never reachable by anything this compiler could
+    // control. A metaspriteMode actor can now cost more than 1 (oamIds[k]
+    // above), so a scene leaning hard on big composed sprites really can
+    // exceed it. Warn, don't hard-cap - matches this codebase's universal
+    // convention for every other hardware budget (VRAM tiles just above,
+    // 16-colour palettes, OBJ palette sharing, >8 sprite sheets/scene).
+    // Summed per actor INSTANCE (scene.actors), not per distinct sheet -
+    // two actors sharing one metasprite sheet each cost that sheet's own
+    // oamIds[k] separately, matching actor_oam_base[]'s own real prefix
+    // sum in scene.c. A sheet that doesn't fit in this scene's 8 slots (the
+    // warning above) falls back to slot 0, same as the engine's own
+    // fallback - costed as oamIds[0] here too, for consistency.
+    const sceneForWarning = scenes[sceneIndex];
+    const slotForSpriteId = (id) => sceneSpriteIds[sceneIndex].indexOf(id);
+    const oamCostForId = (id) => {
+      const slot = slotForSpriteId(id);
+      return oamIds[slot >= 0 ? slot : 0];
+    };
+    let totalOamIds = oamCostForId(playerSpriteIdForScene(sceneForWarning));
+    (sceneForWarning.actors || []).forEach((a) => {
+      totalOamIds += oamCostForId(a.spriteSheetId);
+    });
+    totalOamIds += 1; // emote bubble
+    totalOamIds += MAX_PROJECTILES; // the whole projectile pool
+    totalOamIds += 1; // dialogue avatar
+    if (totalOamIds > 128) {
+      warnings(
+        `Scene '${sceneName}' needs ${totalOamIds} hardware sprite slots worst-case ` +
+          `(actors + emote + projectiles + avatar), over the real 128 the SNES has - ` +
+          `some sprites will fail to render. Use fewer simultaneous actors, or fewer ` +
+          `tiles per metasprite frame.`
+      );
+    }
 
     const extraPoseBytes = [].concat(...EXTRA_POSE_KEYS.map((key) => extraPose[key]));
     // M9.4 (SPRITE_EDITOR_PROGRESS.md): per-slot free-form metasprite frame
