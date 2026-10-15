@@ -71,16 +71,32 @@ class SpriteSheetCanvas extends Component {
   draw = () => {
     const { projectRoot, spriteSheet = {}, direction = "down", frame, rawFrame } = this.props;
     if (this.canvas && this.canvas.current && spriteSheet) {
+      // M9.4 follow-up (user-found: a Free-form actor placed on a scene
+      // still showed as a plain 16x16 sprite) - this worker drew a flat,
+      // single-16x16-frame crop with no knowledge of metaspriteMode at
+      // all. Pass the real composed canvas size + placed-tile data through
+      // when it's set, so the worker can draw the actor's real shape
+      // instead of always assuming 16x16.
+      const width = spriteSheet.metaspriteMode ? spriteSheet.canvasWidth || SPRITE_SIZE : SPRITE_SIZE;
+      const height = spriteSheet.metaspriteMode ? spriteSheet.canvasHeight || SPRITE_SIZE : SPRITE_SIZE;
+      if (this.canvas.current.width !== width || this.canvas.current.height !== height) {
+        this.canvas.current.width = width;
+        this.canvas.current.height = height;
+      }
       this.worker.postMessage({
         src: this.imageSrc(projectRoot, spriteSheet),
-        width: SPRITE_SIZE,
-        height: SPRITE_SIZE,
+        width,
+        height,
         id: this.id,
         numFrames: spriteSheet.numFrames,
         type: spriteSheet.type,
         direction,
         frame,
         rawFrame,
+        metaspriteMode: spriteSheet.metaspriteMode,
+        animationType: spriteSheet.animationType,
+        metasprites: spriteSheet.metasprites,
+        metaspriteTiles: spriteSheet.metaspriteTiles,
       });
     }
   };
@@ -89,7 +105,10 @@ class SpriteSheetCanvas extends Component {
     if (this.offscreenCanvas && this.offscreenCtx && e.data.id === this.id) {
       const ctx = this.canvas.current.getContext("2d");
       this.offscreenCtx.transferFromImageBitmap(e.data.canvasImage);
-      ctx.clearRect(0, 0, SPRITE_SIZE, SPRITE_SIZE);
+      // Clear the canvas element's own real size, not a fixed SPRITE_SIZE -
+      // a metaspriteMode sheet's canvas can be taller/wider than 16x16 (see
+      // draw() above).
+      ctx.clearRect(0, 0, this.canvas.current.width, this.canvas.current.height);
       ctx.drawImage(this.offscreenCanvas, 0, 0);
     }
   };
@@ -104,8 +123,15 @@ class SpriteSheetCanvas extends Component {
   };
 
   render() {
+    const { spriteSheet, style } = this.props;
+    const width =
+      (spriteSheet && spriteSheet.metaspriteMode && spriteSheet.canvasWidth) ||
+      SPRITE_SIZE;
+    const height =
+      (spriteSheet && spriteSheet.metaspriteMode && spriteSheet.canvasHeight) ||
+      SPRITE_SIZE;
     return (
-      <canvas ref={this.canvas} width={SPRITE_SIZE} height={SPRITE_SIZE} />
+      <canvas ref={this.canvas} width={width} height={height} style={style} />
     );
   }
 }
@@ -126,6 +152,13 @@ SpriteSheetCanvas.defaultProps = {
   direction: "down",
   frame: 0,
   spriteSheet: null,
+  // Undefined by default - legacy consumers keep relying purely on CSS
+  // (e.g. `.Actor canvas { top: -8px }`, which assumes a 16x16 sprite).
+  // Actor.js passes a real override for a metaspriteMode sheet, whose
+  // composed size that fixed CSS can't account for - an inline style wins
+  // the cascade over a class rule, so this cleanly overrides it only when
+  // actually needed.
+  style: undefined,
 };
 
 function mapStateToProps(state, props) {

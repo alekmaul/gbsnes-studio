@@ -73,6 +73,8 @@ const Button = styled.button`
 
   canvas {
     width: 48px;
+    height: 48px;
+    object-fit: contain;
     image-rendering: pixelated;
   }
 `;
