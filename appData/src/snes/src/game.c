@@ -307,7 +307,7 @@ int main(void)
         if (scene_unblank_pending)
         {
             scene_unblank_pending = 0;
-            setBrightness(FadeLevel());
+            FadeRestoreBrightness();
         }
 
         joy = padsCurrent(0);

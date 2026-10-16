@@ -43,7 +43,7 @@
  */
 #include "gbs_types.h"
 
-#define ENGINE_FIELDS_SIZE 22
+#define ENGINE_FIELDS_SIZE 23
 extern u8 engine_fields_raw[ENGINE_FIELDS_SIZE];
 
 #define topdown_grid          (engine_fields_raw[0])
@@ -64,5 +64,9 @@ extern u8 engine_fields_raw[ENGINE_FIELDS_SIZE];
  * - see Update_Shmup's own comment in scene.c). Now a real, independently
  * configurable field, matching GB Studio's real shooter_scroll_speed. */
 #define shooter_scroll_speed  (engine_fields_raw[21])
+
+/* v4 follow-up: real white-fade support (fade.c) - matches GB Studio's own
+ * whole-project fade_style field (engine.json: 0 = white, 1 = black). */
+#define fade_style            (engine_fields_raw[22])
 
 #endif

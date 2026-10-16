@@ -18,4 +18,5 @@ u8 engine_fields_raw[ENGINE_FIELDS_SIZE] = {
     0, 2, /* plat_hold_grav @17 = 512 */
     32, 78, /* plat_max_fall_vel @19 = 20000 */
     2, /* shooter_scroll_speed @21 = 2 */
+    0, /* fade_style @22 = 0 */
 };

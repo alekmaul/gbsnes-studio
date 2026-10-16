@@ -799,7 +799,9 @@ u8 frames_len_for(u8 sprite_type, u8 slot)
  * map to physical slots {0, 2, 3, 4, 5, 6} - slot 7 stays free (GB only
  * ever needs 6, nothing to put there yet).
  */
-static const u16 bg_pal_slot_color[6] = { 0, 32, 48, 64, 80, 96 };
+/* non-static: fade.c's white-fade palette interpolation re-DMAs to these same
+ * physical destinations, see scene.h's own extern + comment. */
+const u16 bg_pal_slot_color[6] = { 0, 32, 48, 64, 80, 96 };
 
 static void SceneUploadBgPalette(u8 bg_index)
 {
@@ -813,6 +815,10 @@ static void SceneUploadBgPalette(u8 bg_index)
         if (remaining <= 0) break;
         chunk_len = (remaining > 32) ? 32 : (u16)remaining;
         dmaCopyCGram((u8 *)(src + (u16)i * 32), bg_pal_slot_color[i], chunk_len);
+        /* v4 (white fade): snapshot the same ROM source bytes fade.c just
+         * DMA'd, in a dense per-slot layout (16 colours/slot, no gap for the
+         * skipped physical slot 1) so a white fade can re-lerp them later. */
+        FadeCaptureBgChunk(i, src + (u16)i * 32, chunk_len);
         remaining -= 32;
     }
 }
@@ -962,11 +968,13 @@ void SceneInit(void)
     SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
+    FadeCaptureUiPalette((u8 *)ui_pal); /* v4 (white fade) */
     /* this scene's OBJ tile sheet (8 KB) + 8-palette CGRAM image (bakes in the
      * emote / avatar palettes at OBJ pal 1 / 2). v4: OBJ now lives at 0x0000
      * (was 0x4000) - see game.c's fixed VRAM map comment. */
     dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], OBJ_GFX_VRAM, SPR_TILES_SIZE);
     dmaCopyCGram((u8 *)scene_spr_pal_ptrs[scene_index], 128, SPR_PAL_SIZE);
+    FadeCaptureObjPalette((u8 *)scene_spr_pal_ptrs[scene_index]); /* v4 (white fade) */
 
     if (use_map_engine)
     {

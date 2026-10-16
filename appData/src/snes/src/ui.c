@@ -9,6 +9,7 @@
 #include "assets.h"
 #include "script_runner.h"
 #include "scene.h" /* M9.4: avatar_oid (real runtime value, was AVATAR_OID) */
+#include "fade.h" /* v4 (white fade): FadeCaptureUiPalette */
 
 /* provided by game.c */
 extern u16 prev_joy;
@@ -273,6 +274,11 @@ void UIInit(void)
      * showed through as dark blocks at the top of the screen (the M4b glitch). */
     dmaCopyVram((u8 *)ui_map, UI_MAP_VRAM, 32 * 32 * 2);
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
+    /* v4 (white fade): ui_pal never actually changes per-scene (it's a fixed
+     * ROM constant), but capturing here too - alongside scene.c's own
+     * identical capture at its own ui_pal upload - costs nothing and keeps
+     * every real dmaCopyCGram call site uniformly paired with a capture. */
+    FadeCaptureUiPalette((u8 *)ui_pal);
     bgSetScroll(2, 0, 0);
 }
 
