@@ -6,6 +6,7 @@ import {
   Music,
   Font,
   Emote,
+  SoundEffect,
   Variable,
   Actor,
   Trigger,
@@ -21,6 +22,7 @@ import { loadBackgroundData } from "../../../lib/project/loadBackgroundData";
 import { loadMusicData } from "../../../lib/project/loadMusicData";
 import { loadFontData } from "../../../lib/project/loadFontData";
 import { loadEmoteData } from "../../../lib/project/loadEmoteData";
+import { loadSfxData } from "../../../lib/project/loadSfxData";
 import { SettingsState } from "../settings/settingsState";
 import { MetadataState } from "../metadata/metadataState";
 import parseAssetPath from "../../../lib/helpers/path/parseAssetPath";
@@ -41,6 +43,7 @@ export type ProjectData = {
   music: Music[];
   fonts: Font[];
   emotes: Emote[];
+  soundEffects: SoundEffect[];
   variables: Variable[];
   settings: SettingsState;
 };
@@ -266,6 +269,43 @@ const removeEmote = createAsyncThunk<
 });
 
 /**************************************************************************
+ * Sound Effects
+ */
+
+const loadSfx = createAsyncThunk<{ data: SoundEffect }, string>(
+  "project/loadSfx",
+  async (filename, thunkApi) => {
+    const state = thunkApi.getState() as RootState;
+
+    const projectRoot = state.document && state.document.root;
+    const data = (await loadSfxData(projectRoot)(filename)) as
+      | SoundEffect
+      | undefined;
+
+    if (!data) {
+      throw new Error("Unable to load sound effect");
+    }
+
+    return {
+      data,
+    };
+  }
+);
+
+const removeSfx = createAsyncThunk<
+  { filename: string; plugin: string | undefined },
+  string
+>("project/removeSfx", async (filename, thunkApi) => {
+  const state = thunkApi.getState() as RootState;
+  const projectRoot = state.document && state.document.root;
+  const { file, plugin } = parseAssetPath(filename, projectRoot, "sounds");
+  return {
+    filename: file,
+    plugin,
+  };
+});
+
+/**************************************************************************
  * UI
  */
 
@@ -336,6 +376,8 @@ export default {
   removeFont,
   loadEmote,
   removeEmote,
+  loadSfx,
+  removeSfx,
   loadUI,
   reloadAssets,
   saveProject,

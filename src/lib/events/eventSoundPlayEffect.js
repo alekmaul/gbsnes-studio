@@ -48,6 +48,37 @@ const fields = [
     step: 0.01,
     defaultValue: 0.5
   },
+  // v4 follow-up: "custom" - a real per-project sound effect asset
+  // (assets/sounds/*.wav), as opposed to the 3 built-in synthesized
+  // waveforms above. soundEffectId reuses the exact pitch field shape
+  // "beep" already has (0-7 GB pitch table, the only scale the engine's
+  // BRR playback understands) rather than adding a new one.
+  {
+    key: "soundEffectId",
+    type: "soundEffectAsset",
+    conditions: [
+      {
+        key: "type",
+        eq: "custom"
+      }
+    ],
+    defaultValue: "LAST_SOUND_EFFECT"
+  },
+  {
+    key: "customPitch",
+    type: "number",
+    label: l10n("FIELD_PITCH"),
+    conditions: [
+      {
+        key: "type",
+        eq: "custom"
+      }
+    ],
+    min: 1,
+    max: 8,
+    step: 1,
+    defaultValue: 4
+  },
   {
     key: "wait",
     type: "checkbox",
@@ -61,6 +92,7 @@ const compile = (input, helpers) => {
     soundPlayBeep,
     soundStartTone,
     soundPlayCrash,
+    soundPlayCustomEffect,
     wait
   } = helpers;
 
@@ -82,6 +114,9 @@ const compile = (input, helpers) => {
     soundStartTone(period, toneFrames);
   } else if (input.type === "crash") {
     soundPlayCrash();
+  } else if (input.type === "custom") {
+    const pitch = typeof input.customPitch === "number" ? input.customPitch : 4;
+    soundPlayCustomEffect(input.soundEffectId, 9 - pitch);
   }
 
   // Convert seconds into frames (60fps)

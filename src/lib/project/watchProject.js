@@ -10,18 +10,21 @@ const watchProject = async (
     onAddMusic = () => {},
     onAddFont = () => {},
     onAddEmote = () => {},
+    onAddSfx = () => {},
     onChangedSprite = () => {},
     onChangedBackground = () => {},
     onChangedUI = () => {},
     onChangedMusic = () => {},
     onChangedFont = () => {},
     onChangedEmote = () => {},
+    onChangedSfx = () => {},
     onRemoveSprite = () => {},
     onRemoveBackground = () => {},
     onRemoveUI = () => {},
     onRemoveMusic = () => {},
     onRemoveFont = () => {},
     onRemoveEmote = () => {},
+    onRemoveSfx = () => {},
     onChangedEngineSchema = () => {},
   }
 ) => {
@@ -32,6 +35,7 @@ const watchProject = async (
   const uiRoot = `${projectRoot}/assets/ui`;
   const fontsRoot = `${projectRoot}/assets/fonts`;
   const emotesRoot = `${projectRoot}/assets/emotes`;
+  const soundsRoot = `${projectRoot}/assets/sounds`;
   const pluginsRoot = `${projectRoot}/plugins`;
   const engineSchema = `${projectRoot}/assets/engine/engine.json`;
 
@@ -93,6 +97,17 @@ const watchProject = async (
     .on("change", onChangedEmote)
     .on("unlink", onRemoveEmote);
 
+  const sfxWatcher = chokidar
+    .watch(soundsRoot, {
+      ignored: /^.*\.(?!(wav|WAV)$)[^.]+$/,
+      ignoreInitial: true,
+      persistent: true,
+      awaitWriteFinish
+    })
+    .on("add", onAddSfx)
+    .on("change", onChangedSfx)
+    .on("unlink", onRemoveSfx);
+
   const uiWatcher = chokidar
     .watch(uiRoot, {
       ignored: /^.*\.(?!png$)[^.]+$/,
@@ -127,7 +142,7 @@ const watchProject = async (
     
   const pluginsWatcher = chokidar
     .watch(pluginsRoot, {
-      ignored: /^.*\.(?!(png|mod|PNG|MOD)$)[^.]+$/,
+      ignored: /^.*\.(?!(png|mod|wav|PNG|MOD|WAV)$)[^.]+$/,
       ignoreInitial: true,
       persistent: true,
       awaitWriteFinish
@@ -144,6 +159,8 @@ const watchProject = async (
         onAddFont(filename);
       } else if (subfolder === "emotes") {
         onAddEmote(filename);
+      } else if (subfolder === "sounds") {
+        onAddSfx(filename);
       }
     })
     .on("change", filename => {
@@ -158,6 +175,8 @@ const watchProject = async (
         onChangedFont(filename);
       } else if (subfolder === "emotes") {
         onChangedEmote(filename);
+      } else if (subfolder === "sounds") {
+        onChangedSfx(filename);
       }
     })
     .on("unlink", filename => {
@@ -172,6 +191,8 @@ const watchProject = async (
         onRemoveFont(filename);
       } else if (subfolder === "emotes") {
         onRemoveEmote(filename);
+      } else if (subfolder === "sounds") {
+        onRemoveSfx(filename);
       }
     });
 
@@ -182,6 +203,7 @@ const watchProject = async (
     musicWatcher.close();
     fontWatcher.close();
     emoteWatcher.close();
+    sfxWatcher.close();
     engineSchemaWatcher.close();
     pluginsWatcher.close();
   };

@@ -17,6 +17,7 @@ import EmoteSelect from "../forms/EmoteSelect";
 import OverlayColorSelect from "../forms/OverlayColorSelect";
 import MusicSelect from "../forms/MusicSelect";
 import SoundEffectSelect from "../forms/SoundEffectSelect";
+import SfxAssetSelect from "../forms/SfxAssetSelect";
 import castEventValue from "../../lib/helpers/castEventValue";
 import OperatorSelect from "../forms/OperatorSelect";
 import ScriptEventFormTextArea from "./ScriptEventFormTextarea";
@@ -293,6 +294,11 @@ class ScriptEventFormInput extends Component {
     }
     if (type === "music") {
       return <MusicSelect id={id} value={value} onChange={this.onChange} />;
+    }
+    if (type === "soundEffectAsset") {
+      return (
+        <SfxAssetSelect id={id} value={String(value)} onChange={this.onChange} />
+      );
     }
     if (type === "soundEffect") {
       return (

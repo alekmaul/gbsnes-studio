@@ -3,6 +3,7 @@ import compileSnesData from "./compileSnesData";
 import ejectBuild from "./ejectBuild";
 import buildSnesRom from "./buildSnesRom";
 import compileSnesMusic from "./compileSnesMusic";
+import compileSnesSfx from "./compileSnesSfx";
 import { snesEmulatorRoot } from "../../consts";
 import copy from "../helpers/fsCopy";
 
@@ -102,6 +103,13 @@ const buildProject = async (
   await buildProjectData(data, { projectRoot, outputRoot, progress, warnings });
   await compileSnesMusic({
     music: data.music || [],
+    projectRoot,
+    buildRoot: outputRoot,
+    progress,
+    warnings,
+  });
+  await compileSnesSfx({
+    soundEffects: data.soundEffects || [],
     projectRoot,
     buildRoot: outputRoot,
     progress,

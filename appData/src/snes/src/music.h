@@ -21,4 +21,10 @@ void MusicStop(void);
  * Plays on top of any running music. */
 void SoundPlayEffect(u8 kind, u8 pitch);
 
+/* v4 follow-up: Sound: Play Effect's "custom" type - a real per-project BRR
+ * sample (compileSnesSfx.js), as opposed to the 2 built-ins above.
+ * sfxIndex is a project sound-effect index (see music.c's own comment);
+ * out-of-range or a failed-to-encode slot silently does nothing. */
+void SoundPlayCustomEffect(u8 sfxIndex, u8 pitch);
+
 #endif

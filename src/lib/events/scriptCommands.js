@@ -125,6 +125,10 @@ export const ACTOR_DEACTIVATE = "ACTOR_DEACTIVATE";
 export const ACTOR_START_UPDATE = "ACTOR_START_UPDATE";
 // v4: hardware mosaic/pixelisation effect (REG_MOSAIC) - see mosaic.c.
 export const MOSAIC_SET = "MOSAIC_SET";
+// v4 follow-up: Sound: Play Effect's "custom" type - a real per-project BRR
+// sample (assets/sounds/*.wav, compiled by compileSnesSfx.js), as opposed to
+// the 2 built-in synthesized waveforms SOUND_PLAY_BEEP/_PLAY_CRASH cover.
+export const SOUND_PLAY_CUSTOM = "SOUND_PLAY_CUSTOM";
 
 export const scriptCommands = [
   END,
@@ -249,6 +253,7 @@ export const scriptCommands = [
   ACTOR_DEACTIVATE,
   ACTOR_START_UPDATE,
   MOSAIC_SET,
+  SOUND_PLAY_CUSTOM,
 ];
 
 export const commandIndex = key => {

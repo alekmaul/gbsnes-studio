@@ -256,6 +256,7 @@
   "FIELD_EFFECT_BEEP": "Beep",
   "FIELD_EFFECT_TONE": "Tone",
   "FIELD_EFFECT_CRASH": "Crash",
+  "FIELD_EFFECT_CUSTOM": "Custom",
   "FIELD_SET_TO_VALUE_IF": "Set to '{value}' if",
   "FIELD_ITEM": "Item {value}",
   "FIELD_LAST_OPTION_CANCELS": "Last option sets to '0'",

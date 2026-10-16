@@ -13,6 +13,14 @@ export const getMusicIndex = (musicId, music) => {
   return musicIndex;
 };
 
+// v4 follow-up: Sound: Play Effect's "custom" type - mirrors getMusicIndex
+// exactly. Indexing is positional into the project's own soundEffects[]
+// (same order compileSnesSfx.js encodes in), so a -1 (not found) compiles
+// to a safely-ignored out-of-range sfxIndex rather than a wrong one.
+export const getSfxIndex = (soundEffectId, soundEffects) => {
+  return soundEffects.findIndex(sfx => sfx.id === soundEffectId);
+};
+
 export const getSpriteIndex = (spriteId, sprites) => {
   const spriteIndex = sprites.findIndex(sprite => sprite.id === spriteId);
   if (spriteIndex === -1) {

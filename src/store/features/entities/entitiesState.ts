@@ -58,6 +58,7 @@ import {
   Music,
   Font,
   Emote,
+  SoundEffect,
   Variable,
   CustomEvent,
   ScriptEvent,
@@ -82,6 +83,7 @@ const inodeToRecentSpriteSheet: Dictionary<SpriteSheet> = {}
 const inodeToRecentMusic: Dictionary<Music> = {}
 const inodeToRecentFont: Dictionary<Font> = {}
 const inodeToRecentEmote: Dictionary<Emote> = {}
+const inodeToRecentSfx: Dictionary<SoundEffect> = {}
 
 const matchAsset = (assetA: Asset) => (assetB: Asset) => {
   return assetA.filename === assetB.filename && assetA.plugin === assetB.plugin;
@@ -112,6 +114,9 @@ const fontsAdapter = createEntityAdapter<Font>({
 const emotesAdapter = createEntityAdapter<Emote>({
   sortComparer: sortByFilename,
 });
+const soundEffectsAdapter = createEntityAdapter<SoundEffect>({
+  sortComparer: sortByFilename,
+});
 const variablesAdapter = createEntityAdapter<Variable>();
 const engineFieldValuesAdapter = createEntityAdapter<EngineFieldValue>();
 
@@ -125,6 +130,7 @@ export const initialState: EntitiesState = {
   music: musicAdapter.getInitialState(),
   fonts: fontsAdapter.getInitialState(),
   emotes: emotesAdapter.getInitialState(),
+  soundEffects: soundEffectsAdapter.getInitialState(),
   variables: variablesAdapter.getInitialState(),
   engineFieldValues: engineFieldValuesAdapter.getInitialState(),
 };
@@ -370,6 +376,7 @@ const loadProject: CaseReducer<
   musicAdapter.setAll(state.music, entities.music || {});
   fontsAdapter.setAll(state.fonts, entities.fonts || {});
   emotesAdapter.setAll(state.emotes, entities.emotes || {});
+  soundEffectsAdapter.setAll(state.soundEffects, entities.soundEffects || {});
   customEventsAdapter.setAll(state.customEvents, entities.customEvents || {});
   variablesAdapter.setAll(state.variables, entities.variables || {});
   engineFieldValuesAdapter.setAll(state.engineFieldValues, entities.engineFieldValues || {});
@@ -1075,6 +1082,44 @@ const removeFont: CaseReducer<
   if (existingAsset) {
     inodeToRecentFont[existingAsset.inode] = clone(existingAsset);
     fontsAdapter.removeOne(state.fonts, existingAsset.id);
+  }
+};
+
+const loadSfx: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    data: SoundEffect;
+  }>
+> = (state, action) => {
+  const sfx = localSfxSelectors.selectAll(state);
+  const existingAsset = sfx.find(matchAsset(action.payload.data))
+    || inodeToRecentSfx[action.payload.data.inode];
+  const existingId = existingAsset?.id;
+
+  if (existingId) {
+    delete inodeToRecentSfx[action.payload.data.inode];
+    soundEffectsAdapter.upsertOne(state.soundEffects, {
+      ...existingAsset,
+      ...action.payload.data,
+      id: existingId,
+    });
+  } else {
+    soundEffectsAdapter.addOne(state.soundEffects, action.payload.data);
+  }
+};
+
+const removeSfx: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    filename: string;
+    plugin: string | undefined;
+  }>
+> = (state, action) => {
+  const sfx = localSfxSelectors.selectAll(state);
+  const existingAsset = sfx.find(matchAsset(action.payload));
+  if (existingAsset) {
+    inodeToRecentSfx[existingAsset.inode] = clone(existingAsset);
+    soundEffectsAdapter.removeOne(state.soundEffects, existingAsset.id);
   }
 };
 
@@ -2639,6 +2684,8 @@ const entitiesSlice = createSlice({
       .addCase(projectActions.removeFont.fulfilled, removeFont)
       .addCase(projectActions.loadEmote.fulfilled, loadEmote)
       .addCase(projectActions.removeEmote.fulfilled, removeEmote)
+      .addCase(projectActions.loadSfx.fulfilled, loadSfx)
+      .addCase(projectActions.removeSfx.fulfilled, removeSfx)
       .addCase(projectActions.reloadAssets, reloadAssets),
 });
 
@@ -2680,6 +2727,9 @@ const localFontSelectors = fontsAdapter.getSelectors(
 const localEmoteSelectors = emotesAdapter.getSelectors(
   (state: EntitiesState) => state.emotes
 );
+const localSfxSelectors = soundEffectsAdapter.getSelectors(
+  (state: EntitiesState) => state.soundEffects
+);
 const localCustomEventSelectors = customEventsAdapter.getSelectors(
   (state: EntitiesState) => state.customEvents
 );
@@ -2711,6 +2761,9 @@ export const fontSelectors = fontsAdapter.getSelectors(
 );
 export const emoteSelectors = emotesAdapter.getSelectors(
   (state: RootState) => state.project.present.entities.emotes
+);
+export const sfxSelectors = soundEffectsAdapter.getSelectors(
+  (state: RootState) => state.project.present.entities.soundEffects
 );
 export const variableSelectors = variablesAdapter.getSelectors(
   (state: RootState) => state.project.present.entities.variables

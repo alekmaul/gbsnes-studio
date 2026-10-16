@@ -72,5 +72,6 @@ extern const unsigned char *const scenes[];
 #define PLAYER_SPRITE_SLOT 0
 #define PLAYER_ANIM_SPEED 3
 #define NUM_MUSIC_TRACKS 1
+#define NUM_SOUND_EFFECTS 0
 
 #endif

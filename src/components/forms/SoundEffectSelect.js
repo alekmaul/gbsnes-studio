@@ -19,6 +19,10 @@ const options = [
   {
     label: l10n("FIELD_EFFECT_CRASH"),
     value: "crash"
+  },
+  {
+    label: l10n("FIELD_EFFECT_CUSTOM"),
+    value: "custom"
   }
 ];
 

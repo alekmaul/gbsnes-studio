@@ -947,6 +947,7 @@ const compileSnesData = async (
       spriteSlots: sceneSpriteIds[sceneIndex] || [],
       backgrounds,
       music: projectData.music || [],
+      soundEffects: projectData.soundEffects || [],
       emotes,
       strings,
       variables,
@@ -1721,6 +1722,7 @@ extern const unsigned char *const scenes[${scenes.length}];
 #define PLAYER_SPRITE_SLOT ${playerSpriteSlot}
 #define PLAYER_ANIM_SPEED 3
 #define NUM_MUSIC_TRACKS ${(projectData.music || []).length}
+#define NUM_SOUND_EFFECTS ${(projectData.soundEffects || []).length}
 
 #endif
 `;

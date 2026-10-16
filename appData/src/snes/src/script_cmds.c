@@ -402,6 +402,18 @@ void Script_SoundPlayCrash_b(void)
     script_continue = 1;
 }
 
+// SOUND_PLAY_CUSTOM (v4 follow-up). args: sfxIndex, pitch (1-8, same GB
+// pitch-table scale SOUND_PLAY_BEEP's own args use - eventSoundPlayEffect.js
+// reuses that same field).
+void Script_SoundPlayCustom_b(void)
+{
+    u8 gb_pitch = script_cmd_args[1];
+    if (gb_pitch > 7) gb_pitch = 7;
+    SoundPlayCustomEffect(script_cmd_args[0], 1 + ((gb_pitch * 5) / 7));
+    ADVANCE();
+    script_continue = 1;
+}
+
 /* -------- M5: text, fades, camera -------- */
 
 void Script_Text_b(void)
@@ -1403,7 +1415,8 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ActorActivateFlag_b, 0) /* 0x76 ACTOR_ACTIVATE */ \
     X(Script_ActorDeactivateFlag_b, 0) /* 0x77 ACTOR_DEACTIVATE */ \
     X(Script_ActorStartUpdate_b, 0) /* 0x78 ACTOR_START_UPDATE - v4, real On Update subsystem, see update_script.h */ \
-    X(Script_MosaicSet_b, 4) /* 0x79 MOSAIC_SET - v4, hardware mosaic/pixelisation effect, see mosaic.h */
+    X(Script_MosaicSet_b, 4) /* 0x79 MOSAIC_SET - v4, hardware mosaic/pixelisation effect, see mosaic.h */ \
+    X(Script_SoundPlayCustom_b, 2) /* 0x7A SOUND_PLAY_CUSTOM - v4, real per-project BRR sound effect, see music.h */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

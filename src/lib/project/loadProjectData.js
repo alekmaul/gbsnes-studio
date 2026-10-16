@@ -6,6 +6,7 @@ import loadAllSpriteData from "./loadSpriteData";
 import loadAllMusicData from "./loadMusicData";
 import loadAllFontData from "./loadFontData";
 import loadAllEmoteData from "./loadEmoteData";
+import loadAllSfxData from "./loadSfxData";
 import migrateProject from "./migrateProject";
 import { indexByFn, indexBy } from "../helpers/array";
 import { setDefault } from "../helpers/setDefault";
@@ -34,12 +35,13 @@ const loadProject = async (projectPath) => {
 
   const projectRoot = path.dirname(projectPath);
 
-  const [backgrounds, sprites, music, fonts, emotes] = await Promise.all([
+  const [backgrounds, sprites, music, fonts, emotes, soundEffects] = await Promise.all([
     loadAllBackgroundData(projectRoot),
     loadAllSpriteData(projectRoot),
     loadAllMusicData(projectRoot),
     loadAllFontData(projectRoot),
     loadAllEmoteData(projectRoot),
+    loadAllSfxData(projectRoot),
   ]);
 
   // Merge stored backgrounds data with file system data.
@@ -164,6 +166,25 @@ const loadProject = async (projectPath) => {
     })
     .sort(sortByName);
 
+  // Merge stored sound-effect data with file system data - see the
+  // backgrounds comment above for the full story.
+  const oldSfxByFilename = indexByFilename(json.soundEffects || []);
+  const oldSfxByInode = indexByInode(json.soundEffects || []);
+
+  const fixedSfxIds = soundEffects
+    .map((sfx) => {
+      const oldSfx = oldSfxByFilename[elemKey(sfx)] || oldSfxByInode[sfx.inode];
+      if (oldSfx) {
+        return {
+          ...oldSfx,
+          ...sfx,
+          id: oldSfx.id,
+        };
+      }
+      return sfx;
+    })
+    .sort(sortByName);
+
   const addMissingEntityId = (entity) => {
     if (!entity.id) {
       return {
@@ -194,6 +215,7 @@ const loadProject = async (projectPath) => {
     music: fixedMusicIds,
     fonts: fixedFontIds,
     emotes: fixedEmoteIds,
+    soundEffects: fixedSfxIds,
     scenes: fixedScenes,
     customEvents: fixedCustomEvents,
     engineFieldValues: fixedEngineFieldValues

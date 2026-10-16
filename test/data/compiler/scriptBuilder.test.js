@@ -79,6 +79,7 @@ import {
   SOUND_STOP_TONE,
   SOUND_PLAY_BEEP,
   SOUND_PLAY_CRASH,
+  SOUND_PLAY_CUSTOM,
   SET_TIMER_SCRIPT,
   TIMER_RESTART,
   TIMER_DISABLE,
@@ -1330,6 +1331,45 @@ test("Should be able to play a crash sound", () => {
   const sb = new ScriptBuilder(output);
   sb.soundPlayCrash();
   expect(output).toEqual([cmd(SOUND_PLAY_CRASH)]);
+});
+
+test("Should be able to play a custom sound effect with pitch 8", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    soundEffects: [
+      {
+        id: "1"
+      }
+    ]
+  });
+  sb.soundPlayCustomEffect("1", 8);
+  expect(output).toEqual([cmd(SOUND_PLAY_CUSTOM), 0, 7]);
+});
+
+test("Should be able to play a custom sound effect with pitch 1", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    soundEffects: [
+      {
+        id: "1"
+      }
+    ]
+  });
+  sb.soundPlayCustomEffect("1", 1);
+  expect(output).toEqual([cmd(SOUND_PLAY_CUSTOM), 0, 0]);
+});
+
+test("Should skip missing custom sound effect", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, {
+    soundEffects: [
+      {
+        id: "1"
+      }
+    ]
+  });
+  sb.soundPlayCustomEffect("2", 8);
+  expect(output).toEqual([]);
 });
 
 test("Should be able to fade in", () => {

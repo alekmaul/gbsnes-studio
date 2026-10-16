@@ -108,7 +108,8 @@ import {
   ACTOR_ACTIVATE,
   ACTOR_DEACTIVATE,
   ACTOR_START_UPDATE,
-  MOSAIC_SET
+  MOSAIC_SET,
+  SOUND_PLAY_CUSTOM
 } from "../events/scriptCommands";
 import {
   getActorIndex,
@@ -116,6 +117,7 @@ import {
   getVariableIndex,
   getSpriteIndex,
   getMusicIndex,
+  getSfxIndex,
   compileConditional,
 } from "../events/helpers";
 import {
@@ -1414,6 +1416,32 @@ class ScriptBuilder {
   soundPlayCrash = () => {
     const output = this.output;
     output.push(cmd(SOUND_PLAY_CRASH));
+  };
+
+  // v4 follow-up: Sound: Play Effect's "custom" type - a real per-project
+  // BRR sample (compileSnesSfx.js). Mirrors musicPlay's own "not found ->
+  // emit nothing" convention (getMusicIndex above), rather than relying on
+  // the engine's own out-of-range bounds check as the only safety net.
+  // pitch uses the exact same GB 0-7 pitch-table scale soundPlayBeep's own
+  // compiled byte does - script_cmds.c's Script_SoundPlayCustom_b maps it
+  // onto the BRR 1..6 range identically.
+  soundPlayCustomEffect = (soundEffectId, pitch = 4) => {
+    const output = this.output;
+    const { soundEffects = [] } = this.options;
+    const sfxIndex = getSfxIndex(soundEffectId, soundEffects);
+    if (sfxIndex < 0) {
+      return;
+    }
+    let gbPitch = pitch - 1;
+    if (gbPitch < 0) {
+      gbPitch = 0;
+    }
+    if (gbPitch >= 8) {
+      gbPitch = 7;
+    }
+    output.push(cmd(SOUND_PLAY_CUSTOM));
+    output.push(sfxIndex);
+    output.push(gbPitch & 0x07);
   };
 
   // Data

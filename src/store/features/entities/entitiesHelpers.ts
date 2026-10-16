@@ -20,6 +20,7 @@ eventSchema.define({
 const spriteSheetsSchema = new schema.Entity("spriteSheets");
 const fontsSchema = new schema.Entity("fonts");
 const emotesSchema = new schema.Entity("emotes");
+const soundEffectsSchema = new schema.Entity("soundEffects");
 const variablesSchema = new schema.Entity("variables");
 const sceneSchema = new schema.Entity("scenes", {
   actors: [actorSchema],
@@ -36,6 +37,7 @@ const projectSchema = {
   spriteSheets: [spriteSheetsSchema],
   fonts: [fontsSchema],
   emotes: [emotesSchema],
+  soundEffects: [soundEffectsSchema],
   variables: [variablesSchema],
   customEvents: [customEventsSchema],
   engineFieldValues: [engineFieldValuesSchema]
@@ -58,6 +60,7 @@ export const denormalizeEntities = (
     music: state.music.ids,
     fonts: state.fonts.ids,
     emotes: state.emotes.ids,
+    soundEffects: state.soundEffects.ids,
     variables: state.variables.ids,
     engineFieldValues: state.engineFieldValues.ids,
   };
@@ -71,6 +74,7 @@ export const denormalizeEntities = (
     music: state.music.entities,
     fonts: state.fonts.entities,
     emotes: state.emotes.entities,
+    soundEffects: state.soundEffects.entities,
     variables: state.variables.entities,
     engineFieldValues: state.engineFieldValues.entities
   };

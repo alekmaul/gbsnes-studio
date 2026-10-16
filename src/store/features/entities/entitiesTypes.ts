@@ -245,6 +245,19 @@ export type Emote = {
   _v: number;
 };
 
+// v4 follow-up: real per-project sound-effect assets (assets/sounds/*.wav),
+// scanned the same way as Font/Emote - Sound: Play Effect's "custom" type
+// picks one of these (see eventSoundPlayEffect.js), encoded to BRR by
+// compileSnesSfx.js at build time.
+export type SoundEffect = {
+  id: string;
+  name: string;
+  filename: string;
+  plugin?: string;
+  inode: string;
+  _v: number;
+};
+
 // M6 (v4): banded X-axis parallax (see ParallaxLayersEditor.tsx for the
 // exact height/speed semantics). Matches GB Studio 3.x's SceneParallaxLayer
 // shape exactly - same field names, same meaning.
@@ -289,6 +302,7 @@ export type ProjectEntitiesData = {
   music: Music[];
   fonts: Font[];
   emotes: Emote[];
+  soundEffects: SoundEffect[];
   variables: Variable[];
 };
 
@@ -302,6 +316,7 @@ export interface EntitiesState {
   music: EntityState<Music>;
   fonts: EntityState<Font>;
   emotes: EntityState<Emote>;
+  soundEffects: EntityState<SoundEffect>;
   variables: EntityState<Variable>;
   engineFieldValues: EntityState<EngineFieldValue>;
 }

@@ -45,6 +45,27 @@ extern char sfx_crash;
 /* one reusable sound-table entry; SoundPlayEffect re-points it per call */
 static brrsamples sfx_entry;
 
+/* v4 follow-up: real per-project sound effects (Sound: Play Effect's
+ * "custom" type) - compileSnesSfx.js encodes each project assets/sounds/
+ * *.wav to BRR and generates res/sfx_custom.h (extern char sfx_custom_N +
+ * byte lengths + a SFX_CUSTOM_TABLE initializer), only when the project has
+ * at least one (NUM_SOUND_EFFECTS, from assets.h, is 0 otherwise - the
+ * overwhelmingly common case - so this header never needs to exist on disk
+ * then). Indexing is positional: sfxIndex N is always projectData.
+ * soundEffects[N], same as the generated table itself - an asset that
+ * failed to encode still gets a real slot with len 0 rather than shifting
+ * every later index. */
+typedef struct
+{
+    u8 *addr;
+    u16 len;
+} SfxEntry;
+
+#if NUM_SOUND_EFFECTS > 0
+#include "res/sfx_custom.h"
+static const SfxEntry sfx_table[NUM_SOUND_EFFECTS] = SFX_CUSTOM_TABLE;
+#endif
+
 void MusicInit(void)
 {
     spcBoot();
@@ -91,4 +112,35 @@ void SoundPlayEffect(u8 kind, u8 pitch)
         spcSetSoundEntry(15, 8, p, SFX_BEEP_LEN, (u8 *)&sfx_beep, &sfx_entry);
     }
     spcPlaySound(0);
+}
+
+/* SOUND_PLAY_CUSTOM. sfxIndex: a project sound-effect index (see the
+ * SfxEntry comment above). pitch: snesmod BRR pitch 1..6, same scale as
+ * SoundPlayEffect. Out-of-range sfxIndex or a slot that failed to encode
+ * (len 0) silently does nothing - matches SoundPlayEffect's own "never
+ * crash on bad input" character, and mirrors MusicPlay's own
+ * `track >= NUM_MUSIC_TRACKS` bounds check. */
+void SoundPlayCustomEffect(u8 sfxIndex, u8 pitch)
+{
+#if NUM_SOUND_EFFECTS > 0
+    u8 p = pitch;
+    if (sfxIndex >= NUM_SOUND_EFFECTS)
+    {
+        return;
+    }
+    if (sfx_table[sfxIndex].len == 0)
+    {
+        return;
+    }
+    if (p < 1)
+    {
+        p = 1;
+    }
+    if (p > 6)
+    {
+        p = 6;
+    }
+    spcSetSoundEntry(15, 8, p, sfx_table[sfxIndex].len, sfx_table[sfxIndex].addr, &sfx_entry);
+    spcPlaySound(0);
+#endif
 }

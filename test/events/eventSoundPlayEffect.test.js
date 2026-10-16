@@ -43,6 +43,37 @@ test("Should be able to play crash", () => {
   expect(mockSoundPlayCrash).toBeCalledWith();
 });
 
+test("Should be able to play a custom sound effect with pitch 4 if not set", () => {
+  const mockSoundPlayCustomEffect = jest.fn();
+
+  compile(
+    {
+      type: "custom",
+      soundEffectId: "sfx-1"
+    },
+    {
+      soundPlayCustomEffect: mockSoundPlayCustomEffect
+    }
+  );
+  expect(mockSoundPlayCustomEffect).toBeCalledWith("sfx-1", 5);
+});
+
+test("Should be able to play a custom sound effect with pitch 7 (flipped to make high values high pitched)", () => {
+  const mockSoundPlayCustomEffect = jest.fn();
+
+  compile(
+    {
+      type: "custom",
+      soundEffectId: "sfx-2",
+      customPitch: 7
+    },
+    {
+      soundPlayCustomEffect: mockSoundPlayCustomEffect
+    }
+  );
+  expect(mockSoundPlayCustomEffect).toBeCalledWith("sfx-2", 2);
+});
+
 test("Should play tone at 200hz for 0.5 seconds if tone not set", () => {
   const mockSoundStartTone = jest.fn();
 
