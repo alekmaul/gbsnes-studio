@@ -1929,6 +1929,85 @@ instead, confirmed by reading back the real `joy` WRAM global (0 before the fix,
 pressed-buttons bitmask after). Tests: two new byte-exact `compileSnesData.test.js` cases (an
 authored-bounds case and the no-bounds-default case).
 
+**Shoot Em Up "frozen scene" root-caused to PVSnesLib's SPC700 handshake, not a CPU-contention
+bug this engine introduced (user-reported, real `snesgbs2` "Space Battle" scene).** Reported as
+three symptoms - slow start, projectiles visible immediately, enemies never seem to shoot - all
+three turned out to be one cause: `MusicPlay()`'s `spcLoad`/`spcPlay` calls (PVSnesLib, prebuilt
+binary, no source to read or fix directly) take dramatically longer to resolve the more CPU load
+is running concurrently, confirmed by stripping the real scene down piece by piece and timing
+when the foreground `script_ptr` finally reaches 0: 59 frames for a bare `MUSIC_PLAY` alone, 221
+with the scene's real 15 On-Update enemy contexts added, **never within 900 frames** with
+everything together (the real, unmodified scene). Since `SceneHandleInput()`'s own first line is
+`if (script_ptr) return;`, the stuck foreground silently blocked all player input for the whole
+scene - while the 15 enemies' own On-Update contexts (a separate mechanism, never gated by
+`script_ptr`) kept running and firing regardless, which is why projectiles were visible the
+whole time despite the player never being able to act. Two real, narrower bugs were found and
+fixed along the way in the same investigation: the project's own 11 `.it` music files had all
+been batch-exported without instruments (`itValidate.js` already catches this, re-export in
+OpenMPT via Song > Convert to Instruments fixed it) - and `snesgbs2`'s `project.gbsproj` was
+still referencing `.mod` instead of the project's own already-correct `.it` conversions.
+**Neither of those was the actual bug** - the hang reproduced identically with two different,
+valid tracks, and with a 2-second `Wait` inserted before `MUSIC_PLAY` (ruling out a boot-timing
+race too) - isolating it conclusively to concurrent CPU load during the handshake itself.
+
+Compared directly against the real GB Studio 3.2.1 source (`actor.c`'s `activate_actor`,
+`vm.c`'s `script_runner_update`) to check whether this was an engine-port gap: it isn't - GB's
+own real engine has no per-actor stagger or desync mechanism either, and 15 identically-shaped,
+no-`Wait` enemy scripts would lock-step there too. The real, SNES-specific difference is PVSnesLib's
+closed/prebuilt audio driver's own sensitivity to concurrent CPU load, which has no GB Studio
+equivalent to compare against (GB's own audio driver has completely different hardware/timing
+characteristics).
+
+**Fix, user-proposed and implemented**: hoist a scene's own `MUSIC_PLAY` out of its script
+entirely, when it's the first thing that would unconditionally run, and have `SceneInit()` call
+`MusicPlay()` directly instead - synchronously, before the screen unblanks and before any
+On-Update context is ever stepped, so the handshake runs with nothing competing for CPU.
+`compileSnesData.js`'s new `hoistSceneMusicPreload`/`musicPlayHoistSafeToPassOver` walk the
+scene's own top-level `script` array (never an actor's), recognizing `EVENT_CALL_CUSTOM_EVENT`
+(recurses into its inlined body - the real shape Space Battle itself uses: a custom event
+wrapping `SET_INPUT_SCRIPT` as the first action, `MUSIC_PLAY` as a later sibling) and
+`EVENT_SET_INPUT_SCRIPT` (always safe - its own true/false branches compile to a separate
+script, never inlined here) as special cases, and otherwise checking a verified allowlist of
+~70 plain leaf commands - default-deny for anything not explicitly recognized, including every
+branching/looping event (`IF_*`, `CHOICE`, `MENU`, `LOOP*`, `SWITCH`), never guessed. **The
+allowlist was built by reading every `src/lib/events/event*.js` file directly, not inferred from
+the SNES-side opcode table** - an earlier pass tried deriving it from `script_cmds.c`'s own
+opcode names and found that unreliable (the SNES opcode literally named `ACTOR_PUSH` is "Actor:
+Push", a physics shove - nothing to do with the sub-script call stack the name suggested).
+Confirmed instead, by reading `compileEntityEvents.js` directly, that it generically merges
+every event's own `.children` into its compiled args (`{...args, ...children}`) regardless of
+each event file's own naming - so any event with nested content is already caught by a plain
+"has `.children`" check, and the allowlist only needed to separately name the few genuinely
+unsafe commands with **no** `.children` at all: `EVENT_ACTOR_INVOKE` (sub-script call),
+`EVENT_STOP`/`EVENT_SCENE_POP_STATE` (both call `scriptEnd()` directly), `EVENT_GOTO_LABEL`
+(unconditional jump), `EVENT_SWITCH_SCENE`, and the state-stack family
+(`EVENT_SCENE_PUSH_STATE`/`EVENT_SCENE_RESET_STATE`/`EVENT_SCENE_POP_ALL_STATE`, excluded
+conservatively alongside their own pairing). The hoisted event is spliced out of a *copy* of
+`scene.script` before compiling - `compileSnesData.js` never mutates the input project object -
+so no bytecode patching is needed anywhere.
+
+New scene-blob trailing byte (`[1]`, 0xff = no preload), appended after the Adventure-genre
+player-bounds bytes, same "append-only, never shift an earlier offset" discipline every prior
+scene-blob growth in this file has followed. `scene.c`'s `SceneInit()` reads it and calls
+`MusicPlay()` directly right after `startFuncs[scene_type]()`, before `run_script()` even arms
+the scene's own script - confirmed this is genuinely before the screen unblanks
+(`scene_unblank_pending` - the real unblank happens a whole frame later, in `main()`) and before
+any On-Update context is ever stepped (`UpdateScriptsProcess()` only runs from `SceneUpdate()`,
+called from the main loop on a *later* frame; `ActorStartUpdate()` above only registers
+contexts, it never steps them).
+
+**Verified in Mesen against the real, unmodified "Space Battle" scene**: the foreground
+`script_ptr` now reads 0 (fully idle) from the very first sampled frame, instead of never
+resolving within 900 frames - a qualitative fix, not just a faster one. Real audio confirmed
+separately via the SPC voice envelope (`emu.getState()`'s flat `spc.dsp.voices[N].envVolume`
+keys, this project's own established method): ramps to ~2000 by frame ~130, a normal attack
+curve, not a stuck/silent state. A negative control (an existing Top Down scene with no
+hoistable `MUSIC_PLAY`) confirmed `scene_music_preload` correctly stays `0xff` and player
+movement is completely unaffected. Tests: 3 new byte-exact `compileSnesData.test.js` cases (a
+plain hoistable case, a non-hoistable case blocked by a conditional, and the real Space-Battle
+custom-event shape) plus the existing Adventure-genre bounds tests updated for the blob's new
+trailing byte.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

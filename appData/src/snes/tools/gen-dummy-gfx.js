@@ -388,6 +388,11 @@ const dummyMetasprites = new Array(2 * 8).fill(0);
 // (compileSnesData.js's own documented default for no authored bounds)
 // rather than being meaningless, in case that ever changes.
 const dummyPlayerBounds = [-8 & 0xff, 7, -16 & 0xff, 0xff]; // left,right,top,bottom
+// MUSIC_PLAY preload (v4, "Space Battle" fix): [1] trailing byte, 0xff =
+// none - neither dummy scene's own init script has a hoistable MUSIC_PLAY
+// (this generator doesn't compile real scripts), so there's nothing to
+// preload for either one.
+const dummyMusicPreload = [0xff];
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
@@ -401,12 +406,13 @@ const scene0 = [
   ...collision,
   ...dummyExtraPoses,
   ...dummyMetasprites,
-  ...dummyPlayerBounds
+  ...dummyPlayerBounds,
+  ...dummyMusicPreload
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds, ...dummyMusicPreload];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

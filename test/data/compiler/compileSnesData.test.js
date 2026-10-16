@@ -182,12 +182,13 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // table(6) + 0 actors + 0 triggers = 52 bytes before the ceil(w*h/8) =
     // 45-byte collision bitmap, which is itself followed by the [40]
     // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md), the
-    // [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4), and finally
-    // the [4] player collision-bounds bytes (Adventure genre, Option 1) -
-    // all three appended at the very end of the blob specifically so none
-    // ever shifts any of the fixed-offset assertions above/below them.
+    // [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4), the [4]
+    // player collision-bounds bytes (Adventure genre, Option 1), and finally
+    // the [1] MUSIC_PLAY preload byte - all four appended at the very end of
+    // the blob specifically so none ever shifts any of the fixed-offset
+    // assertions above/below them.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4);
+    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1);
     const colByte = blob[52];
     // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
     // (this target has no directional-collision concept).
@@ -281,8 +282,9 @@ describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", ()
       expect(blob[off] | (blob[off + 1] << 8)).toBe(0);
     }
     // +4: Adventure genre Option 1's trailing player collision-bounds bytes,
-    // appended after the metasprite table - see its own test below.
-    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4);
+    // +1: the MUSIC_PLAY preload byte - both appended after the metasprite
+    // table, see their own tests below.
+    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1);
     // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
     // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
     // own convention - offset is relative to the start of the payload).
@@ -770,7 +772,9 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // right = left + boundsWidth - 1 = -6 + 9 = 3
     // top = boundsY - canvasHeight = 3 - 16 = -13 (243)
     // bottom = top + boundsHeight - 1 = -13 + 11 = -2 (254)
-    const tail = blob.slice(-4);
+    // -5..-1: the player-bounds [4] bytes sit right before the trailing [1]
+    // MUSIC_PLAY preload byte now, not at the very end of the blob anymore.
+    const tail = blob.slice(-5, -1);
     expect([...tail]).toEqual([250, 3, 243, 254]);
   });
 
@@ -788,8 +792,152 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // left=-8(248), right=7, top=-16(240), bottom=-1(255) - reproduces the
     // legacy actor_render_tile -8/-16 anchor exactly, same values
     // gen-dummy-gfx.js's own dummyPlayerBounds uses for the same reason.
-    const tail = blob.slice(-4);
+    // -5..-1: see the comment in the previous test for why not slice(-4).
+    const tail = blob.slice(-5, -1);
     expect([...tail]).toEqual([248, 7, 240, 255]);
+  });
+});
+
+describe("compileSnesData - MUSIC_PLAY preload hoist (v4, 'Space Battle' fix)", () => {
+  // PVSnesLib's spcLoad/spcPlay (inside MusicPlay()) take dramatically
+  // longer to complete the more CPU load is running concurrently - badly
+  // enough, in a real Shoot Em Up scene with many active On-Update
+  // contexts, to never resolve at all if MUSIC_PLAY runs at its normal
+  // position in the script. When a scene's own top-level script
+  // unconditionally reaches MUSIC_PLAY, compileSnesData.js hoists it out
+  // and records the track index as the scene blob's trailing [1] byte (the
+  // real last byte now, after the Adventure-genre bounds) instead -
+  // SceneInit calls MusicPlay() with it directly, before the screen
+  // unblanks. 0xff = no hoist (today's unchanged behaviour: MUSIC_PLAY
+  // compiles normally into the scene's own script bytes).
+  const MUSIC_OPCODE = 30; // 0x1e MUSIC_PLAY - script_cmds.c's SCRIPT_CMD_TABLE
+  const TRACK_A_ID = "track-a";
+  const TRACK_B_ID = "track-b";
+
+  const baseProject = (sceneScript) => ({
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+    },
+    backgrounds: [
+      { id: "bg", filename: "placeholder.png", width: 20, height: 18 },
+    ],
+    spriteSheets: [],
+    music: [
+      { id: TRACK_A_ID, filename: "a.mod" },
+      { id: TRACK_B_ID, filename: "b.mod" },
+    ],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "scene",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [],
+        triggers: [],
+        script: sceneScript,
+      },
+    ],
+  });
+
+  // Last 5 bytes of the scene blob: [4] player-bounds then [1] music
+  // preload (Adventure-genre bounds are unconditionally compiled for every
+  // scene regardless of genre - see the describe block above).
+  const musicPreloadByte = (blob) => blob[blob.length - 1];
+  const anyScriptHasMusicOpcode = (out) =>
+    out.stats.scriptBytes.some((bytes) => bytes.includes(MUSIC_OPCODE));
+
+  test("MUSIC_PLAY as the scene script's first event hoists to the trailing byte and is removed from the compiled script", async () => {
+    const project = baseProject([
+      {
+        id: "e1",
+        command: "EVENT_MUSIC_PLAY",
+        args: { musicId: TRACK_B_ID, loop: true },
+      },
+      { id: "e2", command: "EVENT_END" },
+    ]);
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    expect(musicPreloadByte(blob)).toBe(1); // track-b is index 1
+    expect(anyScriptHasMusicOpcode(out)).toBe(false);
+  });
+
+  test("MUSIC_PLAY after a conditional (IF_TRUE) does not hoist - compiles normally", async () => {
+    const project = baseProject([
+      {
+        id: "e1",
+        command: "EVENT_IF_TRUE",
+        args: { variable: "0" },
+        children: {
+          true: [],
+          false: [],
+        },
+      },
+      {
+        id: "e2",
+        command: "EVENT_MUSIC_PLAY",
+        args: { musicId: TRACK_A_ID, loop: true },
+      },
+      { id: "e3", command: "EVENT_END" },
+    ]);
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    expect(musicPreloadByte(blob)).toBe(0xff);
+    expect(anyScriptHasMusicOpcode(out)).toBe(true);
+  });
+
+  test("the real Space Battle shape - a custom event wrapping SET_INPUT_SCRIPT, MUSIC_PLAY as a later sibling - still hoists", async () => {
+    const project = baseProject([
+      {
+        id: "e1",
+        command: "EVENT_CALL_CUSTOM_EVENT",
+        args: { customEventId: "weapons" },
+        children: {
+          script: [
+            {
+              id: "e1a",
+              command: "EVENT_SET_INPUT_SCRIPT",
+              args: { input: ["a"] },
+              children: {
+                true: [{ id: "e1a1", command: "EVENT_END" }],
+                false: [],
+              },
+            },
+            { id: "e1b", command: "EVENT_END" },
+          ],
+        },
+      },
+      {
+        id: "e2",
+        command: "EVENT_ACTOR_SET_MOVEMENT_SPEED",
+        args: { actorId: "$self$", speed: 0 },
+      },
+      {
+        id: "e3",
+        command: "EVENT_MUSIC_PLAY",
+        args: { musicId: TRACK_A_ID, loop: true },
+      },
+      { id: "e4", command: "EVENT_END" },
+    ]);
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: () => {},
+    });
+    const blob = out.stats.sceneBlobs[0];
+    expect(musicPreloadByte(blob)).toBe(0); // track-a is index 0
+    expect(anyScriptHasMusicOpcode(out)).toBe(false);
   });
 });
 

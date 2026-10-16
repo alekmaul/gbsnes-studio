@@ -74,6 +74,7 @@ import { buildMapEngineBackground, METATILE_PROP_WORDS } from "./snesMapEngine";
 import compileEntityEvents from "./compileEntityEvents";
 import { snesFixedAssets } from "./snesFixedAssets";
 import { dirDec, moveDec, animSpeedDec, spriteTypeDec, collisionGroupDec } from "./helpers";
+import { getMusicIndex } from "../events/helpers";
 import { assetFilename } from "../helpers/gbstudio";
 import { projectTemplatesRoot, TILE_PROP_PRIORITY, engineRoot } from "../../consts";
 import snesTarget from "./targets/snes";
@@ -968,6 +969,167 @@ const compileSnesData = async (
 
   const pushScript = (bytes) => pushRaw(bytes);
 
+  // MUSIC_PLAY preload (v4, "Space Battle" fix): PVSnesLib's spcLoad/spcPlay
+  // (inside MusicPlay(), prebuilt binary, no source to read or fix directly)
+  // takes dramatically longer to complete the more CPU load is running
+  // concurrently - confirmed by measuring a real Shoot Em Up scene's
+  // foreground script_ptr: 59 frames to resolve MUSIC_PLAY alone, 900+ and
+  // still unresolved with the scene's real 15 On-Update enemy contexts and
+  // input-script registration also active. Fix: if a scene's own top-level
+  // script unconditionally reaches a MUSIC_PLAY as (one of) its first
+  // action(s), hoist it out entirely and let SceneInit call MusicPlay()
+  // directly, synchronously, before the screen unblanks and before any
+  // On-Update context is ever stepped - nothing competing for CPU yet. Only
+  // ever hoists from the SCENE's own script (never an actor's), and only
+  // when every event skipped over on the way to it is provably safe to pass
+  // over - default-deny for anything not explicitly recognized, never guess.
+  //
+  // This is a true ALLOWLIST, not inferred from the C-side opcode table (an
+  // earlier pass tried that and found it unreliable - the compiled SNES
+  // opcode names don't line up 1:1 with authored event ids, e.g. the C
+  // opcode literally named ACTOR_PUSH is "Actor: Push" (a physics shove),
+  // nothing to do with the sub-script call stack the name suggested).
+  // Instead every src/lib/events/event*.js file was read directly: this is
+  // every event confirmed to have no nested/conditional body AND a plain,
+  // unconditionally-linear compile() - excluding (checked individually,
+  // real risk found): EVENT_ACTOR_INVOKE (sub-script call), EVENT_STOP
+  // (calls scriptEnd() - nothing after it in this path ever runs),
+  // EVENT_GOTO_LABEL (unconditional jump), EVENT_SWITCH_SCENE (scene
+  // changes), EVENT_SCENE_POP_STATE (also calls scriptEnd()),
+  // EVENT_SCENE_PUSH_STATE/EVENT_SCENE_RESET_STATE/EVENT_SCENE_POP_ALL_STATE
+  // (state-stack semantics, conservatively excluded alongside their own
+  // push/pop pairing). Every branching/looping/choice event (IF_*, CHOICE,
+  // MENU, LOOP*, SWITCH, GROUP) is excluded too - not because each was
+  // individually risky, but because compileEntityEvents.js (confirmed by
+  // reading it directly) generically merges every event's own `.children`
+  // into its args before compiling (`{...args, ...children}`), so ANY event
+  // with nested content shows up as a real `.children` property on the raw
+  // stored object regardless of whether its own compile() mentions
+  // "children" by name - these are caught by the generic `.children` check
+  // below instead of needing to be named here one by one.
+  const MUSIC_PLAY_HOIST_SAFE_LEAF_COMMANDS = new Set([
+    "EVENT_ACTOR_ACTIVATE",
+    "EVENT_ACTOR_COLLISIONS_DISABLE",
+    "EVENT_ACTOR_COLLISIONS_ENABLE",
+    "EVENT_ACTOR_DEACTIVATE",
+    "EVENT_ACTOR_EMOTE",
+    "EVENT_ACTOR_GET_DIRECTION",
+    "EVENT_ACTOR_GET_POSITION",
+    "EVENT_ACTOR_HIDE",
+    "EVENT_ACTOR_MOVE_RELATIVE",
+    "EVENT_ACTOR_MOVE_TO",
+    "EVENT_ACTOR_MOVE_TO_VALUE",
+    "EVENT_ACTOR_PUSH",
+    "EVENT_ACTOR_SET_ANIMATE",
+    "EVENT_ACTOR_SET_ANIMATION_SPEED",
+    "EVENT_ACTOR_SET_DIRECTION",
+    "EVENT_ACTOR_SET_DIRECTION_TO_VALUE",
+    "EVENT_ACTOR_SET_FRAME",
+    "EVENT_ACTOR_SET_FRAME_TO_VALUE",
+    "EVENT_ACTOR_SET_MOVEMENT_SPEED",
+    "EVENT_ACTOR_SET_POSITION",
+    "EVENT_ACTOR_SET_POSITION_RELATIVE",
+    "EVENT_ACTOR_SET_POSITION_TO_VALUE",
+    "EVENT_ACTOR_SET_SPRITE",
+    "EVENT_ACTOR_SET_STATE",
+    "EVENT_ACTOR_SHOW",
+    "EVENT_ACTOR_START_UPDATE",
+    "EVENT_ACTOR_STOP_UPDATE",
+    "EVENT_ADD_FLAGS",
+    "EVENT_AWAIT_INPUT",
+    "EVENT_CAMERA_LOCK",
+    "EVENT_CAMERA_MOVE_TO",
+    "EVENT_CAMERA_SHAKE",
+    "EVENT_CLEAR_DATA",
+    "EVENT_CLEAR_FLAGS",
+    "EVENT_COMMENT",
+    "EVENT_DEC_VALUE",
+    "EVENT_DEFINE_LABEL",
+    // A real no-op here, not an oversight: compile() itself strips every
+    // literal EVENT_END out of the input array before compiling anything
+    // (`(script || []).filter((e) => e.command !== EVENT_END)`, above) -
+    // so one appearing inside a scene's top-level script or a nested
+    // custom-event body (both real, confirmed against the actual "Space
+    // Battle" project JSON) carries no compiled effect to reason about.
+    "EVENT_END",
+    "EVENT_ENGINE_FIELD_SET",
+    "EVENT_ENGINE_FIELD_STORE",
+    "EVENT_FADE_IN",
+    "EVENT_FADE_OUT",
+    "EVENT_HIDE_SPRITES",
+    "EVENT_INC_VALUE",
+    "EVENT_LAUNCH_PROJECTILE",
+    "EVENT_LOAD_DATA",
+    "EVENT_MOSAIC",
+    "EVENT_MUSIC_STOP",
+    "EVENT_OVERLAY_HIDE",
+    "EVENT_OVERLAY_MOVE_TO",
+    "EVENT_OVERLAY_SHOW",
+    "EVENT_PLAYER_BOUNCE",
+    "EVENT_PLAYER_SET_SPRITE",
+    "EVENT_PLAYER_SET_STATE",
+    "EVENT_REMOVE_INPUT_SCRIPT",
+    "EVENT_RESET_VARIABLES",
+    "EVENT_SAVE_DATA",
+    "EVENT_SET_FALSE",
+    "EVENT_SET_FLAGS",
+    "EVENT_SET_TIMER_SCRIPT",
+    "EVENT_SET_TRUE",
+    "EVENT_SET_VALUE",
+    "EVENT_SHOW_SPRITES",
+    "EVENT_SOUND_PLAY_EFFECT",
+    "EVENT_TEXT",
+    "EVENT_TEXT_SET_ANIMATION_SPEED",
+    "EVENT_TIMER_DISABLE",
+    "EVENT_TIMER_RESTART",
+    "EVENT_VARIABLE_MATH",
+    "EVENT_VARIABLE_MATH_EVALUATE",
+    "EVENT_WAIT",
+    "EVENT_WEAPON_ATTACK",
+  ]);
+
+  const musicPlayHoistSafeToPassOver = (event) => {
+    if (event.command === "EVENT_CALL_CUSTOM_EVENT") {
+      // Inlined at compile time (compileEntityEvents.js) - safe to pass
+      // over exactly when its own resolved body is (this is the real shape
+      // Space Battle's own scene uses: a custom event wrapping SET_INPUT_
+      // SCRIPT as the scene's first action, MUSIC_PLAY as a later sibling).
+      const body = (event.children && event.children.script) || [];
+      return body.every(musicPlayHoistSafeToPassOver);
+    }
+    if (event.command === "EVENT_SET_INPUT_SCRIPT") {
+      // Its true/false children compile to a SEPARATE script
+      // (input_script_ptrs[]), never inlined here - they don't affect
+      // whether the next event in THIS stream is reached.
+      return true;
+    }
+    return MUSIC_PLAY_HOIST_SAFE_LEAF_COMMANDS.has(event.command);
+  };
+
+  // Returns { musicIndex, scriptWithoutHoisted } - musicIndex is -1 if
+  // nothing was hoisted (scriptWithoutHoisted is then the original array,
+  // untouched - compileSnesData never mutates the input project object).
+  const hoistSceneMusicPreload = (sceneScript, music) => {
+    const events = sceneScript || [];
+    for (let i = 0; i < events.length; i++) {
+      const event = events[i];
+      if (event.command === "EVENT_MUSIC_PLAY") {
+        const musicIndex = getMusicIndex(event.args && event.args.musicId, music);
+        if (musicIndex >= 0) {
+          return {
+            musicIndex,
+            scriptWithoutHoisted: events.slice(0, i).concat(events.slice(i + 1)),
+          };
+        }
+        return { musicIndex: -1, scriptWithoutHoisted: events };
+      }
+      if (!musicPlayHoistSafeToPassOver(event)) {
+        return { musicIndex: -1, scriptWithoutHoisted: events };
+      }
+    }
+    return { musicIndex: -1, scriptWithoutHoisted: events };
+  };
+
   const sceneBlobs = scenes.map((scene, sceneIndex) => {
     // v4 fix (user-found, code review: "can scene_num_actors be >=
     // MAX_ACTORS?"): this byte is otherwise written unclamped below
@@ -999,7 +1161,14 @@ const compileSnesData = async (
         sceneOut.pop(); // strip this start-script's terminating END
       }
     });
-    compile(scene.script, scene, "scene", sceneIndex, sceneIndex, scene, sceneOut);
+    // MUSIC_PLAY preload - see hoistSceneMusicPreload's own comment above.
+    // Never mutates scene.script (or the input project object) - passes a
+    // copy with the hoisted event spliced out, if one was found.
+    const { musicIndex: sceneMusicPreload, scriptWithoutHoisted } = hoistSceneMusicPreload(
+      scene.script,
+      projectData.music || []
+    );
+    compile(scriptWithoutHoisted, scene, "scene", sceneIndex, sceneIndex, scene, sceneOut);
     const sceneScriptIdx = pushScript(sceneOut);
 
     // Projectiles (v4, follow-up): fired when a projectile whose own
@@ -1236,7 +1405,11 @@ const compileSnesData = async (
       // computed above. Appended last, after metaspriteBytes, for the same
       // "never shifts an earlier offset" reason every prior scene-blob
       // growth in this file has followed.
-      playerBoundsBytes
+      playerBoundsBytes,
+      // [1] MUSIC_PLAY preload index (0xff = none) - see
+      // hoistSceneMusicPreload's own comment above. Appended last, after
+      // playerBoundsBytes, same reason.
+      sceneMusicPreload >= 0 ? sceneMusicPreload : 0xff
     );
   });
 

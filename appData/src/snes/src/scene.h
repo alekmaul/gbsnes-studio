@@ -91,6 +91,18 @@ extern const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
  * Update_Adventure - every other genre is unaffected. */
 extern s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bounds_bottom;
 
+/* MUSIC_PLAY preload (v4, "Space Battle" fix) - when a scene's own top-level
+ * script unconditionally reaches a MUSIC_PLAY as (one of) its first actions,
+ * compileSnesData.js hoists it out of the compiled script entirely and
+ * records the track index here instead (0xff = no preload for this scene).
+ * SceneInit calls MusicPlay() with it directly, synchronously, before the
+ * screen unblanks and before any On-Update context is ever stepped - see
+ * compileSnesData.js's own hoistSceneMusicPreload comment for why: PVSnesLib's
+ * spcLoad/spcPlay (prebuilt binary) takes dramatically longer to complete
+ * the more CPU load is running concurrently, badly enough to never resolve
+ * in a scene with many active On-Update contexts. */
+extern u8 scene_music_preload;
+
 /* Real per-actor OAM id base (SPRITE_EDITOR_PROGRESS.md M7) - a prefix sum
  * over sprite_oam_ids_for_slot[], computed once in SceneInit, replacing the
  * old incidental `i << 2` spacing (which reserved 4 ids/actor for no real

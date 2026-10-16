@@ -21,6 +21,7 @@
 #include "camera.h"
 #include "update_script.h"
 #include "engine_fields.h"
+#include "music.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
@@ -169,6 +170,9 @@ const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
  * four from the scene blob's trailing bytes before Update_Adventure (the
  * only reader) can ever run. */
 s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bounds_bottom;
+
+/* MUSIC_PLAY preload (v4, "Space Battle" fix) - see scene.h's own comment. */
+u8 scene_music_preload;
 
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
  * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
@@ -722,7 +726,9 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  *   parsing comment below rather than fixed offsets here): M8.3's [40]
  *   extra-pose table, M9.4's [2*SPRITE_SLOTS] metasprite-frame table, then
  *   Adventure genre Option 1's [4] player collision-bounds bytes (left,
- *   right, top, bottom - signed, see scene.h's player_bounds_* comment)
+ *   right, top, bottom - signed, see scene.h's player_bounds_* comment),
+ *   then the MUSIC_PLAY preload's [1] byte (0xff = none, see scene.h's
+ *   scene_music_preload comment)
  *
 
  * Every *_idx/script_idx field is a 2-byte little-endian event_ptrs[] index
@@ -1241,13 +1247,18 @@ void SceneInit(void)
 
     /* Adventure genre, Option 1: [4] trailing player collision-bounds bytes
      * (left, right, top, bottom - signed, see scene.h's player_bounds_*
-     * comment and compileSnesData.js's own emission). The real last thing
-     * in the scene blob now. */
+     * comment and compileSnesData.js's own emission). */
     player_bounds_left = (s8)p[0];
     player_bounds_right = (s8)p[1];
     player_bounds_top = (s8)p[2];
     player_bounds_bottom = (s8)p[3];
     p += 4;
+
+    /* MUSIC_PLAY preload (v4, "Space Battle" fix): [1] trailing byte, the
+     * real last thing in the scene blob now - see scene.h's own comment on
+     * scene_music_preload and compileSnesData.js's hoistSceneMusicPreload. */
+    scene_music_preload = p[0];
+    p += 1;
 
     actor_move_settings = 0;
     check_triggers = 1;
@@ -1277,6 +1288,25 @@ void SceneInit(void)
      * that immediately moves the camera/player overrides genre defaults,
      * matching GB's Core_Main.c order (startFuncs[] then ScriptStart). */
     startFuncs[scene_type]();
+
+    /* MUSIC_PLAY preload (v4, "Space Battle" fix) - see scene.h's own
+     * comment on scene_music_preload. Called synchronously, right here,
+     * specifically because nothing else is competing for CPU time yet at
+     * this point: the screen is still force-blanked (scene_unblank_pending
+     * above - the real unblank happens a whole frame later, in main()) and
+     * no On-Update context has been stepped even once (UpdateScriptsProcess
+     * only ever runs from SceneUpdate(), called from the main loop on a
+     * later frame - ActorStartUpdate() above only registers contexts, it
+     * never steps them). PVSnesLib's spcLoad/spcPlay (inside MusicPlay(),
+     * prebuilt binary) take dramatically longer to complete the more CPU
+     * load is running concurrently - confirmed badly enough, in a real
+     * Shoot Em Up scene with many active On-Update contexts, to never
+     * resolve at all if MUSIC_PLAY is left to run at its normal position in
+     * the script instead. */
+    if (scene_music_preload != 0xff)
+    {
+        MusicPlay(scene_music_preload);
+    }
 
     run_script(event_ptrs[scene_script_idx], 0);
 }
