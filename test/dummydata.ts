@@ -143,6 +143,7 @@ export const dummyProjectData: ProjectData = {
   music: [],
   fonts: [],
   emotes: [],
+  soundEffects: [],
   settings: {
     startSceneId: "",
     startX: 0,
