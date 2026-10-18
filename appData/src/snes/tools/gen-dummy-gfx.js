@@ -393,6 +393,13 @@ const dummyPlayerBounds = [-8 & 0xff, 7, -16 & 0xff, 0xff]; // left,right,top,bo
 // (this generator doesn't compile real scripts), so there's nothing to
 // preload for either one.
 const dummyMusicPreload = [0xff];
+// Ladders / one-way platforms (v4): [1] has_col_dir flag, the real last
+// thing in the scene blob now - 0 = no directional-collision table, see
+// scene.c's own comment on platform_has_col_dir/scene_col_dir and
+// compileSnesData.js's emission. Neither dummy scene uses the Platform
+// genre (both SCENE_TYPE_TOPDOWN) or paints any directional/ladder
+// collision tile, so there's no table to emit either way.
+const dummyHasColDir = [0];
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
@@ -407,12 +414,13 @@ const scene0 = [
   ...dummyExtraPoses,
   ...dummyMetasprites,
   ...dummyPlayerBounds,
-  ...dummyMusicPreload
+  ...dummyMusicPreload,
+  ...dummyHasColDir
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds, ...dummyMusicPreload];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds, ...dummyMusicPreload, ...dummyHasColDir];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {

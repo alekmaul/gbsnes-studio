@@ -76,7 +76,7 @@ import { snesFixedAssets } from "./snesFixedAssets";
 import { dirDec, moveDec, animSpeedDec, spriteTypeDec, collisionGroupDec } from "./helpers";
 import { getMusicIndex } from "../events/helpers";
 import { assetFilename } from "../helpers/gbstudio";
-import { projectTemplatesRoot, TILE_PROP_PRIORITY, engineRoot } from "../../consts";
+import { projectTemplatesRoot, TILE_PROP_PRIORITY, COLLISION_ALL, TILE_PROP_LADDER, engineRoot } from "../../consts";
 import snesTarget from "./targets/snes";
 import migrateProject from "../project/migrateProject";
 import { precompileEngineFields } from "../helpers/engineFields";
@@ -1252,9 +1252,11 @@ const compileSnesData = async (
     // real per-tile bytes, not a real bitmap - never caught because nothing
     // before now actually drove the player with real interactive input
     // against a real authored scene's collisions (see MIGRATION_V2_AUDIT.md
-    // M13's investigation). This target has no directional-collision concept
-    // (col_solid is a single solid/clear bit), so any nonzero flag byte -
-    // a wall on any side - counts as a fully solid tile.
+    // M13's investigation). col_solid()/this bitmap are a single solid/
+    // clear bit, so any nonzero flag byte - a wall on any side - counts as
+    // a fully solid tile here; every genre except Platform reads only this.
+    // Update_Platform now gets real directional/ladder data of its own,
+    // see colDirBytes below.
     const colLen = Math.ceil((w * h) / 8);
     const collisions = new Array(colLen).fill(0);
     const rawCollisions = scene.collisions || [];
@@ -1262,6 +1264,56 @@ const compileSnesData = async (
       if (rawCollisions[i]) {
         collisions[i >> 3] |= 1 << (i & 7);
       }
+    }
+
+    // Ladders / one-way platforms (v4, Update_Platform only): a second,
+    // optional per-tile BYTE table carrying the real authored
+    // COLLISION_TOP/BOTTOM/LEFT/RIGHT/TILE_PROP_LADDER bits - see scene.c's
+    // own platform_col_byte()/platform_has_col_dir comment. Most scenes
+    // paint only plain solid/empty tiles (every painted byte already
+    // reduces to "solid from every side" once masked, i.e. COLLISION_ALL)
+    // and skip this table entirely - col_solid()'s own flat bit above
+    // already covers them with zero extra ROM/WRAM cost, matching
+    // scenePriorityMaps' own "most scenes need none" precedent below.
+    //
+    // colDirByteFor() has one deliberate asymmetry with a plain mask: a
+    // tile painted with *something* but none of COLLISION_ALL/LADDER's own
+    // bits (e.g. a tile painted only for TILE_PROP_PRIORITY, 0x20 - the
+    // "Colors" tool shares the same collision byte, see consts.js's own
+    // comment) still has to read as fully solid here, matching col_solid()'s
+    // existing "any nonzero raw byte counts as solid" rule every other
+    // genre already relies on - a plain `raw & mask` would silently turn
+    // such a tile *non*-solid for Platform alone the moment this scene
+    // needs the table for some *other* tile's real directional/ladder bit.
+    const PLAT_COL_DIR_MASK = COLLISION_ALL | TILE_PROP_LADDER;
+    const SCENE_COL_DIR_BYTES = 2040; // must match scene.c's own SCENE_COL_DIR_BYTES
+    const colDirByteFor = (raw) => {
+      const dirBits = raw & PLAT_COL_DIR_MASK;
+      if (raw !== 0 && dirBits === 0) {
+        return COLLISION_ALL;
+      }
+      return dirBits;
+    };
+    let hasColDir = false;
+    for (let i = 0; i < w * h; i++) {
+      const b = colDirByteFor(rawCollisions[i] || 0);
+      if (b !== 0 && b !== COLLISION_ALL) {
+        hasColDir = true;
+        break;
+      }
+    }
+    let colDirBytes = [0]; // [has_col_dir] flag only, when false
+    if (hasColDir) {
+      if (w * h > SCENE_COL_DIR_BYTES) {
+        warnings(
+          `Scene '${scene.name || `#${sceneIndex}`}' paints one-way platform/ladder tiles across ${w * h} tiles, more than the ${SCENE_COL_DIR_BYTES} this engine can track for them - the rest fall back to plain solid/empty.`
+        );
+      }
+      const dirBytes = [];
+      for (let i = 0; i < w * h; i++) {
+        dirBytes.push(colDirByteFor(rawCollisions[i] || 0));
+      }
+      colDirBytes = [1].concat(dirBytes);
     }
 
     const actorEntries = [];
@@ -1408,9 +1460,14 @@ const compileSnesData = async (
       // growth in this file has followed.
       playerBoundsBytes,
       // [1] MUSIC_PLAY preload index (0xff = none) - see
-      // hoistSceneMusicPreload's own comment above. Appended last, after
+      // hoistSceneMusicPreload's own comment above. Appended after
       // playerBoundsBytes, same reason.
-      sceneMusicPreload >= 0 ? sceneMusicPreload : 0xff
+      sceneMusicPreload >= 0 ? sceneMusicPreload : 0xff,
+      // [1 or 1+w*h] Ladders / one-way platforms: has_col_dir flag,
+      // optionally followed by the real per-tile directional-collision
+      // table - see colDirBytes' own comment above. The real last thing in
+      // the scene blob now, appended last for the same reason.
+      colDirBytes
     );
   });
 

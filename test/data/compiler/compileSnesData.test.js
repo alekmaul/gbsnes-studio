@@ -183,15 +183,18 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // 45-byte collision bitmap, which is itself followed by the [40]
     // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md), the
     // [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4), the [4]
-    // player collision-bounds bytes (Adventure genre, Option 1), and finally
-    // the [1] MUSIC_PLAY preload byte - all four appended at the very end of
-    // the blob specifically so none ever shifts any of the fixed-offset
-    // assertions above/below them.
+    // player collision-bounds bytes (Adventure genre, Option 1), the [1]
+    // MUSIC_PLAY preload byte, and finally the Ladders has_col_dir flag +
+    // table - all appended at the very end of the blob specifically so none
+    // ever shifts any of the fixed-offset assertions above/below them.
+    // This scene paints a lone COLLISION_TOP tile (tile 5), which is enough
+    // to make colDirBytes a real 1+w*h table, not just the [0] flag byte.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1);
+    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1 + 1 + w * h);
     const colByte = blob[52];
-    // bit i set <=> tile i was solid. Any nonzero flag byte counts as solid
-    // (this target has no directional-collision concept).
+    // bit i set <=> tile i was solid in the flat 1-bit bitmap. Any nonzero
+    // flag byte counts as solid here - the real directional distinction
+    // lives in the separate colDirBytes table Update_Platform alone reads.
     expect(colByte & (1 << 0)).toBeTruthy(); // tile 0: COLLISION_ALL
     expect(colByte & (1 << 1)).toBeFalsy(); // tile 1: clear
     expect(colByte & (1 << 2)).toBeTruthy(); // tile 2: COLLISION_ALL
@@ -206,6 +209,20 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // happened to land within the first colLen indices (mostly garbage
     // relative to real tile positions), not real per-tile solidity.
     expect(blob.slice(53, 52 + colLen)).toEqual(new Array(colLen - 1).fill(0));
+
+    // Ladders / one-way platforms (v4): tile 5's lone COLLISION_TOP byte
+    // (not COLLISION_ALL) is exactly the case that makes colDirBytes a
+    // real table instead of just the [0] flag - Update_Platform's own
+    // directional/ladder data, independent of the flat bitmap above.
+    const dirStart = 52 + colLen + 40 + 16 + 4 + 1;
+    expect(blob[dirStart]).toBe(1); // has_col_dir
+    const dir = blob.slice(dirStart + 1, dirStart + 1 + w * h);
+    expect(dir[0]).toBe(COLLISION_ALL);
+    expect(dir[2]).toBe(COLLISION_ALL);
+    expect(dir[5]).toBe(COLLISION_TOP);
+    expect(dir.filter((_, i) => i !== 0 && i !== 2 && i !== 5)).toEqual(
+      new Array(w * h - 3).fill(0)
+    );
   });
 });
 
@@ -282,9 +299,10 @@ describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", ()
       expect(blob[off] | (blob[off + 1] << 8)).toBe(0);
     }
     // +4: Adventure genre Option 1's trailing player collision-bounds bytes,
-    // +1: the MUSIC_PLAY preload byte - both appended after the metasprite
-    // table, see their own tests below.
-    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1);
+    // +1: the MUSIC_PLAY preload byte, +1: the Ladders has_col_dir flag -
+    // all three appended after the metasprite table, see their own tests
+    // below.
+    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1 + 1);
     // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
     // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
     // own convention - offset is relative to the start of the payload).
@@ -772,9 +790,11 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // right = left + boundsWidth - 1 = -6 + 9 = 3
     // top = boundsY - canvasHeight = 3 - 16 = -13 (243)
     // bottom = top + boundsHeight - 1 = -13 + 11 = -2 (254)
-    // -5..-1: the player-bounds [4] bytes sit right before the trailing [1]
-    // MUSIC_PLAY preload byte now, not at the very end of the blob anymore.
-    const tail = blob.slice(-5, -1);
+    // -6..-2: the player-bounds [4] bytes sit before the trailing [1]
+    // MUSIC_PLAY preload byte and [1] Ladders has_col_dir flag now, not at
+    // the very end of the blob anymore (this scene paints no collision
+    // tiles at all, so has_col_dir is just the one [0] byte).
+    const tail = blob.slice(-6, -2);
     expect([...tail]).toEqual([250, 3, 243, 254]);
   });
 
@@ -792,8 +812,8 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // left=-8(248), right=7, top=-16(240), bottom=-1(255) - reproduces the
     // legacy actor_render_tile -8/-16 anchor exactly, same values
     // gen-dummy-gfx.js's own dummyPlayerBounds uses for the same reason.
-    // -5..-1: see the comment in the previous test for why not slice(-4).
-    const tail = blob.slice(-5, -1);
+    // -6..-2: see the comment in the previous test for why not slice(-4).
+    const tail = blob.slice(-6, -2);
     expect([...tail]).toEqual([248, 7, 240, 255]);
   });
 });
@@ -849,7 +869,10 @@ describe("compileSnesData - MUSIC_PLAY preload hoist (v4, 'Space Battle' fix)", 
   // Last 5 bytes of the scene blob: [4] player-bounds then [1] music
   // preload (Adventure-genre bounds are unconditionally compiled for every
   // scene regardless of genre - see the describe block above).
-  const musicPreloadByte = (blob) => blob[blob.length - 1];
+  // -2, not -1: the trailing [1] Ladders has_col_dir flag now sits after
+  // the MUSIC_PLAY preload byte (these fixtures paint no collision tiles,
+  // so it's always just the one [0] flag byte).
+  const musicPreloadByte = (blob) => blob[blob.length - 2];
   const anyScriptHasMusicOpcode = (out) =>
     out.stats.scriptBytes.some((bytes) => bytes.includes(MUSIC_OPCODE));
 

@@ -43,7 +43,7 @@
  */
 #include "gbs_types.h"
 
-#define ENGINE_FIELDS_SIZE 22
+#define ENGINE_FIELDS_SIZE 24
 extern u8 engine_fields_raw[ENGINE_FIELDS_SIZE];
 
 #define topdown_grid          (engine_fields_raw[0])
@@ -64,5 +64,10 @@ extern u8 engine_fields_raw[ENGINE_FIELDS_SIZE];
  * - see Update_Shmup's own comment in scene.c). Now a real, independently
  * configurable field, matching GB Studio's real shooter_scroll_speed. */
 #define shooter_scroll_speed  (engine_fields_raw[21])
+
+/* v4 follow-up: ladders/one-way platforms (Update_Platform) - matches GB
+ * Studio's real plat_climb_vel, same 1/4096px/frame velocity scale as the
+ * other plat_* fields above. */
+#define plat_climb_vel        (*(s16 *)&engine_fields_raw[22])
 
 #endif

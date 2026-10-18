@@ -433,7 +433,37 @@ Not ported: the 3 `cType: "define"` input-remapping fields (`INPUT_PLATFORM_JUMP
 engine's input handling is hardcoded per genre throughout `scene.c` (`joy & KEY_A`, …), not a
 per-action remappable table; wiring that up is a real, separate engine change, not attempted
 here. `fade_style` (white/black fade direction) - `fade.c` has no such option at all currently.
-`plat_climb_vel` (ladder speed) - no ladder/climb physics exist in `Update_Platform`.
+
+`plat_climb_vel` (ladder climb speed, same 1/4096px/frame scale as the other `plat_*` fields) -
+real, see "Ladders / one-way platforms" below.
+
+**Ladders / one-way platforms (v4 follow-up, Update_Platform only).** The editor's own
+`BrushToolbar.js` has always let a project paint per-tile `COLLISION_TOP`/`BOTTOM`/`LEFT`/
+`RIGHT` and a ladder flag (`TILE_PROP_LADDER`, inherited from GB Studio) - but `col_solid()`/
+`scene_col[]` are a flat 1-bit-per-tile bitmap ("was the authored byte nonzero at all"), so a
+painted one-way platform or ladder silently behaved as a fully-solid wall. `Update_Platform` now
+gets a second, optional per-tile byte table (`scene_col_dir`/`platform_has_col_dir`, scene.c) -
+most scenes paint only plain solid/empty tiles and skip it entirely, zero cost. A tile only
+blocks sideways/vertical entry from the side it was actually painted to (`COLLISION_TOP` alone =
+the classic "jump up through, stand on top" platform); a ladder tile lets the player climb with
+Up/Down and walk off sideways. Slopes (GB's own `COLLISION_SLOPE_*`, upper nibble) are **not**
+part of this - those bits were already repurposed for `TILE_PROP_PRIORITY` on this fork (see
+`consts.js`), a deliberate earlier decision this doesn't revisit.
+
+Real bug found and fixed via Mesen A/B during verification (not just documented as a limitation):
+a one-way platform's `COLLISION_TOP` check used only the *current* tile row and `plat_vel_y`'s
+sign, so a jump whose apex happened to land inside (or just past) the platform's own row, on the
+exact frame gravity flips `plat_vel_y` non-negative, got caught as if landing on it - even though
+the player arrived from *below*, never fell onto it from above. Fixed by also checking the
+player's position *before* that frame's own Y movement (`old_py`) - only a player who was at or
+above the tile's top edge last frame can be landing on it now. Verified in Mesen three ways: a
+jump through the platform now matches a no-platform negative control's own unobstructed apex
+exactly (previously it snapped short, caught by the bug); the same jump still correctly settles
+back onto the real floor below when it doesn't clear the platform; and a plain fall from genuinely
+above the platform (no jump, gravity only) still lands exactly on its top edge rather than falling
+through. Ladder climbing verified separately: climbs up at `plat_climb_vel`, stops naturally at
+the top of a ladder's own tile run, climbs back down, and correctly exits onto solid ground below
+it.
 
 **Mechanism (compile-time default)**: GB Studio 3.x's real engine writes a chosen value into
 these globals at boot, via a GBVM assembly routine generated from the schema

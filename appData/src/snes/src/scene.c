@@ -574,6 +574,80 @@ static u8 col_solid_row2(s16 tx0, s16 tx1, s16 ty)
     return 0;
 }
 
+/* Directional collision + ladders (Update_Platform only). The editor's own
+ * BrushToolbar.js already lets a project author per-tile COLLISION_TOP/
+ * BOTTOM/LEFT/RIGHT and a ladder flag (inherited from GB Studio, consts.js'
+ * own COLLISION_* / TILE_PROP_LADDER) - col_solid()/scene_col[] above never
+ * carried that nuance through (1 bit/tile: "was the authored byte nonzero
+ * at all" - see compileSnesData.js's own comment on this), so a painted
+ * one-way platform or ladder silently behaved as a fully-solid wall on
+ * this engine. This table is a second, optional, per-tile BYTE array
+ * (1 byte/tile, raw authored collision byte) that Update_Platform consults
+ * instead of col_solid() when the current scene actually used any of
+ * these brushes - col_solid()/scene_col[] themselves, and every other
+ * genre, are completely untouched.
+ *
+ * Sized smaller than SCENE_COL_BYTES's own 255x64 ceiling on purpose: a
+ * byte/tile table at that same tile budget would be 16320 bytes, a real
+ * WRAM cost for a feature most scenes won't use. 2040 tiles (e.g. 64x31)
+ * comfortably covers a realistic Platform level; compileSnesData.js warns
+ * if a scene's own width*height exceeds it, and SceneInit below clamps the
+ * copy the same defensive way scene_col[] already does for its own bitmap. */
+#define SCENE_COL_DIR_BYTES 2040
+static u8 scene_col_dir[SCENE_COL_DIR_BYTES];
+static u8 platform_has_col_dir = 0;
+
+#define PLAT_COL_TOP    0x1
+#define PLAT_COL_BOTTOM 0x2
+#define PLAT_COL_LEFT   0x4
+#define PLAT_COL_RIGHT  0x8
+#define PLAT_COL_LADDER 0x10
+
+/* Raw authored collision byte at (tx,ty), only meaningful while
+ * platform_has_col_dir is set. Out of bounds or past the table's own tile
+ * budget degrades to "solid from every direction, not a ladder" (0xF) -
+ * matches col_solid()'s own "out of bounds counts as solid" convention. */
+static u8 platform_col_byte(s16 tx, s16 ty)
+{
+    u16 idx;
+    if (tx < 0) return 0xF;
+    if (ty < 0) return 0xF;
+    if (tx >= scene_width) return 0xF;
+    if (ty >= scene_height) return 0xF;
+    idx = (u16)ty * scene_width + (u16)tx;
+    if (idx >= SCENE_COL_DIR_BYTES) return 0xF;
+    return scene_col_dir[idx];
+}
+
+/* Does (tx,ty) block Platform movement in direction dirBit (one of
+ * PLAT_COL_TOP/BOTTOM/LEFT/RIGHT)? When this scene has no directional
+ * table (the common case - no one-way platform/ladder brush used),
+ * this is exactly col_solid()'s own flat solid/not-solid bit, so every
+ * existing project's Platform behaviour is completely unchanged. */
+static u8 platform_blocks(s16 tx, s16 ty, u8 dirBit)
+{
+    if (!platform_has_col_dir) return col_solid(tx, ty);
+    return (platform_col_byte(tx, ty) & dirBit) ? 1 : 0;
+}
+
+/* Two-column version of platform_blocks(), same shared-row shape as
+ * col_solid_row2() for the Y-sweep's left/right foot pair. */
+static u8 platform_blocks_row2(s16 tx0, s16 tx1, s16 ty, u8 dirBit)
+{
+    if (!platform_has_col_dir) return col_solid_row2(tx0, tx1, ty);
+    if (platform_col_byte(tx0, ty) & dirBit) return 1;
+    if (platform_col_byte(tx1, ty) & dirBit) return 1;
+    return 0;
+}
+
+/* Is (tx,ty) a ladder tile? Always false without a directional table -
+ * ladders need the same per-tile data one-way platforms do. */
+static u8 platform_is_ladder(s16 tx, s16 ty)
+{
+    if (!platform_has_col_dir) return 0;
+    return (platform_col_byte(tx, ty) & PLAT_COL_LADDER) ? 1 : 0;
+}
+
 // The 16px sprite of actor `skip` occupies tiles [tx, tx+1] x [ty, ty+1] at
 // its destination tile (tx, ty). Return the index of another actor blocking
 // that step, or 0xFF.
@@ -1254,11 +1328,35 @@ void SceneInit(void)
     player_bounds_bottom = (s8)p[3];
     p += 4;
 
-    /* MUSIC_PLAY preload (v4, "Space Battle" fix): [1] trailing byte, the
-     * real last thing in the scene blob now - see scene.h's own comment on
-     * scene_music_preload and compileSnesData.js's hoistSceneMusicPreload. */
+    /* MUSIC_PLAY preload (v4, "Space Battle" fix): [1] trailing byte - see
+     * scene.h's own comment on scene_music_preload and
+     * compileSnesData.js's hoistSceneMusicPreload. */
     scene_music_preload = p[0];
     p += 1;
+
+    /* Ladders / one-way platforms (Update_Platform): [1] has_col_dir flag,
+     * the real last thing in the scene blob now, optionally followed by a
+     * dir_bytes-long per-tile directional-collision table (see
+     * platform_col_byte()'s own comment above and compileSnesData.js's
+     * emission) - most scenes paint no COLLISION_TOP/BOTTOM/LEFT/RIGHT/
+     * ladder tiles at all and skip straight past this with just the one
+     * flag byte. */
+    platform_has_col_dir = p[0];
+    p += 1;
+    if (platform_has_col_dir)
+    {
+        u16 dir_bytes = (u16)scene_width * scene_height;
+        u16 k;
+        if (dir_bytes > SCENE_COL_DIR_BYTES)
+        {
+            dir_bytes = SCENE_COL_DIR_BYTES;
+        }
+        for (k = 0; k < dir_bytes; k++)
+        {
+            scene_col_dir[k] = p[k];
+        }
+        p += (u16)scene_width * scene_height;
+    }
 
     actor_move_settings = 0;
     check_triggers = 1;
@@ -2082,17 +2180,16 @@ void Update_Adventure(void)
  * audit: fixed-point physics (walk/run acceleration+deceleration, gravity,
  * variable-height jump) built fresh, not a Top Down/Adventure variant.
  *
- * Deliberately NOT ported this milestone (documented, not half-invented):
- * - Ladders (GB's TILE_PROP_LADDER) - would need a second per-tile data
- *   channel this engine's 1-bit-per-tile collision bitmap has no room for;
- *   a real per-tile "ladder" flag needs the M7 data compiler that actually
- *   derives collision from project art, not something to bolt onto the
- *   dummy-fixture format now.
- * - Directional per-tile collision (GB's COLLISION_LEFT/RIGHT/TOP/BOTTOM -
- *   e.g. one-way platforms) - this engine's collision bitmap is a single
- *   solid/not-solid bit per tile (established since M4c); a solid tile
- *   blocks from every direction here, a documented simplification, not a
- *   partial port of GB's richer per-tile byte.
+ * Ladders and directional per-tile collision (GB's TILE_PROP_LADDER and
+ * COLLISION_LEFT/RIGHT/TOP/BOTTOM - e.g. one-way platforms) shipped later
+ * (v4 follow-up) - see platform_col_byte()/platform_has_col_dir/
+ * scene_col_dir above and compileSnesData.js's own colDirBytes comment.
+ * col_solid()/scene_col[] themselves are still a flat 1-bit solid/not-solid
+ * bitmap, used unchanged by every other genre - this is a second, optional
+ * per-tile table Update_Platform alone consults when a scene actually
+ * paints a one-way platform/ladder tile.
+ *
+ * Deliberately NOT ported (documented, not half-invented):
  * - player_iframes/hit_actor/collision_group (hit-invincibility) - v4
  *   follow-up: PlayerContactUpdate() (below Update_Shmup) now handles this
  *   for every genre, including Platform (this collision test above never
@@ -2128,6 +2225,10 @@ static s16 plat_vel_y = 0;
 static u8 plat_grounded = 0;
 static s16 plat_last_trigger_tx = -1;
 static s16 plat_last_trigger_ty = -1;
+/* Ladders (v4). Only ever set/consulted when the current scene has a real
+ * directional-collision table (platform_has_col_dir) - see
+ * platform_is_ladder()'s own comment above. */
+static u8 plat_on_ladder = 0;
 
 /* PLAYER_BOUNCE (v4). plat_vel_y is file-static to this file, like every
  * other Platform physics variable - a small setter instead of a new extern,
@@ -2162,6 +2263,23 @@ void Start_Platform(void)
         actors[0].dir_x = 1;
     }
 
+    // Ladders (v4): if the scene starts the player standing on a ladder
+    // tile, snap onto it immediately - mirrors GB's own platform_init
+    // (checks the tile the player starts on, simplified from GB's "tile
+    // just above the start position" check: this engine's own feet-row
+    // convention already matches what Update_Platform's own ladder grab
+    // checks use, see below).
+    if (platform_is_ladder((actors[0].x) >> 3, (actors[0].y - 1) >> 3))
+    {
+        s16 ladder_tx = (actors[0].x) >> 3;
+        plat_x = ((ladder_tx << 3) + 4) << 4;
+        plat_on_ladder = 1;
+    }
+    else
+    {
+        plat_on_ladder = 0;
+    }
+
     // GB's own camera deadzone here (4x/16y) - ported for real (v4).
     camera_deadzone_x = PLATFORM_CAMERA_DEADZONE_X;
     camera_deadzone_y = PLATFORM_CAMERA_DEADZONE_Y;
@@ -2183,153 +2301,276 @@ void Update_Platform(void)
 
     actors[0].dir_y = 0;
 
-    if (joy & KEY_LEFT)
+    if (plat_on_ladder)
     {
-        actors[0].dir_x = -1;
-        if (joy & KEY_A)
+        // Ladders (v4): a scoped-down port of GB's own on_ladder branch in
+        // platform.c - no slopes (this engine has none - see consts.js'
+        // own TILE_PROP_PRIORITY comment), and LEFT/RIGHT always let go of
+        // the ladder immediately rather than GB's own "only if the tile
+        // you'd step into isn't itself a wall" check (a deliberate
+        // simplification: if it is a wall, next frame's own normal wall
+        // collision below stops the player right at it anyway - same end
+        // position, just reached a frame later via the ordinary path
+        // instead of a dedicated pre-check).
+        px = plat_x >> 4;
+        py = plat_y >> 4;
+        plat_vel_x = 0;
+        plat_vel_y = 0;
+        actors[0].animate = 0;
+        if (joy & KEY_UP)
         {
-            plat_vel_x -= plat_run_acc;
-            if (plat_vel_x < -plat_run_vel) plat_vel_x = -plat_run_vel;
-            if (plat_vel_x > -plat_min_vel) plat_vel_x = -plat_min_vel;
+            if (platform_is_ladder(px >> 3, (py - 1) >> 3))
+            {
+                plat_vel_y = -plat_climb_vel;
+            }
+        }
+        else if (joy & KEY_DOWN)
+        {
+            if (platform_is_ladder(px >> 3, py >> 3))
+            {
+                plat_vel_y = plat_climb_vel;
+            }
+        }
+        else if (joy & KEY_LEFT)
+        {
+            plat_on_ladder = 0;
+            actors[0].dir_x = -1;
+        }
+        else if (joy & KEY_RIGHT)
+        {
+            plat_on_ladder = 0;
+            actors[0].dir_x = 1;
+        }
+        plat_y += plat_vel_y >> 8;
+        py = plat_y >> 4;
+        // Climbed off the top/bottom of the ladder's own run of tiles -
+        // let go so normal gravity/ground collision takes over again.
+        if (plat_on_ladder)
+        {
+            if (!platform_is_ladder(px >> 3, (py - 1) >> 3))
+            {
+                if (!platform_is_ladder(px >> 3, py >> 3))
+                {
+                    plat_on_ladder = 0;
+                }
+            }
+        }
+        plat_grounded = 0;
+    }
+    else
+    {
+        if (joy & KEY_LEFT)
+        {
+            actors[0].dir_x = -1;
+            if (joy & KEY_A)
+            {
+                plat_vel_x -= plat_run_acc;
+                if (plat_vel_x < -plat_run_vel) plat_vel_x = -plat_run_vel;
+                if (plat_vel_x > -plat_min_vel) plat_vel_x = -plat_min_vel;
+            }
+            else
+            {
+                plat_vel_x -= plat_walk_acc;
+                if (plat_vel_x < -plat_walk_vel) plat_vel_x = -plat_walk_vel;
+                if (plat_vel_x > -plat_min_vel) plat_vel_x = -plat_min_vel;
+            }
+        }
+        else if (joy & KEY_RIGHT)
+        {
+            actors[0].dir_x = 1;
+            if (joy & KEY_A)
+            {
+                plat_vel_x += plat_run_acc;
+                if (plat_vel_x > plat_run_vel) plat_vel_x = plat_run_vel;
+                if (plat_vel_x < plat_min_vel) plat_vel_x = plat_min_vel;
+            }
+            else
+            {
+                plat_vel_x += plat_walk_acc;
+                if (plat_vel_x > plat_walk_vel) plat_vel_x = plat_walk_vel;
+                if (plat_vel_x < plat_min_vel) plat_vel_x = plat_min_vel;
+            }
+        }
+        else if (plat_grounded)
+        {
+            if (plat_vel_x < 0)
+            {
+                plat_vel_x += plat_dec;
+                if (plat_vel_x > 0) plat_vel_x = 0;
+            }
+            else if (plat_vel_x > 0)
+            {
+                plat_vel_x -= plat_dec;
+                if (plat_vel_x < 0) plat_vel_x = 0;
+            }
+        }
+
+        plat_x += plat_vel_x >> 8;
+        px = plat_x >> 4;
+        py = plat_y >> 4;
+
+        if (plat_grounded && (joy & KEY_A) && !(prev_joy & KEY_A))
+        {
+            tile_x = px >> 3;
+            tile_y = (py - 1) >> 3;
+            if (actors[0].dir_x > 0)
+            {
+                hit_actor = actor_at_tile(tile_x + 2, tile_y);
+            }
+            else
+            {
+                hit_actor = actor_at_tile(tile_x - 1, tile_y);
+            }
+            // A "hostile" actor is never A-press-interactable, only contact-
+            // triggered - same B-matching fix as SceneTryInteract's own (its
+            // comment has the full reasoning); B's platform.c has this exact
+            // exclusion too (`!hit_actor->collision_group`).
+            if (hit_actor != 0xFF && !actors[hit_actor].collision_group)
+            {
+                run_script(actors[hit_actor].events_ptr, hit_actor);
+            }
+        }
+
+        // Ladders (v4): grab on a fresh UP/DOWN press, checked from the
+        // player's current centre column - mirrors GB's own grab checks in
+        // platform.c (its own "Vertical Movement" block), simplified to
+        // this engine's own px-is-centre convention (no half-width offset
+        // needed - see platform_is_ladder()'s own callers). Takes effect
+        // next frame (the branch above is only entered once per frame,
+        // same as GB's own on_ladder flag) - the player keeps falling/
+        // sliding under gravity for this one frame, exactly like GB.
+        if (joy & KEY_UP)
+        {
+            if (platform_is_ladder(px >> 3, (py - 1) >> 3))
+            {
+                plat_on_ladder = 1;
+                plat_vel_x = 0;
+                px = ((px >> 3) << 3) + 4;
+                plat_x = px << 4;
+            }
+        }
+        else if (joy & KEY_DOWN)
+        {
+            if (platform_is_ladder(px >> 3, py >> 3))
+            {
+                plat_on_ladder = 1;
+                plat_vel_x = 0;
+                px = ((px >> 3) << 3) + 4;
+                plat_x = px << 4;
+            }
+        }
+
+        if ((joy & KEY_B) && !(prev_joy & KEY_B) && plat_grounded)
+        {
+            plat_vel_y = -plat_jump_vel;
+            plat_grounded = 0;
+        }
+
+        if (joy & KEY_B)
+        {
+            if (plat_vel_y < 0) plat_vel_y += plat_hold_grav;
+            else plat_vel_y += plat_grav;
         }
         else
         {
-            plat_vel_x -= plat_walk_acc;
-            if (plat_vel_x < -plat_walk_vel) plat_vel_x = -plat_walk_vel;
-            if (plat_vel_x > -plat_min_vel) plat_vel_x = -plat_min_vel;
+            plat_vel_y += plat_grav;
         }
-    }
-    else if (joy & KEY_RIGHT)
-    {
-        actors[0].dir_x = 1;
-        if (joy & KEY_A)
+        if (plat_vel_y > plat_max_fall_vel) plat_vel_y = plat_max_fall_vel;
+
         {
-            plat_vel_x += plat_run_acc;
-            if (plat_vel_x > plat_run_vel) plat_vel_x = plat_run_vel;
-            if (plat_vel_x < plat_min_vel) plat_vel_x = plat_min_vel;
-        }
-        else
-        {
-            plat_vel_x += plat_walk_acc;
-            if (plat_vel_x > plat_walk_vel) plat_vel_x = plat_walk_vel;
-            if (plat_vel_x < plat_min_vel) plat_vel_x = plat_min_vel;
-        }
-    }
-    else if (plat_grounded)
-    {
+            // old_py (before this frame's own Y movement) - needed below
+            // to tell a genuine "falling onto a one-way platform from
+            // above" apart from "already at/past its row, arrived from
+            // below" (see the TOP-collision check's own comment).
+            s16 old_py = plat_y >> 4;
+            plat_y += plat_vel_y >> 8;
+            px = plat_x >> 4;
+            py = plat_y >> 4;
+
+        // Wall collision - the sprite's leading vertical edge against the
+        // tile column it would newly enter, checked at both the feet row
+        // and the head row (this engine's sprite is a real 16px tall,
+        // unlike GB's own ~8px physics-body convention here - see the
+        // function-group comment). A tile only blocks sideways entry from
+        // the side it was painted to (PLAT_COL_RIGHT stops entry from the
+        // right i.e. moving left into it, PLAT_COL_LEFT the mirror) -
+        // falls back to the old flat col_solid() rule when this scene has
+        // no directional-collision table, so every existing project is
+        // unaffected (see platform_blocks()'s own comment).
         if (plat_vel_x < 0)
         {
-            plat_vel_x += plat_dec;
-            if (plat_vel_x > 0) plat_vel_x = 0;
+            s16 col = (px - 8) >> 3;
+            if (platform_blocks(col, (py - 1) >> 3, PLAT_COL_RIGHT) || platform_blocks(col, (py - 16) >> 3, PLAT_COL_RIGHT))
+            {
+                plat_vel_x = 0;
+                px = ((col + 1) << 3) + 8;
+                plat_x = px << 4;
+            }
         }
         else if (plat_vel_x > 0)
         {
-            plat_vel_x -= plat_dec;
-            if (plat_vel_x < 0) plat_vel_x = 0;
+            s16 col = (px + 7) >> 3;
+            if (platform_blocks(col, (py - 1) >> 3, PLAT_COL_LEFT) || platform_blocks(col, (py - 16) >> 3, PLAT_COL_LEFT))
+            {
+                plat_vel_x = 0;
+                px = (col << 3) - 8;
+                plat_x = px << 4;
+            }
         }
-    }
 
-    plat_x += plat_vel_x >> 8;
-    px = plat_x >> 4;
-    py = plat_y >> 4;
-
-    if (plat_grounded && (joy & KEY_A) && !(prev_joy & KEY_A))
-    {
-        tile_x = px >> 3;
-        tile_y = (py - 1) >> 3;
-        if (actors[0].dir_x > 0)
+        // Ground / ceiling collision - the sprite's leading horizontal edge
+        // (feet falling, head rising) against both columns it spans. A
+        // one-way platform (PLAT_COL_TOP only, no LEFT/RIGHT/BOTTOM) is
+        // solid to land on but never blocks rising through it from below -
+        // the classic "jump up through, stand on top" platform.
+        if (plat_vel_y >= 0)
         {
-            hit_actor = actor_at_tile(tile_x + 2, tile_y);
+            s16 row = py >> 3;
+            s16 col_l = (px - 8) >> 3;
+            s16 col_r = (px + 7) >> 3;
+            // Real bug found by Mesen A/B (a no-platform negative control
+            // reached a materially higher true apex than the with-platform
+            // run): checking only the *current* row/velocity sign means a
+            // jump whose apex happens to land inside (or just past) a
+            // one-way platform's own row, on the exact frame gravity flips
+            // plat_vel_y non-negative, gets caught as if landing on it -
+            // even though the player arrived from *below*, never fell onto
+            // it from above. old_py (captured before this frame's own Y
+            // movement) tells the two apart: only a player who was at or
+            // above the tile's own top edge last frame can be landing on
+            // it now - one already below/inside it (climbing up into it)
+            // must keep rising through, untouched.
+            if (old_py <= (row << 3))
+            {
+                if (platform_blocks_row2(col_l, col_r, row, PLAT_COL_TOP))
+                {
+                    plat_grounded = 1;
+                    plat_vel_y = 0;
+                    py = row << 3;
+                    plat_y = py << 4;
+                }
+                else
+                {
+                    plat_grounded = 0;
+                }
+            }
+            else
+            {
+                plat_grounded = 0;
+            }
         }
         else
         {
-            hit_actor = actor_at_tile(tile_x - 1, tile_y);
+            s16 row = (py - 16) >> 3;
+            s16 col_l = (px - 8) >> 3;
+            s16 col_r = (px + 7) >> 3;
+            if (platform_blocks_row2(col_l, col_r, row, PLAT_COL_BOTTOM))
+            {
+                plat_vel_y = 0;
+                py = ((row + 1) << 3) + 16;
+                plat_y = py << 4;
+            }
         }
-        // A "hostile" actor is never A-press-interactable, only contact-
-        // triggered - same B-matching fix as SceneTryInteract's own (its
-        // comment has the full reasoning); B's platform.c has this exact
-        // exclusion too (`!hit_actor->collision_group`).
-        if (hit_actor != 0xFF && !actors[hit_actor].collision_group)
-        {
-            run_script(actors[hit_actor].events_ptr, hit_actor);
-        }
-    }
-
-    if ((joy & KEY_B) && !(prev_joy & KEY_B) && plat_grounded)
-    {
-        plat_vel_y = -plat_jump_vel;
-        plat_grounded = 0;
-    }
-
-    if (joy & KEY_B)
-    {
-        if (plat_vel_y < 0) plat_vel_y += plat_hold_grav;
-        else plat_vel_y += plat_grav;
-    }
-    else
-    {
-        plat_vel_y += plat_grav;
-    }
-    if (plat_vel_y > plat_max_fall_vel) plat_vel_y = plat_max_fall_vel;
-
-    plat_y += plat_vel_y >> 8;
-    px = plat_x >> 4;
-    py = plat_y >> 4;
-
-    // Wall collision - the sprite's leading vertical edge against the tile
-    // column it would newly enter, checked at both the feet row and the
-    // head row (this engine's sprite is a real 16px tall, unlike GB's own
-    // ~8px physics-body convention here - see the function-group comment).
-    if (plat_vel_x < 0)
-    {
-        s16 col = (px - 8) >> 3;
-        if (col_solid(col, (py - 1) >> 3) || col_solid(col, (py - 16) >> 3))
-        {
-            plat_vel_x = 0;
-            px = ((col + 1) << 3) + 8;
-            plat_x = px << 4;
-        }
-    }
-    else if (plat_vel_x > 0)
-    {
-        s16 col = (px + 7) >> 3;
-        if (col_solid(col, (py - 1) >> 3) || col_solid(col, (py - 16) >> 3))
-        {
-            plat_vel_x = 0;
-            px = (col << 3) - 8;
-            plat_x = px << 4;
-        }
-    }
-
-    // Ground / ceiling collision - the sprite's leading horizontal edge
-    // (feet falling, head rising) against both columns it spans.
-    if (plat_vel_y >= 0)
-    {
-        s16 row = py >> 3;
-        s16 col_l = (px - 8) >> 3;
-        s16 col_r = (px + 7) >> 3;
-        if (col_solid_row2(col_l, col_r, row))
-        {
-            plat_grounded = 1;
-            plat_vel_y = 0;
-            py = row << 3;
-            plat_y = py << 4;
-        }
-        else
-        {
-            plat_grounded = 0;
-        }
-    }
-    else
-    {
-        s16 row = (py - 16) >> 3;
-        s16 col_l = (px - 8) >> 3;
-        s16 col_r = (px + 7) >> 3;
-        if (col_solid_row2(col_l, col_r, row))
-        {
-            plat_vel_y = 0;
-            py = ((row + 1) << 3) + 16;
-            plat_y = py << 4;
         }
     }
 
