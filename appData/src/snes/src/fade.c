@@ -3,6 +3,7 @@
     v4 follow-up: real white-fade support - see fade.h's own header comment.
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
+#include <string.h>
 #include "fade.h"
 #include "script_runner.h"
 #include "scene.h"          /* bg_pal_slot_color[] - white-fade BG write-back */
@@ -39,31 +40,18 @@ static u16 fade_pal_bg_len = 0;
 
 void FadeCaptureBgChunk(u8 slot, const u8 *src, u16 byte_len)
 {
-    u16 colors = byte_len / 2;
-    u16 i;
-    for (i = 0; i < colors; i++)
-    {
-        fade_pal_original[(u16)slot * 16 + i] = (u16)src[i * 2] | ((u16)src[i * 2 + 1] << 8);
-    }
-    fade_pal_bg_len = (u16)slot * 16 + colors;
+    memcpy(&fade_pal_original[(u16)slot * 16], src, byte_len);
+    fade_pal_bg_len = (u16)slot * 16 + byte_len / 2;
 }
 
 void FadeCaptureUiPalette(const u8 *src)
 {
-    u16 i;
-    for (i = 0; i < FADE_PAL_UI_COLORS; i++)
-    {
-        fade_pal_original[FADE_PAL_UI_OFFSET + i] = (u16)src[i * 2] | ((u16)src[i * 2 + 1] << 8);
-    }
+    memcpy(&fade_pal_original[FADE_PAL_UI_OFFSET], src, FADE_PAL_UI_COLORS * 2);
 }
 
 void FadeCaptureObjPalette(const u8 *src)
 {
-    u16 i;
-    for (i = 0; i < FADE_PAL_OBJ_COLORS; i++)
-    {
-        fade_pal_original[FADE_PAL_OBJ_OFFSET + i] = (u16)src[i * 2] | ((u16)src[i * 2 + 1] << 8);
-    }
+    memcpy(&fade_pal_original[FADE_PAL_OBJ_OFFSET], src, FADE_PAL_OBJ_COLORS * 2);
 }
 
 /* One white-fade step: re-lerp every captured colour fresh from
