@@ -108,13 +108,15 @@ test("Should get default fields when engine not ejected", async () => {
   // than the full array, so this test doesn't need updating every time a
   // field's min/max/defaultValue is tuned.
   const fields = dispatch.mock.calls[0][0].payload;
-  expect(fields).toHaveLength(13);
+  expect(fields).toHaveLength(17);
   expect(fields.map((f: { key: string }) => f.key)).toEqual(
     expect.arrayContaining([
       "topdown_grid",
       "plat_jump_vel",
       "plat_climb_vel",
       "shooter_scroll_speed",
+      "INPUT_PLATFORM_JUMP",
+      "INPUT_TOPDOWN_INTERACT",
     ])
   );
 });

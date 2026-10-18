@@ -15,6 +15,16 @@ export const precompileEngineFields = (
   let offset = 0;
   const offsets: Dictionary<PrecompiledEngineField> = {};
   for (let engineField of engineFields) {
+    // "define" fields (button remapping - INPUT_PLATFORM_JUMP etc.) are a
+    // compile-time #define, not a runtime-readable byte in
+    // engine_fields_raw[] - they have no offset at all, matching GB
+    // Studio's own real schema (same cType, same reason). Skipping them
+    // here, not just at the call sites, keeps every *other* field's offset
+    // correct regardless of where a "define" field sits in engine.json's
+    // own list order.
+    if (engineField.cType === "define") {
+      continue;
+    }
     offsets[engineField.key] = {
       offset,
       field: engineField,

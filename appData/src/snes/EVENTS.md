@@ -428,14 +428,23 @@ global already existed:
   normally-sized background (ruling out a hidden half-rate cause), and each call that scrolls
   now adds exactly 2 whole pixels.
 
-Not ported: the 3 `cType: "define"` input-remapping fields (`INPUT_PLATFORM_JUMP`/`RUN`/
-`INTERACT`, `INPUT_TOPDOWN_INTERACT` - which physical button triggers jump vs. interact) - this
-engine's input handling is hardcoded per genre throughout `scene.c` (`joy & KEY_A`, …), not a
-per-action remappable table; wiring that up is a real, separate engine change, not attempted
-here. `fade_style` (white/black fade direction) - `fade.c` has no such option at all currently.
+`fade_style` (white/black fade direction) - `fade.c` has no such option at all currently.
 
 `plat_climb_vel` (ladder climb speed, same 1/4096px/frame scale as the other `plat_*` fields) -
 real, see "Ladders / one-way platforms" below.
+
+**Button remapping (v4 follow-up) — `INPUT_PLATFORM_JUMP`/`RUN`/`INTERACT`,
+`INPUT_TOPDOWN_INTERACT`.** Real now, matching GB Studio's own `cType: "define"` fields exactly
+(a compile-time `#define`, not a runtime-readable byte - `compileEngineFields()` skips them,
+`precompileEngineFields()`/`EngineFieldSelect.tsx` do too, so Engine Field: Set/Store can't
+target one, same as upstream). `compileSnesData.js`'s new `compileInputDefines()` writes the
+project's chosen button (a real SNES `KEY_*` macro name, e.g. `KEY_X` - not GB's `INPUT_A`/
+`INPUT_B` names) straight into a generated `src/input_defines.h`, included by `scene.c` before
+`Update_Platform`/`Update_TopDown`; the 6 previously-hardcoded `joy & KEY_A`/`KEY_B` call sites
+now read `joy & INPUT_PLATFORM_JUMP` etc. Defaults (`KEY_B` jump, `KEY_A` run/interact both
+genres) exactly reproduce the old hardcoded buttons, so an untouched project sees zero behaviour
+change. `gen-dummy-gfx.js` generates the same header for the committed dummy/eject build.
+Verified in Mesen: a project remapped to `KEY_X` ignores `B` entirely and jumps on `X`.
 
 **Ladders / one-way platforms (v4 follow-up, Update_Platform only).** The editor's own
 `BrushToolbar.js` has always let a project paint per-tile `COLLISION_TOP`/`BOTTOM`/`LEFT`/

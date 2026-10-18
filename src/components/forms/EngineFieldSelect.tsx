@@ -6,6 +6,12 @@ import { Select, Option, OptGroup } from "../ui/form/Select";
 import l10n from "../../lib/helpers/l10n";
 import { useGroupedEngineFields } from "../settings/useGroupedEngineFields";
 
+// "define" fields (button remapping - INPUT_PLATFORM_JUMP etc.) are a
+// compile-time #define, not a runtime-readable byte - Engine Field: Set/
+// Store can't target them, matching GB Studio's own real EngineFieldSelect
+// (same filter, same reason).
+const notDefine = (field: { cType: string }) => field.cType !== "define";
+
 interface EngineFieldSelectProps {
   value?: string;
   onChange?: (newValue: string) => void;
@@ -21,13 +27,15 @@ const EngineFieldSelect: React.FC<EngineFieldSelectProps> = ({
 
   useEffect(() => {
     setOptions(
-      groupedFields.map((g) => ({
-        label: l10n(g.name),
-        options: g.fields.map((f) => ({
-          value: f.key,
-          label: l10n(f.label),
-        })),
-      }))
+      groupedFields
+        .map((g) => ({
+          label: l10n(g.name),
+          options: g.fields.filter(notDefine).map((f) => ({
+            value: f.key,
+            label: l10n(f.label),
+          })),
+        }))
+        .filter((g) => g.options.length > 0)
     );
   }, [groupedFields]);
 

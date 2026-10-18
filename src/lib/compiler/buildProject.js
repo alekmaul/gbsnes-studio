@@ -75,6 +75,11 @@ const buildProjectData = async (
   // global per appData/src/snes/engine.json field (see compileSnesData.js's
   // own compileEngineFields comment).
   await fs.writeFile(`${outputRoot}/src/engine_fields.c`, snesData.engineFieldsC);
+  // Button remapping (v4 follow-up) - INPUT_PLATFORM_JUMP/RUN/INTERACT,
+  // INPUT_TOPDOWN_INTERACT compile to real #defines here instead (GB
+  // Studio's own "define" cType, see compileSnesData.js's own
+  // compileInputDefines comment), consumed by scene.c.
+  await fs.writeFile(`${outputRoot}/src/input_defines.h`, snesData.inputDefinesH);
   // Graphic assets go in src/data/: one `<name>_data.as` (superfree section)
   // per background / font / OBJ sheet / OBJ palette, plus data.asm that
   // `.include`s them - so wla spreads them across banks instead of one atomic

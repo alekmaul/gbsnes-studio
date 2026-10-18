@@ -22,6 +22,7 @@
 #include "update_script.h"
 #include "engine_fields.h"
 #include "music.h"
+#include "input_defines.h"
 
 u16 scene_index = 0xFFFF;
 u16 scene_next_index = 0;
@@ -1649,7 +1650,7 @@ void Update_TopDown(void)
         return;
     }
 
-    if ((joy & KEY_A) && !(prev_joy & KEY_A))
+    if ((joy & INPUT_TOPDOWN_INTERACT) && !(prev_joy & INPUT_TOPDOWN_INTERACT))
     {
         SceneTryInteract();
         if (script_ptr)
@@ -2362,7 +2363,7 @@ void Update_Platform(void)
         if (joy & KEY_LEFT)
         {
             actors[0].dir_x = -1;
-            if (joy & KEY_A)
+            if (joy & INPUT_PLATFORM_RUN)
             {
                 plat_vel_x -= plat_run_acc;
                 if (plat_vel_x < -plat_run_vel) plat_vel_x = -plat_run_vel;
@@ -2378,7 +2379,7 @@ void Update_Platform(void)
         else if (joy & KEY_RIGHT)
         {
             actors[0].dir_x = 1;
-            if (joy & KEY_A)
+            if (joy & INPUT_PLATFORM_RUN)
             {
                 plat_vel_x += plat_run_acc;
                 if (plat_vel_x > plat_run_vel) plat_vel_x = plat_run_vel;
@@ -2409,7 +2410,7 @@ void Update_Platform(void)
         px = plat_x >> 4;
         py = plat_y >> 4;
 
-        if (plat_grounded && (joy & KEY_A) && !(prev_joy & KEY_A))
+        if (plat_grounded && (joy & INPUT_PLATFORM_INTERACT) && !(prev_joy & INPUT_PLATFORM_INTERACT))
         {
             tile_x = px >> 3;
             tile_y = (py - 1) >> 3;
@@ -2460,13 +2461,13 @@ void Update_Platform(void)
             }
         }
 
-        if ((joy & KEY_B) && !(prev_joy & KEY_B) && plat_grounded)
+        if ((joy & INPUT_PLATFORM_JUMP) && !(prev_joy & INPUT_PLATFORM_JUMP) && plat_grounded)
         {
             plat_vel_y = -plat_jump_vel;
             plat_grounded = 0;
         }
 
-        if (joy & KEY_B)
+        if (joy & INPUT_PLATFORM_JUMP)
         {
             if (plat_vel_y < 0) plat_vel_y += plat_hold_grav;
             else plat_vel_y += plat_grav;

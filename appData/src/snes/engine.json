@@ -132,6 +132,62 @@
       "defaultValue": 4000,
       "min": 0,
       "max": 16384
+    },
+    {
+      "key": "INPUT_PLATFORM_JUMP",
+      "label": "FIELD_INPUT_JUMP",
+      "group": "GAMETYPE_PLATFORMER",
+      "type": "select",
+      "options": [
+        ["KEY_B", "B"],
+        ["KEY_A", "A"],
+        ["KEY_X", "X"],
+        ["KEY_Y", "Y"]
+      ],
+      "cType": "define",
+      "defaultValue": "KEY_B"
+    },
+    {
+      "key": "INPUT_PLATFORM_RUN",
+      "label": "FIELD_INPUT_RUN",
+      "group": "GAMETYPE_PLATFORMER",
+      "type": "select",
+      "options": [
+        ["KEY_A", "A"],
+        ["KEY_B", "B"],
+        ["KEY_X", "X"],
+        ["KEY_Y", "Y"]
+      ],
+      "cType": "define",
+      "defaultValue": "KEY_A"
+    },
+    {
+      "key": "INPUT_PLATFORM_INTERACT",
+      "label": "FIELD_INPUT_INTERACT",
+      "group": "GAMETYPE_PLATFORMER",
+      "type": "select",
+      "options": [
+        ["KEY_A", "A"],
+        ["KEY_B", "B"],
+        ["KEY_X", "X"],
+        ["KEY_Y", "Y"]
+      ],
+      "cType": "define",
+      "defaultValue": "KEY_A"
+    },
+    {
+      "key": "INPUT_TOPDOWN_INTERACT",
+      "label": "FIELD_INPUT_INTERACT",
+      "group": "GAMETYPE_TOP_DOWN",
+      "type": "select",
+      "options": [
+        ["KEY_A", "A"],
+        ["KEY_B", "B"],
+        ["KEY_X", "X"],
+        ["KEY_Y", "Y"]
+      ],
+      "cType": "define",
+      "defaultValue": "KEY_A"
     }
   ]
 }
