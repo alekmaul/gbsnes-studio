@@ -5,6 +5,7 @@ import SceneSelect from "../forms/SceneSelectOld";
 import { BackgroundSelect } from "../forms/BackgroundSelect";
 import SpriteSheetSelect from "../forms/SpriteSheetSelectOld";
 import SpriteStateSelect from "../forms/SpriteStateSelect";
+import AnimStateSelect from "../forms/AnimStateSelect";
 import { VariableSelect } from "../forms/VariableSelect";
 import DirectionPicker from "../forms/DirectionPicker";
 import InputPicker from "../forms/InputPicker";
@@ -211,6 +212,16 @@ class ScriptEventFormInput extends Component {
     if (type === "spriteState") {
       return (
         <SpriteStateSelect
+          id={id}
+          value={value}
+          spriteSheetId={args.spriteSheetId}
+          onChange={this.onChange}
+        />
+      );
+    }
+    if (type === "animState") {
+      return (
+        <AnimStateSelect
           id={id}
           value={value}
           spriteSheetId={args.spriteSheetId}

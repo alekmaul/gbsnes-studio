@@ -51,11 +51,13 @@ const snapCanvasSize = (value: unknown): number => {
 interface SpriteInspectorProps {
   id: string;
   selectedStateId: string;
+  selectedAnimStateId?: string;
 }
 
 export const SpriteInspector: FC<SpriteInspectorProps> = ({
   id,
   selectedStateId,
+  selectedAnimStateId,
 }) => {
   const dispatch = useDispatch();
   const sprite = useSelector((state: RootState) =>
@@ -63,6 +65,13 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
   );
   const spriteState = selectedStateId
     ? sprite?.states?.find((s) => s.id === selectedStateId)
+    : undefined;
+  // Named animation states (v4 follow-up) - same duck-typed container
+  // lookup MetaspriteCanvas.tsx/MetaspriteFramesTimeline.tsx already use,
+  // kept local here too rather than importing entitiesState.ts's own
+  // internal getMetaspriteContainer.
+  const animState = selectedAnimStateId
+    ? sprite?.animStates?.find((s) => s.id === selectedAnimStateId)
     : undefined;
   const selectedTileIds = useSelector(
     (state: RootState) => state.editor.selectedMetaspriteTileIds
@@ -73,7 +82,7 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
   const selectedTileId =
     selectedTileIds.length > 0 ? selectedTileIds[0] : undefined;
   const selectedTile = selectedTileId
-    ? sprite?.metaspriteTiles?.[selectedTileId]
+    ? (animState || sprite)?.metaspriteTiles?.[selectedTileId]
     : undefined;
 
   if (!sprite) {
@@ -110,6 +119,7 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
     dispatch(
       entitiesActions.editMetaspriteTiles({
         spriteSheetId: id,
+        animStateId: selectedAnimStateId,
         metaspriteTileIds: selectedTileIds,
         changes,
       })
@@ -120,6 +130,7 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
     dispatch(
       entitiesActions.flipXMetaspriteTiles({
         spriteSheetId: id,
+        animStateId: selectedAnimStateId,
         metaspriteTileIds: selectedTileIds,
       })
     );
@@ -129,7 +140,21 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
     dispatch(
       entitiesActions.flipYMetaspriteTiles({
         spriteSheetId: id,
+        animStateId: selectedAnimStateId,
         metaspriteTileIds: selectedTileIds,
+      })
+    );
+  };
+
+  const editAnimState = (changes: Record<string, unknown>) => {
+    if (!selectedAnimStateId) {
+      return;
+    }
+    dispatch(
+      entitiesActions.editAnimState({
+        spriteSheetId: id,
+        animStateId: selectedAnimStateId,
+        changes,
       })
     );
   };
@@ -372,6 +397,75 @@ export const SpriteInspector: FC<SpriteInspectorProps> = ({
                       editState({ spriteSheetId: newId })
                     }
                   />
+                </FormField>
+              </FormRow>
+            </>
+          )}
+
+          {animState && (
+            <>
+              <FormDivider />
+              <FormSectionTitle>{l10n("FIELD_ANIM_STATE")}</FormSectionTitle>
+              <FormRow>
+                <FormField name="animStateName" label={l10n("FIELD_STATE_NAME")}>
+                  <EditableText
+                    name="animStateName"
+                    value={animState.name || ""}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) =>
+                      editAnimState({ name: e.currentTarget.value })
+                    }
+                  />
+                </FormField>
+              </FormRow>
+              <FormRow>
+                <FormField
+                  name="animStateType"
+                  label={l10n("FIELD_ANIMATION_TYPE")}
+                  info={l10n("FIELD_ANIMATION_TYPE_NOTE")}
+                >
+                  <AnimationTypeSelect
+                    name="animStateType"
+                    value={animState.animationType}
+                    onChange={(newValue?: SpriteAnimationType) =>
+                      editAnimState({ animationType: newValue || "fixed" })
+                    }
+                  />
+                </FormField>
+              </FormRow>
+              <FormRow>
+                <FormField
+                  name="animStateCanvasSize"
+                  label={l10n("FIELD_CANVAS_SIZE")}
+                  info={l10n("FIELD_METASPRITE_CANVAS_SIZE_NOTE")}
+                >
+                  <FormRow>
+                    <CoordinateInput
+                      name="animStateCanvasWidth"
+                      coordinate="w"
+                      value={animState.canvasWidth || 16}
+                      min={16}
+                      max={128}
+                      step={CANVAS_SIZE_STEP}
+                      onChange={(e) =>
+                        editAnimState({
+                          canvasWidth: snapCanvasSize(castEventValue(e)),
+                        })
+                      }
+                    />
+                    <CoordinateInput
+                      name="animStateCanvasHeight"
+                      coordinate="h"
+                      value={animState.canvasHeight || 16}
+                      min={16}
+                      max={128}
+                      step={CANVAS_SIZE_STEP}
+                      onChange={(e) =>
+                        editAnimState({
+                          canvasHeight: snapCanvasSize(castEventValue(e)),
+                        })
+                      }
+                    />
+                  </FormRow>
                 </FormField>
               </FormRow>
             </>

@@ -53,6 +53,7 @@ import {
   Background,
   SpriteSheet,
   SpriteState,
+  AnimState,
   Metasprite,
   MetaspriteTile,
   Music,
@@ -571,27 +572,81 @@ const removeSpriteState: CaseReducer<
 // exactly one, not a different (e.g. 8x8) block size.
 const METASPRITE_TILE_SIZE = 16;
 
-// The FIRST time a sheet's `metasprites` array is created (it's still
+// Named animation states (v4 follow-up) - every metasprite-tile/frame
+// reducer below can target either a sheet's own top-level metasprites/
+// metaspriteTiles (its default/implicit state - animStateId undefined, the
+// exact path every one of these reducers already had) or one of its
+// animStates[] (animStateId provided, entitiesTypes.ts's own AnimState).
+// MetaspriteContainer is the shared duck-typed shape both SpriteSheet and
+// AnimState satisfy structurally (AnimState just never has `numFrames` -
+// it always carries a real, explicit metasprites/metaspriteTiles instead
+// of ever needing to seed from a PNG-derived frame count); getContainer()/
+// writeContainerChanges() are the only two places this indirection lives,
+// so every reducer's own actual tile/frame algorithm below is completely
+// unchanged either way - it just reads/writes through these instead of
+// `spriteSheet` directly.
+interface MetaspriteContainer {
+  metasprites?: Metasprite[];
+  metaspriteTiles?: Record<string, MetaspriteTile>;
+  canvasWidth?: number;
+  canvasHeight?: number;
+  numFrames?: number; // only ever set on a SpriteSheet, never an AnimState
+}
+
+const getMetaspriteContainer = (
+  spriteSheet: SpriteSheet,
+  animStateId?: string
+): MetaspriteContainer =>
+  (animStateId &&
+    (spriteSheet.animStates || []).find((s) => s.id === animStateId)) ||
+  spriteSheet;
+
+const writeContainerChanges = (
+  state: EntitiesState,
+  spriteSheet: SpriteSheet,
+  animStateId: string | undefined,
+  changes: Pick<MetaspriteContainer, "metasprites" | "metaspriteTiles">
+) => {
+  if (animStateId) {
+    const animStates = (spriteSheet.animStates || []).map((s) =>
+      s.id === animStateId ? { ...s, ...changes } : s
+    );
+    spriteSheetsAdapter.updateOne(state.spriteSheets, {
+      id: spriteSheet.id,
+      changes: { animStates },
+    });
+    return;
+  }
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes,
+  });
+};
+
+// The FIRST time a container's `metasprites` array is created (it's still
 // undefined), seed it with as many empty frames as the image's own
 // numFrames already implies - not just 1 - before growing further. Without
 // this, placing a tile directly into (say) frame 2 of a 3-frame sheet
 // would create an array of length 3 with frames 0-1 genuinely missing
 // (not just empty) the moment metasprites.length becomes the frame-count
 // source of truth (MetaspriteFramesTimeline.tsx's frameCountFor), silently
-// hiding frames the author never asked to lose.
-const seedMetasprites = (spriteSheet: SpriteSheet): Metasprite[] =>
-  spriteSheet.metasprites
-    ? [...spriteSheet.metasprites]
-    : Array.from({ length: Math.max(1, spriteSheet.numFrames || 1) }, () => ({
+// hiding frames the author never asked to lose. An AnimState has no
+// numFrames to seed from (Math.max(1, undefined || 1) = 1), matching its
+// own real convention: a brand new named state always starts as a single
+// empty frame.
+const seedMetasprites = (container: MetaspriteContainer): Metasprite[] =>
+  container.metasprites
+    ? [...container.metasprites]
+    : Array.from({ length: Math.max(1, container.numFrames || 1) }, () => ({
         id: uuid(),
         tiles: [],
       }));
 
 const ensureMetaspriteFrame = (
-  spriteSheet: SpriteSheet,
+  container: MetaspriteContainer,
   frameIndex: number
 ): Metasprite[] => {
-  const metasprites = seedMetasprites(spriteSheet);
+  const metasprites = seedMetasprites(container);
   while (metasprites.length <= frameIndex) {
     metasprites.push({ id: uuid(), tiles: [] });
   }
@@ -602,6 +657,7 @@ const addMetaspriteTile: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
     frameIndex: number;
     metaspriteTileId: string;
     x: number;
@@ -617,10 +673,8 @@ const addMetaspriteTile: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metasprites = ensureMetaspriteFrame(
-    spriteSheet,
-    action.payload.frameIndex
-  );
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metasprites = ensureMetaspriteFrame(container, action.payload.frameIndex);
   const metasprite = metasprites[action.payload.frameIndex];
   const tile: MetaspriteTile = {
     id: action.payload.metaspriteTileId,
@@ -636,14 +690,11 @@ const addMetaspriteTile: CaseReducer<
     ...metasprite,
     tiles: [...metasprite.tiles, tile.id],
   };
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: {
-      metasprites,
-      metaspriteTiles: {
-        ...(spriteSheet.metaspriteTiles || {}),
-        [tile.id]: tile,
-      },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metasprites,
+    metaspriteTiles: {
+      ...(container.metaspriteTiles || {}),
+      [tile.id]: tile,
     },
   });
 };
@@ -652,6 +703,7 @@ const editMetaspriteTiles: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
     metaspriteTileIds: string[];
     changes: Partial<MetaspriteTile>;
   }>
@@ -663,15 +715,15 @@ const editMetaspriteTiles: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   action.payload.metaspriteTileIds.forEach((id) => {
     if (metaspriteTiles[id]) {
       metaspriteTiles[id] = { ...metaspriteTiles[id], ...action.payload.changes };
     }
   });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metaspriteTiles,
   });
 };
 
@@ -679,6 +731,7 @@ const moveMetaspriteTiles: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
     metaspriteTiles: { metaspriteTileId: string; x: number; y: number }[];
   }>
 > = (state, action) => {
@@ -689,7 +742,8 @@ const moveMetaspriteTiles: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   action.payload.metaspriteTiles.forEach(({ metaspriteTileId, x, y }) => {
     if (metaspriteTiles[metaspriteTileId]) {
       metaspriteTiles[metaspriteTileId] = {
@@ -699,9 +753,8 @@ const moveMetaspriteTiles: CaseReducer<
       };
     }
   });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metaspriteTiles,
   });
 };
 
@@ -709,6 +762,7 @@ const moveMetaspriteTilesRelative: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
     metaspriteTileIds: string[];
     x: number;
     y: number;
@@ -721,7 +775,8 @@ const moveMetaspriteTilesRelative: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   action.payload.metaspriteTileIds.forEach((id) => {
     const tile = metaspriteTiles[id];
     if (tile) {
@@ -732,9 +787,8 @@ const moveMetaspriteTilesRelative: CaseReducer<
       };
     }
   });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metaspriteTiles,
   });
 };
 
@@ -745,7 +799,7 @@ const moveMetaspriteTilesRelative: CaseReducer<
 // pose" result for a multi-tile selection.
 const flipXMetaspriteTiles: CaseReducer<
   EntitiesState,
-  PayloadAction<{ spriteSheetId: string; metaspriteTileIds: string[] }>
+  PayloadAction<{ spriteSheetId: string; animStateId?: string; metaspriteTileIds: string[] }>
 > = (state, action) => {
   const spriteSheet = localSpriteSheetSelectors.selectById(
     state,
@@ -754,7 +808,8 @@ const flipXMetaspriteTiles: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   const tiles = action.payload.metaspriteTileIds
     .map((id) => metaspriteTiles[id])
     .filter((tile): tile is MetaspriteTile => !!tile);
@@ -775,15 +830,14 @@ const flipXMetaspriteTiles: CaseReducer<
       x: flippedMiddleX - METASPRITE_TILE_SIZE / 2,
     };
   });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metaspriteTiles,
   });
 };
 
 const flipYMetaspriteTiles: CaseReducer<
   EntitiesState,
-  PayloadAction<{ spriteSheetId: string; metaspriteTileIds: string[] }>
+  PayloadAction<{ spriteSheetId: string; animStateId?: string; metaspriteTileIds: string[] }>
 > = (state, action) => {
   const spriteSheet = localSpriteSheetSelectors.selectById(
     state,
@@ -792,7 +846,8 @@ const flipYMetaspriteTiles: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   const tiles = action.payload.metaspriteTileIds
     .map((id) => metaspriteTiles[id])
     .filter((tile): tile is MetaspriteTile => !!tile);
@@ -813,9 +868,8 @@ const flipYMetaspriteTiles: CaseReducer<
       y: flippedMiddleY - METASPRITE_TILE_SIZE / 2,
     };
   });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metaspriteTiles,
   });
 };
 
@@ -823,6 +877,7 @@ const sendMetaspriteTilesToFront: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
     metaspriteTileIds: string[];
     frameIndex: number;
   }>
@@ -834,7 +889,8 @@ const sendMetaspriteTilesToFront: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metasprites = [...(spriteSheet.metasprites || [])];
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metasprites = [...(container.metasprites || [])];
   const metasprite = metasprites[action.payload.frameIndex];
   if (!metasprite) {
     return;
@@ -847,9 +903,8 @@ const sendMetaspriteTilesToFront: CaseReducer<
       ...metasprite.tiles.filter((id) => idsSet.has(id)),
     ],
   };
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metasprites },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metasprites,
   });
 };
 
@@ -857,6 +912,7 @@ const sendMetaspriteTilesToBack: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
     metaspriteTileIds: string[];
     frameIndex: number;
   }>
@@ -868,7 +924,8 @@ const sendMetaspriteTilesToBack: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metasprites = [...(spriteSheet.metasprites || [])];
+  const container = getMetaspriteContainer(spriteSheet, action.payload.animStateId);
+  const metasprites = [...(container.metasprites || [])];
   const metasprite = metasprites[action.payload.frameIndex];
   if (!metasprite) {
     return;
@@ -881,9 +938,8 @@ const sendMetaspriteTilesToBack: CaseReducer<
       ...metasprite.tiles.filter((id) => !idsSet.has(id)),
     ],
   };
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metasprites },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metasprites,
   });
 };
 
@@ -893,6 +949,7 @@ const removeMetaspriteTiles: CaseReducer<
     spriteSheetId: string;
     metaspriteTileIds: string[];
     frameIndex: number;
+    animStateId?: string;
   }>
 > = (state, action) => {
   const spriteSheet = localSpriteSheetSelectors.selectById(
@@ -902,8 +959,12 @@ const removeMetaspriteTiles: CaseReducer<
   if (!spriteSheet) {
     return;
   }
+  const container = getMetaspriteContainer(
+    spriteSheet,
+    action.payload.animStateId
+  );
   const idsSet = new Set(action.payload.metaspriteTileIds);
-  const metasprites = [...(spriteSheet.metasprites || [])];
+  const metasprites = [...(container.metasprites || [])];
   const metasprite = metasprites[action.payload.frameIndex];
   if (metasprite) {
     metasprites[action.payload.frameIndex] = {
@@ -911,13 +972,13 @@ const removeMetaspriteTiles: CaseReducer<
       tiles: metasprite.tiles.filter((id) => !idsSet.has(id)),
     };
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   idsSet.forEach((id) => {
     delete metaspriteTiles[id];
   });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metasprites, metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metasprites,
+    metaspriteTiles,
   });
 };
 
@@ -930,6 +991,7 @@ const removeMetaspriteTilesOutsideCanvas: CaseReducer<
   PayloadAction<{
     spriteSheetId: string;
     frameIndex: number;
+    animStateId?: string;
   }>
 > = (state, action) => {
   const spriteSheet = localSpriteSheetSelectors.selectById(
@@ -939,14 +1001,18 @@ const removeMetaspriteTilesOutsideCanvas: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const canvasWidth = spriteSheet.canvasWidth || METASPRITE_TILE_SIZE;
-  const canvasHeight = spriteSheet.canvasHeight || METASPRITE_TILE_SIZE;
-  const metasprites = [...(spriteSheet.metasprites || [])];
+  const container = getMetaspriteContainer(
+    spriteSheet,
+    action.payload.animStateId
+  );
+  const canvasWidth = container.canvasWidth || METASPRITE_TILE_SIZE;
+  const canvasHeight = container.canvasHeight || METASPRITE_TILE_SIZE;
+  const metasprites = [...(container.metasprites || [])];
   const metasprite = metasprites[action.payload.frameIndex];
   if (!metasprite) {
     return;
   }
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   const keptIds = metasprite.tiles.filter((id) => {
     const tile = metaspriteTiles[id];
     if (!tile) {
@@ -966,9 +1032,9 @@ const removeMetaspriteTilesOutsideCanvas: CaseReducer<
     ...metasprite,
     tiles: keptIds,
   };
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metasprites, metaspriteTiles },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metasprites,
+    metaspriteTiles,
   });
 };
 
@@ -990,6 +1056,7 @@ const addMetaspriteFrame: CaseReducer<
   EntitiesState,
   PayloadAction<{
     spriteSheetId: string;
+    animStateId?: string;
   }>
 > = (state, action) => {
   const spriteSheet = localSpriteSheetSelectors.selectById(
@@ -999,11 +1066,14 @@ const addMetaspriteFrame: CaseReducer<
   if (!spriteSheet) {
     return;
   }
-  const metasprites = seedMetasprites(spriteSheet);
+  const container = getMetaspriteContainer(
+    spriteSheet,
+    action.payload.animStateId
+  );
+  const metasprites = seedMetasprites(container);
   metasprites.push({ id: uuid(), tiles: [] });
-  spriteSheetsAdapter.updateOne(state.spriteSheets, {
-    id: spriteSheet.id,
-    changes: { metasprites },
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    metasprites,
   });
 };
 
@@ -1012,6 +1082,7 @@ const removeMetaspriteFrame: CaseReducer<
   PayloadAction<{
     spriteSheetId: string;
     frameIndex: number;
+    animStateId?: string;
   }>
 > = (state, action) => {
   const spriteSheet = localSpriteSheetSelectors.selectById(
@@ -1021,28 +1092,122 @@ const removeMetaspriteFrame: CaseReducer<
   if (!spriteSheet) {
     return;
   }
+  const container = getMetaspriteContainer(
+    spriteSheet,
+    action.payload.animStateId
+  );
   // Same seeding as addMetaspriteFrame/ensureMetaspriteFrame - a sheet
   // whose metasprites array was never created yet (no tile placed, "+"
   // never clicked) still has to seed from numFrames first, or removing
   // frame 2 of an untouched 3-frame sheet would find nothing there to
   // remove and silently no-op.
-  const metasprites = seedMetasprites(spriteSheet);
+  const metasprites = seedMetasprites(container);
   const removed = metasprites[action.payload.frameIndex];
   if (!removed) {
     return;
   }
   metasprites.splice(action.payload.frameIndex, 1);
-  const metaspriteTiles = { ...(spriteSheet.metaspriteTiles || {}) };
+  const metaspriteTiles = { ...(container.metaspriteTiles || {}) };
   removed.tiles.forEach((id) => {
     delete metaspriteTiles[id];
   });
+  writeContainerChanges(state, spriteSheet, action.payload.animStateId, {
+    // Always at least 1 frame left, matching every other sprite type's
+    // own "frame 0 always exists" convention.
+    metasprites: metasprites.length ? metasprites : [{ id: uuid(), tiles: [] }],
+    metaspriteTiles,
+  });
+};
+
+// Named animation states (v4 follow-up) - add/edit/remove a named pose-set
+// on a metaspriteMode sheet's own animStates[] (AnimState, entitiesTypes.ts).
+// Mirrors addSpriteState/editSpriteState/removeSpriteState above exactly -
+// same shape, same id-generated-in-prepare convention - for the unrelated,
+// newer "States" concept (see AnimState's own comment for why the two
+// needed separate reducers instead of reusing SpriteState's).
+const addAnimState: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    animStateId: string;
+    name: string;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  const canvasWidth = spriteSheet.canvasWidth || METASPRITE_TILE_SIZE;
+  const canvasHeight = spriteSheet.canvasHeight || METASPRITE_TILE_SIZE;
   spriteSheetsAdapter.updateOne(state.spriteSheets, {
     id: spriteSheet.id,
     changes: {
-      // Always at least 1 frame left, matching every other sprite type's
-      // own "frame 0 always exists" convention.
-      metasprites: metasprites.length ? metasprites : [{ id: uuid(), tiles: [] }],
-      metaspriteTiles,
+      animStates: [
+        ...(spriteSheet.animStates || []),
+        {
+          id: action.payload.animStateId,
+          name: action.payload.name,
+          animationType: "fixed",
+          metasprites: [{ id: uuid(), tiles: [] }],
+          metaspriteTiles: {},
+          canvasWidth,
+          canvasHeight,
+        },
+      ],
+    },
+  });
+};
+
+const editAnimState: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    animStateId: string;
+    changes: Partial<AnimState>;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: {
+      animStates: (spriteSheet.animStates || []).map((animState) =>
+        animState.id === action.payload.animStateId
+          ? { ...animState, ...action.payload.changes }
+          : animState
+      ),
+    },
+  });
+};
+
+const removeAnimState: CaseReducer<
+  EntitiesState,
+  PayloadAction<{
+    spriteSheetId: string;
+    animStateId: string;
+  }>
+> = (state, action) => {
+  const spriteSheet = localSpriteSheetSelectors.selectById(
+    state,
+    action.payload.spriteSheetId
+  );
+  if (!spriteSheet) {
+    return;
+  }
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: {
+      animStates: (spriteSheet.animStates || []).filter(
+        (animState) => animState.id !== action.payload.animStateId
+      ),
     },
   });
 };
@@ -2638,6 +2803,7 @@ const entitiesSlice = createSlice({
       reducer: addMetaspriteTile,
       prepare: (payload: {
         spriteSheetId: string;
+        animStateId?: string;
         frameIndex: number;
         x: number;
         y: number;
@@ -2663,6 +2829,20 @@ const entitiesSlice = createSlice({
     removeMetaspriteTilesOutsideCanvas,
     addMetaspriteFrame,
     removeMetaspriteFrame,
+
+    addAnimState: {
+      reducer: addAnimState,
+      prepare: (payload: { spriteSheetId: string; name: string }) => {
+        return {
+          payload: {
+            ...payload,
+            animStateId: uuid(),
+          },
+        };
+      },
+    },
+    editAnimState,
+    removeAnimState,
 
     /**************************************************************************
      * Engine Field Values

@@ -83,6 +83,21 @@ extern u8 extra_pose_side_b[SPRITE_SLOTS];
  * sprite_slot_for_index already uses. */
 extern const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
 
+/* Named animation states (v4 follow-up) - a metaspriteMode sheet can author
+ * several independent named pose-sets (Idle/Walk/Attack) beyond its own
+ * default/implicit state 0, compiled into the same per-slot metasprite
+ * blob metasprite_frame_base[slot] already points at. anim_state_count[slot]
+ * is how many *extra* states this slot's sheet authors (0 = none, every
+ * ACTOR on this slot stays on state 0 forever, unchanged behaviour);
+ * anim_state_dir[slot] points at an array of that many {frames_len(u8),
+ * spriteType(u8), byteOffset(u16)} entries (state 1 at index 0, state 2 at
+ * index 1, ...) - byteOffset is relative to metasprite_frame_base[slot]
+ * itself. See ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c),
+ * which read this to set an actor's own frames_len/sprite_type/
+ * anim_state_offset (gbs_types.h), and compileSnesData.js's own emission. */
+extern u8 anim_state_count[SPRITE_SLOTS];
+extern const unsigned char *anim_state_dir[SPRITE_SLOTS];
+
 /* Adventure genre, Option 1 (box-sweep collision) - the player's real
  * collision bounding box, signed byte offsets from actors[0].x/actors[0].y
  * (left/top are typically negative, right/bottom typically small positive -

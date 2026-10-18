@@ -103,10 +103,12 @@ const Chip = styled.div<ChipProps>`
 
 interface MetaspriteFramesTimelineProps {
   id: string;
+  animStateId?: string;
 }
 
 export const MetaspriteFramesTimeline: FC<MetaspriteFramesTimelineProps> = ({
   id,
+  animStateId,
 }) => {
   const dispatch = useDispatch();
   const sprite = useSelector((state: RootState) =>
@@ -120,16 +122,33 @@ export const MetaspriteFramesTimeline: FC<MetaspriteFramesTimelineProps> = ({
     return null;
   }
 
-  const frameCount = Math.max(1, frameCountFor(sprite));
+  // Named animation states (v4 follow-up) - an AnimState's own frame count
+  // is ALWAYS free-form (metasprites.length), regardless of its own
+  // animationType choice: confirmed directly in compileSnesData.js's own
+  // packFrames/stateDirEntries - framesLen there is always
+  // convStates[s].metaspriteFrames.length, never capped at 3/6 the way a
+  // plain sheet's "multi"/"multi_movement" frame count is. So unlike the
+  // sheet-level frameCountFor/canEditFrameCount below (which still has to
+  // reproduce the sheet's own real compiled frame-count rules), an
+  // AnimState never needs that branching - always editable, always just
+  // its own metasprites.length.
+  const animState = animStateId
+    ? sprite.animStates?.find((s) => s.id === animStateId)
+    : undefined;
+  const frameCount = animStateId
+    ? Math.max(1, animState?.metasprites?.length || 1)
+    : Math.max(1, frameCountFor(sprite));
   const frames = Array.from({ length: frameCount }, (_, i) => i);
-  const editableFrameCount = canEditFrameCount(sprite);
+  const editableFrameCount = animStateId ? true : canEditFrameCount(sprite);
 
   const onSelect = (i: number) => () => {
     dispatch(editorActions.setSelectedMetaspriteFrameIndex(i));
   };
 
   const onAddFrame = () => {
-    dispatch(entitiesActions.addMetaspriteFrame({ spriteSheetId: id }));
+    dispatch(
+      entitiesActions.addMetaspriteFrame({ spriteSheetId: id, animStateId })
+    );
     // the new frame always lands at the end (frameCount, 0-indexed = the
     // array's new length - 1).
     dispatch(editorActions.setSelectedMetaspriteFrameIndex(frameCount));
@@ -142,6 +161,7 @@ export const MetaspriteFramesTimeline: FC<MetaspriteFramesTimelineProps> = ({
     dispatch(
       entitiesActions.removeMetaspriteFrame({
         spriteSheetId: id,
+        animStateId,
         frameIndex,
       })
     );
@@ -157,7 +177,9 @@ export const MetaspriteFramesTimeline: FC<MetaspriteFramesTimelineProps> = ({
       <SplitPaneHeader collapsed={false}>{l10n("FIELD_SPRITE_FRAMES")}</SplitPaneHeader>
       <Strip>
         {frames.map((i) => {
-          const tileCount = sprite.metasprites?.[i]?.tiles.length || 0;
+          const tileCount = animStateId
+            ? animState?.metasprites?.[i]?.tiles.length || 0
+            : sprite.metasprites?.[i]?.tiles.length || 0;
           return (
             <Chip key={i} selected={i === frameIndex} onClick={onSelect(i)}>
               {i + 1}

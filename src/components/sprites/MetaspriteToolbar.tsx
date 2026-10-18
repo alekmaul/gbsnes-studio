@@ -35,11 +35,13 @@ const Divider = styled.div`
 
 interface MetaspriteToolbarProps {
   id: string;
+  animStateId?: string;
   frameIndex: number;
 }
 
 export const MetaspriteToolbar: FC<MetaspriteToolbarProps> = ({
   id,
+  animStateId,
   frameIndex,
 }) => {
   const dispatch = useDispatch();
@@ -59,6 +61,7 @@ export const MetaspriteToolbar: FC<MetaspriteToolbarProps> = ({
     dispatch(
       entitiesActions.flipXMetaspriteTiles({
         spriteSheetId: id,
+        animStateId,
         metaspriteTileIds: selectedTileIds,
       })
     );
@@ -68,6 +71,7 @@ export const MetaspriteToolbar: FC<MetaspriteToolbarProps> = ({
     dispatch(
       entitiesActions.flipYMetaspriteTiles({
         spriteSheetId: id,
+        animStateId,
         metaspriteTileIds: selectedTileIds,
       })
     );
@@ -77,6 +81,7 @@ export const MetaspriteToolbar: FC<MetaspriteToolbarProps> = ({
     dispatch(
       entitiesActions.sendMetaspriteTilesToFront({
         spriteSheetId: id,
+        animStateId,
         metaspriteTileIds: selectedTileIds,
         frameIndex,
       })
@@ -87,6 +92,7 @@ export const MetaspriteToolbar: FC<MetaspriteToolbarProps> = ({
     dispatch(
       entitiesActions.sendMetaspriteTilesToBack({
         spriteSheetId: id,
+        animStateId,
         metaspriteTileIds: selectedTileIds,
         frameIndex,
       })
@@ -97,6 +103,7 @@ export const MetaspriteToolbar: FC<MetaspriteToolbarProps> = ({
     dispatch(
       entitiesActions.removeMetaspriteTiles({
         spriteSheetId: id,
+        animStateId,
         metaspriteTileIds: selectedTileIds,
         frameIndex,
       })

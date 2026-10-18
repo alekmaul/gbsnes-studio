@@ -978,6 +978,99 @@ describe("metasprites (M9, SPRITE_EDITOR_PROGRESS.md)", () => {
     expect(sheet?.metasprites?.length).toBe(1);
     expect(sheet?.metasprites?.[0].tiles).toEqual([]);
   });
+
+  test("Should add a tile to a named animation state without touching the sheet's own default metasprites", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+            metasprites: [{ id: "meta0", tiles: ["default1"] }],
+            metaspriteTiles: {
+              default1: { id: "default1", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
+            },
+            animStates: [
+              {
+                id: "state1",
+                name: "Walk",
+                animationType: "fixed",
+                metasprites: [{ id: "stateMeta0", tiles: [] }],
+                metaspriteTiles: {},
+                canvasWidth: 16,
+                canvasHeight: 16,
+              },
+            ],
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const newState = reducer(
+      state,
+      actions.addMetaspriteTile({
+        spriteSheetId: "sprite1",
+        animStateId: "state1",
+        frameIndex: 0,
+        x: 0,
+        y: 0,
+        sliceX: 16,
+        sliceY: 0,
+      })
+    );
+    const sheet = newState.spriteSheets.entities["sprite1"];
+    expect(sheet?.animStates?.[0].metasprites?.[0].tiles.length).toBe(1);
+    // the sheet's own default state is untouched
+    expect(sheet?.metasprites?.[0].tiles).toEqual(["default1"]);
+  });
+
+  test("Should add, edit and remove a named animation state", () => {
+    const state: EntitiesState = {
+      ...initialState,
+      spriteSheets: {
+        entities: {
+          sprite1: {
+            ...dummySpriteSheet,
+            id: "sprite1",
+            metaspriteMode: true,
+          },
+        },
+        ids: ["sprite1"],
+      },
+    };
+
+    const addedState = reducer(
+      state,
+      actions.addAnimState({ spriteSheetId: "sprite1", name: "Walk" })
+    );
+    const added = addedState.spriteSheets.entities["sprite1"]?.animStates;
+    expect(added?.length).toBe(1);
+    expect(added?.[0].name).toBe("Walk");
+    expect(added?.[0].animationType).toBe("fixed");
+    expect(added?.[0].metasprites).toEqual([{ id: added?.[0].metasprites[0].id, tiles: [] }]);
+    const stateId = added?.[0].id as string;
+
+    const editedState = reducer(
+      addedState,
+      actions.editAnimState({
+        spriteSheetId: "sprite1",
+        animStateId: stateId,
+        changes: { name: "Run", animationType: "multi_movement" },
+      })
+    );
+    const edited = editedState.spriteSheets.entities["sprite1"]?.animStates;
+    expect(edited?.[0].name).toBe("Run");
+    expect(edited?.[0].animationType).toBe("multi_movement");
+
+    const removedState = reducer(
+      editedState,
+      actions.removeAnimState({ spriteSheetId: "sprite1", animStateId: stateId })
+    );
+    expect(removedState.spriteSheets.entities["sprite1"]?.animStates).toEqual([]);
+  });
 });
 
 test("Should add new music track if loaded while project is open", () => {

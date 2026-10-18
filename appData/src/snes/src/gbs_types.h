@@ -115,6 +115,19 @@ typedef struct
      * u8, for the same project-wide-index reason as hit1/2/3_idx above. */
     u16 update_idx;
     u8 update_ctx;
+    /* Named animation states (v4 follow-up) - a metaspriteMode sheet can
+     * author several independent named pose-sets (Idle/Walk/Attack, each
+     * with its own animationType/frame set), compiled into the SAME
+     * per-slot metasprite blob metasprite_frame_base[slot] already points
+     * at (see scene.c's own comment on anim_state_offset's use in
+     * SceneRenderActors/actor_metasprite_pose). 0 = this actor's sheet's
+     * own default/implicit state - the exact byte offset
+     * metasprite_frame_base[slot] already resolves to today, so a sheet
+     * with no extra states behaves completely unchanged. Set by
+     * ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c), alongside
+     * sprite_type/frames_len (same pattern ACTOR_SET_SPRITE already uses
+     * for switching to a different sheet's own defaults). */
+    u16 anim_state_offset;
 } ACTOR;
 
 typedef struct

@@ -529,6 +529,15 @@ const compileSnesData = async (
 
   // Convert every sprite sheet that's referenced anywhere, once.
   const spriteConv = {};
+  // Named animation states (v4 follow-up): each extra state (animStates[],
+  // beyond the sheet's own default/implicit state 0 handled by spriteConv
+  // above) is its own independent metasprite conversion - same source PNG,
+  // its own metasprites/metaspriteTiles. spriteConvStates[id] is an array
+  // in animStates order (index 0 = animStates[0], ...), computed once here
+  // just like spriteConv, and reused per-scene in buildSceneSprites below
+  // (packer.alloc() itself is still per-scene, this is just the PNG-slicing
+  // half, which isn't).
+  const spriteConvStates = {};
   // v2: Array.from(new Set(...)), iterated with a plain for loop - not
   // `for (const id of newSetHere)`. This codebase's babel target silently
   // fails to iterate a bare Set in a for-of loop at all (the loop body
@@ -560,6 +569,26 @@ const compileSnesData = async (
         );
     conv.warnings.forEach(warnings);
     spriteConv[id] = conv;
+
+    // Named animation states (v4 follow-up): only meaningful for a
+    // metaspriteMode sheet (an extra state is itself always a free-form
+    // composition, regardless of whether the sheet's own default state
+    // happens to be a plain legacy frame) - a non-metaspriteMode sheet
+    // simply can't have any (the editor never offers animStates there).
+    if (sheet.metaspriteMode && (sheet.animStates || []).length > 0) {
+      const convStates = [];
+      for (let s = 0; s < sheet.animStates.length; s++) {
+        const animState = sheet.animStates[s];
+        // eslint-disable-next-line no-await-in-loop
+        const stateConv = await snesgfx.imageToFreeformMetaspriteData(
+          assetFilename(projectRoot, "sprites", sheet),
+          { frames: animState.metasprites, tiles: animState.metaspriteTiles }
+        );
+        stateConv.warnings.forEach(warnings);
+        convStates.push(stateConv);
+      }
+      spriteConvStates[id] = convStates;
+    }
   }
 
   // SNES has 8 OBJ palettes (16 colours each, CGRAM 128..255). Palettes 1 and 2
@@ -758,6 +787,11 @@ const compileSnesData = async (
     // final blob); a real slot's own encodeMetaspriteSlot() payload bytes
     // otherwise, set in the per-slot loop below.
     const metaspriteSlotBytes = new Array(SPRITE_SLOTS).fill(null);
+    // Named animation states (v4 follow-up): [stateCount(u8), ...] per
+    // slot - stateCount 0 (the default, set here) for every slot with no
+    // extra animStates, set to a real directory in the per-slot loop below
+    // for a metaspriteMode slot whose sheet authors any.
+    const animStateDirBytes = new Array(SPRITE_SLOTS).fill(null).map(() => [0]);
 
     const objPalColours = {}; // objPal -> this scene's claimed colour list
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
@@ -777,7 +811,11 @@ const compileSnesData = async (
         } else {
           objPalColours[objPal] = conv.colors.slice();
         }
-        writePal(objPal, palBytesFor(objPalColours[objPal]));
+        // writePal() itself happens after every one of this sheet's extra
+        // animStates (below) has also had a chance to merge its own
+        // colours into objPalColours[objPal] - writing it here already
+        // would miss any colour an extra state introduces that the
+        // default state alone never used.
 
         // dx/dy are precomputed here (not left as raw editor-space
         // coordinates) so scene.c's render loop can add them straight onto
@@ -787,34 +825,89 @@ const compileSnesData = async (
         // position - generalized here to "centered on canvasWidth, anchored
         // to the bottom of canvasHeight" so a 16x16 canvas with one tile at
         // editor-space (0,0) reproduces the exact legacy -8/-16 byte-for-byte.
+        //
+        // Named animation states (v4 follow-up): factored out so both this
+        // sheet's own default/implicit state and each of its animStates[]
+        // (below) can share the exact same packing - a 16x16 canvas with
+        // one tile at (0,0) still reproduces the legacy -8/-16 anchor for
+        // every state, not just the default one.
+        const packFrames = (metaspriteFrames, pool, canvasWidth, canvasHeight, label) => {
+          let maxEntriesPerFrame = 0;
+          const frameBlocks = (metaspriteFrames || []).map((frameTiles) => {
+            const entries = frameTiles
+              .map((t) => {
+                const quadBytes = t.quad.map((idx) => pool[idx]);
+                const base = packer.alloc(quadBytes, label);
+                if (base === null) return null; // over budget - packer already warned once
+                return {
+                  dx: toS8Byte(t.dx - canvasWidth / 2),
+                  dy: toS8Byte(t.dy - canvasHeight),
+                  halfTileBase: base >> 1,
+                  flags: (t.flipX ? 1 : 0) | (t.flipY ? 2 : 0) | (t.priority ? 4 : 0)
+                };
+              })
+              .filter(Boolean);
+            maxEntriesPerFrame = Math.max(maxEntriesPerFrame, entries.length);
+            return entries;
+          });
+          return { frameBlocks, maxEntriesPerFrame };
+        };
+
         const canvasWidth = sheet.canvasWidth || 16;
         const canvasHeight = sheet.canvasHeight || 16;
-        let maxEntriesPerFrame = 0;
-        const frameBlocks = (conv.metaspriteFrames || []).map((frameTiles) => {
-          const entries = frameTiles
-            .map((t) => {
-              const quadBytes = t.quad.map((idx) => tilesPool[idx]);
-              const base = packer.alloc(
-                quadBytes,
-                `${sceneName} slot ${k} (metasprite)`
-              );
-              if (base === null) return null; // over budget - packer already warned once
-              return {
-                dx: toS8Byte(t.dx - canvasWidth / 2),
-                dy: toS8Byte(t.dy - canvasHeight),
-                halfTileBase: base >> 1,
-                flags: (t.flipX ? 1 : 0) | (t.flipY ? 2 : 0) | (t.priority ? 4 : 0)
-              };
-            })
-            .filter(Boolean);
-          maxEntriesPerFrame = Math.max(maxEntriesPerFrame, entries.length);
-          return entries;
-        });
+        const defaultPacked = packFrames(
+          conv.metaspriteFrames,
+          tilesPool,
+          canvasWidth,
+          canvasHeight,
+          `${sceneName} slot ${k} (metasprite)`
+        );
 
         types[k] = animationTypeToSpriteType(sheet.animationType);
-        frames[k] = Math.min(Math.max(1, frameBlocks.length), 255);
-        oamIds[k] = Math.max(1, maxEntriesPerFrame);
-        metaspriteSlotBytes[k] = encodeMetaspriteSlot(frameBlocks);
+        frames[k] = Math.min(Math.max(1, defaultPacked.frameBlocks.length), 255);
+        let worstCaseOamIds = Math.max(1, defaultPacked.maxEntriesPerFrame);
+        let slotBytes = encodeMetaspriteSlot(defaultPacked.frameBlocks);
+
+        // Named animation states (v4 follow-up): each extra state is
+        // appended right after the default state's own bytes, in the SAME
+        // per-slot blob metasprite_frame_base[slot] already points at -
+        // anim_state_offset (gbs_types.h) is this running byte length
+        // *before* appending the state currently being packed.
+        const convStates = spriteConvStates[id] || [];
+        const stateDirEntries = [];
+        for (let s = 0; s < convStates.length; s++) {
+          const animState = sheet.animStates[s];
+          const label = `${sceneName} slot ${k} (metasprite state '${animState.name || animState.id}')`;
+          let statePool = convStates[s].tiles;
+          if (objPalColours[objPal]) {
+            statePool = mergeSpriteIntoPalette(objPalColours[objPal], convStates[s], label, sceneName);
+          } else {
+            objPalColours[objPal] = convStates[s].colors.slice();
+          }
+          const stateCanvasWidth = animState.canvasWidth || 16;
+          const stateCanvasHeight = animState.canvasHeight || 16;
+          const packed = packFrames(
+            convStates[s].metaspriteFrames,
+            statePool,
+            stateCanvasWidth,
+            stateCanvasHeight,
+            label
+          );
+          worstCaseOamIds = Math.max(worstCaseOamIds, packed.maxEntriesPerFrame);
+          stateDirEntries.push({
+            framesLen: Math.min(Math.max(1, packed.frameBlocks.length), 255),
+            spriteType: animationTypeToSpriteType(animState.animationType),
+            byteOffset: slotBytes.length
+          });
+          slotBytes = slotBytes.concat(encodeMetaspriteSlot(packed.frameBlocks));
+        }
+        animStateDirBytes[k] = [stateDirEntries.length].concat(
+          ...stateDirEntries.map((e) => [e.framesLen, e.spriteType, ...u16b(e.byteOffset)])
+        );
+        writePal(objPal, palBytesFor(objPalColours[objPal]));
+
+        oamIds[k] = worstCaseOamIds;
+        metaspriteSlotBytes[k] = slotBytes;
         return;
       }
 
@@ -902,7 +995,16 @@ const compileSnesData = async (
         payload ? [].concat(u16b(payload.length), payload) : [0, 0]
       )
     );
-    return { sheet, palBytes, types, frames, pals, oamIds, extraPoseBytes, metaspriteBytes };
+    // Named animation states (v4 follow-up): [hasAnimStates(u8), ...] -
+    // see scene.c's own comment on has_anim_states/anim_state_count/
+    // anim_state_dir. 0 (just the flag byte, no directory at all) for the
+    // overwhelming common case: no metaspriteMode sheet in this scene
+    // authors any extra state beyond its own default.
+    const hasAnimStates = animStateDirBytes.some((bytes) => bytes[0] > 0);
+    const animStateBytes = hasAnimStates
+      ? [1].concat(...animStateDirBytes)
+      : [0];
+    return { sheet, palBytes, types, frames, pals, oamIds, extraPoseBytes, metaspriteBytes, animStateBytes };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -1506,9 +1608,14 @@ const compileSnesData = async (
       sceneMusicPreload >= 0 ? sceneMusicPreload : 0xff,
       // [1 or 1+w*h] Ladders / one-way platforms: has_col_dir flag,
       // optionally followed by the real per-tile directional-collision
-      // table - see colDirBytes' own comment above. The real last thing in
-      // the scene blob now, appended last for the same reason.
-      colDirBytes
+      // table - see colDirBytes' own comment above.
+      colDirBytes,
+      // [1 or more] Named animation states: hasAnimStates flag, optionally
+      // followed by a per-slot directory - see buildSceneSprites' own
+      // animStateBytes comment. The real last thing in the scene blob now,
+      // appended last for the same "never shifts an earlier offset" reason
+      // every prior scene-blob growth in this file has followed.
+      spr.animStateBytes
     );
   });
 

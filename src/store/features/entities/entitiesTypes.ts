@@ -106,6 +106,16 @@ export type EngineFieldValue = {
   value: number | string | boolean | undefined;
 };
 
+// "Sprite Swap" in the editor (user-asked rename, v4 follow-up) - this
+// fork's own older, whole-sheet-swap mechanism (switching an actor to an
+// entirely different SpriteSheet entity at runtime, Actor/Player: Set
+// Sprite Swap). Kept as-is, type name unchanged on purpose (only the
+// *display* label changed, not this stored field name or the scripting
+// event's own command id - no existing project's data format is
+// affected). Not to be confused with AnimState below, GB Studio 3.2.1's
+// own, different "SpriteState" concept (named pose-sets *within* one
+// sheet) - the two share a name upstream but are genuinely different
+// features, hence the rename here to avoid exactly that confusion.
 export type SpriteState = {
   id: string;
   name: string;
@@ -166,6 +176,31 @@ export type Metasprite = {
   tiles: string[];
 };
 
+// Named animation states (v4 follow-up) - matches GB Studio 3.2.1's own
+// real SpriteState concept (a NEW, distinct name from this fork's older,
+// unrelated SpriteState above - the "Sprite Swap" whole-sheet-switch
+// feature - see that type's own comment and consts.js/en.json for why the
+// two needed separating). A metaspriteMode sheet's own top-level
+// metasprites/metaspriteTiles/animationType/canvasWidth/canvasHeight
+// (above) are this sheet's default/implicit state ("state 0" - the exact
+// byte offset the engine's metasprite_frame_base[slot] already resolves
+// to, see scene.c's own anim_state_offset comment) and are NEVER touched
+// by this feature; animStates below holds any *additional* named states
+// beyond it, each a self-contained pose-set with its own animationType
+// (so e.g. a 1-frame "Hurt" state and a 6-frame "Walk" state can coexist
+// on one sheet) switched at runtime via Actor/Player: Set Animation
+// State (ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE, index 0 always means
+// "back to this sheet's own default state").
+export type AnimState = {
+  id: string;
+  name: string;
+  animationType: SpriteAnimationType;
+  metasprites: Metasprite[];
+  metaspriteTiles: Record<string, MetaspriteTile>;
+  canvasWidth: number;
+  canvasHeight: number;
+};
+
 export type SpriteSheet = {
   id: string;
   name: string;
@@ -219,6 +254,10 @@ export type SpriteSheet = {
   metaspriteTiles?: Record<string, MetaspriteTile>;
   canvasWidth?: number;
   canvasHeight?: number;
+  // Named animation states (v4 follow-up) - see AnimState's own comment
+  // above. undefined/empty = no extra states, identical compiled output
+  // to before this feature existed.
+  animStates?: AnimState[];
 };
 
 // M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,

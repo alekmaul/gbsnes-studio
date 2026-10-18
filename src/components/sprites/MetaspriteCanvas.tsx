@@ -99,9 +99,13 @@ const Hint = styled.div`
 
 interface MetaspriteCanvasProps {
   id: string;
+  animStateId?: string;
 }
 
-export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
+export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({
+  id,
+  animStateId,
+}) => {
   const dispatch = useDispatch();
   // User-found: the app toolbar's own zoom button (top of the window, next
   // to the section picker) already exists and correctly updates
@@ -147,10 +151,21 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
   } | null>(null);
   const marqueeOrigin = useRef<{ x: number; y: number } | null>(null);
 
-  const canvasWidth = sprite?.canvasWidth || TILE_SIZE;
-  const canvasHeight = sprite?.canvasHeight || TILE_SIZE;
-  const metasprite = sprite?.metasprites?.[frameIndex];
-  const tileLookup = sprite?.metaspriteTiles || {};
+  // Named animation states (v4 follow-up) - when animStateId is set, every
+  // read/write below targets that state's own metasprites/metaspriteTiles/
+  // canvas size instead of the sheet's own top-level (default state) ones -
+  // mirrors entitiesState.ts's own getMetaspriteContainer exactly, kept as a
+  // small local duck-typed lookup here rather than importing that reducer
+  // internal, matching how this component already reads `sprite.*` fields
+  // directly rather than through a selector helper.
+  const animState = animStateId
+    ? sprite?.animStates?.find((s) => s.id === animStateId)
+    : undefined;
+  const container = animState || sprite;
+  const canvasWidth = container?.canvasWidth || TILE_SIZE;
+  const canvasHeight = container?.canvasHeight || TILE_SIZE;
+  const metasprite = container?.metasprites?.[frameIndex];
+  const tileLookup = container?.metaspriteTiles || {};
   const tileIds = metasprite?.tiles || [];
 
   const imageUrl = sprite
@@ -217,6 +232,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
         dispatch(
           entitiesActions.moveMetaspriteTiles({
             spriteSheetId: id,
+            animStateId,
             metaspriteTiles: selectedTileIds.map((tileId) => {
               const start = dragStartPositions.current[tileId];
               return {
@@ -255,6 +271,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
       dragOrigin,
       dispatch,
       id,
+      animStateId,
       tileIds,
       tileLookup,
     ]
@@ -265,6 +282,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
       dispatch(
         entitiesActions.removeMetaspriteTilesOutsideCanvas({
           spriteSheetId: id,
+          animStateId,
           frameIndex,
         })
       );
@@ -273,7 +291,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
     setDragOrigin(null);
     marqueeOrigin.current = null;
     setMarquee(null);
-  }, [dragging, dispatch, id, frameIndex]);
+  }, [dragging, dispatch, id, animStateId, frameIndex]);
 
   useEffect(() => {
     if (dragging || marqueeOrigin.current) {
@@ -321,6 +339,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
       dispatch(
         entitiesActions.addMetaspriteTile({
           spriteSheetId: id,
+          animStateId,
           frameIndex,
           x: snap(p.x - TILE_SIZE / 2),
           y: snap(p.y - TILE_SIZE / 2),
@@ -347,6 +366,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
     dispatch(
       entitiesActions.removeMetaspriteTiles({
         spriteSheetId: id,
+        animStateId,
         metaspriteTileIds: [tileId],
         frameIndex,
       })
@@ -371,6 +391,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
         dispatch(
           entitiesActions.removeMetaspriteTiles({
             spriteSheetId: id,
+            animStateId,
             metaspriteTileIds: selectedTileIds,
             frameIndex,
           })
@@ -392,6 +413,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
         dispatch(
           entitiesActions.moveMetaspriteTilesRelative({
             spriteSheetId: id,
+            animStateId,
             metaspriteTileIds: selectedTileIds,
             x: dx,
             y: dy,
@@ -399,7 +421,7 @@ export const MetaspriteCanvas: FC<MetaspriteCanvasProps> = ({ id }) => {
         );
       }
     },
-    [dispatch, id, selectedTileIds, frameIndex]
+    [dispatch, id, animStateId, selectedTileIds, frameIndex]
   );
 
   useEffect(() => {

@@ -756,6 +756,53 @@ void Script_ActorSetSprite_b(void)
     script_continue = 1;
 }
 
+// Named animation states (v4 follow-up). arg is a compile-time-resolved
+// state index for THIS actor's current sheet/slot - 0 is always the
+// sheet's own default/implicit state (the exact sprite_type/frames_len a
+// plain, state-less sheet already has), 1+ indexes anim_state_dir[slot]
+// (scene.c/scene.h, compileSnesData.js's own emission). A state index
+// past this slot's own anim_state_count is a no-op (e.g. the authored
+// sheet doesn't actually have that many states - shouldn't happen from a
+// compiled project, but matches this engine's own established "a bad
+// index does nothing, never reads out of bounds" convention elsewhere,
+// e.g. PLAYER_SET_SPRITE's own idx < NUM_SPRITE_SHEETS guard). Resets
+// frame/flip the same way a sheet SWAP (PLAYER_SET_SPRITE) already does -
+// a different pose-set starting mid-cycle would read another state's own
+// frame data at a stale index.
+static void ActorSetAnimState(u8 actor_idx, u8 state)
+{
+    u8 slot = actors[actor_idx].frame_offset >> 1;
+    if (state == 0)
+    {
+        actors[actor_idx].sprite_type = sprite_type_for_slot[slot];
+        actors[actor_idx].frames_len = frames_len_for(actors[actor_idx].sprite_type, slot);
+        actors[actor_idx].anim_state_offset = 0;
+    }
+    else if (state <= anim_state_count[slot])
+    {
+        const unsigned char *entry = anim_state_dir[slot] + (u16)(state - 1) * 4;
+        actors[actor_idx].frames_len = entry[0];
+        actors[actor_idx].sprite_type = entry[1];
+        actors[actor_idx].anim_state_offset = entry[2] | ((u16)entry[3] << 8);
+    }
+    actors[actor_idx].frame = 0;
+    actors[actor_idx].flip = 0;
+}
+
+void Script_PlayerSetAnimState_b(void)
+{
+    ActorSetAnimState(0, script_cmd_args[0]);
+    ADVANCE();
+    script_continue = 1;
+}
+
+void Script_ActorSetAnimState_b(void)
+{
+    ActorSetAnimState(script_actor, script_cmd_args[0]);
+    ADVANCE();
+    script_continue = 1;
+}
+
 // IF_ACTOR_RELATIVE_TO_ACTOR (v4): a plain position compare between
 // script_actor and a second actor slot - no relation to the On Update
 // subsystem at all (the M16 opcode audit's "needs On Update port" label
@@ -1416,7 +1463,9 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ActorDeactivateFlag_b, 0) /* 0x77 ACTOR_DEACTIVATE */ \
     X(Script_ActorStartUpdate_b, 0) /* 0x78 ACTOR_START_UPDATE - v4, real On Update subsystem, see update_script.h */ \
     X(Script_MosaicSet_b, 4) /* 0x79 MOSAIC_SET - v4, hardware mosaic/pixelisation effect, see mosaic.h */ \
-    X(Script_SoundPlayCustom_b, 2) /* 0x7A SOUND_PLAY_CUSTOM - v4, real per-project BRR sound effect, see music.h */
+    X(Script_SoundPlayCustom_b, 2) /* 0x7A SOUND_PLAY_CUSTOM - v4, real per-project BRR sound effect, see music.h */ \
+    X(Script_PlayerSetAnimState_b, 1) /* 0x7B PLAYER_SET_ANIM_STATE - v4, named animation states, see gbs_types.h's anim_state_offset */ \
+    X(Script_ActorSetAnimState_b, 1) /* 0x7C ACTOR_SET_ANIM_STATE - v4, named animation states, see gbs_types.h's anim_state_offset */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

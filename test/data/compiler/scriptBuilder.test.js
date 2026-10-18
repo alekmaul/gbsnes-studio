@@ -80,6 +80,8 @@ import {
   SOUND_PLAY_BEEP,
   SOUND_PLAY_CRASH,
   SOUND_PLAY_CUSTOM,
+  PLAYER_SET_ANIM_STATE,
+  ACTOR_SET_ANIM_STATE,
   SET_TIMER_SCRIPT,
   TIMER_RESTART,
   TIMER_DISABLE,
@@ -1398,6 +1400,20 @@ test("Should be able to set the mosaic effect, non-blocking", () => {
   const sb = new ScriptBuilder(output);
   sb.mosaicSet(8, 1, 0, false);
   expect(output).toEqual([cmd(MOSAIC_SET), 8, 1, 0, 0]);
+});
+
+test("Should be able to set the active actor's named animation state", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.actorSetAnimState(2);
+  expect(output).toEqual([cmd(ACTOR_SET_ANIM_STATE), 2]);
+});
+
+test("Should be able to set the player's named animation state", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output);
+  sb.playerSetAnimState(1);
+  expect(output).toEqual([cmd(PLAYER_SET_ANIM_STATE), 1]);
 });
 
 test("Should be able to load data", () => {

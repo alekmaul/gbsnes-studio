@@ -72,9 +72,11 @@ const SpritesPage = () => {
   );
 
   const [selectedStateId, setSelectedStateId] = useState("");
+  const [selectedAnimStateId, setSelectedAnimStateId] = useState("");
 
   useEffect(() => {
     setSelectedStateId("");
+    setSelectedAnimStateId("");
     // User-found: "when elephant is selected, i see nothing" - the free-form
     // canvas's frame index (and pending tile-stamp pick) live in global
     // editor state, not per-sprite, so switching sheets kept whatever frame
@@ -85,6 +87,16 @@ const SpritesPage = () => {
     dispatch(editorActions.setSelectedMetaspriteFrameIndex(0));
     dispatch(editorActions.setSpriteTileSelection(undefined));
   }, [selectedId, dispatch]);
+
+  // Named animation states (v4 follow-up) - same reset, now also on every
+  // switch between the sheet's own default state and a named animState:
+  // each has its own independent metasprites/frame count, so the same
+  // "frame index from a different container" staleness applies here too.
+  useEffect(() => {
+    dispatch(editorActions.setSelectedMetaspriteFrameIndex(0));
+    dispatch(editorActions.setSpriteTileSelection(undefined));
+    dispatch(editorActions.resetSelectedMetaspriteTileIds());
+  }, [selectedAnimStateId, dispatch]);
 
   const [leftPaneWidth, , startLeftPaneResize] = useResizable({
     initialSize: 220,
@@ -130,6 +142,8 @@ const SpritesPage = () => {
           selectedId={selectedId}
           selectedStateId={selectedStateId}
           onSelectStateId={setSelectedStateId}
+          selectedAnimStateId={selectedAnimStateId}
+          onSelectAnimStateId={setSelectedAnimStateId}
         />
       </div>
       <SplitPaneHorizontalDivider onMouseDown={startLeftPaneResize} />
@@ -142,10 +156,17 @@ const SpritesPage = () => {
       >
         {isMetasprite ? (
           <>
-            <MetaspriteToolbar id={selectedId} frameIndex={frameIndex} />
-            <MetaspriteCanvas id={selectedId} />
+            <MetaspriteToolbar
+              id={selectedId}
+              animStateId={selectedAnimStateId}
+              frameIndex={frameIndex}
+            />
+            <MetaspriteCanvas id={selectedId} animStateId={selectedAnimStateId} />
             <MetaspriteTilePalette id={selectedId} />
-            <MetaspriteFramesTimeline id={selectedId} />
+            <MetaspriteFramesTimeline
+              id={selectedId}
+              animStateId={selectedAnimStateId}
+            />
           </>
         ) : (
           <>
@@ -165,7 +186,11 @@ const SpritesPage = () => {
           position: "relative",
         }}
       >
-        <SpriteInspector id={selectedId} selectedStateId={selectedStateId} />
+        <SpriteInspector
+          id={selectedId}
+          selectedStateId={selectedStateId}
+          selectedAnimStateId={selectedAnimStateId}
+        />
       </div>
     </Wrapper>
   );

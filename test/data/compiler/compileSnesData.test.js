@@ -190,7 +190,7 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // This scene paints a lone COLLISION_TOP tile (tile 5), which is enough
     // to make colDirBytes a real 1+w*h table, not just the [0] flag byte.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1 + 1 + w * h);
+    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1 + 1 + 1 + w * h);
     const colByte = blob[52];
     // bit i set <=> tile i was solid in the flat 1-bit bitmap. Any nonzero
     // flag byte counts as solid here - the real directional distinction
@@ -302,7 +302,7 @@ describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", ()
     // +1: the MUSIC_PLAY preload byte, +1: the Ladders has_col_dir flag -
     // all three appended after the metasprite table, see their own tests
     // below.
-    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1 + 1);
+    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1 + 1 + 1);
     // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
     // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
     // own convention - offset is relative to the start of the payload).
@@ -794,7 +794,7 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // MUSIC_PLAY preload byte and [1] Ladders has_col_dir flag now, not at
     // the very end of the blob anymore (this scene paints no collision
     // tiles at all, so has_col_dir is just the one [0] byte).
-    const tail = blob.slice(-6, -2);
+    const tail = blob.slice(-7, -3);
     expect([...tail]).toEqual([250, 3, 243, 254]);
   });
 
@@ -813,7 +813,7 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // legacy actor_render_tile -8/-16 anchor exactly, same values
     // gen-dummy-gfx.js's own dummyPlayerBounds uses for the same reason.
     // -6..-2: see the comment in the previous test for why not slice(-4).
-    const tail = blob.slice(-6, -2);
+    const tail = blob.slice(-7, -3);
     expect([...tail]).toEqual([248, 7, 240, 255]);
   });
 });
@@ -872,7 +872,7 @@ describe("compileSnesData - MUSIC_PLAY preload hoist (v4, 'Space Battle' fix)", 
   // -2, not -1: the trailing [1] Ladders has_col_dir flag now sits after
   // the MUSIC_PLAY preload byte (these fixtures paint no collision tiles,
   // so it's always just the one [0] flag byte).
-  const musicPreloadByte = (blob) => blob[blob.length - 2];
+  const musicPreloadByte = (blob) => blob[blob.length - 3];
   const anyScriptHasMusicOpcode = (out) =>
     out.stats.scriptBytes.some((bytes) => bytes.includes(MUSIC_OPCODE));
 

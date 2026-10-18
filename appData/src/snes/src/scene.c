@@ -166,6 +166,18 @@ u8 extra_pose_side_b[SPRITE_SLOTS];
  * SceneRenderActors ever reads one. */
 const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
 
+/* Named animation states (v4 follow-up) - see scene.h's own comment and
+ * SceneInit's own parsing of the scene blob's trailing has_anim_states
+ * section. anim_state_count[slot] is how many *extra* states (beyond the
+ * sheet's own default/implicit state 0) this slot's sheet authors;
+ * anim_state_dir[slot] points at that slot's own directory of
+ * {frames_len, spriteType, byteOffset(u16)} entries, one per extra state,
+ * or 0 if anim_state_count[slot] is 0. Same "always written before any
+ * reader runs" discipline as metasprite_frame_base above. */
+u8 has_anim_states;
+u8 anim_state_count[SPRITE_SLOTS];
+const unsigned char *anim_state_dir[SPRITE_SLOTS];
+
 /* Adventure genre, Option 1 (box-sweep collision) - see scene.h's own
  * comment. .bss isn't pre-zeroed either, but SceneInit always writes all
  * four from the scene blob's trailing bytes before Update_Adventure (the
@@ -1104,6 +1116,7 @@ void SceneInit(void)
      * arrays SceneInit already just DMA'd above, same as every other actor. */
     actors[0].sprite_type = sprite_type_for_slot[PLAYER_SPRITE_SLOT];
     actors[0].frames_len = frames_len_for(sprite_type_for_slot[PLAYER_SPRITE_SLOT], PLAYER_SPRITE_SLOT);
+    actors[0].anim_state_offset = 0; /* this sheet's own default/implicit state */
     actors[0].move_speed = 1;
     actors[0].collisions_enabled = 1;
     /* Projectiles (v4): the player is always collision_group "player" (bit
@@ -1135,6 +1148,7 @@ void SceneInit(void)
         actors[i].anim_speed = p[8];
         actors[i].animate = p[9];
         actors[i].frames_len = frames_len_for(p[7], p[4]);
+        actors[i].anim_state_offset = 0; /* this sheet's own default/implicit state */
         actors[i].events_ptr = event_ptrs[p[5] | ((u16)p[6] << 8)];
         /* Projectiles (v4): [10]=collision_group, [11..16]=hit1/2/3_idx (2
          * bytes each) - see compileSnesData.js actorEntries and
@@ -1357,6 +1371,39 @@ void SceneInit(void)
             scene_col_dir[k] = p[k];
         }
         p += (u16)scene_width * scene_height;
+    }
+
+    /* Named animation states (v4 follow-up): [1] has_anim_states flag, the
+     * real last thing in the scene blob now - 0 (the overwhelming common
+     * case: no metaspriteMode sheet in this scene authors any extra named
+     * state beyond its own default) skips straight past this with just the
+     * one flag byte. Otherwise, for each of the SPRITE_SLOTS slots: [1]
+     * stateCount (0 = this slot's sheet has no extra states), then
+     * stateCount * [frames_len(u8), spriteType(u8), byteOffset(u16)] -
+     * byteOffset is relative to metasprite_frame_base[slot] (the exact
+     * pointer a sheet's own default/implicit state - "state 0" - already
+     * used before this feature existed), see
+     * ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c) and
+     * compileSnesData.js's own emission. */
+    has_anim_states = p[0];
+    p += 1;
+    if (has_anim_states)
+    {
+        for (i = 0; i < SPRITE_SLOTS; i++)
+        {
+            anim_state_count[i] = p[0];
+            p += 1;
+            anim_state_dir[i] = anim_state_count[i] ? p : 0;
+            p += (u16)anim_state_count[i] * 4;
+        }
+    }
+    else
+    {
+        for (i = 0; i < SPRITE_SLOTS; i++)
+        {
+            anim_state_count[i] = 0;
+            anim_state_dir[i] = 0;
+        }
     }
 
     actor_move_settings = 0;
@@ -3591,7 +3638,12 @@ static void SceneRenderActors(void)
                  * position-mirror for a non-directional sheet has no
                  * "opposite side" to mirror toward). */
                 meta_mirror = (a->sprite_type != SPRITE_STATIC) && flip;
-                meta_base = metasprite_frame_base[slot];
+                /* Named animation states (v4 follow-up): anim_state_offset
+                 * is 0 for every actor still on this sheet's own default
+                 * state (the exact byte metasprite_frame_base[slot] always
+                 * pointed at before this feature existed), so this is a
+                 * no-op for every untouched project. */
+                meta_base = metasprite_frame_base[slot] + a->anim_state_offset;
                 meta_frame_off = meta_base[(u16)meta_pose * 2] |
                                   ((u16)meta_base[(u16)meta_pose * 2 + 1] << 8);
                 meta_e = meta_base + meta_frame_off;
