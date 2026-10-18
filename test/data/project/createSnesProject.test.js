@@ -4,7 +4,9 @@ import Path from "path";
 import createProject from "../../../src/lib/project/createProject";
 import loadProjectData from "../../../src/lib/project/loadProjectData";
 import compileSnesData from "../../../src/lib/compiler/compileSnesData";
+import buildProject from "../../../src/lib/compiler/buildProject";
 import loadAllEmoteData from "../../../src/lib/project/loadEmoteData";
+import { pvsneslibVendorDir } from "../../../src/consts";
 
 /*
  * M11 follow-up (user-found): the Splash "New Project" screen's template
@@ -69,5 +71,58 @@ describe.each(["sneshtml", "snesblank", "snesgbs2"])(
         await fs.remove(tmpRoot);
       }
     }, 30000);
+  }
+);
+
+/*
+ * User-found (2026-10-18): the real sneshtml template failed to link with
+ * "INSERT_SECTIONS: No room for section ... in ROM bank 0" - the shared
+ * engine code (script_cmds.c et al.) has grown enough over many v4
+ * features that the 8-bank/256KB default (sneshtml had no snesRomBanks
+ * override) is no longer enough, the same class of overflow snesgbs2 was
+ * already given its own snesRomBanks: 32 for. Fixed by giving sneshtml its
+ * own snesRomBanks: 16 (bisected: 8 fails, 16 is the smallest valid
+ * power-of-2 - see buildSnesRom.js's romSizing() - that links cleanly).
+ * The test above only runs compileSnesData, never the real link step, so
+ * it could not have caught this - this one runs buildProject() end to end
+ * (toolchain-gated) specifically to guard against it recurring.
+ */
+describe.each(["sneshtml", "snesgbs2"])(
+  "createProject - %s real toolchain link",
+  (templateId) => {
+    const maybe = fs.existsSync(pvsneslibVendorDir()) ? test : test.skip;
+    maybe(
+      "links to a real bootable ROM with the template's own committed settings",
+      async () => {
+        const tmpRoot = await fs.mkdtemp(
+          Path.join(os.tmpdir(), `gbs-createsnes-link-${templateId}-`)
+        );
+        try {
+          const projectDataPath = await createProject({
+            name: `Test${templateId}Link`,
+            path: tmpRoot,
+            target: templateId,
+          });
+          const projectRoot = Path.dirname(projectDataPath);
+          const data = await loadProjectData(projectDataPath);
+          const outputRoot = Path.join(tmpRoot, "build-out");
+          const warnings = [];
+          await buildProject(data, {
+            projectRoot,
+            outputRoot,
+            progress: () => {},
+            warnings: (m) => warnings.push(m),
+          });
+          expect(warnings.filter((w) => /no room/i.test(w))).toEqual([]);
+          const rom = await fs.readFile(
+            Path.join(outputRoot, "build", "rom", "game.sfc")
+          );
+          expect(rom.length).toBeGreaterThan(0);
+        } finally {
+          await fs.remove(tmpRoot);
+        }
+      },
+      120000
+    );
   }
 );

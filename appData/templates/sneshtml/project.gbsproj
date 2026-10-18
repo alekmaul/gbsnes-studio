@@ -3,6 +3,7 @@
         "target": "snes",
         "snesRegion": "ntsc",
         "snesSramSize": "03",
+        "snesRomBanks": 16,
         "showCollisions": true,
         "showConnections": true,
         "worldScrollX": 0,
