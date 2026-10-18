@@ -68,11 +68,6 @@
         }
     ],
     "customEvents": [],
-    "engineFieldValues": [
-        {
-            "id": "fade_style",
-            "value": 0
-        }
-    ],
+    "engineFieldValues": [],
     "_release": "7"
 }

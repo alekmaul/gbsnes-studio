@@ -40,13 +40,6 @@
 #define BG1_GFX_VRAM 0x2000
 #define BG1_MAP_VRAM 0x6800
 
-/* BG palette physical CGRAM colour indices per logical slot (6 slots, slot 1
- * skipped - reserved for the UI/BG3 palette at colours 16-19, see
- * SceneUploadBgPalette's own comment in scene.c). Shared with fade.c's
- * white-fade palette interpolation, which must write its ramped colours back
- * to these exact same physical destinations. */
-extern const u16 bg_pal_slot_color[6];
-
 /* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [32]
  * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
  * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */

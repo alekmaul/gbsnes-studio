@@ -54563,10 +54563,5 @@
         "startMoveSpeed": 1,
         "startAnimSpeed": 3
     },
-    "engineFieldValues": [
-        {
-            "id": "fade_style",
-            "value": 0
-        }
-    ]
+    "engineFieldValues": []
 }
