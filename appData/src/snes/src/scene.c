@@ -617,9 +617,26 @@ static u8 platform_has_col_dir = 0;
 #define PLAT_COL_LADDER 0x10
 
 /* Raw authored collision byte at (tx,ty), only meaningful while
- * platform_has_col_dir is set. Out of bounds or past the table's own tile
- * budget degrades to "solid from every direction, not a ladder" (0xF) -
- * matches col_solid()'s own "out of bounds counts as solid" convention. */
+ * platform_has_col_dir is set. Out of bounds degrades to "solid from every
+ * direction, not a ladder" (0xF), matching col_solid()'s own "out of bounds
+ * counts as solid" convention.
+ *
+ * Real bug (user-found: a wide scene's player got shoved backwards every
+ * frame trying to move in either direction, on perfectly open ground). Past
+ * the table's own tile budget (compileSnesData.js's own SCENE_COL_DIR_BYTES
+ * warning covers exactly this case) used to hardcode 0xF too - "solid from
+ * every direction" for a tile that was never actually painted solid at all,
+ * on a scene wide enough that an entire row (not just a far corner) could
+ * sit past the budget from the very first frame. platform_blocks()'s own
+ * header comment already documented the INTENDED fallback - "the old flat
+ * col_solid() rule" - but this function's code never actually deferred to
+ * it for an out-of-budget tile, only for a scene with no directional table
+ * at all. Now it does: col_solid() reads the separate, much larger
+ * scene_col[] bitmap (SCENE_COL_BYTES, sized for the full scene regardless
+ * of this table's own smaller budget), so an out-of-budget tile now
+ * correctly reads as solid-every-direction only if it's REALLY painted
+ * solid, and fully open otherwise - matching what every other genre's own
+ * collision already does for the same tile. */
 static u8 platform_col_byte(s16 tx, s16 ty)
 {
     u16 idx;
@@ -628,7 +645,7 @@ static u8 platform_col_byte(s16 tx, s16 ty)
     if (tx >= scene_width) return 0xF;
     if (ty >= scene_height) return 0xF;
     idx = (u16)ty * scene_width + (u16)tx;
-    if (idx >= SCENE_COL_DIR_BYTES) return 0xF;
+    if (idx >= SCENE_COL_DIR_BYTES) return col_solid(tx, ty) ? 0xF : 0;
     return scene_col_dir[idx];
 }
 
@@ -2658,11 +2675,29 @@ void Update_Platform(void)
 
     tile_x = SceneActorTileX(0);
     tile_y = SceneActorTileY(0);
-    if (tile_x != plat_last_trigger_tx || tile_y != plat_last_trigger_ty)
     {
-        plat_last_trigger_tx = tile_x;
-        plat_last_trigger_ty = tile_y;
-        SceneActivateTriggerAt(tile_x, tile_y);
+        // User-found: a walk trigger whose own script gates on `IF_INPUT
+        // up` (the common GB Studio "walk up to a door, press Up to
+        // enter" pattern - this engine's dedup below only re-runs
+        // SceneActivateTriggerAt when the player's tile actually changes,
+        // so a player who reaches the door tile without already holding
+        // Up (or who stops on it first) can never retrigger it while
+        // standing still - tile_x/tile_y never change again once they've
+        // stopped. Confirmed this is a real, intentional GB Studio
+        // mechanism, not a bug in the author's script: GB's own real
+        // platform.c calls the equivalent `trigger_activate_at_intersection(
+        // ..., INPUT_UP_PRESSED)` - the third "force" argument bypasses its
+        // own "don't reactivate the same trigger" dedup specifically on a
+        // fresh Up press, for exactly this case. Mirrored here the same
+        // way: a fresh (edge-triggered, not held) Up press forces a
+        // recheck even on the same tile as last frame.
+        u8 force_trigger = (u8)((joy & KEY_UP) && !(prev_joy & KEY_UP));
+        if (force_trigger || tile_x != plat_last_trigger_tx || tile_y != plat_last_trigger_ty)
+        {
+            plat_last_trigger_tx = tile_x;
+            plat_last_trigger_ty = tile_y;
+            SceneActivateTriggerAt(tile_x, tile_y);
+        }
     }
 }
 
