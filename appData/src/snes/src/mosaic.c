@@ -1,83 +1,70 @@
 /*---------------------------------------------------------------------------------
     Hardware mosaic/pixelisation effect (v4) - same frame-ticked ramp shape
-    as fade.c's brightness ramp, writing REG_MOSAIC directly instead of
-    PVSnesLib's own blocking setMosaicEffect() - see mosaic.h for why.
+    as fade.c's brightness ramp. mosaic.h's own comment explains why this
+    is a non-blocking ramp and not PVSnesLib's older blocking
+    setMosaicEffect() (videos.asm).
+
+    v4 follow-up: this file used to hand-roll that ramp itself (mosaic_size/
+    mosaic_target/mosaic_mask/mosaic_step_frames/mosaic_tick/mosaic_active C
+    statics). The vendored PVSnesLib toolchain update added a native
+    non-blocking software mosaic API - setMosaicInit/updateMosaicEffect/
+    isMosaicActive/setMosaicEffectSpeed/setMosaicTo - and checking the real
+    asm (videos.asm) shows it's a byte-for-byte match of what this file
+    already did by hand, down to the same step-frame tick gating, the same
+    inc/dec-toward-target step, and the same REG_MOSAIC = (size<<4)|mask
+    packing (and setMosaicInit already zeroes REG_MOSAIC itself). So this
+    file is now a thin wrapper around the library instead of its own
+    implementation - same rationale as fade.c's own v4 follow-up, including
+    removing the same latent same-name-static-vs-asm-symbol risk (this file
+    had mosaic_size/mosaic_target/mosaic_tick/mosaic_active matching the
+    library's own asm symbol names exactly).
+
+    MosaicUpdate() is the one function that still needs its own logic:
+    updateMosaicEffect() has no concept of this engine's script_action_complete
+    handshake (EVENT_MOSAIC's optional "wait" behavior) - so MosaicUpdate()
+    detects the active -> inactive edge itself (isMosaicActive() before and
+    after the library's own per-frame step) instead of the library ever
+    needing to know about it.
 ---------------------------------------------------------------------------------*/
 #include <snes.h>
 #include "mosaic.h"
 #include "script_runner.h"
 
-static u8 mosaic_size = 0;        /* current mosaic size, 0..15 */
-static u8 mosaic_target = 0;
-static u8 mosaic_mask = 0;        /* REG_MOSAIC bits 0-3 for the active ramp */
-static u8 mosaic_step_frames = 1;
-static u8 mosaic_tick = 0;
-static u8 mosaic_active = 0;
-
 u8 mosaic_script_wait = 0;
 
 void MosaicInit(void)
 {
-    mosaic_size = 0;
-    mosaic_target = 0;
-    mosaic_mask = 0;
-    mosaic_active = 0;
-    mosaic_tick = 0;
-    REG_MOSAIC = 0;
+    setMosaicInit();
 }
 
 void MosaicSetSpeed(u8 speed)
 {
-    mosaic_step_frames = speed;
+    setMosaicEffectSpeed(speed);
 }
 
 void MosaicTo(u8 size, u8 bgMask)
 {
-    mosaic_target = size;
-    mosaic_mask = bgMask;
-    mosaic_active = 1;
-    mosaic_tick = 0;
+    setMosaicTo(size, bgMask);
 }
 
 u8 IsMosaicking(void)
 {
-    return mosaic_active;
+    return isMosaicActive();
 }
 
 void MosaicUpdate(void)
 {
-    if (!mosaic_active)
+    if (!isMosaicActive())
     {
         return;
     }
 
-    if (mosaic_step_frames != 0)
-    {
-        mosaic_tick++;
-        if (mosaic_tick < mosaic_step_frames)
-        {
-            return;
-        }
-        mosaic_tick = 0;
-    }
+    /* REG_MOSAIC is written inside updateMosaicEffect() itself now. */
+    updateMosaicEffect();
 
-    if (mosaic_size < mosaic_target)
+    if (!isMosaicActive() && mosaic_script_wait)
     {
-        mosaic_size++;
-    }
-    else if (mosaic_size > mosaic_target)
-    {
-        mosaic_size--;
-    }
-    REG_MOSAIC = (mosaic_size << 4) | mosaic_mask;
-
-    if (mosaic_size == mosaic_target)
-    {
-        mosaic_active = 0;
-        if (mosaic_script_wait)
-        {
-            mosaic_script_wait = 0;
-            script_action_complete = 1;
-        }
+        mosaic_script_wait = 0;
+        script_action_complete = 1;
     }
 }
