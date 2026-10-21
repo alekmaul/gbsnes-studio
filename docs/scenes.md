@@ -47,6 +47,12 @@ block actor and player movement.
 
 <img src="/gbsnes-studio/assets/images/screenshots/scene-collisions.gif" alt="Scene Collision" width="600" />
 
+**Platformer scenes only** - the Collisions tool also has **Collision Top/Bottom/Left/Right**
+swatches (a tile that's only solid from one side) and a **Ladder** swatch. "Collision Top"
+alone makes a one-way platform: solid to land on, but the player can still jump up through it
+from below. A Ladder tile lets the player climb with Up/Down while standing in its column.
+Every other scene type still only ever uses the plain Solid swatch.
+
 ## Scene limits
 
 The status bar under each scene shows `A: n/19`, `S: n/8` and `T: n/30` - actors, sprite
