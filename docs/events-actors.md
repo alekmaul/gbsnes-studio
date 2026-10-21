@@ -58,11 +58,30 @@ multi-frame sprite sheet.
 
 **Actor: Set Animate** - toggles the "Animate Frames" behavior at runtime.
 
+**Actor: Set Frame** - forces the active actor onto a specific pose of its sprite sheet (e.g.
+frame 2 of a directional "multi" sheet is its "side" pose), overriding whatever its facing
+direction would normally show. The override lasts until the next **Set Direction** event (or
+until the actor's sprite sheet/animation state changes), at which point normal facing-driven
+animation resumes. If the actor is currently moving or auto-animating ("Animate Frames"
+ticked), its own walk-cycle can still overwrite the frame again on its regular tick - this
+event is meant for a one-off pose on an otherwise idle actor, not for fighting a live
+animation.
+
+**Actor: Set Frame to Variable** - same as **Actor: Set Frame**, reading the frame number from
+a variable instead of a literal value.
+
+**Actor: Set Flip** - mirrors the active actor's current pose left/right, with the same
+override behavior (and the same "cleared by Set Direction" rule) as **Actor: Set Frame** above.
+
 **Actor: Set Sprite Sheet** - swaps a non-player actor's sprite sheet mid-game, for a sheet
 already loaded somewhere in the scene.
 
-**Actor/Player: Set Sprite State** - switches to a named animation state (e.g. a costume
-change) defined on the actor's sprite sheet.
+**Actor/Player: Set Sprite Swap** - swaps the active actor's *whole* sprite sheet for another
+already-loaded one, by a named swap defined on its current sheet (e.g. a costume change).
+
+**Actor/Player: Set Animation State** - switches to one of a sprite sheet's own named
+animation states (e.g. "Idle" / "Attack"), each a self-contained pose-set with its own frame
+count - unlike Set Sprite Swap above, this stays on the same sheet.
 
 **Actor Emote** - shows a speech-bubble icon over the actor's head for a moment.
 

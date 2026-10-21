@@ -155,6 +155,14 @@ extern u16 avatar_oid;
  * place. */
 u8 frames_len_for(u8 sprite_type, u8 slot);
 
+/* v4 follow-up (Actor: Set Frame / Set Flip on a directional sheet) - the
+ * real authored pose count a frame_override value can select between,
+ * separate from frames_len_for() above. See scene.c's own comment. Exposed
+ * so Script_ActorSetFrame_b/Script_ActorSetFrameToVal_b (script_cmds.c) can
+ * clamp the stored frame to a real pose index instead of frames_len_for()'s
+ * own (deliberately different) 1/2 walk-cycle value. */
+u8 override_frame_count(u8 sprite_type, u8 frames_len);
+
 /* Dummy scenes reuse the M3 64x64 map (SceneInit's fallback when a scene
  * blob's width/height byte is 0 - dummy/test fixtures only, a real project
  * always populates both via compileSnesData.js). Left at 64x64 on purpose,

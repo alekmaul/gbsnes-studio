@@ -128,6 +128,21 @@ typedef struct
      * sprite_type/frames_len (same pattern ACTOR_SET_SPRITE already uses
      * for switching to a different sheet's own defaults). */
     u16 anim_state_offset;
+    /* Frame/flip override (v4 follow-up). Actor: Set Frame / Set Frame to
+     * Variable / Set Flip used to only have a real effect on a
+     * non-directional ("fixed") sheet - a directional ("multi"/
+     * "multi_movement") sheet's render path (actor_render_tile/
+     * actor_metasprite_pose, scene.c) recomputes pose+flip from dir_x/dir_y
+     * fresh every frame, so an explicit frame/flip was silently overwritten
+     * the very next render. frame_override (set by those 3 opcodes,
+     * cleared by Actor: Set Direction - script_cmds.c) makes the render
+     * path trust actors[i].frame/flip as-is instead of deriving them from
+     * facing, for exactly as long as the author hasn't re-asserted a
+     * direction. Does not defeat a moving/auto-animating actor's own
+     * walk-cycle tick (SceneAnimateActors) overwriting frame again on its
+     * own cadence - same pre-existing caveat the "fixed" sheet case always
+     * had for an animate-flagged actor, now just also true here. */
+    u8 frame_override;
 } ACTOR;
 
 typedef struct

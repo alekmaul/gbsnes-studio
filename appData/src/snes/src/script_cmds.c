@@ -716,6 +716,7 @@ void Script_PlayerSetSprite_b(void)
             actors[0].frames_len = frames_len_for(actors[0].sprite_type, slot);
             actors[0].frame = 0;
             actors[0].flip = 0;
+            actors[0].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
         }
     }
     ADVANCE();
@@ -750,6 +751,7 @@ void Script_ActorSetSprite_b(void)
                 frames_len_for(actors[script_actor].sprite_type, slot);
             actors[script_actor].frame = 0;
             actors[script_actor].flip = 0;
+            actors[script_actor].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
         }
     }
     ADVANCE();
@@ -787,6 +789,7 @@ static void ActorSetAnimState(u8 actor_idx, u8 state)
     }
     actors[actor_idx].frame = 0;
     actors[actor_idx].flip = 0;
+    actors[actor_idx].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
 }
 
 void Script_PlayerSetAnimState_b(void)
@@ -842,6 +845,11 @@ void Script_ActorSetDir_b(void)
     u8 d = script_cmd_args[0];
     actors[script_actor].dir_x = d == 2 ? -1 : d == 4 ? 1 : 0;
     actors[script_actor].dir_y = d == 8 ? -1 : d == 1 ? 1 : 0;
+    /* v4 follow-up: Set Direction is the canonical "resume automatic
+     * facing" signal - drops any Set Frame/Set Flip override so a
+     * directional sheet's render goes back to picking its pose from
+     * dir_x/dir_y again (see gbs_types.h's frame_override comment). */
+    actors[script_actor].frame_override = 0;
     ADVANCE();
     script_continue = 1;
 }
@@ -1111,21 +1119,40 @@ void Script_TextSetAnimSpeed_b(void)
     ADVANCE();
     script_continue = 1;
 }
+/* v4 follow-up: Set Frame / Set Frame to Variable / Set Flip used to only
+ * have a real effect on a non-directional ("fixed") sheet - a directional
+ * ("multi"/"multi_movement") sheet's render path recomputed pose+flip from
+ * dir_x/dir_y fresh every frame, silently overwriting whatever these 3
+ * opcodes just stored. frame_override (gbs_types.h) makes the render path
+ * (actor_render_tile/actor_metasprite_pose, scene.c) trust the stored
+ * frame/flip as-is on a directional sheet too, until Set Direction
+ * (Script_ActorSetDir_b above) clears it again. The modulus here is
+ * override_frame_count(), not frames_len - frames_len deliberately stays
+ * 1/2 for SPRITE_ACTOR/SPRITE_ACTOR_ANIMATED to drive the walk cycle
+ * correctly; the real authored pose count (3 or 6) is a separate number. */
 void Script_ActorSetFrame_b(void)
 {
-    u8 n = actors[script_actor].frames_len ? actors[script_actor].frames_len : 1;
+    u8 n = override_frame_count(actors[script_actor].sprite_type, actors[script_actor].frames_len);
     actors[script_actor].flip = 0;
     actors[script_actor].frame = script_cmd_args[0] % n;
+    actors[script_actor].frame_override = 1;
     ADVANCE();
     script_continue = 1;
 }
-void Script_ActorSetFlip_b(void)        { actors[script_actor].flip = script_cmd_args[0]; ADVANCE(); script_continue = 1; }
+void Script_ActorSetFlip_b(void)
+{
+    actors[script_actor].flip = script_cmd_args[0];
+    actors[script_actor].frame_override = 1;
+    ADVANCE();
+    script_continue = 1;
+}
 void Script_TextMulti_b(void) { UITextMulti(script_cmd_args[0]); ADVANCE(); script_continue = 1; }
 void Script_ActorSetFrameToVal_b(void)
 {
-    u8 n = actors[script_actor].frames_len ? actors[script_actor].frames_len : 1;
+    u8 n = override_frame_count(actors[script_actor].sprite_type, actors[script_actor].frames_len);
     actors[script_actor].flip = 0;
     actors[script_actor].frame = VAR(ARG16(0, 1)) % n;
+    actors[script_actor].frame_override = 1;
     ADVANCE();
     script_continue = 1;
 }

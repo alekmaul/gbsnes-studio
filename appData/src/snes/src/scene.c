@@ -872,6 +872,21 @@ u8 frames_len_for(u8 sprite_type, u8 slot)
     return 1;
 }
 
+/* How many real authored poses Actor: Set Frame / Set Frame to Variable can
+ * pick between while frame_override is active - the sheet's own real pose
+ * count, NOT frames_len (which deliberately stays 1/2 for SPRITE_ACTOR/
+ * SPRITE_ACTOR_ANIMATED above, to drive the walk cycle and every other
+ * frames_len_for() caller correctly - this is a separate concern). A
+ * directional sheet has 3 (down/up/side) or 6 (down-A/B, up-A/B, side-A/B)
+ * real poses regardless of frames_len; a non-directional ("fixed") sheet's
+ * pose count IS frames_len, unchanged from today. */
+u8 override_frame_count(u8 sprite_type, u8 frames_len)
+{
+    if (sprite_type == SPRITE_ACTOR) return 3;
+    if (sprite_type == SPRITE_ACTOR_ANIMATED) return 6;
+    return frames_len ? frames_len : 1;
+}
+
 /* v2 M6: up to 6 BG palette regions per scene, matching GB Studio 2.0.0-
  * beta5's colour model (Palette.c: a 48-byte, 6x8-colour-DMG-packed blob
  * per scene selected per background tile via a CGB VRAM-bank-1 attribute
@@ -1134,6 +1149,7 @@ void SceneInit(void)
     actors[0].sprite_type = sprite_type_for_slot[PLAYER_SPRITE_SLOT];
     actors[0].frames_len = frames_len_for(sprite_type_for_slot[PLAYER_SPRITE_SLOT], PLAYER_SPRITE_SLOT);
     actors[0].anim_state_offset = 0; /* this sheet's own default/implicit state */
+    actors[0].frame_override = 0;
     actors[0].move_speed = 1;
     actors[0].collisions_enabled = 1;
     /* Projectiles (v4): the player is always collision_group "player" (bit
@@ -1166,6 +1182,7 @@ void SceneInit(void)
         actors[i].animate = p[9];
         actors[i].frames_len = frames_len_for(p[7], p[4]);
         actors[i].anim_state_offset = 0; /* this sheet's own default/implicit state */
+        actors[i].frame_override = 0;
         actors[i].events_ptr = event_ptrs[p[5] | ((u16)p[6] << 8)];
         /* Projectiles (v4): [10]=collision_group, [11..16]=hit1/2/3_idx (2
          * bytes each) - see compileSnesData.js actorEntries and
@@ -3498,6 +3515,33 @@ static u16 actor_render_tile(ACTOR *a, u8 *flip_out)
         return fo;
     }
 
+    /* v4 follow-up: Actor: Set Frame/Set Flip on a directional sheet - see
+     * gbs_types.h's frame_override comment. `frame` is already clamped to
+     * a real pose index by override_frame_count() at the Set Frame/Set
+     * Frame to Variable call site, so this only ever reads a pose this
+     * sheet really has. SPRITE_ACTOR (3 real poses: down/up/side) has its
+     * own mapping here, NOT the 6-frame A/B cascade above - a 3-frame
+     * sheet never populates extra_pose_*_b[] at all, so frame values past
+     * 2 can never occur for it (override_frame_count() caps at 3). */
+    if (a->frame_override)
+    {
+        *flip_out = a->flip;
+        if (st == SPRITE_ACTOR)
+        {
+            if (frame == 1) return (u16)extra_pose_up_a[slot] << 1;
+            if (frame == 2) return (u16)extra_pose_side_a[slot] << 1;
+            return fo;
+        }
+        /* SPRITE_ACTOR_ANIMATED - same 6-pose order as the SPRITE_STATIC
+         * cycle above. */
+        if (frame == 1) return (u16)extra_pose_down_b[slot] << 1;
+        if (frame == 2) return (u16)extra_pose_up_a[slot] << 1;
+        if (frame == 3) return (u16)extra_pose_up_b[slot] << 1;
+        if (frame == 4) return (u16)extra_pose_side_a[slot] << 1;
+        if (frame == 5) return (u16)extra_pose_side_b[slot] << 1;
+        return fo;
+    }
+
     if (st == SPRITE_ACTOR_ANIMATED)
     {
         if (frame & 1) pose_b = 1;
@@ -3540,6 +3584,16 @@ static u8 actor_metasprite_pose(ACTOR *a, u8 *flip_out)
     u8 pose_b = 0;
 
     if (st == SPRITE_STATIC)
+    {
+        *flip_out = a->flip;
+        return a->frame;
+    }
+    /* v4 follow-up: Actor: Set Frame/Set Flip override (gbs_types.h) - a->frame
+     * is already clamped to a real compact pose index (0-2 for SPRITE_ACTOR,
+     * 0-5 for SPRITE_ACTOR_ANIMATED) by override_frame_count() at the Set
+     * Frame/Set Frame to Variable call site, which is exactly this
+     * function's own existing index convention - no remapping needed. */
+    if (a->frame_override)
     {
         *flip_out = a->flip;
         return a->frame;
