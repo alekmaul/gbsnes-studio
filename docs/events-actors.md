@@ -70,8 +70,9 @@ animation.
 **Actor: Set Frame to Variable** - same as **Actor: Set Frame**, reading the frame number from
 a variable instead of a literal value.
 
-**Actor: Set Flip** - mirrors the active actor's current pose left/right, with the same
-override behavior (and the same "cleared by Set Direction" rule) as **Actor: Set Frame** above.
+{: .note }
+> There is no separate "Set Flip" event. Mirroring is handled automatically by **Set Direction**
+> (facing left mirrors the side pose).
 
 **Actor: Set Sprite Sheet** - swaps a non-player actor's sprite sheet mid-game. Works for any
 sheet already loaded somewhere in the scene; for an actor the engine recognizes as needing to
