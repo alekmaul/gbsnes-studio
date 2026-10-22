@@ -447,18 +447,9 @@ const compileSnesData = async (
     add(playerSpriteIdForScene(sc));
     (sc.actors || []).forEach((a) => add(a.spriteSheetId));
     sceneRuntimeSpriteIds[i].forEach(add);
-    const distinct = new Set(
-      [playerSpriteIdForScene(sc)]
-        .concat((sc.actors || []).map((a) => a.spriteSheetId))
-        .concat(sceneRuntimeSpriteIds[i])
-        .filter(isSprite)
-    );
-    if (distinct.size > SPRITE_SLOTS) {
-      warnings(
-        `Scene '${sc.name || i}' uses ${distinct.size} sprite sheets; only ` +
-          `${SPRITE_SLOTS} fit - the rest fall back to slot 0 (the player).`
-      );
-    }
+    // The "too many sheets" warning used to live here - it's emitted
+    // further down now, once runtime streaming has had a chance to cover
+    // some of the overflow (see uncoveredOverflowWarning below).
     return ids;
   });
   const slotForActor = (sceneIndex, id) => {
@@ -607,6 +598,65 @@ const compileSnesData = async (
       )
     )
   );
+
+  // Over-budget warning, computed only now that streaming is known: a sheet
+  // beyond the regular 8 is only a real problem if nothing covers it. A
+  // sheet counts as covered by streaming only when its ONLY references are
+  // Set Sprite Sheet/Set Animation State events from actors that actually
+  // got a streaming slot - an actor's own default sheet, the player's
+  // sheet, or a Launch Projectile/Weapon Attack target beyond the budget
+  // still falls back to slot 0, and so does a swap from an actor that was
+  // over the MAX_STREAM_SLOTS cap (that case also has its own warning
+  // above). Metasprite stream targets never appear in a slotted actor's
+  // target set, so they stay uncovered here too.
+  const scanProjectileSpriteIds = (evs, ids) => {
+    (evs || []).forEach((ev) => {
+      if (
+        ev.args &&
+        (ev.command === "EVENT_LAUNCH_PROJECTILE" || ev.command === "EVENT_WEAPON_ATTACK") &&
+        isSprite(ev.args.spriteSheetId)
+      ) {
+        ids.add(ev.args.spriteSheetId);
+      }
+      if (ev.children) {
+        Object.keys(ev.children).forEach((k) => scanProjectileSpriteIds(ev.children[k], ids));
+      }
+    });
+  };
+  scenes.forEach((sc, i) => {
+    const actors = sc.actors || [];
+    const nonStreamRefs = new Set(
+      [playerSpriteIdForScene(sc)].concat(actors.map((a) => a.spriteSheetId)).filter(isSprite)
+    );
+    scanProjectileSpriteIds(sc.script, nonStreamRefs);
+    actors.forEach((a) =>
+      [a.script, a.startScript, a.updateScript, a.hit1Script, a.hit2Script, a.hit3Script].forEach(
+        (s) => scanProjectileSpriteIds(s, nonStreamRefs)
+      )
+    );
+    (sc.triggers || []).forEach((t) => scanProjectileSpriteIds(t.script, nonStreamRefs));
+    // Swaps from an actor without a streaming slot aren't covered either.
+    sceneStreamPairs[i].forEach(({ actorIndex, sheetId }) => {
+      if (!sceneStreamSlotForActor[i].has(actorIndex)) nonStreamRefs.add(sheetId);
+    });
+    const distinct = new Set(
+      Array.from(nonStreamRefs).concat(sceneStreamPairs[i].map((p) => p.sheetId)).filter(isSprite)
+    );
+    const uncovered = Array.from(distinct).filter(
+      (id) => sceneSpriteIds[i].indexOf(id) === -1 && nonStreamRefs.has(id)
+    );
+    if (uncovered.length > 0) {
+      const streamed = Array.from(distinct).filter(
+        (id) => sceneSpriteIds[i].indexOf(id) === -1 && !nonStreamRefs.has(id)
+      ).length;
+      warnings(
+        `Scene '${sc.name || i}' uses ${distinct.size} sprite sheets; only ` +
+          `${SPRITE_SLOTS} fit` +
+          (streamed ? ` (${streamed} more handled by runtime streaming)` : "") +
+          ` - ${uncovered.length} can't be loaded and fall back to slot 0 (the player).`
+      );
+    }
+  });
 
   // ---- dialogue avatars (M5d): TEXT events with an avatarId ------------
   // Also per-scene: a scene's blob carries only the avatars its own scripts

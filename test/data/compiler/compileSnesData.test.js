@@ -1669,6 +1669,24 @@ describe("compileSnesData - runtime sprite-sheet streaming (v4 follow-up)", () =
     expect(out.stats.sceneStreamSlotForActor[0]).toEqual({ 8: 0 });
     expect(out.stats.streamTargetSheetIds).toEqual([OVERFLOW_ID]);
     expect(warnings.some((w) => w.includes("more than"))).toBe(false);
+    // 9 distinct sheets, but the 9th is fully covered by streaming - the
+    // old "only 8 fit - the rest fall back to slot 0" warning must not fire.
+    expect(warnings.some((w) => w.includes("fall back to slot 0"))).toBe(false);
+  });
+
+  test("an overflow sheet that's an actor's own default (not a swap target) still warns", async () => {
+    const project = baseProject(
+      [{ id: OVERFLOW_ID, filename: "static.png", type: "static" }],
+      [{ id: "ninth-default", spriteSheetId: OVERFLOW_ID, x: 0, y: 2, script: [] }]
+    );
+    const warnings = [];
+    await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    expect(
+      warnings.some((w) => w.includes("1 can't be loaded and fall back to slot 0"))
+    ).toBe(true);
   });
 
   test("more than MAX_STREAM_SLOTS (2) streaming actors - only the first 2 get a slot, the rest warn and stay a no-op", async () => {
@@ -1692,6 +1710,15 @@ describe("compileSnesData - runtime sprite-sheet streaming (v4 follow-up)", () =
     // 7 fillers at actor index 1-7, the 3 streaming actors at 8, 9, 10.
     expect(out.stats.sceneStreamSlotForActor[0]).toEqual({ 8: 0, 9: 1 });
     expect(warnings.some((w) => w.includes("more than 2 actors"))).toBe(true);
+    // The 3rd actor's target really isn't loaded - the overflow warning
+    // reports exactly that one, and credits the other 2 to streaming.
+    expect(
+      warnings.some(
+        (w) =>
+          w.includes("(2 more handled by runtime streaming)") &&
+          w.includes("1 can't be loaded")
+      )
+    ).toBe(true);
   });
 
   test("a metaspriteMode sheet beyond the regular budget is not a supported streaming target yet - warns, stays a no-op", async () => {
