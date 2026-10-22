@@ -466,6 +466,148 @@ const compileSnesData = async (
     return k >= 0 ? k : 0;
   };
 
+  // ---- runtime sprite-sheet streaming (v4 follow-up) -------------------
+  // Player/Actor: Set Sprite Sheet (and Set Animation State, which resolves
+  // to the same underlying swap) only work above if the target sheet is one
+  // of the 8 regularly pre-loaded ones (sceneSpriteIds). A sheet referenced
+  // ONLY as an overflow target used to be a silent no-op - see EVENTS.md's
+  // own history. This gives a SPECIFIC actor that targets such a sheet its
+  // own dedicated, non-shared OBJ slot + OBJ palette (never shared with any
+  // other actor - a shared slot design would mean one actor's swap silently
+  // changes what every OTHER actor sharing that slot renders too), with a
+  // real runtime VRAM DMA (script_cmds.c) instead of a compile-time preload.
+  //
+  // MAX_STREAM_SLOTS must match gbs_types.h's own #define exactly - this is
+  // a fixed engine-wide ceiling (how many actors can SIMULTANEOUSLY hold a
+  // dedicated streaming slot in one scene), not a per-project setting.
+  const MAX_STREAM_SLOTS = 2;
+
+  // Which REAL actor index (0 = player) a Set Sprite Sheet/Set Animation
+  // State event targets - mirrors scriptBuilder.js's own getActorById/
+  // actorSetActive $self$ resolution exactly (confirmed against the real
+  // source, not guessed): "$self$" means the player in a scene/trigger
+  // script (entity.id never matches scene.actors[].id there), or the owning
+  // actor inside that actor's own script/startScript/updateScript/
+  // hit1-3Script; an explicit (non-$self$) actor id is always a direct,
+  // context-independent lookup, falling back to the player if unmatched -
+  // the exact same fallback every one of these events' own compile() already
+  // has ("if (!getActorById(...)) playerSetSprite(...)").
+  const resolveStreamActorIndex = (actorId, selfActorIndex, actors) => {
+    if (!actorId || actorId === "$self$") return selfActorIndex;
+    const idx = actors.findIndex((a) => a.id === actorId);
+    return idx === -1 ? 0 : idx + 1;
+  };
+  const scanStreamTargets = (evs, pairs, selfActorIndex, actors) => {
+    (evs || []).forEach((ev) => {
+      if (ev.command && ev.args) {
+        let targetId;
+        let actorIndex;
+        if (ev.command === "EVENT_PLAYER_SET_SPRITE") {
+          targetId = ev.args.spriteSheetId;
+          actorIndex = 0;
+        } else if (ev.command === "EVENT_PLAYER_SET_STATE") {
+          targetId = resolveStateTargetSpriteSheetId(ev.args);
+          actorIndex = 0;
+        } else if (ev.command === "EVENT_ACTOR_SET_SPRITE") {
+          targetId = ev.args.spriteSheetId;
+          actorIndex = resolveStreamActorIndex(ev.args.actorId, selfActorIndex, actors);
+        } else if (ev.command === "EVENT_ACTOR_SET_STATE") {
+          targetId = resolveStateTargetSpriteSheetId(ev.args);
+          actorIndex = resolveStreamActorIndex(ev.args.actorId, selfActorIndex, actors);
+        }
+        if (isSprite(targetId)) {
+          pairs.push({ actorIndex, sheetId: targetId });
+        }
+      }
+      if (ev.children) {
+        Object.keys(ev.children).forEach((k) =>
+          scanStreamTargets(ev.children[k], pairs, selfActorIndex, actors)
+        );
+      }
+    });
+  };
+  const sceneStreamPairs = scenes.map((sc) => {
+    const pairs = [];
+    const actors = sc.actors || [];
+    scanStreamTargets(sc.script, pairs, 0, actors); // scene script: $self$ = player
+    actors.forEach((a, i) => {
+      const selfIdx = i + 1;
+      scanStreamTargets(a.script, pairs, selfIdx, actors);
+      scanStreamTargets(a.startScript, pairs, selfIdx, actors);
+      scanStreamTargets(a.updateScript, pairs, selfIdx, actors);
+      scanStreamTargets(a.hit1Script, pairs, selfIdx, actors);
+      scanStreamTargets(a.hit2Script, pairs, selfIdx, actors);
+      scanStreamTargets(a.hit3Script, pairs, selfIdx, actors);
+    });
+    (sc.triggers || []).forEach((t) => scanStreamTargets(t.script, pairs, 0, actors)); // trigger: $self$ = player
+    return pairs;
+  });
+
+  // sceneStreamSlotForActor[i]: Map<actorIndex, streamSlot 0..MAX_STREAM_SLOTS-1>
+  // sceneStreamTargetsForActor[i]: Map<actorIndex, Set<sheetId>> - every
+  // distinct out-of-budget sheet that actor might stream to in this scene
+  // (sized for the worst case, since only one is ever resident at a time).
+  const sceneStreamSlotForActor = [];
+  const sceneStreamTargetsForActor = [];
+  const warnedSceneMetasprite = new Set();
+  scenes.forEach((sc, i) => {
+    const needs = new Map();
+    sceneStreamPairs[i].forEach(({ actorIndex, sheetId }) => {
+      if (sceneSpriteIds[i].indexOf(sheetId) !== -1) return; // already regular-loaded
+      const sheet = spriteById(sheetId);
+      if (!sheet) return;
+      if (sheet.metaspriteMode) {
+        // V1 scope: a Free-form (Metasprite) sheet's variable, potentially
+        // large tile cost doesn't fit this feature's fixed-size reserved
+        // region - not supported yet, same graceful "stays a no-op" fallback
+        // as every other unsupported target, just warned once per scene.
+        if (!warnedSceneMetasprite.has(i)) {
+          warnedSceneMetasprite.add(i);
+          warnings(
+            `Scene '${sc.name || i}' tries to runtime-swap to a Free-form (Metasprite) ` +
+              `sprite sheet beyond this scene's regular 8-sheet budget - not supported yet, the swap stays a no-op.`
+          );
+        }
+        return;
+      }
+      if (!needs.has(actorIndex)) needs.set(actorIndex, new Set());
+      needs.get(actorIndex).add(sheetId);
+    });
+    const slotMap = new Map();
+    Array.from(needs.keys())
+      .sort((a, b) => a - b)
+      .forEach((actorIndex, k) => {
+        if (k < MAX_STREAM_SLOTS) {
+          slotMap.set(actorIndex, k);
+        } else {
+          warnings(
+            `Scene '${sc.name || i}' has more than ${MAX_STREAM_SLOTS} actors that need to ` +
+              `runtime-swap to a sprite sheet beyond its regular 8-sheet budget - only the ` +
+              `first ${MAX_STREAM_SLOTS} get a dedicated streaming slot; the rest fall back ` +
+              `to a no-op swap, same as before this feature existed.`
+          );
+        }
+      });
+    sceneStreamSlotForActor.push(slotMap);
+    sceneStreamTargetsForActor.push(needs);
+  });
+  // Every distinct sheet that's ever a REAL (budgeted) stream target
+  // anywhere in the project - these need their own addressable ROM data,
+  // independent of any scene's own packed OBJ buffer (see buildSceneSprites).
+  const allStreamTargetSheetIds = Array.from(
+    new Set(
+      [].concat(
+        ...scenes.map((sc, i) =>
+          [].concat(
+            ...Array.from(sceneStreamSlotForActor[i].keys()).map((actorIndex) =>
+              Array.from(sceneStreamTargetsForActor[i].get(actorIndex))
+            )
+          )
+        )
+      )
+    )
+  );
+
   // ---- dialogue avatars (M5d): TEXT events with an avatarId ------------
   // Also per-scene: a scene's blob carries only the avatars its own scripts
   // use, at AVATAR region slots 0..k. scriptBuilder's getSpriteIndex resolves
@@ -546,7 +688,9 @@ const compileSnesData = async (
   // Map-iterator spread bug in snesFixedAssets.js - exotic iterables (Set/
   // Map, not plain arrays) aren't safe to consume directly here; convert to
   // a real array first.
-  const allSpriteIds = Array.from(new Set([].concat(...sceneSpriteIds, ...sceneAvatarIds)));
+  const allSpriteIds = Array.from(
+    new Set([].concat(...sceneSpriteIds, ...sceneAvatarIds, allStreamTargetSheetIds))
+  );
   for (let i = 0; i < allSpriteIds.length; i++) {
     const id = allSpriteIds[i];
     const sheet = spriteById(id);
@@ -599,8 +743,19 @@ const compileSnesData = async (
   const MAX_OBJ_COLOURS = OBJ_PAL_SIZE / 2; // 16
   const NUM_OBJ_PALS = 8;
   const ACTOR_OBJ_PAL_POOL = [0, 3, 4, 5, 6, 7];
-  const objPalForSlot = (k) =>
-    k < ACTOR_OBJ_PAL_POOL.length ? ACTOR_OBJ_PAL_POOL[k] : 0;
+  // v4 follow-up (runtime sprite-sheet streaming): a scene that reserves
+  // numStreamSlots dedicated streaming slots gives up that many registers
+  // from the END of this pool (objPalForStreamSlot, below) - regular
+  // sheets in THAT scene only draw from the remaining front of the pool,
+  // never colliding with a streaming slot's own register. A scene with no
+  // streaming need (numStreamSlots=0, the default/every other call site)
+  // is byte-for-byte unchanged.
+  const objPalForSlot = (k, numStreamSlots = 0) => {
+    const poolLen = ACTOR_OBJ_PAL_POOL.length - numStreamSlots;
+    return k < poolLen ? ACTOR_OBJ_PAL_POOL[k] : 0;
+  };
+  const objPalForStreamSlot = (streamSlotIdx) =>
+    ACTOR_OBJ_PAL_POOL[ACTOR_OBJ_PAL_POOL.length - 1 - streamSlotIdx];
   const padPal = (bytes) => {
     const out = bytes.slice(0, OBJ_PAL_SIZE);
     while (out.length < OBJ_PAL_SIZE) out.push(0);
@@ -611,6 +766,36 @@ const compileSnesData = async (
     words[0] = 0; // colour 0 is hardware-transparent for every OBJ sprite
     return snesgfx.paletteBytes(words);
   };
+
+  // v4 follow-up (runtime sprite-sheet streaming): one real tile+palette
+  // blob per sheet in allStreamTargetSheetIds, laid out as [all poses' own
+  // TL+TR tiles, pose order][all poses' own BL+BR tiles, pose order] - NOT
+  // per-pose-interleaved - so the runtime can DMA a whole sheet in with
+  // exactly 2 dmaCopyVram calls (one per half) regardless of its pose
+  // count, instead of one tiny DMA per pose. Matches conv.tiles' own
+  // existing [TL,TR,BL,BR] quad order per pose (same order placeTiles/
+  // placeExtraPose already consume) - reused as-is, not recomputed.
+  const streamSheetTiles = [];
+  const streamSheetPal = [];
+  const streamSheetType = [];
+  const streamSheetFrames = [];
+  const streamIndexForSheetId = {};
+  allStreamTargetSheetIds.forEach((id, n) => {
+    streamIndexForSheetId[id] = n;
+    const conv = spriteConv[id];
+    const numPoses = conv.tiles.length / 4;
+    const tltr = [];
+    const blbr = [];
+    for (let f = 0; f < numPoses; f++) {
+      const t = conv.tiles.slice(f * 4, f * 4 + 4);
+      tltr.push(t[0], t[1]);
+      blbr.push(t[2], t[3]);
+    }
+    streamSheetTiles.push([].concat(...tltr, ...blbr));
+    streamSheetPal.push(palBytesFor(conv.colors));
+    streamSheetType.push(conv.spriteType);
+    streamSheetFrames.push(numPoses);
+  });
 
   // A scene with more than ACTOR_OBJ_PAL_POOL.length (6) distinct sprite
   // sheets forces two unrelated actors onto the same OBJ palette register.
@@ -732,9 +917,17 @@ const compileSnesData = async (
   const SHEET_RESERVED_TILES = 96; // pair0 (primary poses) + pair1 (emotes) + pair2 (avatars)
   const buildSceneSprites = (sceneIndex) => {
     const sceneName = scenes[sceneIndex].name || `#${sceneIndex}`;
+    // v4 follow-up (runtime sprite-sheet streaming): this scene's own
+    // count of actors that got a dedicated streaming slot (0, capped at
+    // MAX_STREAM_SLOTS - sceneStreamSlotForActor already enforced that
+    // cap when assigning slots). Each costs one more reserved 32-tile
+    // pair (right after SHEET_RESERVED_TILES's existing 0-95 prefix) and
+    // one fewer register from the end of ACTOR_OBJ_PAL_POOL for this
+    // scene's own regular sheets - see objPalForSlot/objPalForStreamSlot.
+    const numStreamSlots = sceneStreamSlotForActor[sceneIndex].size;
     const packer = createScenePacker({
       totalTiles: SHEET_TOTAL_TILES,
-      reservedTiles: SHEET_RESERVED_TILES
+      reservedTiles: SHEET_RESERVED_TILES + numStreamSlots * 32
     });
     const sheet = packer.sheet; // all-zero, SHEET_TOTAL_TILES*32 bytes long
     // Copy in the fixed 0-95 prefix (placeholder + emotes; avatars are
@@ -764,7 +957,18 @@ const compileSnesData = async (
     const types = new Array(SPRITE_SLOTS).fill(0);
     const frames = new Array(SPRITE_SLOTS).fill(1);
     const pals = [];
-    for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k));
+    for (let k = 0; k < SPRITE_SLOTS; k++) pals.push(objPalForSlot(k, numStreamSlots));
+    // v4 follow-up: which real OBJ palette register each of this scene's
+    // (up to MAX_STREAM_SLOTS) streaming slots gets - fixed per scene at
+    // compile time (the register never changes once assigned; only the
+    // CGRAM *content* behind it changes, at runtime, when a stream
+    // actually happens). A slot this scene never uses gets a harmless
+    // placeholder (0) - nothing ever reads it, since no actor's own
+    // stream_slot will ever equal that index.
+    const streamPalForSlotBytes = [];
+    for (let k = 0; k < MAX_STREAM_SLOTS; k++) {
+      streamPalForSlotBytes.push(k < numStreamSlots ? objPalForStreamSlot(k) : 0);
+    }
     // A legacy (non-metaspriteMode) actor is still exactly 1 real OAM
     // hardware sprite per frame - M8.3 only changes WHERE that one sprite's
     // tile data lives in VRAM (dynamic per-scene packing instead of a fixed
@@ -797,7 +1001,7 @@ const compileSnesData = async (
     sceneSpriteIds[sceneIndex].forEach((id, k) => {
       const sheet = spriteById(id);
       const conv = spriteConv[id];
-      const objPal = objPalForSlot(k);
+      const objPal = objPalForSlot(k, numStreamSlots);
       if (sheet.metaspriteMode) {
         // M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite) sheet -
         // every placed tile (every frame, including frame 0) goes through
@@ -1004,7 +1208,18 @@ const compileSnesData = async (
     const animStateBytes = hasAnimStates
       ? [1].concat(...animStateDirBytes)
       : [0];
-    return { sheet, palBytes, types, frames, pals, oamIds, extraPoseBytes, metaspriteBytes, animStateBytes };
+    return {
+      sheet,
+      palBytes,
+      types,
+      frames,
+      pals,
+      oamIds,
+      extraPoseBytes,
+      metaspriteBytes,
+      animStateBytes,
+      streamPalForSlotBytes
+    };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -1612,10 +1827,25 @@ const compileSnesData = async (
       colDirBytes,
       // [1 or more] Named animation states: hasAnimStates flag, optionally
       // followed by a per-slot directory - see buildSceneSprites' own
-      // animStateBytes comment. The real last thing in the scene blob now,
-      // appended last for the same "never shifts an earlier offset" reason
-      // every prior scene-blob growth in this file has followed.
-      spr.animStateBytes
+      // animStateBytes comment.
+      spr.animStateBytes,
+      // v4 follow-up (runtime sprite-sheet streaming): [1] the player's own
+      // stream_slot (0xff = none), [scene.actors.length] one per actor in
+      // the same order as actorEntries above, [MAX_STREAM_SLOTS] which real
+      // OBJ palette register each of this scene's streaming slots uses (see
+      // buildSceneSprites' own streamPalForSlotBytes comment) - the real
+      // last thing in the scene blob now, appended last for the same
+      // "never shifts an earlier offset" reason every prior scene-blob
+      // growth in this file has followed.
+      sceneStreamSlotForActor[sceneIndex].has(0)
+        ? sceneStreamSlotForActor[sceneIndex].get(0)
+        : 0xff,
+      (scene.actors || []).map((_, i) =>
+        sceneStreamSlotForActor[sceneIndex].has(i + 1)
+          ? sceneStreamSlotForActor[sceneIndex].get(i + 1)
+          : 0xff
+      ),
+      spr.streamPalForSlotBytes
     );
   });
 
@@ -1839,6 +2069,26 @@ ${sprPals.arrays.map((_, i) => `extern const unsigned char scene_spr_pal_${i}[${
 extern const unsigned char *const scene_spr_ptrs[${scenes.length}];
 extern const unsigned char *const scene_spr_pal_ptrs[${scenes.length}];
 extern const unsigned char *const scene_sprite_slot_ptrs[${scenes.length}];
+/* Runtime sprite-sheet streaming (v4 follow-up) - a project-wide table,
+ * independent of any scene's own packed OBJ buffer: index = project
+ * sprite-sheet index (the same NUM_SPRITE_SHEETS space PLAYER_SET_SPRITE's
+ * own idx already uses). 0 for a sheet that's never a runtime streaming
+ * target anywhere (the overwhelming common case). Otherwise:
+ * stream_tile_ptrs[idx] -> that sheet's own tile data, laid out as [all
+ * poses' own TL+TR tiles, pose order][all poses' own BL+BR tiles, pose
+ * order] (2 contiguous halves, not per-pose-interleaved - see
+ * Script_ActorSetSprite_b's own comment for why: this lets the runtime
+ * DMA a whole sheet in with exactly 2 dmaCopyVram calls, not one per
+ * pose); stream_pal_ptrs[idx] -> its 32-byte OBJ palette;
+ * stream_type_for_index[idx]/stream_frames_for_index[idx] ->
+ * sprite_type/pose-count (1-6), mirroring sprite_type_for_slot/
+ * frames_len_for's own meaning for a regular slot. */
+${allStreamTargetSheetIds.map((_, n) => `extern const unsigned char stream_spr_${n}[${streamSheetTiles[n].length}];`).join("\n")}
+${allStreamTargetSheetIds.map((_, n) => `extern const unsigned char stream_spr_pal_${n}[${OBJ_PAL_SIZE}];`).join("\n")}
+extern const unsigned char *const stream_tile_ptrs[${nSpriteSheets}];
+extern const unsigned char *const stream_pal_ptrs[${nSpriteSheets}];
+extern const unsigned char stream_type_for_index[${nSpriteSheets}];
+extern const unsigned char stream_frames_for_index[${nSpriteSheets}];
 extern const unsigned char ui_font[${fixed.uiFont.length}];
 extern const unsigned char ui_pal[${fixed.uiPaletteBytes.length}];
 
@@ -1907,6 +2157,14 @@ extern const unsigned char *const scenes[${scenes.length}];
 #define NUM_BGS ${nBg}
 #define NUM_SPRITE_SHEETS ${nSpriteSheets}
 #define SPRITE_SLOTS ${SPRITE_SLOTS}
+/* Runtime sprite-sheet streaming (v4 follow-up) - MUST match gbs_types.h's
+ * own #define MAX_STREAM_SLOTS exactly (guarded by
+ * test/data/compiler/compileSnesData.test.js), same convention as every
+ * other dual compiler/engine constant in this codebase (e.g.
+ * SCENE_COL_DIR_BYTES). Not project-configurable - a fixed engine ceiling
+ * on how many actors can simultaneously hold a dedicated streaming slot
+ * in one scene. */
+#define MAX_STREAM_SLOTS ${MAX_STREAM_SLOTS}
 #define SPR_TILES_SIZE ${SPR_TILES_SIZE}
 #define SPR_PAL_SIZE   ${SPR_PAL_SIZE}
 #define UI_FONT_SIZE  ${fixed.uiFont.length}
@@ -2003,6 +2261,14 @@ extern const unsigned char *const scenes[${scenes.length}];
       { label: `scene_spr_pal_${i}`, bytes: a },
     ]);
   });
+  allStreamTargetSheetIds.forEach((_, n) => {
+    assetsData[`stream_spr_${n}_data.as`] = asmAsset(`stream_spr_${n}`, [
+      { label: `stream_spr_${n}`, bytes: streamSheetTiles[n] },
+    ]);
+    assetsData[`stream_spr_pal_${n}_data.as`] = asmAsset(`stream_spr_pal_${n}`, [
+      { label: `stream_spr_pal_${n}`, bytes: streamSheetPal[n] },
+    ]);
+  });
   scenePriorityMaps.forEach((entry) => {
     if (!entry) return;
     assetsData[`${entry.name}_data.as`] = asmAsset(entry.name, [
@@ -2032,6 +2298,38 @@ ${sceneSprPalIdx.map((i) => `    scene_spr_pal_${i}`).join(",\n")}
 };
 const unsigned char *const scene_sprite_slot_ptrs[${scenes.length}] = {
 ${sceneSprSlotIdx.map((i) => `    scene_spr_slot_${i}`).join(",\n")}
+};
+const unsigned char *const stream_tile_ptrs[${nSpriteSheets}] = {
+${(spriteSheets.length ? spriteSheets : [null])
+  .map((s) => {
+    const n = s ? streamIndexForSheetId[s.id] : undefined;
+    return n === undefined ? "    0" : `    stream_spr_${n}`;
+  })
+  .join(",\n")}
+};
+const unsigned char *const stream_pal_ptrs[${nSpriteSheets}] = {
+${(spriteSheets.length ? spriteSheets : [null])
+  .map((s) => {
+    const n = s ? streamIndexForSheetId[s.id] : undefined;
+    return n === undefined ? "    0" : `    stream_spr_pal_${n}`;
+  })
+  .join(",\n")}
+};
+const unsigned char stream_type_for_index[${nSpriteSheets}] = {
+${(spriteSheets.length ? spriteSheets : [null])
+  .map((s) => {
+    const n = s ? streamIndexForSheetId[s.id] : undefined;
+    return `    ${n === undefined ? 0 : streamSheetType[n]}`;
+  })
+  .join(",\n")}
+};
+const unsigned char stream_frames_for_index[${nSpriteSheets}] = {
+${(spriteSheets.length ? spriteSheets : [null])
+  .map((s) => {
+    const n = s ? streamIndexForSheetId[s.id] : undefined;
+    return `    ${n === undefined ? 0 : streamSheetFrames[n]}`;
+  })
+  .join(",\n")}
 };
 const unsigned char *const bg_tiles_ptrs[${nBg}] = { ${bgTables.map((b) => `${b.name}_tiles`).join(", ")} };
 const unsigned char *const bg_maps_ptrs[${nBg}] = { ${bgTables.map((b) => `${b.name}_map`).join(", ")} };
@@ -2093,6 +2391,18 @@ ${sceneBlobs.map((_, i) => `    scene_${i}`).join(",\n")}
       // sheet referenced only via a runtime sprite-swap event still gets a
       // real slot (v4 fix).
       sceneSlotForIndex,
+      // Runtime sprite-sheet streaming (v4 follow-up) - exposed for tests
+      // the same way sceneSlotForIndex already is: [sceneIndex] -> a plain
+      // {actorIndex: streamSlot} object (0 = player), only for actors that
+      // actually got a dedicated streaming slot assigned (see
+      // sceneStreamSlotForActor's own comment above for the assignment
+      // rule/cap).
+      sceneStreamSlotForActor: sceneStreamSlotForActor.map((m) =>
+        Object.fromEntries(m)
+      ),
+      // Every distinct sheet that's a real (budgeted) streaming target
+      // anywhere in the project, in stream_tile_ptrs/etc index order.
+      streamTargetSheetIds: allStreamTargetSheetIds,
     },
   };
 };

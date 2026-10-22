@@ -697,6 +697,46 @@ void Script_ActorActivate_b(void)
 // appended after the sheet index - consumed by ADVANCE()'s table-driven
 // length but not acted on yet (this engine has no map_next_sprite-style
 // carry-over concept to hook it into).
+// Runtime sprite-sheet streaming (v4 follow-up) - see gbs_types.h's own
+// ACTOR.stream_slot comment and scene.h's STREAM_SLOT_TILE_BASE/INDEX for
+// the full design. Called only once the regular pre-loaded-slot lookup
+// above already failed (slot == 0xFF) - if this actor also has no
+// dedicated streaming slot reserved at compile time, or idx was never a
+// REAL streaming target anywhere (stream_tile_ptrs[idx] == 0 - e.g. a
+// Free-form/Metasprite sheet, not supported yet), this stays the exact
+// same silent no-op it always was.
+//
+// stream_tile_ptrs[idx] holds the sheet's own tile data as 2 CONTIGUOUS
+// halves - [all poses' own TL+TR tiles, pose order][all poses' own BL+BR
+// tiles, pose order], not per-pose-interleaved (compileSnesData.js's own
+// comment on this) - so exactly 2 dmaCopyVram calls land the whole
+// sheet, regardless of its real pose count (1-6), instead of one tiny
+// DMA per pose. dmaCopyVram's own destination is a VRAM WORD address, not
+// a tile index (confirmed against SceneInit's own identical pair of
+// calls) - base (a tile index, same unit frame_offset already uses
+// elsewhere) converts via *16 (32 bytes/tile = 16 words/tile); the BL/BR
+// half sits exactly 16 tiles below TL/TR in tile-index terms, matching
+// every other pose's own {base,base+1,base+16,base+17} quadrant layout.
+static void ActorStreamSprite(u8 actor_idx, u16 idx)
+{
+    u8 ss = actors[actor_idx].stream_slot;
+    u16 base;
+    u16 halfLen;
+    if (ss == 0xFF) return;
+    if (stream_tile_ptrs[idx] == 0) return;
+    base = STREAM_SLOT_TILE_BASE(ss);
+    halfLen = (u16)stream_frames_for_index[idx] * 2 * 32;
+    dmaCopyVram((u8 *)stream_tile_ptrs[idx], OBJ_GFX_VRAM + base * 16, halfLen);
+    dmaCopyVram((u8 *)stream_tile_ptrs[idx] + halfLen, OBJ_GFX_VRAM + (base + 16) * 16, halfLen);
+    dmaCopyCGram((u8 *)stream_pal_ptrs[idx], 128 + (u16)sprite_pal_for_slot[STREAM_SLOT_INDEX(ss)] * 32, 32);
+    actors[actor_idx].frame_offset = (u8)base;
+    actors[actor_idx].sprite_type = stream_type_for_index[idx];
+    actors[actor_idx].frames_len = frames_len_for(actors[actor_idx].sprite_type, STREAM_SLOT_INDEX(ss));
+    actors[actor_idx].frame = 0;
+    actors[actor_idx].flip = 0;
+    actors[actor_idx].frame_override = 0;
+}
+
 void Script_PlayerSetSprite_b(void)
 {
     u16 idx = ARG16(0, 1);
@@ -717,6 +757,10 @@ void Script_PlayerSetSprite_b(void)
             actors[0].frame = 0;
             actors[0].flip = 0;
             actors[0].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
+        }
+        else
+        {
+            ActorStreamSprite(0, idx);
         }
     }
     ADVANCE();
@@ -752,6 +796,10 @@ void Script_ActorSetSprite_b(void)
             actors[script_actor].frame = 0;
             actors[script_actor].flip = 0;
             actors[script_actor].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
+        }
+        else
+        {
+            ActorStreamSprite(script_actor, idx);
         }
     }
     ADVANCE();

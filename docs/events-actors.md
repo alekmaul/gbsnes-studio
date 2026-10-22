@@ -73,8 +73,14 @@ a variable instead of a literal value.
 **Actor: Set Flip** - mirrors the active actor's current pose left/right, with the same
 override behavior (and the same "cleared by Set Direction" rule) as **Actor: Set Frame** above.
 
-**Actor: Set Sprite Sheet** - swaps a non-player actor's sprite sheet mid-game, for a sheet
-already loaded somewhere in the scene.
+**Actor: Set Sprite Sheet** - swaps a non-player actor's sprite sheet mid-game. Works for any
+sheet already loaded somewhere in the scene; for an actor the engine recognizes as needing to
+swap to a sheet beyond that, it gets its own dedicated slot and the swap happens with a real
+runtime graphics upload (up to 2 such actors per scene - a 3rd falls back to no effect, and a
+Free-form/Metasprite sheet can't be a streaming target yet).
+
+**Player: Set Sprite Sheet** - the same event, for the player. Same real-time-swap support as
+Actor: Set Sprite Sheet above.
 
 **Actor/Player: Set Sprite Swap** - swaps the active actor's *whole* sprite sheet for another
 already-loaded one, by a named swap defined on its current sheet (e.g. a costume change).

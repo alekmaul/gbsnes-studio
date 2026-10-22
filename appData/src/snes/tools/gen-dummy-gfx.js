@@ -407,6 +407,16 @@ const dummyHasColDir = [0];
 // emission. Neither dummy scene's slot-0 sheet (SPRITE_STATIC, 1 frame)
 // authors any extra state.
 const dummyHasAnimStates = [0];
+// Runtime sprite-sheet streaming (v4 follow-up): [1] player_stream_slot,
+// [this scene's own actor count] one per actor, [MAX_STREAM_SLOTS] which
+// real OBJ palette register each streaming slot uses - the real last
+// thing in the scene blob now, see compileSnesData.js's own emission and
+// scene.c's comment on this section. Neither dummy scene uses streaming
+// at all (0xff for every actor; the unused palette-register bytes are a
+// harmless placeholder 0).
+const MAX_STREAM_SLOTS = 2; // must match gbs_types.h's own #define
+const dummyPlayerStreamSlot = [0xff];
+const dummyStreamPalForSlot = new Array(MAX_STREAM_SLOTS).fill(0);
 const scene0 = [
   0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
   ...dummySprSlots,
@@ -423,12 +433,15 @@ const scene0 = [
   ...dummyPlayerBounds,
   ...dummyMusicPreload,
   ...dummyHasColDir,
-  ...dummyHasAnimStates
+  ...dummyHasAnimStates,
+  ...dummyPlayerStreamSlot,
+  0xff, // scene0's one actor (the wandering NPC) - never streams
+  ...dummyStreamPalForSlot
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds, ...dummyMusicPreload, ...dummyHasColDir, ...dummyHasAnimStates];
+const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds, ...dummyMusicPreload, ...dummyHasColDir, ...dummyHasAnimStates, ...dummyPlayerStreamSlot, ...dummyStreamPalForSlot];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {
@@ -533,6 +546,15 @@ extern const unsigned char scene_spr_pal_0[${sprPal.length}];
 extern const unsigned char *const scene_spr_ptrs[2];
 extern const unsigned char *const scene_spr_pal_ptrs[2];
 extern const unsigned char *const scene_sprite_slot_ptrs[2];
+// Runtime sprite-sheet streaming (v4 follow-up) - see compileSnesData.js's
+// own matching comment. This dummy fixture's one sheet is never a
+// streaming target anywhere, so every entry here is a harmless 0/all-zero
+// placeholder (NUM_SPRITE_SHEETS is 1 below, so each table has exactly 1
+// entry).
+extern const unsigned char *const stream_tile_ptrs[1];
+extern const unsigned char *const stream_pal_ptrs[1];
+extern const unsigned char stream_type_for_index[1];
+extern const unsigned char stream_frames_for_index[1];
 extern const unsigned char ui_font[${uiFont.length}];
 extern const unsigned char ui_pal[${uiPal.length}];
 
@@ -576,6 +598,7 @@ extern const unsigned char *const scenes[];
 #define NUM_BGS ${bgs.length}
 #define NUM_SPRITE_SHEETS 1
 #define SPRITE_SLOTS 8
+#define MAX_STREAM_SLOTS 2 // must match gbs_types.h's own #define
 #define SPR_TILES_SIZE ${sprSheet.length}
 #define SPR_PAL_SIZE   ${sprPal.length}
 #define UI_FONT_SIZE  ${uiFont.length}
@@ -659,6 +682,10 @@ ${cArray("scene_spr_slot_0", [0])}
 const unsigned char *const scene_spr_ptrs[2] = { scene_spr_0, scene_spr_0 };
 const unsigned char *const scene_spr_pal_ptrs[2] = { scene_spr_pal_0, scene_spr_pal_0 };
 const unsigned char *const scene_sprite_slot_ptrs[2] = { scene_spr_slot_0, scene_spr_slot_0 };
+const unsigned char *const stream_tile_ptrs[1] = { 0 };
+const unsigned char *const stream_pal_ptrs[1] = { 0 };
+const unsigned char stream_type_for_index[1] = { 0 };
+const unsigned char stream_frames_for_index[1] = { 0 };
 const unsigned char *const bg_tiles_ptrs[${bgs.length}] = { ${bgs
     .map(b => `${b.name}_tiles`)
     .join(", ")} };

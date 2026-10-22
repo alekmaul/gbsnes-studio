@@ -125,7 +125,7 @@ static u8 sprites_hidden = 0;
  * not pre-zero .bss, so SceneInit always writes all 8. */
 u8 sprite_type_for_slot[SPRITE_SLOTS];
 u8 sprite_frames_for_slot[SPRITE_SLOTS];
-u8 sprite_pal_for_slot[SPRITE_SLOTS];
+u8 sprite_pal_for_slot[SPRITE_POSE_SLOTS]; /* sized for streaming too - see scene.h */
 u8 sprite_oam_ids_for_slot[SPRITE_SLOTS]; /* M7 groundwork, see scene.h */
 const unsigned char *sprite_slot_for_index = 0;
 
@@ -156,11 +156,11 @@ u16 avatar_oid;
  * sprite_frames_for_slot[]/direction gating already decide whether a given
  * pose is ever asked for. Filled by SceneInit from the scene blob's own
  * trailing [40] table (after the collision bitmap - see its own comment). */
-u8 extra_pose_down_b[SPRITE_SLOTS];
-u8 extra_pose_up_a[SPRITE_SLOTS];
-u8 extra_pose_up_b[SPRITE_SLOTS];
-u8 extra_pose_side_a[SPRITE_SLOTS];
-u8 extra_pose_side_b[SPRITE_SLOTS];
+u8 extra_pose_down_b[SPRITE_POSE_SLOTS];
+u8 extra_pose_up_a[SPRITE_POSE_SLOTS];
+u8 extra_pose_up_b[SPRITE_POSE_SLOTS];
+u8 extra_pose_side_a[SPRITE_POSE_SLOTS];
+u8 extra_pose_side_b[SPRITE_POSE_SLOTS];
 /* M9.4 - see scene.h's own comment. .bss isn't pre-zeroed either, so
  * SceneInit always writes every entry (NULL or a real pointer) before
  * SceneRenderActors ever reads one. */
@@ -1438,6 +1438,47 @@ void SceneInit(void)
             anim_state_count[i] = 0;
             anim_state_dir[i] = 0;
         }
+    }
+
+    /* Runtime sprite-sheet streaming (v4 follow-up): [1] the player's own
+     * stream_slot, [scene_num_actors] one per actor (same order as the
+     * actor-entry table parsed further up), [MAX_STREAM_SLOTS] which real
+     * OBJ palette register each of this scene's streaming slots uses -
+     * see compileSnesData.js's own matching emission comment. The real
+     * last thing in the scene blob now. Unconditional, no flag byte - the
+     * payload size is always known as soon as scene_num_actors was parsed
+     * above - 0xFF for every actor in the overwhelming common case where
+     * this scene never uses streaming at all (see gbs_types.h's own
+     * ACTOR.stream_slot comment). */
+    actors[0].stream_slot = p[0];
+    p += 1;
+    for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
+    {
+        actors[i].stream_slot = p[i - 1];
+    }
+    p += scene_num_actors;
+    /* Every stream slot's own 5 extra-pose addresses are a fixed function
+     * of its tile base alone (STREAM_SLOT_TILE_BASE/INDEX, scene.h) -
+     * identical in every scene regardless of whether that scene even
+     * uses streaming, so these never need to be read from the blob at
+     * all, unlike a regular slot's own extra_pose_* entries (whose real
+     * address varies per scene, per createScenePacker()). Only the OBJ
+     * palette register assignment is genuinely per-scene (it depends on
+     * how many of that scene's OWN regular sheets already claimed a
+     * register - compileSnesData.js's own objPalForSlot/
+     * objPalForStreamSlot), so that one byte per slot still comes from
+     * the blob. */
+    for (i = 0; i < MAX_STREAM_SLOTS; i++)
+    {
+        u8 base = STREAM_SLOT_TILE_BASE(i);
+        u8 ssIdx = STREAM_SLOT_INDEX(i);
+        extra_pose_down_b[ssIdx] = (u8)((base + 2) >> 1);
+        extra_pose_up_a[ssIdx] = (u8)((base + 4) >> 1);
+        extra_pose_up_b[ssIdx] = (u8)((base + 6) >> 1);
+        extra_pose_side_a[ssIdx] = (u8)((base + 8) >> 1);
+        extra_pose_side_b[ssIdx] = (u8)((base + 10) >> 1);
+        sprite_pal_for_slot[ssIdx] = p[0];
+        p += 1;
     }
 
     actor_move_settings = 0;

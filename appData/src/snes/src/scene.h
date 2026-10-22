@@ -40,12 +40,44 @@
 #define BG1_GFX_VRAM 0x2000
 #define BG1_MAP_VRAM 0x6800
 
+/* Runtime sprite-sheet streaming (v4 follow-up) - a scene with one or more
+ * actors that need a real runtime VRAM swap (Player/Actor: Set Sprite
+ * Sheet to a sheet beyond the 8 regular, compile-time-preloaded OBJ
+ * slots - compileSnesData.js's own sceneSpriteIds) reserves one exclusive
+ * 32-tile ("pair") region per such actor, right after the fixed 0-95
+ * (primary-pose/emote/avatar) prefix every scene already reserves
+ * (compileSnesData.js's own SHEET_RESERVED_TILES = 96 - both sides must
+ * agree on this number exactly). Within stream slot k's own pair, the 6
+ * possible poses (primary/down-A, down-B, up-A, up-B, side-A, side-B)
+ * each get their own quadrant-aligned 2-tile base, mirroring
+ * placeTiles()'s own {base,base+1,base+16,base+17} TL/TR/BL/BR
+ * convention every regular slot's poses already use (SNES's own 16-wide
+ * OBJ name-table addressing requires this exact layout for every 16x16
+ * sprite, not just the primary pose) - local bases 0,2,4,6,8,10.
+ * STREAM_SLOT_INDEX(k) is the "slot" value (frame_offset>>1) a stream
+ * slot's *primary* pose resolves to - used purely as the array index
+ * into extra_pose_*[]/sprite_pal_for_slot[] below (NOT a small 0/1 index
+ * - growing these two arrays' size to cover this one further address was
+ * simpler and lower-risk than teaching the render path a second,
+ * parallel small-index scheme; every other per-slot table
+ * (sprite_type_for_slot/frames_len_for/oam_ids) is read only at
+ * Set-Sprite-time via this engine's OWN small 0/1 stream_slot field
+ * instead, never at this bigger index, so they stay sized SPRITE_SLOTS
+ * unchanged). SPRITE_POSE_SLOTS is sized to cover the LAST stream slot's
+ * own index (MAX_STREAM_SLOTS-1). */
+#define STREAM_SLOT_TILE_BASE(k) (96 + 32 * (k))
+#define STREAM_SLOT_INDEX(k) (STREAM_SLOT_TILE_BASE(k) / 2)
+#define SPRITE_POSE_SLOTS (STREAM_SLOT_INDEX(MAX_STREAM_SLOTS - 1) + 1)
+
 /* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [32]
  * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
  * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */
 extern u8 sprite_type_for_slot[SPRITE_SLOTS];
 extern u8 sprite_frames_for_slot[SPRITE_SLOTS];
-extern u8 sprite_pal_for_slot[SPRITE_SLOTS];
+/* Sized SPRITE_POSE_SLOTS, not SPRITE_SLOTS - see STREAM_SLOT_INDEX's own
+ * comment above for why: a streaming actor's frame_offset>>1 lands on a
+ * real (larger) index into this array too, same as extra_pose_*[] below. */
+extern u8 sprite_pal_for_slot[SPRITE_POSE_SLOTS];
 /* Real-metasprite groundwork (SPRITE_EDITOR_PROGRESS.md M7) - how many real
  * OAM hardware sprites one actor using this sheet slot needs. Every entry is
  * compile-time 1 today (compileSnesData.js has no multi-tile metasprite data
@@ -62,11 +94,11 @@ extern const unsigned char *sprite_slot_for_index;
  * = value << 1 - every placement from compileSnesData.js's
  * createScenePacker() is already 2-aligned, so the full 0-511 tile range
  * fits in one byte); 0 = this pose was never placed for this slot. */
-extern u8 extra_pose_down_b[SPRITE_SLOTS];
-extern u8 extra_pose_up_a[SPRITE_SLOTS];
-extern u8 extra_pose_up_b[SPRITE_SLOTS];
-extern u8 extra_pose_side_a[SPRITE_SLOTS];
-extern u8 extra_pose_side_b[SPRITE_SLOTS];
+extern u8 extra_pose_down_b[SPRITE_POSE_SLOTS];
+extern u8 extra_pose_up_a[SPRITE_POSE_SLOTS];
+extern u8 extra_pose_up_b[SPRITE_POSE_SLOTS];
+extern u8 extra_pose_side_a[SPRITE_POSE_SLOTS];
+extern u8 extra_pose_side_b[SPRITE_POSE_SLOTS];
 
 /* M9.4 (SPRITE_EDITOR_PROGRESS.md): a slot using a free-form metasprite
  * sheet (Sprites page "Free-form (Metasprite)" mode) gets a real pointer

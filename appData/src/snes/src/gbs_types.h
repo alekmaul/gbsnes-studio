@@ -29,6 +29,15 @@
  * constraint (actors use ~10 of 128 hardware sprites), it's just no reason
  * to go bigger than what a scene realistically needs at once. */
 #define MAX_PROJECTILES 4
+/* Runtime sprite-sheet streaming (v4 follow-up). MUST match
+ * compileSnesData.js's own #define MAX_STREAM_SLOTS exactly (guarded by
+ * test/data/compiler/compileSnesData.test.js, same convention as every
+ * other dual compiler/engine constant in this codebase, e.g.
+ * SCENE_COL_DIR_BYTES). How many actors can simultaneously hold a
+ * dedicated, non-shared OBJ streaming slot in one scene - see scene.h's
+ * own STREAM_SLOT_TILE_BASE/STREAM_SLOT_INDEX comment for the full
+ * design. */
+#define MAX_STREAM_SLOTS 2
 
 /* Placeholder until the M7 data compiler emits the real count (data_ptrs.h) */
 #ifndef NUM_VARIABLES
@@ -143,6 +152,20 @@ typedef struct
      * own cadence - same pre-existing caveat the "fixed" sheet case always
      * had for an animate-flagged actor, now just also true here. */
     u8 frame_override;
+    /* Runtime sprite-sheet streaming (v4 follow-up). 0xFF = this actor
+     * never streams (the overwhelming common case - every existing
+     * project is unaffected); else which of this scene's own
+     * MAX_STREAM_SLOTS dedicated streaming regions this actor currently
+     * occupies. Set by SceneInit from the compiled scene blob (a scene
+     * decides, at compile time, which specific actors are EVER allowed
+     * to stream, and reserves one exclusive OBJ slot + OBJ palette per
+     * such actor - never shared with any other actor, so a stream can
+     * never silently change what a different actor renders). Read by
+     * Script_ActorSetSprite_b/Script_PlayerSetSprite_b (script_cmds.c) to
+     * know where to DMA a target sheet's own data into; see scene.h's own
+     * STREAM_SLOT_TILE_BASE/STREAM_SLOT_INDEX comment for the full
+     * addressing design. */
+    u8 stream_slot;
 } ACTOR;
 
 typedef struct

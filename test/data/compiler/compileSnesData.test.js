@@ -184,13 +184,16 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md), the
     // [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4), the [4]
     // player collision-bounds bytes (Adventure genre, Option 1), the [1]
-    // MUSIC_PLAY preload byte, and finally the Ladders has_col_dir flag +
-    // table - all appended at the very end of the blob specifically so none
-    // ever shifts any of the fixed-offset assertions above/below them.
+    // MUSIC_PLAY preload byte, the Ladders has_col_dir flag + table, the [1]
+    // hasAnimStates flag, and finally the runtime sprite-sheet streaming
+    // trailing bytes (v4 follow-up): [1] player_stream_slot + [0 actors] +
+    // [2] (MAX_STREAM_SLOTS) stream_pal_for_slot - all appended at the very
+    // end of the blob specifically so none ever shifts any of the
+    // fixed-offset assertions above/below them.
     // This scene paints a lone COLLISION_TOP tile (tile 5), which is enough
     // to make colDirBytes a real 1+w*h table, not just the [0] flag byte.
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1 + 1 + 1 + w * h);
+    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1 + 1 + 1 + w * h + 1 + 0 + 2);
     const colByte = blob[52];
     // bit i set <=> tile i was solid in the flat 1-bit bitmap. Any nonzero
     // flag byte counts as solid here - the real directional distinction
@@ -299,10 +302,13 @@ describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", ()
       expect(blob[off] | (blob[off + 1] << 8)).toBe(0);
     }
     // +4: Adventure genre Option 1's trailing player collision-bounds bytes,
-    // +1: the MUSIC_PLAY preload byte, +1: the Ladders has_col_dir flag -
-    // all three appended after the metasprite table, see their own tests
-    // below.
-    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1 + 1 + 1);
+    // +1: the MUSIC_PLAY preload byte, +1: the Ladders has_col_dir flag,
+    // +1: the hasAnimStates flag - all appended after the metasprite table,
+    // see their own tests below. +1 (player_stream_slot) + 1 (this scene's
+    // one actor's own stream_slot) + 2 (MAX_STREAM_SLOTS stream_pal_for_slot)
+    // for the runtime sprite-sheet streaming trailing bytes (v4 follow-up),
+    // the real last thing in the blob now.
+    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1 + 1 + 1 + 1 + 1 + 2);
     // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
     // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
     // own convention - offset is relative to the start of the payload).
@@ -791,10 +797,13 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // top = boundsY - canvasHeight = 3 - 16 = -13 (243)
     // bottom = top + boundsHeight - 1 = -13 + 11 = -2 (254)
     // -6..-2: the player-bounds [4] bytes sit before the trailing [1]
-    // MUSIC_PLAY preload byte and [1] Ladders has_col_dir flag now, not at
-    // the very end of the blob anymore (this scene paints no collision
-    // tiles at all, so has_col_dir is just the one [0] byte).
-    const tail = blob.slice(-7, -3);
+    // MUSIC_PLAY preload byte, [1] Ladders has_col_dir flag, [1]
+    // hasAnimStates flag, and the runtime sprite-sheet streaming trailing
+    // bytes (v4 follow-up: [1] player_stream_slot + [0 actors] + [2]
+    // MAX_STREAM_SLOTS stream_pal_for_slot) now, not at the very end of the
+    // blob anymore (this scene paints no collision tiles at all, so
+    // has_col_dir is just the one [0] byte, and has no actors either).
+    const tail = blob.slice(-10, -6);
     expect([...tail]).toEqual([250, 3, 243, 254]);
   });
 
@@ -812,8 +821,8 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     // left=-8(248), right=7, top=-16(240), bottom=-1(255) - reproduces the
     // legacy actor_render_tile -8/-16 anchor exactly, same values
     // gen-dummy-gfx.js's own dummyPlayerBounds uses for the same reason.
-    // -6..-2: see the comment in the previous test for why not slice(-4).
-    const tail = blob.slice(-7, -3);
+    // see the comment in the previous test for why not slice(-4).
+    const tail = blob.slice(-10, -6);
     expect([...tail]).toEqual([248, 7, 240, 255]);
   });
 });
@@ -866,13 +875,15 @@ describe("compileSnesData - MUSIC_PLAY preload hoist (v4, 'Space Battle' fix)", 
     ],
   });
 
-  // Last 5 bytes of the scene blob: [4] player-bounds then [1] music
+  // Last bytes of the scene blob: [4] player-bounds then [1] music
   // preload (Adventure-genre bounds are unconditionally compiled for every
-  // scene regardless of genre - see the describe block above).
-  // -2, not -1: the trailing [1] Ladders has_col_dir flag now sits after
-  // the MUSIC_PLAY preload byte (these fixtures paint no collision tiles,
-  // so it's always just the one [0] flag byte).
-  const musicPreloadByte = (blob) => blob[blob.length - 3];
+  // scene regardless of genre - see the describe block above), followed by
+  // [1] Ladders has_col_dir flag (these fixtures paint no collision tiles,
+  // so it's always just the one [0] flag byte), [1] hasAnimStates flag, and
+  // the runtime sprite-sheet streaming trailing bytes (v4 follow-up: [1]
+  // player_stream_slot + [0 actors] + [2] MAX_STREAM_SLOTS
+  // stream_pal_for_slot) - 2 + 3 = 5 bytes after the music preload byte now.
+  const musicPreloadByte = (blob) => blob[blob.length - 6];
   const anyScriptHasMusicOpcode = (out) =>
     out.stats.scriptBytes.some((bytes) => bytes.includes(MUSIC_OPCODE));
 
@@ -1564,6 +1575,155 @@ describe("compileSnesData - runtime sprite-swap events get a real slot (v4 fix)"
     });
     const swapOnlyIndex = baseProject.spriteSheets.findIndex((s) => s.id === SWAP_ONLY_ID);
     expect(out.stats.sceneSlotForIndex[0][swapOnlyIndex]).not.toBe(0xff);
+  });
+});
+
+// Runtime sprite-sheet streaming (v4 follow-up): a specific actor that
+// Set Sprite Sheet's to something beyond the scene's regular 8-sheet
+// budget gets its own dedicated streaming slot instead of staying a
+// silent no-op - see appData/src/snes/src/script_cmds.c's
+// ActorStreamSprite and gbs_types.h's own ACTOR.stream_slot comment for
+// the runtime side this exercises the compiled data for.
+describe("compileSnesData - runtime sprite-sheet streaming (v4 follow-up)", () => {
+  const PLAYER_ID = "player-sheet";
+  const FILLER_IDS = Array.from({ length: 7 }, (_, i) => `filler-${i}`);
+  const OVERFLOW_ID = "overflow-sheet";
+  const OVERFLOW_ID_2 = "overflow-sheet-2";
+  const OVERFLOW_ID_3 = "overflow-sheet-3";
+
+  // 7 filler actors (each its own distinct sheet) + the player's own sheet
+  // = exactly 8 distinct sheets, filling sceneSpriteIds' real SPRITE_SLOTS
+  // budget before any streaming actor is even considered.
+  const fillerActors = FILLER_IDS.map((id, i) => ({
+    id: `filler-actor-${i}`,
+    spriteSheetId: id,
+    x: i,
+    y: 0,
+    script: [],
+  }));
+
+  // One streaming actor (its own default sheet reuses PLAYER_ID, so it
+  // doesn't itself consume a 9th regular slot) whose script Set Sprite
+  // Sheet's to OVERFLOW_ID - not in the regular 8, so it's a genuine
+  // streaming need.
+  const streamingActor = (actorIdSuffix, overflowId) => ({
+    id: `streamer-${actorIdSuffix}`,
+    spriteSheetId: PLAYER_ID,
+    x: 0,
+    y: 1,
+    script: [
+      {
+        id: `ev-${actorIdSuffix}`,
+        command: "EVENT_ACTOR_SET_SPRITE",
+        args: { actorId: `streamer-${actorIdSuffix}`, spriteSheetId: overflowId },
+      },
+    ],
+  });
+
+  const baseProject = (extraSheets, actors) => ({
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+      playerSpriteSheetId: PLAYER_ID,
+    },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+    spriteSheets: [
+      { id: PLAYER_ID, filename: "static.png", type: "static" },
+      ...FILLER_IDS.map((id) => ({ id, filename: "static.png", type: "static" })),
+      ...extraSheets,
+    ],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "stream",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [...fillerActors, ...actors],
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+
+  test("a single actor beyond the regular 8-sheet budget gets a real dedicated streaming slot", async () => {
+    const project = baseProject(
+      [{ id: OVERFLOW_ID, filename: "static.png", type: "static" }],
+      [streamingActor("a", OVERFLOW_ID)]
+    );
+    const warnings = [];
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    // The player's own sheet + 7 fillers already fill the regular budget,
+    // so OVERFLOW_ID never gets a regular slot.
+    const overflowIndex = project.spriteSheets.findIndex((s) => s.id === OVERFLOW_ID);
+    expect(out.stats.sceneSlotForIndex[0][overflowIndex]).toBe(0xff);
+    // The streaming actor is actor index 8 (7 fillers at 1-7, this one at 8).
+    expect(out.stats.sceneStreamSlotForActor[0]).toEqual({ 8: 0 });
+    expect(out.stats.streamTargetSheetIds).toEqual([OVERFLOW_ID]);
+    expect(warnings.some((w) => w.includes("more than"))).toBe(false);
+  });
+
+  test("more than MAX_STREAM_SLOTS (2) streaming actors - only the first 2 get a slot, the rest warn and stay a no-op", async () => {
+    const project = baseProject(
+      [
+        { id: OVERFLOW_ID, filename: "static.png", type: "static" },
+        { id: OVERFLOW_ID_2, filename: "static.png", type: "static" },
+        { id: OVERFLOW_ID_3, filename: "static.png", type: "static" },
+      ],
+      [
+        streamingActor("a", OVERFLOW_ID),
+        streamingActor("b", OVERFLOW_ID_2),
+        streamingActor("c", OVERFLOW_ID_3),
+      ]
+    );
+    const warnings = [];
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    // 7 fillers at actor index 1-7, the 3 streaming actors at 8, 9, 10.
+    expect(out.stats.sceneStreamSlotForActor[0]).toEqual({ 8: 0, 9: 1 });
+    expect(warnings.some((w) => w.includes("more than 2 actors"))).toBe(true);
+  });
+
+  test("a metaspriteMode sheet beyond the regular budget is not a supported streaming target yet - warns, stays a no-op", async () => {
+    const project = baseProject(
+      [{ id: OVERFLOW_ID, filename: "static.png", type: "static", metaspriteMode: true }],
+      [streamingActor("a", OVERFLOW_ID)]
+    );
+    const warnings = [];
+    const out = await compileSnesData(project, {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    expect(out.stats.sceneStreamSlotForActor[0]).toEqual({});
+    expect(out.stats.streamTargetSheetIds).toEqual([]);
+    expect(warnings.some((w) => w.includes("Free-form (Metasprite)"))).toBe(true);
+  });
+
+  // The JS-side MAX_STREAM_SLOTS (used for compile-time slot assignment)
+  // and gbs_types.h's own #define (used for the C-side array sizes/
+  // addressing - scene.h's STREAM_SLOT_TILE_BASE/INDEX) must agree exactly
+  // - a silent mismatch would compile fine (no link error) but corrupt
+  // VRAM/CGRAM at runtime the moment a 3rd-or-later stream slot was ever
+  // assigned. No existing test caught this, so added here directly rather
+  // than only relying on the two sides' own cross-referencing comments.
+  test("MAX_STREAM_SLOTS matches gbs_types.h's own #define exactly", () => {
+    const header = fs.readFileSync(
+      Path.join(__dirname, "..", "..", "..", "appData", "src", "snes", "src", "gbs_types.h"),
+      "utf8"
+    );
+    const match = header.match(/#define\s+MAX_STREAM_SLOTS\s+(\d+)/);
+    expect(match).not.toBeNull();
+    expect(Number(match[1])).toBe(2);
   });
 });
 

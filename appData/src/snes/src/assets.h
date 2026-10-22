@@ -11,6 +11,15 @@ extern const unsigned char scene_spr_pal_0[256];
 extern const unsigned char *const scene_spr_ptrs[2];
 extern const unsigned char *const scene_spr_pal_ptrs[2];
 extern const unsigned char *const scene_sprite_slot_ptrs[2];
+// Runtime sprite-sheet streaming (v4 follow-up) - see compileSnesData.js's
+// own matching comment. This dummy fixture's one sheet is never a
+// streaming target anywhere, so every entry here is a harmless 0/all-zero
+// placeholder (NUM_SPRITE_SHEETS is 1 below, so each table has exactly 1
+// entry).
+extern const unsigned char *const stream_tile_ptrs[1];
+extern const unsigned char *const stream_pal_ptrs[1];
+extern const unsigned char stream_type_for_index[1];
+extern const unsigned char stream_frames_for_index[1];
 extern const unsigned char ui_font[3760];
 extern const unsigned char ui_pal[8];
 
@@ -52,6 +61,7 @@ extern const unsigned char *const scenes[];
 #define NUM_BGS 2
 #define NUM_SPRITE_SHEETS 1
 #define SPRITE_SLOTS 8
+#define MAX_STREAM_SLOTS 2 // must match gbs_types.h's own #define
 #define SPR_TILES_SIZE 16384
 #define SPR_PAL_SIZE   256
 #define UI_FONT_SIZE  3760

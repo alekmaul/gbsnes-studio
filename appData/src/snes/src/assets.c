@@ -8,6 +8,10 @@ const unsigned char scene_spr_slot_0[1] = {
 const unsigned char *const scene_spr_ptrs[2] = { scene_spr_0, scene_spr_0 };
 const unsigned char *const scene_spr_pal_ptrs[2] = { scene_spr_pal_0, scene_spr_pal_0 };
 const unsigned char *const scene_sprite_slot_ptrs[2] = { scene_spr_slot_0, scene_spr_slot_0 };
+const unsigned char *const stream_tile_ptrs[1] = { 0 };
+const unsigned char *const stream_pal_ptrs[1] = { 0 };
+const unsigned char stream_type_for_index[1] = { 0 };
+const unsigned char stream_frames_for_index[1] = { 0 };
 const unsigned char *const bg_tiles_ptrs[2] = { bg0_tiles, bg1_tiles };
 const unsigned char *const bg_maps_ptrs[2] = { bg0_map, bg1_map };
 const unsigned char *const bg_pals_ptrs[2] = { bg0_pal, bg1_pal };
@@ -122,7 +126,7 @@ const BANK_PTR string_ptrs[] = {
     { string_7 }
 };
 
-const unsigned char scene_0[649] = {
+const unsigned char scene_0[653] = {
     0, 1, 2, 0, 64, 64, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 0, 3, 4, 5, 6, 7, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -163,10 +167,10 @@ const unsigned char scene_0[649] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 248, 7, 240, 255, 255, 0, 0
+    0, 0, 248, 7, 240, 255, 255, 0, 0, 255, 255, 0, 0
 };
 
-const unsigned char scene_1[156] = {
+const unsigned char scene_1[159] = {
     1, 0, 0, 2, 20, 18, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 0, 3, 4, 5, 6, 7, 0, 0, 1,
     1, 1, 1, 1, 1, 1, 1, 0, 0, 0, 0, 0, 0, 2, 2, 2,
@@ -176,7 +180,7 @@ const unsigned char scene_1[156] = {
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-    0, 0, 0, 0, 0, 248, 7, 240, 255, 255, 0, 0
+    0, 0, 0, 0, 0, 248, 7, 240, 255, 255, 0, 0, 255, 0, 0
 };
 
 const unsigned char *const scenes[] = { scene_0, scene_1 };
