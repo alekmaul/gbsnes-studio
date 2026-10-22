@@ -123,10 +123,10 @@ static u8 sprites_hidden = 0;
  * its own <=8 sheets). sprite_slot_for_index points at the current scene's
  * project-index -> slot map (PLAYER_SET_SPRITE). Mutable: the toolchain does
  * not pre-zero .bss, so SceneInit always writes all 8. */
-u8 sprite_type_for_slot[SPRITE_SLOTS];
-u8 sprite_frames_for_slot[SPRITE_SLOTS];
+u8 sprite_type_for_slot[SPRITE_POSE_SLOTS];
+u8 sprite_frames_for_slot[SPRITE_POSE_SLOTS];
 u8 sprite_pal_for_slot[SPRITE_POSE_SLOTS]; /* sized for streaming too - see scene.h */
-u8 sprite_oam_ids_for_slot[SPRITE_SLOTS]; /* M7 groundwork, see scene.h */
+u8 sprite_oam_ids_for_slot[SPRITE_POSE_SLOTS]; /* M7 groundwork, see scene.h */
 const unsigned char *sprite_slot_for_index = 0;
 
 /* M7 groundwork, see scene.h - .bss isn't pre-zeroed either, SceneInit
@@ -164,7 +164,7 @@ u8 extra_pose_side_b[SPRITE_POSE_SLOTS];
 /* M9.4 - see scene.h's own comment. .bss isn't pre-zeroed either, so
  * SceneInit always writes every entry (NULL or a real pointer) before
  * SceneRenderActors ever reads one. */
-const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
+const unsigned char *metasprite_frame_base[SPRITE_POSE_SLOTS];
 
 /* Named animation states (v4 follow-up) - see scene.h's own comment and
  * SceneInit's own parsing of the scene blob's trailing has_anim_states
@@ -175,8 +175,8 @@ const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
  * or 0 if anim_state_count[slot] is 0. Same "always written before any
  * reader runs" discipline as metasprite_frame_base above. */
 u8 has_anim_states;
-u8 anim_state_count[SPRITE_SLOTS];
-const unsigned char *anim_state_dir[SPRITE_SLOTS];
+u8 anim_state_count[SPRITE_POSE_SLOTS];
+const unsigned char *anim_state_dir[SPRITE_POSE_SLOTS];
 
 /* Adventure genre, Option 1 (box-sweep collision) - see scene.h's own
  * comment. .bss isn't pre-zeroed either, but SceneInit always writes all
@@ -1479,6 +1479,19 @@ void SceneInit(void)
         extra_pose_side_b[ssIdx] = (u8)((base + 10) >> 1);
         sprite_pal_for_slot[ssIdx] = p[0];
         p += 1;
+        /* Every other per-slot table is read at this index too (render
+         * path, frames_len_for, Set Animation State - see scene.h's
+         * STREAM_SLOT_INDEX comment), so give each a real value instead
+         * of whatever .bss held: a stream target is always a legacy
+         * (non-metasprite) sheet, 1 OAM entry, no named anim states.
+         * sprite_type/frames get their real values from the stream
+         * target itself in ActorStreamSprite (script_cmds.c). */
+        metasprite_frame_base[ssIdx] = 0;
+        sprite_oam_ids_for_slot[ssIdx] = 1;
+        anim_state_count[ssIdx] = 0;
+        anim_state_dir[ssIdx] = 0;
+        sprite_type_for_slot[ssIdx] = 0;
+        sprite_frames_for_slot[ssIdx] = 1;
     }
 
     actor_move_settings = 0;

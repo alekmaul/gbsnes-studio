@@ -728,7 +728,18 @@ static void ActorStreamSprite(u8 actor_idx, u16 idx)
     halfLen = (u16)stream_frames_for_index[idx] * 2 * 32;
     dmaCopyVram((u8 *)stream_tile_ptrs[idx], OBJ_GFX_VRAM + base * 16, halfLen);
     dmaCopyVram((u8 *)stream_tile_ptrs[idx] + halfLen, OBJ_GFX_VRAM + (base + 16) * 16, halfLen);
-    dmaCopyCGram((u8 *)stream_pal_ptrs[idx], 128 + (u16)sprite_pal_for_slot[STREAM_SLOT_INDEX(ss)] * 32, 32);
+    /* dmaCopyCGram's destination is a COLOUR index, not a byte offset (same
+     * as SceneInit's own "128" = first OBJ colour) - 16 colours per OBJ
+     * palette. Real bug found by Mesen: *32 here landed this palette in a
+     * BG palette (and left the stream slot's own OBJ palette black). The
+     * length argument is still bytes (32 = 16 colours * 2). */
+    dmaCopyCGram((u8 *)stream_pal_ptrs[idx], 128 + (u16)sprite_pal_for_slot[STREAM_SLOT_INDEX(ss)] * 16, 32);
+    /* A stream slot is never shared, so its per-slot tables can safely be
+     * rewritten to describe the sheet now resident there - frames_len_for()
+     * reads sprite_frames_for_slot[], and Set Animation State's "back to
+     * default" (state 0) reads sprite_type_for_slot[], both at this index. */
+    sprite_type_for_slot[STREAM_SLOT_INDEX(ss)] = stream_type_for_index[idx];
+    sprite_frames_for_slot[STREAM_SLOT_INDEX(ss)] = stream_frames_for_index[idx];
     actors[actor_idx].frame_offset = (u8)base;
     actors[actor_idx].sprite_type = stream_type_for_index[idx];
     actors[actor_idx].frames_len = frames_len_for(actors[actor_idx].sprite_type, STREAM_SLOT_INDEX(ss));

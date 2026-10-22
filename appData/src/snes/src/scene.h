@@ -56,15 +56,22 @@
  * sprite, not just the primary pose) - local bases 0,2,4,6,8,10.
  * STREAM_SLOT_INDEX(k) is the "slot" value (frame_offset>>1) a stream
  * slot's *primary* pose resolves to - used purely as the array index
- * into extra_pose_*[]/sprite_pal_for_slot[] below (NOT a small 0/1 index
- * - growing these two arrays' size to cover this one further address was
- * simpler and lower-risk than teaching the render path a second,
- * parallel small-index scheme; every other per-slot table
- * (sprite_type_for_slot/frames_len_for/oam_ids) is read only at
- * Set-Sprite-time via this engine's OWN small 0/1 stream_slot field
- * instead, never at this bigger index, so they stay sized SPRITE_SLOTS
- * unchanged). SPRITE_POSE_SLOTS is sized to cover the LAST stream slot's
- * own index (MAX_STREAM_SLOTS-1). */
+ * into the per-slot tables below (NOT a small 0/1 index - growing the
+ * tables to cover this further address was simpler and lower-risk than
+ * teaching the render path a second, parallel small-index scheme).
+ * EVERY per-slot table is sized SPRITE_POSE_SLOTS, not SPRITE_SLOTS -
+ * the render path (metasprite_frame_base, the extra_pose_ arrays,
+ * sprite_pal_for_slot, sprite_oam_ids_for_slot), frames_len_for()
+ * (sprite_frames_for_slot) and
+ * Set Animation State (sprite_type_for_slot/anim_state_*) all index by
+ * frame_offset>>1, so a streaming actor reads every one of them at its
+ * stream index. Real bug found by Mesen verification: only 2 of these
+ * were widened at first, and metasprite_frame_base[48] read garbage past
+ * the end of an 8-entry array - every streamed actor became invisible.
+ * SceneInit writes every stream index explicitly (no metasprite data,
+ * 1 OAM entry, no anim states); ActorStreamSprite fills in the real
+ * type/frame count when a stream happens. SPRITE_POSE_SLOTS covers the
+ * LAST stream slot's own index (MAX_STREAM_SLOTS-1). */
 #define STREAM_SLOT_TILE_BASE(k) (96 + 32 * (k))
 #define STREAM_SLOT_INDEX(k) (STREAM_SLOT_TILE_BASE(k) / 2)
 #define SPRITE_POSE_SLOTS (STREAM_SLOT_INDEX(MAX_STREAM_SLOTS - 1) + 1)
@@ -72,8 +79,8 @@
 /* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [32]
  * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
  * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */
-extern u8 sprite_type_for_slot[SPRITE_SLOTS];
-extern u8 sprite_frames_for_slot[SPRITE_SLOTS];
+extern u8 sprite_type_for_slot[SPRITE_POSE_SLOTS];
+extern u8 sprite_frames_for_slot[SPRITE_POSE_SLOTS];
 /* Sized SPRITE_POSE_SLOTS, not SPRITE_SLOTS - see STREAM_SLOT_INDEX's own
  * comment above for why: a streaming actor's frame_offset>>1 lands on a
  * real (larger) index into this array too, same as extra_pose_*[] below. */
@@ -84,7 +91,7 @@ extern u8 sprite_pal_for_slot[SPRITE_POSE_SLOTS];
  * to size this from yet, M8) - scaffolding only, but already read for real
  * by SceneInit's actor_oam_base[] prefix sum below, so the render loop is
  * ready for a real per-slot cost the moment M8 starts emitting one. */
-extern u8 sprite_oam_ids_for_slot[SPRITE_SLOTS];
+extern u8 sprite_oam_ids_for_slot[SPRITE_POSE_SLOTS];
 extern const unsigned char *sprite_slot_for_index;
 
 /* M8.3 (SPRITE_EDITOR_PROGRESS.md) - a slot's "extra" poses (anything beyond
@@ -113,7 +120,7 @@ extern u8 extra_pose_side_b[SPRITE_POSE_SLOTS];
  * flags(u8)}]. A pointer directly into the scene blob's own ROM-resident
  * data is safe for the scene's whole lifetime - the same pattern
  * sprite_slot_for_index already uses. */
-extern const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
+extern const unsigned char *metasprite_frame_base[SPRITE_POSE_SLOTS];
 
 /* Named animation states (v4 follow-up) - a metaspriteMode sheet can author
  * several independent named pose-sets (Idle/Walk/Attack) beyond its own
@@ -127,8 +134,8 @@ extern const unsigned char *metasprite_frame_base[SPRITE_SLOTS];
  * itself. See ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c),
  * which read this to set an actor's own frames_len/sprite_type/
  * anim_state_offset (gbs_types.h), and compileSnesData.js's own emission. */
-extern u8 anim_state_count[SPRITE_SLOTS];
-extern const unsigned char *anim_state_dir[SPRITE_SLOTS];
+extern u8 anim_state_count[SPRITE_POSE_SLOTS];
+extern const unsigned char *anim_state_dir[SPRITE_POSE_SLOTS];
 
 /* Adventure genre, Option 1 (box-sweep collision) - the player's real
  * collision bounding box, signed byte offsets from actors[0].x/actors[0].y
