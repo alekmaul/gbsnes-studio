@@ -26,6 +26,5 @@ subfolder, and they'll appear ready to use in the Project Editor.
 
 The [GB Studio Community Assets](https://github.com/gb-studio-dev/gb-studio-community-assets)
 repository has a lot of free, ready-to-use sprites and backgrounds. Since SNES artwork uses
-a real extracted palette rather than GB Studio's fixed 4-shade requirement, these assets
-generally still work as a starting point, but will need resizing (see
+a real palette extracted from each PNG, these assets generally still work as a starting point, but will need resizing (see
 [Backgrounds](backgrounds.html) and [Sprites](sprites.html)) to fit the larger SNES screen.

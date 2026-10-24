@@ -32,13 +32,13 @@ memory:
 
 | Region | Budget |
 | --- | --- |
-| Background tileset (unique 8x8 tiles) | **256 tiles** |
+| Background tileset (unique 8x8 tiles) | **1024 tiles** |
 | Background tilemap | up to 64x64 tiles (streamed beyond that on the width axis) |
 | Actor sprite sheets loaded at once | **8** (shown as `S: n/8` in the status bar) |
 | UI box (font, frame, cursor) | fixed, doesn't share budget with the background |
 
 {: .note }
-> The 256-tile background budget is usually the first thing a large or detail-heavy scene
+> The 1024-tile background budget is usually the first thing a large or detail-heavy scene
 > hits - well before the 64x64 tilemap or 255-tile-wide streaming ceiling. Reusing tiles
 > across the image is the only way to stay under it; see [Backgrounds](backgrounds.html#tiles).
 
@@ -49,10 +49,11 @@ The status bar under each scene shows `A: n/19`, `S: n/8` and `T: n/30`:
 - **Actors** - up to **19** per scene. The engine reserves one extra slot for the player, so
   although the underlying array holds 20 actors, only 19 are available for the ones you place.
 - **Sprite sheets** (`S`) - up to **8** distinct actor sprite sheets loaded into VRAM at once
-  per scene (the player's own sheet counts as one). This replaces Game Boy's per-frame VRAM
-  budget, since the SNES engine pre-loads whole sprite sheets per scene instead of streaming
-  individual frames. A scene needing more than 8 still compiles - any sheet past the 8th falls
-  back to the player's own slot - see `appData/src/snes/EVENTS.md` for the details.
+  per scene (the player's own sheet counts as one), pre-loaded when the scene starts. A scene
+  needing more than 8 still compiles - any sheet past the 8th falls back to the player's own
+  slot. The exception is a sheet only reached through _Set Sprite Sheet_: up to 2 actors per
+  scene can switch to a sheet beyond the 8, which is then loaded while the game runs (see
+  [Player](player.html)).
 - **Triggers** - up to **30** per scene.
 
 {: .note }

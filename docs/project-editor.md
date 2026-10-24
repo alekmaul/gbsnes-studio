@@ -17,11 +17,6 @@ combining scenes, adding actors and triggers, then attaching scripting events to
   Undo with Ctrl/Cmd+Z if you remove something by mistake.
 - **Collisions** - draw collision tiles onto a scene.
 
-{: .note }
-> GB Studio's Colorize tool doesn't apply here - GB2SNES Studio backgrounds and sprites use a
-> real palette extracted automatically from each PNG (see [Assets](assets.html)), so
-> there's nothing to paint by hand.
-
 <img src="/gbsnes-studio/assets/images/screenshots/editor-tools.png" alt="Editor tools" width="600" />
 
 ## The Asset Viewer

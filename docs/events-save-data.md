@@ -8,7 +8,7 @@ nav_order: 8
 # Save Data
 
 Cartridge SRAM saves, with 3 independent save slots. Each save stores the player's position and
-facing plus every variable - the same scope as the GB Studio reference.
+facing plus every variable.
 
 **Save Data** - writes the current save scope to a slot.
 

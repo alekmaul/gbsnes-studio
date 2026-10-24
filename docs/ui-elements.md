@@ -19,8 +19,7 @@ restyle the box, font and cursor to match your game.
 ## `ascii.png` - the font
 
 A **128px x 112px** grid of 8px x 8px glyphs, 16 columns x 14 rows (224 tiles), covering
-character codes 0x20-0xFF in order - the same layout and character range as Game Boy's own
-font asset, so an existing GB Studio font image can be reused directly. The first glyph
+character codes 0x20-0xFF in order. The first glyph
 (0x20, space) is always treated as fully transparent, regardless of what's drawn there.
 
 ## `frame.png` - the dialogue/menu box frame

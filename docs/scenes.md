@@ -41,10 +41,6 @@ Select the scene, then use the Add Event button in the sidebar to build its scri
 Select the Collisions tool, then click or drag across the scene to draw collision tiles that
 block actor and player movement.
 
-{: .note }
-> GB Studio's Colorizing tool doesn't apply here - see [Project Editor](project-editor.html)
-> for why.
-
 <img src="/gbsnes-studio/assets/images/screenshots/scene-collisions.gif" alt="Scene Collision" width="600" />
 
 **Platformer scenes only** - the Collisions tool also has **Collision Top/Bottom/Left/Right**

@@ -9,7 +9,7 @@ GB2SNES Studio is a drag-and-drop game creator for the Super Nintendo, based on
 [GB Studio](https://www.gbstudio.dev/). It's designed to be usable with little to no
 programming knowledge, while still staying accessible to advanced users through scripting
 and direct access to the underlying C engine. Unlike the `main` branch of this project
-(GBGB2SNES Studio, which keeps a Game Boy target alongside SNES), this branch targets the
+(GBSNES Studio, which keeps a Game Boy target alongside SNES), this branch targets the
 Super Nintendo only.
 
 You can build real, bootable `.sfc` ROM files that run in an emulator, on a web page, or on

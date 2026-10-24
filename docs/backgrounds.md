@@ -12,8 +12,7 @@ folder.
 
 ## Colors
 
-Unlike GB Studio's fixed 4-shade requirement, SNES backgrounds use a real palette extracted
-directly from your PNG - up to **16 colors** per background. Export as an indexed PNG with
+SNES backgrounds use a real palette extracted directly from your PNG - up to **16 colors** per background. Export as an indexed PNG with
 16 colors or fewer for a predictable result; if your image has more than 16 distinct colors,
 the extras are snapped to the nearest already-kept color and a warning is shown.
 
@@ -37,8 +36,8 @@ fill the screen.
 
 ## Tiles
 
-A background can contain no more than **256** unique 8px x 8px tiles at once, due to VRAM
-limits (versus 192 on Game Boy). Reusing tiles across an image helps stay under this limit on
+A background can contain no more than **1024** unique 8px x 8px tiles at once - the SNES
+tilemap's tile-number limit. Reusing tiles across an image helps stay under this limit on
 more detailed backgrounds.
 
 <img src="/gbsnes-studio/assets/images/screenshots/background-example.png" alt="Background example" width="512" />

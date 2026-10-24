@@ -21,12 +21,12 @@ Most actor scripting events also apply to the player. _Actor: Set Player Sprite 
 changes the player's graphics mid-game, and the change persists across scene transitions -
 switch it back manually if it should only be temporary.
 
-{: .warning }
-> On SNES, _Actor: Set Player Sprite Sheet_ only works for a sheet that's already loaded
-> somewhere else in the project (used by another actor, or already the player's own sheet).
-> Unlike Game Boy, the SNES engine pre-loads a fixed set of sprite sheets per scene at build
-> time rather than streaming new graphics into VRAM at runtime - switching to a sheet that's
-> never used anywhere is a silent no-op.
+{: .note }
+> A scene pre-loads up to 8 sprite sheets when it starts. Switching to one of those is
+> instant. Switching to any other sheet loads its graphics while the game runs, into a
+> slot reserved for that actor - up to 2 such actors per scene. A 3rd one, or a Free-form
+> (Metasprite) sheet, can't be switched this way: the event then has no effect, and the build
+> shows a warning.
 
 When switching scenes, the player always becomes visible at the new scene's start position,
 regardless of any earlier _Actor: Hide_. To keep the player hidden going into a scene (for a

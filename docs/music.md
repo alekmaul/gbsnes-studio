@@ -7,8 +7,8 @@ nav_order: 3
 # Music
 
 Add music to your game by including module files in your project's `assets/music` folder,
-then trigger them with the `Music: Play` scripting event. Unlike Game Boy's 4-channel PSG,
-the SNES plays real digital audio (BRR-compressed PCM samples) through PVSnesLib's `snesmod`
+then trigger them with the `Music: Play` scripting event. The
+SNES plays real digital audio (BRR-compressed PCM samples) through PVSnesLib's `snesmod`
 driver - so a track's actual sound comes from whatever samples it carries, the same as a
 module on a PC tracker.
 
