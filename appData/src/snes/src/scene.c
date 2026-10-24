@@ -863,10 +863,18 @@ u8 frames_len_for(u8 sprite_type, u8 slot)
          * legacy sheet still falls through to the capped check below,
          * unchanged. */
         if (metasprite_frame_base[slot]) return sprite_frames_for_slot[slot];
-        /* n == 3 is a directional SPRITE_ACTOR sheet (its 3 frames are laid
-         * out down/up/side, not for a linear cycle) - leave it at frame 0. */
+        /* n == 3: if the SHEET itself is directional (a static actor
+         * override on a down/up/side sheet - e.g. a Turnip), stay on frame
+         * 0. If the sheet itself is a static auto-cycle (a 3-entry frame
+         * list, or a 3-frame PNG set to "Fixed"), cycle all 3. Nested ifs,
+         * not &&, per this file's 816-tcc boolean-chain rule. */
         u8 n = sprite_frames_for_slot[slot];
         if (n == 2) return 2;
+        if (n == 3)
+        {
+            if (sprite_type_for_slot[slot] == SPRITE_STATIC) return 3;
+            return 1;
+        }
         if (n >= 4 && n <= 6) return n;
     }
     return 1;

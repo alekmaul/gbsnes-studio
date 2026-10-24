@@ -39,9 +39,11 @@ const Body = styled.div`
   padding: 8px 14px;
 `;
 
+// max-height: user-asked, 64px taller than the original 48px so zooming the
+// sheet in doesn't immediately add a scrollbar to it.
 const Strip = styled.div`
   flex-shrink: 0;
-  max-height: 48px;
+  max-height: 112px;
   overflow: auto;
   border: 1px solid ${(props) => props.theme.colors.sidebar.border};
 

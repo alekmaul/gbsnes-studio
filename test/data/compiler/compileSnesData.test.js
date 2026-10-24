@@ -1754,6 +1754,115 @@ describe("compileSnesData - runtime sprite-sheet streaming (v4 follow-up)", () =
   });
 });
 
+// Editable frame list on normal sprite sheets (SpriteSheet.frameSequence):
+// a static auto-cycle sheet's PNG frames reordered/repeated, compiled
+// through the regular sprite path - no Free-form needed.
+describe("compileSnesData - frame list on normal sprite sheets", () => {
+  const SHEET_ID = "seq-sheet";
+  const w = 20;
+  const h = 18;
+  const colLen = Math.ceil((w * h) / 8);
+  // header(8) + sprite-slot(32) + parallax(6) + playerHit(6)
+  const ACTORS_OFFSET = 52;
+
+  const project = (sheet, actors = []) => ({
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+      playerSpriteSheetId: SHEET_ID,
+    },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
+    spriteSheets: [{ id: SHEET_ID, ...sheet }],
+    variables: [],
+    scenes: [
+      {
+        id: "s0",
+        name: "seq",
+        backgroundId: "bg",
+        width: w,
+        height: h,
+        actors,
+        triggers: [],
+        script: [],
+      },
+    ],
+  });
+  const compile = async (p) => {
+    const warnings = [];
+    const out = await compileSnesData(p, {
+      projectRoot: PROJECT_DIR,
+      warnings: (m) => warnings.push(m),
+    });
+    return { blob: out.stats.sceneBlobs[0], warnings };
+  };
+  const slotType = (blob) => blob[8]; // sprite_type[0]
+  const slotFrames = (blob) => blob[8 + 8]; // sprite_frames[0]
+  // extra-pose table (5 arrays of 8) right after actors + triggers + collision bitmap
+  const extraPose = (blob, nActors, key) =>
+    blob[ACTORS_OFFSET + nActors * 19 + colLen + key * 8];
+
+  test("[0, 1, 1] on a 'Fixed' sheet compiles 3 static frames, the repeat reusing the same tiles", async () => {
+    const { blob, warnings } = await compile(
+      project({
+        filename: "actor_animated.png",
+        type: "actor_animated",
+        animationType: "fixed",
+        frameSequence: [0, 1, 1],
+      })
+    );
+    expect(slotType(blob)).toBe(0);
+    expect(slotFrames(blob)).toBe(3);
+    const downB = extraPose(blob, 0, 0); // frame 1
+    const upA = extraPose(blob, 0, 1); // frame 2 (same PNG frame)
+    expect(downB).not.toBe(0);
+    expect(upA).toBe(downB);
+    expect(warnings).toEqual([]);
+  });
+
+  test("no frame list keeps the PNG's own frames, unchanged", async () => {
+    const { blob } = await compile(
+      project({ filename: "actor_animated.png", type: "actor_animated", animationType: "fixed" })
+    );
+    expect(slotType(blob)).toBe(0);
+    expect(slotFrames(blob)).toBe(6);
+  });
+
+  test("an entry beyond the image's frames is skipped with a warning", async () => {
+    const { blob, warnings } = await compile(
+      project({
+        filename: "actor_animated.png",
+        type: "actor_animated",
+        animationType: "fixed",
+        frameSequence: [0, 9],
+      })
+    );
+    expect(slotFrames(blob)).toBe(1);
+    expect(warnings.some((m) => m.includes("doesn't have"))).toBe(true);
+  });
+
+  test("a frame list is ignored on a directional sheet", async () => {
+    const { blob } = await compile(
+      project({ filename: "actor.png", type: "actor", frameSequence: [0, 0, 0] })
+    );
+    expect(slotType(blob)).toBe(1); // still SPRITE_ACTOR
+    expect(slotFrames(blob)).toBe(3);
+  });
+
+  test("an actor on a 3-frame 'Fixed' sheet gets the static type, not directional", async () => {
+    const { blob } = await compile(
+      project({ filename: "actor.png", type: "actor", animationType: "fixed" }, [
+        { id: "a0", spriteSheetId: SHEET_ID, x: 1, y: 1, movementType: "static", script: [] },
+      ])
+    );
+    expect(slotType(blob)).toBe(0);
+    expect(blob[ACTORS_OFFSET + 7]).toBe(0); // actor entry's sprite_type byte
+  });
+});
+
 // v4 fix (user-found: a real Shoot Em Up scene - 15 enemies each firing
 // EVENT_LAUNCH_PROJECTILE from their own Actor.updateScript ("On Update"
 // tab) - warned "Projectile sprite sheet not loaded in this scene" for

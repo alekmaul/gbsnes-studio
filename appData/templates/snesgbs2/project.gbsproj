@@ -52999,6 +52999,7 @@
             "numFrames": 2,
             "type": "animated",
             "filename": "duck.png",
+            "frameSequence": [0, 1, 1],
             "_v": 1600011071075
         },
         {

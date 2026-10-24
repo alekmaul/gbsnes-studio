@@ -49,6 +49,10 @@ import { AnimationSpeedSelect } from "../forms/AnimationSpeedSelect";
 import { MovementSpeedSelect } from "../forms/MovementSpeedSelect";
 import CollisionMaskPicker from "../forms/CollisionMaskPicker";
 import { KeysMatching } from "../../lib/helpers/types";
+import {
+  effectiveFrameSequence,
+  isFrameSequenceEligible,
+} from "../../lib/helpers/frameSequence";
 import { NoteField } from "../ui/form/NoteField";
 import { TabBar } from "../ui/tabs/Tabs";
 import { Button } from "../ui/buttons/Button";
@@ -452,7 +456,11 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
                   label={l10n("FIELD_INITIAL_FRAME")}
                   placeholder="0"
                   min={0}
-                  max={(spriteSheet?.numFrames || 1) - 1}
+                  max={
+                    (spriteSheet && isFrameSequenceEligible(spriteSheet)
+                      ? effectiveFrameSequence(spriteSheet).length
+                      : spriteSheet?.numFrames || 1) - 1
+                  }
                   value={actor.frame}
                   onChange={onChangeFieldInput("frame")}
                 />

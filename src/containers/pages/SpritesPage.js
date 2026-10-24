@@ -73,8 +73,12 @@ const SpritesPage = () => {
 
   const [selectedStateId, setSelectedStateId] = useState("");
   const [selectedAnimStateId, setSelectedAnimStateId] = useState("");
+  // Frame shown by SpritePreview and highlighted by SpriteFramesStrip -
+  // shared so the highlight follows playback.
+  const [previewFrame, setPreviewFrame] = useState(0);
 
   useEffect(() => {
+    setPreviewFrame(0);
     setSelectedStateId("");
     setSelectedAnimStateId("");
     // User-found: "when elephant is selected, i see nothing" - the free-form
@@ -170,9 +174,17 @@ const SpritesPage = () => {
           </>
         ) : (
           <>
-            <SpritePreview id={selectedId} />
+            <SpritePreview
+              id={selectedId}
+              frame={previewFrame}
+              onFrameChange={setPreviewFrame}
+            />
             <SpriteSheetPanel id={selectedId} />
-            <SpriteFramesStrip id={selectedId} />
+            <SpriteFramesStrip
+              id={selectedId}
+              selected={previewFrame}
+              onSelect={setPreviewFrame}
+            />
           </>
         )}
       </CenterColumn>

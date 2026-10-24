@@ -762,6 +762,40 @@ const compileSnesData = async (
           { animationTypeOverride: sheet.animationType }
         );
     conv.warnings.forEach(warnings);
+    // Editable frame list (SpriteSheet.frameSequence): a normal static
+    // auto-cycle sheet's frames reordered/repeated, e.g. [0, 1, 1]. Rebuilds
+    // conv.tiles in sequence order so every consumer downstream (placeTiles/
+    // placeExtraPose, frames[k], streaming, projectiles, avatars) sees it
+    // with no special-casing; a repeated frame dedups to the same VRAM quad
+    // in createScenePacker. Max 6 - the SPRITE_STATIC render path's own pose
+    // count (fo + 5 extra poses). Directional and Free-form sheets ignore it.
+    if (
+      !sheet.metaspriteMode &&
+      conv.spriteType === 0 &&
+      Array.isArray(sheet.frameSequence) &&
+      sheet.frameSequence.length > 0
+    ) {
+      const valid = sheet.frameSequence.filter(
+        (f) => Number.isInteger(f) && f >= 0 && f < conv.frameCount
+      );
+      if (valid.length !== sheet.frameSequence.length) {
+        warnings(
+          `Sprite '${sheet.name || sheet.filename}': its frame list refers to frames the image ` +
+            `doesn't have (it has ${conv.frameCount}) - those entries are skipped.`
+        );
+      }
+      if (valid.length > 6) {
+        warnings(
+          `Sprite '${sheet.name || sheet.filename}': its frame list has ${valid.length} frames, ` +
+            `only the first 6 are used.`
+        );
+      }
+      const seq = valid.slice(0, 6);
+      if (seq.length > 0) {
+        conv.tiles = [].concat(...seq.map((f) => conv.tiles.slice(f * 4, f * 4 + 4)));
+        conv.frameCount = seq.length;
+      }
+    }
     spriteConv[id] = conv;
 
     // Named animation states (v4 follow-up): only meaningful for a
@@ -1309,6 +1343,11 @@ const compileSnesData = async (
       return animationTypeToSpriteType(sheet.animationType);
     }
     const conv = spriteConv[id];
+    // A sheet that is itself a static auto-cycle (conv.spriteType 0 -
+    // auto-detected, "Fixed", or a frame list) must give its actors a
+    // static type too: spriteTypeDec alone re-derives "directional" from a
+    // 3 or 6 frame count, which made the actor disagree with its own slot.
+    if (conv && conv.spriteType === 0) return 0;
     return spriteTypeDec(actorSpriteType, conv ? conv.frameCount : 1);
   };
 

@@ -258,6 +258,12 @@ export type SpriteSheet = {
   // above. undefined/empty = no extra states, identical compiled output
   // to before this feature existed.
   animStates?: AnimState[];
+  // Editable frame list for a normal (non-Free-form) static auto-cycle
+  // sheet: an ordered list of the PNG's own frame indices, e.g. [0, 1, 1]
+  // to repeat frame 2. Undefined = the PNG's frames in order (0..n-1).
+  // Compiled through the regular sprite path (compileSnesData.js), max 6
+  // frames. Ignored for directional sheets and Free-form sheets.
+  frameSequence?: number[];
 };
 
 // M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,

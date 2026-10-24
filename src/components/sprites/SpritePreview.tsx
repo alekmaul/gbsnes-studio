@@ -1,9 +1,20 @@
-import React, { FC, useEffect, useRef, useState } from "react";
+import React, {
+  Dispatch,
+  FC,
+  SetStateAction,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { useSelector } from "react-redux";
 import styled from "styled-components";
 import { RootState } from "../../store/configureStore";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import { framesPerDirection } from "../../lib/helpers/gbstudio";
+import {
+  effectiveFrameSequence,
+  isFrameSequenceEligible,
+} from "../../lib/helpers/frameSequence";
 import SpriteSheetCanvas from "../world/SpriteSheetCanvas";
 import { Button } from "../ui/buttons/Button";
 import { CaretRightIcon, PauseIcon, PlayIcon } from "../ui/icons/Icons";
@@ -22,14 +33,37 @@ const Wrapper = styled.div`
   flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 14px;
   min-height: 0;
 `;
 
+// The playback buttons sit in a toolbar above the preview, like GB Studio
+// 3.2's own sprite editor (MetaspriteEditorToolsPanel) - styled as this
+// page's Free-form MetaspriteToolbar so both modes share one look.
+const Toolbar = styled.div`
+  height: 32px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 8px;
+  background: ${(props) => props.theme.colors.toolbar.background};
+  border-bottom: 1px solid ${(props) => props.theme.colors.toolbar.border};
+`;
+
+// overflow hidden: a zoomed-in preview larger than the area is clipped
+// rather than adding a scrollbar.
+const Stage = styled.div`
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 14px;
+`;
+
 const CanvasFrame = styled.div<{ canvasSize: number }>`
+  flex-shrink: 0;
   width: ${(props) => Math.max(128, props.canvasSize)}px;
   height: ${(props) => Math.max(128, props.canvasSize)}px;
   display: flex;
@@ -49,11 +83,6 @@ const CanvasFrame = styled.div<{ canvasSize: number }>`
   }
 `;
 
-const Transport = styled.div`
-  display: flex;
-  gap: 4px;
-`;
-
 // no dedicated "previous" icon exists in this app's icon set - reuse
 // CaretRightIcon flipped, the same trick NavigatorSprites.tsx's own
 // animationTypeIcons already uses for reusing one icon in several directions.
@@ -62,11 +91,20 @@ const FlippedIcon = styled.span`
   transform: scaleX(-1);
 `;
 
+// frame is owned by SpritesPage and shared with SpriteFramesStrip, so the
+// strip's highlight follows the frame being played here (and clicking a
+// strip frame shows it here).
 interface SpritePreviewProps {
   id: string;
+  frame: number;
+  onFrameChange: Dispatch<SetStateAction<number>>;
 }
 
-export const SpritePreview: FC<SpritePreviewProps> = ({ id }) => {
+export const SpritePreview: FC<SpritePreviewProps> = ({
+  id,
+  frame,
+  onFrameChange: setFrame,
+}) => {
   const sprite = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, id)
   );
@@ -77,15 +115,22 @@ export const SpritePreview: FC<SpritePreviewProps> = ({ id }) => {
   // frame size (every sprite frame on this engine is 16x16).
   const zoomSprite = useSelector((state: RootState) => state.editor.zoomSprite);
   const canvasSize = Math.round(16 * (zoomSprite / 100));
-  const maxFrame = sprite
-    ? Math.max(0, framesPerDirection(sprite.type, sprite.numFrames) - 1)
-    : 0;
-  const [frame, setFrame] = useState(0);
+  // A static auto-cycle sheet plays its frame list (SpriteSheet.frameSequence,
+  // what actually gets compiled) instead of the PNG's raw frame order.
+  const sequence =
+    sprite && isFrameSequenceEligible(sprite)
+      ? effectiveFrameSequence(sprite)
+      : null;
+  let maxFrame = 0;
+  if (sequence) {
+    maxFrame = sequence.length - 1;
+  } else if (sprite) {
+    maxFrame = Math.max(0, framesPerDirection(sprite.type, sprite.numFrames) - 1);
+  }
   const [playing, setPlaying] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    setFrame(0);
     setPlaying(false);
   }, [id]);
 
@@ -100,7 +145,7 @@ export const SpritePreview: FC<SpritePreviewProps> = ({ id }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [playing, maxFrame]);
+  }, [playing, maxFrame, setFrame]);
 
   const step = (delta: number) => () => {
     setPlaying(false);
@@ -115,27 +160,50 @@ export const SpritePreview: FC<SpritePreviewProps> = ({ id }) => {
 
   return (
     <Wrapper>
-      <CanvasFrame canvasSize={canvasSize}>
-        <SpriteSheetCanvas spriteSheetId={id} direction="down" frame={frame} />
-      </CanvasFrame>
-      <Transport>
-        <Button size="small" onClick={step(-1)} disabled={maxFrame === 0}>
+      <Toolbar>
+        <Button
+          size="small"
+          variant="transparent"
+          onClick={step(-1)}
+          disabled={maxFrame === 0}
+        >
           <FlippedIcon>
             <CaretRightIcon />
           </FlippedIcon>
         </Button>
         <Button
           size="small"
-          variant={playing ? "primary" : "normal"}
+          variant={playing ? "primary" : "transparent"}
           onClick={togglePlay}
           disabled={maxFrame === 0}
         >
           {playing ? <PauseIcon /> : <PlayIcon />}
         </Button>
-        <Button size="small" onClick={step(1)} disabled={maxFrame === 0}>
+        <Button
+          size="small"
+          variant="transparent"
+          onClick={step(1)}
+          disabled={maxFrame === 0}
+        >
           <CaretRightIcon />
         </Button>
-      </Transport>
+      </Toolbar>
+      <Stage>
+        <CanvasFrame canvasSize={canvasSize}>
+          {sequence ? (
+            <SpriteSheetCanvas
+              spriteSheetId={id}
+              rawFrame={sequence[Math.min(frame, maxFrame)]}
+            />
+          ) : (
+            <SpriteSheetCanvas
+              spriteSheetId={id}
+              direction="down"
+              frame={frame}
+            />
+          )}
+        </CanvasFrame>
+      </Stage>
     </Wrapper>
   );
 };

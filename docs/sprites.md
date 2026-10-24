@@ -12,8 +12,7 @@ Add sprites to your game by including PNG files in your project's `assets/sprite
 
 Sprites are made of **16px x 16px** frames laid out horizontally in the file.
 
-Unlike GB Studio's fixed 4-color requirement, SNES sprites use a real palette extracted
-directly from your PNG - up to **16 colors** per sheet. The color of the **top-left pixel**
+SNES sprites use a real palette extracted directly from your PNG - up to **16 colors** per sheet. The color of the **top-left pixel**
 of the sheet is always treated as transparent (index 0), regardless of what color it
 actually is - keep that pixel as whatever color you're using for "empty" in your sprite.
 Colors beyond the 16-color limit are snapped to the nearest already-kept color, with a
@@ -31,6 +30,30 @@ Multiple frames that cycle automatically, for things like a torch or a flag - no
 direction. Supported frame counts: 2, 4, 5 or 6, at 16px height (so 32px to 96px wide).
 
 <img src="/gbsnes-studio/assets/images/screenshots/sprite-animated.png" alt="Animated sprite" width="192" />
+
+### Editing the frame list
+
+An animated sheet (or any sheet set to **Animation Type: Fixed**) doesn't have to play its
+PNG's frames once each, in order. The **Frames** strip under the preview on the Sprites page
+is an editable frame list: each entry shows one of the PNG's own frames, and the game plays
+the entries in order. You don't need Free-form mode for this.
+
+- **+** adds a frame at the end. **Duplicate** copies the selected frame right after it.
+  **Remove** deletes it (a sheet always keeps at least 1 frame).
+- **◀ ▶** move the selected frame left or right.
+- Click a thumbnail in the **Image frames** row to choose which PNG frame the selected
+  entry shows.
+- **Reset** goes back to the PNG's own frames, once each.
+
+A list holds up to 6 frames: the SNES engine has 6 pose slots per sprite (the same slots a
+walking actor uses for its down/up/side poses), so a static animation can't go beyond that.
+On a full list, clicking **+** or **Duplicate** shows a message instead of adding a frame. The same
+frame can appear more than once. For example, a
+2-frame duck with the list `1, 2, 2` holds its second pose twice as long as its first. A
+repeated frame uses no extra video memory.
+
+Directional sheets (**Four Directions**, 3 frames; **Four Directions + Movement**, 6 frames)
+keep their fixed frame layout, so their strip stays read-only.
 
 ## Actor
 

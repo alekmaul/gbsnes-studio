@@ -6,6 +6,10 @@ import { assetFilename } from "../../lib/helpers/gbstudio";
 // eslint-disable-next-line import/no-unresolved
 import SpriteSheetCanasWorker from "./SpriteSheetCanvas.worker";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
+import {
+  effectiveFrameSequence,
+  isFrameSequenceEligible,
+} from "../../lib/helpers/frameSequence";
 
 const workerPool = [];
 for(let i=0; i<navigator.hardwareConcurrency; i++) {
@@ -69,8 +73,19 @@ class SpriteSheetCanvas extends Component {
   }
 
   draw = () => {
-    const { projectRoot, spriteSheet = {}, direction = "down", frame, rawFrame } = this.props;
+    const { projectRoot, spriteSheet = {}, direction = "down", frame } = this.props;
+    let { rawFrame } = this.props;
     if (this.canvas && this.canvas.current && spriteSheet) {
+      // A static sheet with an edited frame list: frame N is the list's N-th
+      // entry (a PNG frame index), the same frame the compiled ROM shows.
+      if (
+        rawFrame === undefined &&
+        spriteSheet.frameSequence &&
+        isFrameSequenceEligible(spriteSheet)
+      ) {
+        const seq = effectiveFrameSequence(spriteSheet);
+        rawFrame = seq[(frame || 0) % seq.length];
+      }
       // M9.4 follow-up (user-found: a Free-form actor placed on a scene
       // still showed as a plain 16x16 sprite) - this worker drew a flat,
       // single-16x16-frame crop with no knowledge of metaspriteMode at
