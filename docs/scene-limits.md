@@ -34,7 +34,8 @@ memory:
 | --- | --- |
 | Background tileset (unique 8x8 tiles) | **1024 tiles** |
 | Background tilemap | up to 64x64 tiles (streamed beyond that on the width axis) |
-| Actor sprite sheets loaded at once | **8** (shown as `S: n/8` in the status bar) |
+| Sprite sheets loaded at once | **32** (shown as `S: n/32` in the status bar) |
+| Sprite tiles | **416** tiles of 8x8, shared by the scene's sheets |
 | UI box (font, frame, cursor) | fixed, doesn't share budget with the background |
 
 {: .note }
@@ -44,16 +45,13 @@ memory:
 
 ## Per-scene entities
 
-The status bar under each scene shows `A: n/19`, `S: n/8` and `T: n/30`:
+The status bar under each scene shows `A: n/19`, `S: n/32` and `T: n/30`:
 
 - **Actors** - up to **19** per scene. The engine reserves one extra slot for the player, so
   although the underlying array holds 20 actors, only 19 are available for the ones you place.
-- **Sprite sheets** (`S`) - up to **8** distinct actor sprite sheets loaded into VRAM at once
-  per scene (the player's own sheet counts as one), pre-loaded when the scene starts. A scene
-  needing more than 8 still compiles - any sheet past the 8th falls back to the player's own
-  slot. The exception is a sheet only reached through _Set Sprite Sheet_: up to 2 actors per
-  scene can switch to a sheet beyond the 8, which is then loaded while the game runs (see
-  [Player](player.html)).
+- **Sprite sheets** (`S`) - up to **32** per scene, the player's included, all loaded when the
+  scene starts. How many fit also depends on their size: see
+  [Sprites](sprites.html#limits).
 - **Triggers** - up to **30** per scene.
 
 {: .note }

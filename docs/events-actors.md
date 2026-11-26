@@ -53,42 +53,28 @@ independently of Show/Hide.
 **Deactivate Actor** - disables AI, movement, collision and interaction for the active actor,
 independently of Show/Hide.
 
-**Actor: Set Animation Speed** - paces the walk-cycle (or the "Animate Frames" auto-cycle) of a
-multi-frame sprite sheet.
+**Actor: Set Animation Speed** - how fast the active actor's frames follow each other.
 
-**Actor: Set Animate** - toggles the "Animate Frames" behavior at runtime.
+**Actor: Set Animate** - toggles the "Animate" setting: whether the actor's frames also cycle
+while it stands still (a moving actor always animates).
 
-**Actor: Set Frame** - forces the active actor onto a specific pose of its sprite sheet (e.g.
-frame 2 of a directional "multi" sheet is its "side" pose), overriding whatever its facing
-direction would normally show. The override lasts until the next **Set Direction** event (or
-until the actor's sprite sheet/animation state changes), at which point normal facing-driven
-animation resumes. If the actor is currently moving or auto-animating ("Animate Frames"
-ticked), its own walk-cycle can still overwrite the frame again on its regular tick - this
-event is meant for a one-off pose on an otherwise idle actor, not for fighting a live
-animation.
+**Actor: Set Frame** - shows a frame of the current animation, counted from 0. An animating
+actor goes on from there.
 
 **Actor: Set Frame to Variable** - same as **Actor: Set Frame**, reading the frame number from
 a variable instead of a literal value.
 
+**Actor: Set Sprite Sheet** - changes the sheet of the active actor. The sheet starts in its
+default state.
+
+**Player: Set Sprite Sheet** - the same event, for the player.
+
+**Actor: Set Animation State** - shows one of the sheet's named
+[animation states](sprites.html#animation-states), for the player or an actor. A sheet without a
+state of that name shows its default one.
+
 {: .note }
-> There is no separate "Set Flip" event. Mirroring is handled automatically by **Set Direction**
-> (facing left mirrors the side pose).
-
-**Actor: Set Sprite Sheet** - swaps a non-player actor's sprite sheet mid-game. Works for any
-sheet already loaded somewhere in the scene; for an actor the engine recognizes as needing to
-swap to a sheet beyond that, it gets its own dedicated slot and the swap happens with a real
-runtime graphics upload (up to 2 such actors per scene - a 3rd falls back to no effect, and a
-Free-form/Metasprite sheet can't be a streaming target yet).
-
-**Player: Set Sprite Sheet** - the same event, for the player. Same real-time-swap support as
-Actor: Set Sprite Sheet above.
-
-**Actor/Player: Set Sprite Swap** - swaps the active actor's *whole* sprite sheet for another
-already-loaded one, by a named swap defined on its current sheet (e.g. a costume change).
-
-**Actor/Player: Set Animation State** - switches to one of a sprite sheet's own named
-animation states (e.g. "Idle" / "Attack"), each a self-contained pose-set with its own frame
-count - unlike Set Sprite Swap above, this stays on the same sheet.
+> There is no "Set Flip" event: mirroring is part of a sheet's animations.
 
 **Actor Emote** - shows a speech-bubble icon over the actor's head for a moment.
 

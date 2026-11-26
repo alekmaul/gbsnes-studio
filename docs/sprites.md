@@ -6,146 +6,105 @@ nav_order: 2
 
 # Sprites
 
-Add sprites to your game by including PNG files in your project's `assets/sprites` folder.
+Add sprites to your game by including PNG files in your project's `assets/sprites` folder, then
+describe on the **Sprites** page how each image is cut into animations. The sprite system is the
+one of GB Studio 3.2.1, with SNES colours and SNES tile sizes.
 
 ## Requirements
 
-Sprites are made of **16px x 16px** frames laid out horizontally in the file.
+- A sheet is a PNG of any size. It is a stock of tiles: you place the parts you need onto a
+  frame, so they can be laid out as you like.
+- The colour of the **top-left pixel** is transparent, as are see-through pixels. Keep that
+  pixel in the colour you use for "empty".
+- A sheet can use **15 colours** besides the transparent one. Extra colours are replaced by the
+  closest one, with a build warning.
 
-SNES sprites use a real palette extracted directly from your PNG - up to **16 colors** per sheet. The color of the **top-left pixel**
-of the sheet is always treated as transparent (index 0), regardless of what color it
-actually is - keep that pixel as whatever color you're using for "empty" in your sprite.
-Colors beyond the 16-color limit are snapped to the nearest already-kept color, with a
-warning.
+## Simple sheets
 
-## Static sprites
+A new sheet whose image is **16px high** is set up automatically from its width:
 
-A single, non-animated frame. Size: 16px x 16px.
+| Width | Frames | Animation type |
+| --- | --- | --- |
+| 16px | 1 | Fixed Direction |
+| 48px | 3: down, up, right | Four Directions |
+| 96px | 6: two of each of down, up, right | Four Directions + Movement |
+| other multiples of 16px | all of them, in a loop | Fixed Direction |
 
-<img src="/gbsnes-studio/assets/images/screenshots/sprite-static.png" alt="Static sprite" width="48" />
-
-## Animated sprites
-
-Multiple frames that cycle automatically, for things like a torch or a flag - not tied to a
-direction. Supported frame counts: 2, 4, 5 or 6, at 16px height (so 32px to 96px wide).
-
-<img src="/gbsnes-studio/assets/images/screenshots/sprite-animated.png" alt="Animated sprite" width="192" />
-
-### Editing the frame list
-
-An animated sheet (or any sheet set to **Animation Type: Fixed**) doesn't have to play its
-PNG's frames once each, in order. The **Frames** strip under the preview on the Sprites page
-is an editable frame list: each entry shows one of the PNG's own frames, and the game plays
-the entries in order. You don't need Free-form mode for this.
-
-- **+** adds a frame at the end. **Duplicate** copies the selected frame right after it.
-  **Remove** deletes it (a sheet always keeps at least 1 frame).
-- **◀ ▶** move the selected frame left or right.
-- Click a thumbnail in the **Image frames** row to choose which PNG frame the selected
-  entry shows.
-- **Reset** goes back to the PNG's own frames, once each.
-
-A list holds up to 6 frames: the SNES engine has 6 pose slots per sprite (the same slots a
-walking actor uses for its down/up/side poses), so a static animation can't go beyond that.
-On a full list, clicking **+** or **Duplicate** shows a message instead of adding a frame. The same
-frame can appear more than once. For example, a
-2-frame duck with the list `1, 2, 2` holds its second pose twice as long as its first. A
-repeated frame uses no extra video memory.
-
-Directional sheets (**Four Directions**, 3 frames; **Four Directions + Movement**, 6 frames)
-keep their fixed frame layout, so their strip stays read-only.
-
-## Actor
-
-A directional sprite: 3 frames at 48px x 16px, showing the character facing down, up and to
-the side. Facing left is generated automatically by flipping the "side" frame.
+Facing left mirrors the "right" frames.
 
 <img src="/gbsnes-studio/assets/images/screenshots/sprite-actor.png" alt="Actor" width="288" />
 
-## Animated Actor
+Any other image starts with an empty state for you to fill. **Auto Detect Animations** redoes
+this setup at any time (it replaces what the sheet had).
 
-A directional, walking sprite: 6 frames at 96px x 16px - two poses per direction (down,
-up, side), which alternate while the actor is moving and settle to the first pose when idle.
+## Animation states
 
-<img src="/gbsnes-studio/assets/images/screenshots/sprite-actor-animated.png" alt="Animated Actor" width="288" />
+A sheet has one **default state** and any number of named states ("Jump", "Hurt", ...). Add them
+with **Add Animation State**. The _Actor: Set Animation State_ event shows a state by its name;
+a sheet without a state of that name shows its default one.
 
-## Free-form (Metasprite) mode
+Each state has an **Animation Type**, which decides the animations you fill in:
 
-Compose a bigger sprite out of several individually-placed 16x16 tiles instead of one fixed
-block - a 16x32 character, a wide boss, an asymmetric prop. Unlike the other sprite types
-above, a Free-form sheet's frame *content* is something you build on a canvas rather than a
-fixed layout in the source PNG.
+| Animation type | Animations |
+| --- | --- |
+| Fixed Direction | Idle |
+| Fixed Direction + Movement | Idle, Moving |
+| Four Directions | Right, Left, Up, Down |
+| Four Directions + Movement | Idle and Moving for each of the four directions |
+| Platformer Player | Idle, Jump and Moving to the right and left, Climbing |
+| Cursor | Idle, Hover (the Point and Click cursor over something clickable) |
 
-### Turning it on
+**Flip 'Right' To Create 'Left' Facing Frames** (on by default where it applies) builds the left
+animations by mirroring the right ones, so you only draw one side.
 
-In the Sprites page's right-hand panel, check **Free-form (Metasprite)**. This is a separate
-toggle from **Animation Type** above it, not a 4th option of that same dropdown - Animation
-Type still decides how many frames your sheet has and what they mean (a plain frame, one of 3
-directions, or one of 6 walk-cycle poses); Free-form only changes what you can put *inside*
-each of those frames.
+To keep an actor in one pose whatever its direction, give it a **Fixed Direction** sheet or
+state.
 
-Once it's on:
+## Frames and tiles
 
-- **Canvas Size** becomes editable (16-128px, in 16px steps) instead of staying fixed at
-  16x16 - free-form mode exists specifically to build something bigger than that one block.
-- The center column switches to the tile editor: a toolbar, the composing canvas, a tile
-  palette sliced from your sheet's own PNG, and a frame strip along the bottom.
+An animation is a list of frames, shown in the timeline under the canvas: add, clone, delete and
+drag frames to reorder them.
 
-### Placing and editing tiles
+A frame is made of **tiles** taken from the sheet:
 
-1. Click a 16x16 cell in the **Tiles** palette (bottom panel) to pick it.
-2. Click anywhere on the canvas above to stamp a copy of that tile there, snapped to the
-   nearest 16px grid position.
-3. Click an already-placed tile to select it (shift-click to add to the selection; drag a
-   box on empty canvas to select everything inside it).
-4. With a tile selected: drag to move it, arrow keys to nudge by 1px (hold Shift for a
-   whole 16px step), Delete/Backspace to remove it, or use the toolbar's flip/front/back
-   buttons. The right panel also shows the selected tile's own X/Y, flip, and a "Display
-   Behind Background" checkbox - checking it draws that one tile above foreground-priority
-   background tiles instead of the usual layer order, the same priority bit a painted
-   priority tile on a scene's background already uses.
+1. In the **Tiles** panel, choose **8x8** or **16x16** - the two sprite sizes of the SNES used
+   here - then drag a selection over the image. Larger selections are cut into tiles of that
+   size.
+2. Click the canvas to place them, or drag them there from the panel.
+3. Select placed tiles to move them (arrow keys: 1px, with Shift: 8px), flip them (`X` / `Z`),
+   bring them to the front or back, replace them, copy/paste or delete them.
 
-Use the **Zoom** controls in the Tiles panel's header (and the app toolbar's own zoom, which
-scales the composing canvas) to work at a comfortable size - a 16x16 tile is small.
+**Display Behind Background** draws a tile behind the scene's background. **Onion Skin** shows
+the previous frame under the one you edit, and **Show Grid** and **Precision Selection** help
+placing tiles.
 
-The dashed amber box on the canvas is your sheet's existing **Collision Bounding Box**
-(from the panel above) shown as a reference - it's not consumed by collision yet (this
-engine's actor collision is tile-based, not per-sprite-bounds), purely a visual aid.
+A frame can be larger than 16x16: set the sheet's **Canvas Size**. The bottom centre of the
+canvas is the actor's position; tiles must stay within 128px of it.
 
-### How it renders in-game
+The **Collision Bounding Box** is used by the player in the Adventure scene type. Elsewhere
+collisions are tile based: an actor occupies 2x2 tiles whatever its size.
 
-Every placed tile becomes a real hardware sprite entry, positioned relative to the actor the
-same way a normal 16x16 sprite is (horizontally centered, feet at the bottom of the actor's
-tile) - so a single tile on a 16x16 canvas looks identical to a non-Free-form sprite, and
-extra tiles extend outward from there. Identical tiles (same source region, same flip) reuse
-the same VRAM data automatically, the same sharing a normal multi-pose sheet already gets.
+Animation speed is a setting of each actor (_Animation Speed_ in the actor's panel, or the
+_Actor: Set Animation Speed_ event). A moving actor always animates; an idle one only when
+**Animate** is ticked.
 
-If **Animation Type** is **Four Directions** or **Four Directions + Movement**, the "side"
-frame's whole placed-tile set automatically mirrors (position and pixels) when the actor
-faces the opposite direction - you only ever author one side, same as a normal Actor sheet.
+## Limits
 
-### Adding or removing a whole frame
+| Per scene | Limit |
+| --- | --- |
+| Sprite sheets (the player's included) | 32 |
+| Tiles of video memory for sprites | 416 tiles of 8x8, shared by all its sheets |
+| Hardware sprites on screen | 128 (actor tiles, emote, projectiles, portrait) |
+| Colour palettes for sprite sheets | 6 of 16 colours |
 
-This only works for sheets set to **Animation Type: Fixed** - the frame strip at the
-bottom gets **+**/**−** buttons. Fixed sheets have no directional meaning (they're a plain
-auto-cycling animation, like a torch or an explosion), so growing or shrinking the frame
-count is safe and well-defined.
+Identical tiles, mirrored ones included, are stored once. When a scene uses more sheets than
+there are palettes, sheets share them, keeping their colours as long as they fit; beyond that,
+colours are replaced by close ones. The build warns when a limit is exceeded.
 
-For **Four Directions** (3 frames) and **Four Directions + Movement** (6 frames), the frame
-count stays locked - those frames each mean something specific to the engine (down/up/side,
-or two walk poses per direction), so there's no well-defined way to "add a 5th direction."
-If you need a direction-based sheet with free-form tile content, compose the existing 3 or 6
-frames instead of trying to add more.
+Every sheet a scene can show - its actors, the player, projectiles and _Set Sprite Sheet_
+events - is loaded when the scene starts.
 
-Switching Free-form on for a Fixed sheet that already has several frames (from its PNG's own
-width) keeps all of them - you're only ever adding to or removing from that starting point,
-never losing frames you haven't touched yet.
+## Dialogue portraits
 
-If a scene's actors collectively need more hardware sprite slots than the SNES has (128 -
-shared with the dialogue avatar, emote bubble and the projectile pool), Build ROM warns and
-names the scene rather than letting sprites silently fail to render - use fewer simultaneous
-actors, or fewer tiles per metasprite frame, in that scene.
-
-### What's not built yet
-
-- No way to resize or reorder frames other than add/remove at the end.
+The portrait of _Display Dialogue_ is a **16x16** sheet. Its transparent pixels take the colour
+of the dialogue box, and the portraits of one scene share 15 colours.

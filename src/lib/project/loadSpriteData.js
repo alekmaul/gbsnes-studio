@@ -4,11 +4,8 @@ import uuidv4 from "uuid/v4";
 import sizeOf from "image-size";
 import { stat } from "fs-extra";
 import parseAssetPath from "../helpers/path/parseAssetPath";
-import { spriteTypeFromNumFrames } from "../helpers/gbstudio";
 import { checksumFile } from "../helpers/checksum";
 import { toValidSymbol } from "../helpers/symbols";
-
-const FRAME_SIZE = 16;
 
 const globAsync = promisify(glob);
 const sizeOfAsync = promisify(sizeOf);
@@ -20,15 +17,12 @@ const loadSpriteData = projectRoot => async filename => {
     const fileStat = await stat(filename, { bigint: true });
     const inode = fileStat.ino.toString();
     const checksum = await checksumFile(filename);
-    const numFrames = size.width / FRAME_SIZE;
     const name = file.replace(/.png/i, "");
     return {
       id: uuidv4(),
       plugin,
       name,
       symbol: toValidSymbol(`sprite_${name}`),
-      numFrames,
-      type: spriteTypeFromNumFrames(numFrames),
       filename: file,
       inode,
       checksum,

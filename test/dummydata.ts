@@ -93,8 +93,6 @@ export const dummySpriteSheet: SpriteSheet = {
   height: 16,
   numTiles: 0,
   checksum: "",
-  numFrames: 1,
-  type: "static",
   canvasWidth: 16,
   canvasHeight: 16,
   boundsX: 0,

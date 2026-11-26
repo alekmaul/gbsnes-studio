@@ -12,7 +12,6 @@ import {
   SpriteShape,
 } from "../../store/stateShape";
 import { walkSceneEvents } from "../../lib/helpers/eventSystem";
-import { EVENT_PLAYER_SET_SPRITE } from "../../lib/compiler/eventTypes";
 import { sceneSelectors, actorSelectors, triggerSelectors, spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 import clamp from "../../lib/helpers/clamp";
 import l10n from "../../lib/helpers/l10n";
@@ -28,7 +27,6 @@ class SceneInfo extends Component {
     this.state = {
       loaded: false,
       actorCount: 0,
-      frameCount: 0,
       sheetCount: 0,
       triggerCount: 0,
       warnings: [],
@@ -50,12 +48,14 @@ class SceneInfo extends Component {
       actorsLookup,
       triggersLookup,
       spriteSheetsLookup,
+      settings,
     } = this.props;
     if (
       prevProps.scene !== scene ||
       prevProps.actorsLookup !== actorsLookup ||
       prevProps.triggersLookup !== triggersLookup ||
-      prevProps.spriteSheetsLookup !== spriteSheetsLookup
+      prevProps.spriteSheetsLookup !== spriteSheetsLookup ||
+      prevProps.settings !== settings
     ) {
       this.debouncedRecalculateCounts();
     }
@@ -89,16 +89,22 @@ class SceneInfo extends Component {
       triggers: scene.triggers.map((id) => triggersLookup[id]),
     };
 
+    // The player's sheet is loaded with the scene, like the compiler does
+    const { settings } = this.props;
+    const defaults = settings.defaultPlayerSprites || {};
+    const playerSheet =
+      spriteSheetsLookup[scene.playerSpriteSheetId] ||
+      spriteSheetsLookup[defaults[scene.type]] ||
+      spriteSheetsLookup[settings.playerSpriteSheetId];
+    if (playerSheet) {
+      usedSpriteSheets.push(playerSheet);
+    }
+
     // Find used sprite sheets in events
     walkSceneEvents(fullScene, (event) => {
-      if (
-        event.args &&
-        event.args.spriteSheetId &&
-        event.command !== EVENT_PLAYER_SET_SPRITE &&
-        !event.args.__comment
-      ) {
+      if (event.args && event.args.spriteSheetId && !event.args.__comment) {
         const spriteSheet = spriteSheetsLookup[event.args.spriteSheetId];
-        if (usedSpriteSheets.indexOf(spriteSheet) === -1) {
+        if (spriteSheet && usedSpriteSheets.indexOf(spriteSheet) === -1) {
           usedSpriteSheets.push(spriteSheet);
         }
       }
@@ -107,17 +113,11 @@ class SceneInfo extends Component {
     // Find used sprite sheets from scene actors
     fullScene.actors.forEach((actor) => {
       const spriteSheet = spriteSheetsLookup[actor.spriteSheetId];
-      if (usedSpriteSheets.indexOf(spriteSheet) === -1) {
+      if (spriteSheet && usedSpriteSheets.indexOf(spriteSheet) === -1) {
         usedSpriteSheets.push(spriteSheet);
       }
     });
 
-    const frameCount = usedSpriteSheets.reduce((memo, spriteSheet) => {
-      return memo + (spriteSheet ? spriteSheet.numFrames : 0);
-    }, 0);
-    // SNES has a fixed per-scene OBJ sheet budget (compileSnesData.js
-    // SPRITE_SLOTS) instead of a VRAM frame-count budget - count distinct
-    // sheets instead of summing frames (targets/snes.js maxSpriteSheets).
     const sheetCount = usedSpriteSheets.length;
 
     function checkScreenAt(x, y) {
@@ -184,7 +184,6 @@ class SceneInfo extends Component {
       actorCount: scene.actors.length,
       sheetCount,
       triggerCount: scene.triggers.length,
-      frameCount,
       warnings
     });
   };
@@ -237,7 +236,7 @@ class SceneInfo extends Component {
   }
 
   render() {
-    const { loaded, actorCount, frameCount, sheetCount, triggerCount, warnings, tooltipType, tooltipX, tooltipY } = this.state;
+    const { loaded, actorCount, sheetCount, triggerCount, warnings, tooltipType, tooltipX, tooltipY } = this.state;
 
     if (!loaded) {
       return null;
@@ -245,13 +244,7 @@ class SceneInfo extends Component {
 
     const maxActors = this.getMaxActors();
     const maxTriggers = compilerTarget.maxTriggers;
-    // A fixed number of loadable OBJ sheets per scene (maxSpriteFrames is
-    // null) - show the sheet budget rather than a frame-count budget.
-    const showSheetBudget = compilerTarget.maxSpriteFrames == null;
-    const spriteBudgetCount = showSheetBudget ? sheetCount : frameCount;
-    const spriteBudgetMax = showSheetBudget
-      ? compilerTarget.maxSpriteSheets
-      : compilerTarget.maxSpriteFrames;
+    const maxSheets = compilerTarget.maxSpriteSheets;
 
     const actorWarning = warnings.length > 0;
     const actorError = actorCount > maxActors;
@@ -297,15 +290,15 @@ class SceneInfo extends Component {
         {"\u00A0 \u00A0"}
         <span
           className={cx("Scene__InfoButton", {
-            "Scene__Info--Warning": spriteBudgetCount === spriteBudgetMax,
-            "Scene__Info--Error": spriteBudgetCount > spriteBudgetMax,
+            "Scene__Info--Warning": sheetCount === maxSheets,
+            "Scene__Info--Error": sheetCount > maxSheets,
           })}
           onMouseEnter={this.onHoverOn("frames")}
           onClick={this.onOpenTooltip("frames")}
           onMouseLeave={this.onHoverOff}
           aria-describedby="scene_info_frames"
         >
-          {showSheetBudget ? "S" : "F"}: {spriteBudgetCount}/{spriteBudgetMax}
+          S: {sheetCount}/{maxSheets}
         </span>
         <Portal>
           <div
@@ -319,20 +312,13 @@ class SceneInfo extends Component {
               bottom: tooltipY,
             }}
           >
-            {showSheetBudget ? (
-              <>
-                <div>{l10n("FIELD_NUM_SHEETS_LABEL")}</div>
-                <div>{l10n("FIELD_SHEETS_COUNT", { sheetCount, maxSheets: spriteBudgetMax })}</div>
-                {spriteBudgetCount > spriteBudgetMax && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
-                {spriteBudgetCount > spriteBudgetMax && <div>{l10n("WARNING_SHEETS_LIMIT")}</div>}
-              </>
-            ) : (
-              <>
-                <div>{l10n("FIELD_NUM_FRAMES_LABEL")}</div>
-                <div>{l10n("FIELD_FRAMES_COUNT", { frameCount, maxFrames: spriteBudgetMax })}</div>
-                {spriteBudgetCount > spriteBudgetMax && <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>}
-                {spriteBudgetCount > spriteBudgetMax && <div>{l10n("WARNING_FRAMES_LIMIT")}</div>}
-              </>
+            <div>{l10n("FIELD_NUM_SHEETS_LABEL")}</div>
+            <div>{l10n("FIELD_SHEETS_COUNT", { sheetCount, maxSheets })}</div>
+            {sheetCount > maxSheets && (
+              <div className="Scene__TooltipTitle">{l10n("FIELD_WARNING")}</div>
+            )}
+            {sheetCount > maxSheets && (
+              <div>{l10n("WARNING_SHEETS_LIMIT")}</div>
             )}
           </div>
         </Portal>
@@ -377,6 +363,10 @@ SceneInfo.propTypes = {
   actorsLookup: PropTypes.objectOf(ActorShape).isRequired,
   triggersLookup: PropTypes.objectOf(TriggerShape).isRequired,
   spriteSheetsLookup: PropTypes.objectOf(SpriteShape).isRequired,
+  settings: PropTypes.shape({
+    playerSpriteSheetId: PropTypes.string,
+    defaultPlayerSprites: PropTypes.objectOf(PropTypes.string),
+  }).isRequired,
 };
 
 function mapStateToProps(state, props) {
@@ -386,6 +376,7 @@ function mapStateToProps(state, props) {
   const scene = sceneSelectors.selectById(state, props.id);
 
   return {
+    settings: state.project.present.settings,
     scene,
     actorsLookup,
     triggersLookup,

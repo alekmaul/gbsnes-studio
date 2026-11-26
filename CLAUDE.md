@@ -289,9 +289,8 @@ SNES) and `maxBackgroundWidth/Height` from the target. The `WARNING_BACKGROUND_T
 l10n strings gained `{width}`/`{height}` params (all 13 non-en locales updated). And the
 **Scene info bar** (`src/components/world/Scene.js`): GB shows a per-scene sprite-frame VRAM
 budget (`F: n/25`), SNES has a fixed OBJ sheet so it now shows distinct actor sprite *sheets*
-instead (`S: n/8`, `SPRITE_SLOTS`; per-scene count, the project-wide cap is enforced by a
-`compileSnesData` warning). New target fields: `maxBackgroundWidth/Height`, `maxSpriteFrames`
-(gb 25 / snes null), `maxSpriteSheets` (gb null / snes 8) — `targets.test.js` guards them.
+instead (now `S: n/32`, see *Sprites*). New target fields: `maxBackgroundWidth/Height`, `maxSpriteSheets` — `targets.test.js`
+guards them.
 The rest of the "M9 gaps" in EVENTS.md turned out stale: GB Studio 1.2.2's editor already
 renders raw full-colour PNGs everywhere (no DMG filter — the 4-shade conversion is
 compiler-only) and the scene canvas is already sized from the background's tile dimensions.
@@ -356,19 +355,10 @@ by target, `undefined` target still falls back to gb).
 - **`src/lib/compiler/snesgfx.js`** — the SNES counterpart of `ggbgfx.js` (M6 core). PNG →
   real extracted palette (≤16 colours, 8-bit RGB → 15-bit BGR555), SNES **4bpp planar** tiles
   (32 B/tile), tile dedup with H/V-flip matching, 16-bit tilemap (`tile | pal<<10 | prio<<13 |
-  xflip<<14 | yflip<<15`). `imageToBGData(file)` for backgrounds; `imageToSpriteData(file)` for
-  a sprite sheet's first 16×16 frame → 4 OBJ tiles. Pure helpers unit-tested; `decodeBGData()`
-  inverts `imageToBGData` and `snesgfx.test.js` asserts a lossless round-trip.
+  xflip<<14 | yflip<<15`). `imageToBGData(file)` for backgrounds (sprite sheets are compiled by
+  `compileSnesSprites.js`, see *Sprites*); `decodeBGData()` inverts it.
   `targets/snes.js` `maxTilesetTiles` is the real tile-index-field ceiling (1024 — see the
   "Fixed VRAM layout" entry below for why it isn't a VRAM-size number).
-  **`imageToSpriteData` now warns on a >16-colour sprite sheet, matching `imageToBGData`**
-  (asked by the user while discussing the `snesFixedAssets.js` palette bug above: "why
-  transform sprite/background palettes at all?"). Backgrounds already warned and pointed at
-  the fix ("re-export as an indexed PNG with ≤16 colours"); sprites silently snapped overflow
-  colours to the nearest kept one with no diagnostic. Both now collect every distinct colour
-  first (previously sprites stopped collecting at 16, hiding the true count), then truncate to
-  `maxColors` (first-seen order) and warn if truncated. Tests: `snesgfx.test.js` (two new
-  cases, synthetic 20-colour fixtures via `pngjs`).
 - **`src/lib/compiler/compileSnesData.js`** — the SNES data compiler (M7 phase 1). A
   denormalized project → `appData/src/snes/src/assets.{c,h}` + `src/data/*` in the engine's
   format: scene blobs, `event_ptrs[]` (script bytecode via the shared `compileEntityEvents` /
@@ -445,59 +435,10 @@ by target, `undefined` target still falls back to gb).
   committed dummy data stays byte-identical). Test: `snesFixedAssets.test.js` builds a synthetic
   project `assets/ui/emotes.png` with a colour absent from the tools copy and confirms it - not
   the tools copy's colours - ends up in the compiled palette.
-  **Per-scene OBJ sheets (user-found: a 16-sheet project showed the player sprite for
-  everything past the 8th).** The OBJ sheet used to be **one project-wide** 8 KB blob loaded
-  at boot - 8 slots for the whole game. Now `compileSnesData.js` builds one 8 KB sheet **per
-  scene** (`buildSceneSprites`): player always slot 0, that scene's own actor sheets 1..7,
-  plus the fixed emotes (region 32-63) and only that scene's dialogue avatars (64-95). Deduped
-  by content (a Logo + Title with no actors share one). Emitted as `src/data/scene_spr_*_data.as`
-  (one `superfree` section per blob, `.include`d from `src/data/data.asm` — see the
-  `compileSnesData.js` bullet; this is the general "graphic assets are 65816 source" scheme, not
-  sprite-specific). The 8-palette CGRAM image is
-  per-scene too and now bakes in the emote / avatar palettes at OBJ pal 1 / 2 (game.c's two
-  `dmaCopyCGram` calls are gone). The scene blob gained a `[24]` table after `w,h`:
-  `sprite_type[8]`, `sprite_frames[8]`, `sprite_pal[8]`; `SceneInit` DMAs `scene_spr_ptrs
-  [scene_index]` / `scene_spr_pal_ptrs[scene_index]` and fills the now-**mutable** globals
-  `sprite_{type,frames,pal}_for_slot[8]` + `sprite_slot_for_index` (= `scene_sprite_slot_ptrs
-  [scene_index]`, for `PLAYER_SET_SPRITE`) from it. Per-scene ≤8 sheets covers the stock
-  sample (Outside's 6, Cave's 4, …); a scene needing >8 still warns and overflows to slot 0.
-  Verified in SnesJs: Cave's fire/sage/savepoint and House's seller/radio render their real
-  sprites; dialogue + avatar + emote intact. Actor blob byte 4 = the **per-scene** slot;
-  engine sets `frame_offset = slot*2`. Sub-scripts (`SET_INPUT_SCRIPT` / `SET_TIMER_SCRIPT`) use a `banked`
+  Sub-scripts (`SET_INPUT_SCRIPT` / `SET_TIMER_SCRIPT`) use a `banked`
   shim → own `event_ptrs[]` slot; the engine now runs them for real too (M7-cont., see
   `appData/src/snes/README.md`), including a fix for `IF_INPUT`/`AWAIT_INPUT` comparing against
-  raw PVSnesLib pad bits instead of the compiler's GB-layout button mask. **Actor sprite frames
-  (M7-cont.).** Phase 1 (direction): a 3-frame `SPRITE_ACTOR` sheet's up/side frames go in two
-  new 8-slot OBJ regions (`ACTOR_UP_TILE0=96`, `ACTOR_SIDE_TILE0=128`) appended after the
-  actors/emotes/avatars regions - `placeTiles`'s fixed `16 + 2*slot` offset only stays
-  collision-free for 8 slots per region (the `AVATAR_SLOT0` bug's cause), so a same-pattern new
-  region beats widening slot 0-7. `SceneRenderActors` computes facing (`down`/`up`/`side`+flip)
-  fresh every render call from `dir_x`/`dir_y` (mirroring GB's `SceneRenderActor_b`), so
-  `EVENT_ACTOR_SET_DIRECTION` works with no extra opcode plumbing. **Phase 2 (walk-cycle
-  animation).** A 6-frame `SPRITE_ACTOR_ANIMATED` sheet (down-a/down-b/up-a/up-b/side-a/side-b)
-  walk-cycles its 2 poses per direction while moving; OBJ sheet grew 160→256 tiles (full first
-  name page) with 3 more regions for the "B" poses (`ACTOR_DOWN_B_TILE0=160`, `_UP_B=192`,
-  `_SIDE_B=224`). Per-actor `sprite_type` is now movement-aware (matches GB's `spriteTypeDec`):
-  6-frame on a *non-moving* actor = `SPRITE_STATIC` `frames_len` 6 (manual/auto cycle of all 6 -
-  a torch), not a walk cycle. Actor scene-blob entry grew 7→9 bytes (`anim_speed`, `animate`
-  added); `compileSnesData.js` emits `sprite_frames_for_slot[]` (1/3/6) so `SceneInit` derives
-  `frames_len`. `scene.c`'s `SceneAnimateActors` (ported from GB's frame-cycle loop) steps
-  `actors[i].frame` on the /8 tick, gated by `anim_speed` (4 fastest..0 slowest, default 3),
-  while `moving` or `animate`; a new `actors[i].anim_hold` counter bridges the 1-frame `moving`=0
-  dips at tile boundaries (else a walking sprite stutters/resets); idle settles to pose 0.
-  Verified in Mesen (real OAM tile/flip): player + a random-walk NPC both cycled A↔B correctly
-  per direction, snapped to standing when idle; 3-/1-frame sheets provably unchanged
-  (`frames_len` 1 → `SceneAnimateActors` skips; `SPRITE_ACTOR` render path byte-identical to
-  phase 1).
-  **N-frame `animated` sheets (user-found: the sample's 2-frame duck / 4-frame torch didn't
-  animate).** `snesgfx.js` only recognised 3- and 6-frame sheets; 2/4/5-frame "animated"
-  sheets read frame 0 only. Now `imageToSpriteData` keeps every frame for 2-6, `spriteType`
-  `SPRITE_STATIC` (an auto-cycle, not a walk/direction sheet). `compileSnesData.js`
-  `placeDirectionFrames` puts frame f into the f-th of `[downA, downB, upA, upB, sideA, sideB]`
-  - the same regions the engine's `SPRITE_ACTOR_ANIMATED` and 6-frame-`SPRITE_STATIC` render
-  paths already read by frame number - so `scene.c` only needed `frames_len_for` widened to
-  `n ∈ {2,4,5,6}` (n==3 stays a directional `SPRITE_ACTOR`, frame 0). Verified in SnesJs: the
-  duck's OAM tile alternates `2k` ↔ `160+2k` (frame 0 ↔ 1). Test: `snesgfx.test.js`.
+  raw PVSnesLib pad bits instead of the compiler's GB-layout button mask.
   **Actor sprite Y offset (user-found: "the rock is not on the stair").** `SceneRenderActors`
   drew the 16×16 OBJ at `actors[i].y - scroll_y - 8`, putting every sprite a full tile too
   low. GB positions it so the feet sit at the bottom of the actor's tile (`pos.y = tile*8+8`,
@@ -520,42 +461,6 @@ by target, `undefined` target still falls back to gb).
   a scene with one NPC, player pressing A from each of the four sides - all four now run the
   actor's script (talk box appears); before, right/below worked and left/above didn't. The
   trigger-A-press check in the same function picks up the same corrected `ntx/nty`.
-  **Per-sprite OBJ palettes (done).** Each used sprite slot draws its own 16-colour OBJ
-  palette. The SNES has 8 OBJ palettes (CGRAM 128..255); palettes 1 and 2 stay reserved for
-  the emote bubbles / dialogue avatars, so `compileSnesData.js` assigns actor sprite slots
-  from `ACTOR_OBJ_PAL_POOL = [0,3,4,5,6,7]` (a 7th/8th distinct sheet reuses palette 0) and
-  emits `sprite_pal_for_slot[8]`. `spr_pal` grew from one palette to the whole OBJ CGRAM image
-  (8×32 B); `game.c`'s `oamInitGfxSet` uploads it wholesale, then its emote/avatar
-  `dmaCopyCGram` calls reclaim palettes 1/2. `scene.c`'s `SceneRenderActors` passes
-  `sprite_pal_for_slot[actors[i].frame_offset >> 1]` as the OAM palette (`frame_offset` is
-  always `slot*2`, so no new struct field / `SceneInit` change / `PLAYER_SET_SPRITE` change -
-  a slot swap picks up the new palette for free). Verified in Mesen (Test_ActorInvoke: player
-  on OBJ pal 0, the signpost NPC on OBJ pal 3, real CGRAM contents distinct; emote pal 1 /
-  avatar pal 2 intact after the wholesale upload).
-  **A 7th/8th sheet no longer clobbers the palette it shares (user-found: "npc001.png
-  overwrites the palette shared with the player").** `ACTOR_OBJ_PAL_POOL` has only 6 entries,
-  so once a scene has 7+ distinct sprite sheets, `writePal()` used to write the straggler's
-  palette bytes straight over whatever the first claimant (always the player, since it's
-  always `sceneSpriteIds[…][0]`) had written to the same CGRAM bytes - last write wins, so the
-  player would render in the 7th sheet's colours instead of its own. Fixed with a real merge
-  in `buildSceneSprites` (`mergeSpriteIntoPalette`): the first sprite to claim an OBJ palette
-  register keeps its own 0-based colour indices untouched; a later sprite forced onto the same
-  register reuses a colour it already shares with the claimant, otherwise appends its own into
-  a free slot, and has its own tile data re-indexed to match (`snesgfx.js`'s `indicesFromTile`/
-  `tileFromIndices` round-trip a tile to/from raw indices for this). Colour 0 is skipped on
-  both sides - hardware-transparent for any OBJ sprite regardless of what's stored there, never
-  worth a slot. Only once the *combined* colour count of everyone sharing a register exceeds 16
-  does the overflow snap to the nearest already-placed colour, with a warning (mirrors the
-  plain per-sprite `imageToSpriteData` 16-colour overflow above). `imageToSpriteData` now also
-  returns `colors` (the raw 8-bit list, same order as its palette) so a caller can do this kind
-  of cross-sprite merge without re-scanning the PNG. Verified against the real "Sample Project
-  (SNES)": Outside's 7th sheet (`npc001.png`) used to leave OBJ pal 0 with only its own ~2
-  colours (the player's gone); now pal 0 holds 9 populated colour entries (both sheets' full
-  palettes), no overflow warning. New test: `compileSnesData.test.js` ("a 7th sheet sharing pal
-  0 gets its colours merged in, not overwritten") - builds two solid-colour synthetic sprites,
-  confirms both colours are present in the merged CGRAM bytes *and* that each sprite's own tile
-  data resolves to its own colour (not the other's); fails against the pre-fix code (the
-  player's colour is simply missing from the palette).
   `test/data/compiler/compileSnesData.test.js`: 12 `test/projects/*` fixtures compile through
   `compileSnesData`; 6 (Test_Math, Test_CombinedMath, Test_ActorStoreDirection, Test_RelativePos,
   Test_SceneState, Test_ActorInvoke) build end-to-end to a bootable `.sfc` when the vendored
@@ -1013,7 +918,7 @@ by target, `undefined` target still falls back to gb).
   `ACTOR_SET_FRAME_TO_VALUE` mirrors the already-real `ACTOR_SET_FRAME` reading a variable
   instead of a literal (equally inert today, since `frames_len` is hardcoded to 1 everywhere -
   no manual frame-cycling yet, matching the sprite-direction-frames Phase 1 scope). The
-  architecturally real one is `PLAYER_SET_SPRITE`: GB streams the target sheet into VRAM at
+  architecturally real one is `PLAYER_SET_SPRITE` (since replaced, see *Sprites*): GB streams the target sheet into VRAM at
   runtime from its full per-project bank; this engine has no such streaming, so
   `compileSnesData.js` now emits `sprite_slot_for_index[]` (project sprite index → pre-loaded OBJ
   slot, or `0xFF` if that sheet was never used by any actor/the player anywhere) and
@@ -1126,20 +1031,32 @@ Engine Field writes — each already has its own explanatory comment in `script_
 (M0–M13 on `v2`, M14–M18 on `v3`) lives in the roadmap artifact and Claude's memory
 (`gbsnes-v2-migration`), not duplicated here.
 
-**Sprites page: Free-form (Metasprite) mode.** A sprite sheet can compose a bigger pose out of
-several individually-placed 16×16 tiles (`metaspriteMode`/`metasprites`/`metaspriteTiles` on
-`SpriteSheet`) instead of one fixed block — a wide boss, a 16×32 character, an asymmetric prop
-— and it genuinely renders in a built ROM: `compileSnesData.js` packs each placed tile's quad
-through the same `createScenePacker` already used for legacy extra poses, and
-`SceneRenderActors` (`scene.c`) loops over a real multi-OAM-entry list per actor instead of the
-one fixed `oamSet` every other sprite still uses unchanged. A `multi`/`multi_movement` sheet's
-side pose auto-mirrors (position + pixels) for the opposite facing direction, matching every
-other actor sheet's own convention. A scene whose actors collectively need more than the
-SNES's real 128 hardware sprite slots gets a compile-time warning naming the scene, not a
-silent render failure. `SPRITE_EDITOR_PROGRESS.md` (repo root) has the full build-up history,
-including two real engine bugs (a pose-index mismatch for a 3-frame sheet, and a second,
-independent place computing an actor's own sprite type that had silently desynced from the
-slot table) found and fixed via real Mesen hardware verification, not just unit tests.
+### Sprites (GB Studio 3.2.1's system, on the SNES)
+
+The earlier sprite editors of this fork (fixed 3/6-frame sheets with a free-form mode, "sprite
+swaps", named animation states) were rejected by the user and removed in full: the current
+system is a port of GB Studio 3.2.1's (`../gb-studio-3.2.1`). **Copy from that source rather
+than redesigning** when something is missing.
+
+- **Data**: sheet → states → 8 animations → frames (metasprites) → tiles, normalized as
+  `spriteStates`, `spriteAnimations`, `metasprites`, `metaspriteTiles`. A tile's `x`/`y` is its
+  bottom-left corner relative to the 16px box at the bottom of the canvas, y up; `size` is 8 or
+  16 (3.2.1's are 8x16). `lib/sprite/upgradeSpriteSheet.ts` gives states to a sheet saved
+  without them (16px-high images by their width, others a blank state).
+- **Editor**: `containers/pages/SpritesPage.tsx` + `components/sprites/`.
+- **Compiler**: `lib/compiler/compileSnesSprites.js` — its header documents the binary format.
+  Per scene: up to 32 sheets (player first) and 512 OBJ tiles, tiles 32-95 reserved for emotes
+  and portraits; sheets share OBJ palettes 0 and 3-7. All loaded with the scene (no runtime
+  streaming). Transparency everywhere: the top-left pixel's colour, or alpha < 128.
+- **Engine**: `sprites.c`/`.h` (slots, animations, OAM). OAM is rebuilt each frame, front-most
+  first, from sprite 1; sprite 0 is the dialogue portrait. `SpriteDrawFrame` writes
+  `oamMemory` inside its own loop on purpose: one function call per sprite cost too much under
+  816-tcc (see `PERF.md`). Actors far off-screen skip their animation update.
+- **Dialogue portrait**: BG3's box tiles have priority and hide every sprite, so `ui.c` opens a
+  2x2 transparent hole under the portrait and `compileSnesAvatars` composes it over the box
+  background.
+- Templates `sneshtml`, `snesgbs2` and `snesblank` carry 3.2.1's states, tiles converted to
+  8x8 / 16x16.
 
 **Custom-palette editor removed (user-driven).** The GB-heritage "Custom Palettes" feature
 (menu entry, page, per-scene/actor palette pickers, the "Colorize" paint tool, the
@@ -1538,67 +1455,6 @@ matching 65's ASCII value), and a screenshot confirmed the box visibly renders `
 no corruption. No JS-level test added - pure `ui.c` runtime change, no compiler/wire-format
 surface (the compiler-side `#NN#` → `#NN#`-resolved-index behavior already had coverage before
 this fix, in `scriptBuilder.test.js`/`trimlines.test.js`, and didn't change).
-
-**Named animation states / metasprite editor ("Path A"/"Path B"), attempted and fully reverted
-(2026-10-07 through 2026-10-09).** A multi-day effort tried to give sprite sheets named,
-per-state animations (`SpriteState`/`SpriteSheet.animSpeed`/`defaultSpriteType`, a grouped
-"ANIMATIONS" tree + "Animation Settings" panel) and, further, a real GB Studio 3.2-style
-metasprite editor (`SpriteSheet.animationStates` → `AnimationState` → `AnimationType`-derived
-`SubState` → `Frame` → `MetaspriteTile`, click-to-place tile composition, a `compileSnesSprites.ts`
-compiler emitting real PVSnesLib `t_metasprite` records - never wired into the build). Several
-UI passes tried to reconcile the new panels' layout with the existing editor and never actually
-matched GB Studio 3.2's real page (overlapping panels, wrong positioning, a "big garbage" layout
-after one attempt) - user-rejected as not matching intent across multiple rounds, and finally
-asked for all of it removed: "it is not working, you don't understand what I want."
-
-Reverted in full: the `src/components/sprites/` directory, `compileSnesSprites.ts` and its
-test, the Path A editor panels (`SpriteAnimationSettingsPanel.tsx`, and
-`SpriteAnimationsPanel.tsx` restored to its pre-Path-A flat, ungrouped form, then removed
-entirely - see the follow-up paragraph below), `SpritesPage.js` restored to its pre-Path-A
-shape, the `SpriteAnimationState`/`SpriteSubState`/`SpriteFrame`/`MetaspriteTile` types and
-their 7 reducers in `entitiesState.ts`, `SpriteSheet.animSpeed`/`defaultSpriteType` (both the
-type fields and their `compileSnesData.js`/engine wiring - the scene blob's per-slot OBJ table
-is back to `[24]` bytes, `sprite_anim_speed_for_slot` is gone from `scene.c`/`scene.h`/
-`script_cmds.c`), and the associated l10n keys/tests. The pre-existing, actually-shipped
-mechanism this reverts *to* - `SpriteSheet.type` (static/animated/actor/actor_animated) +
-`numFrames`, compiled by `compileSnesData.js` into the per-scene sprite tables
-`SceneAnimateActors` (`scene.c`) auto-cycles - is untouched and still exactly as documented
-elsewhere in this file. Also untouched: `SpriteState`/`states` (the "Set Sprite State"
-scripting event's own data, `eventPlayerSetState.js`/`eventActorSetState.js`/
-`SpriteStateSelect.js`) - a real, older, unrelated feature that happened to share the word
-"state" with Path A's unrelated per-sheet-default feature.
-
-Not reverted (unrelated real fixes that landed in the same commits as this work):
-`PlayerContactUpdate()`'s actor-script fallback fix (below) and the VRAM/dialogue-code work
-documented elsewhere in this file.
-
-**Follow-up, same week (user-found: "tu as laissé la partie frames et la partie animation
-dans la view sprites" - the Sprites page still showed a Frames panel and a flat Animations
-list after the revert above).** Those two panels (`SpriteFramesPanel.tsx`/`.css`, the flat,
-ungrouped `SpriteAnimationsPanel.tsx`) and the `getSpriteAnimations()` helper
-(`spriteAnimations.js`) actually **predate** Path A/B entirely (confirmed via `git log
---follow`: commits `6a46373`/`68ca733`/`89e0608`, all well before `b4bc399`) - they were kept
-in the first revert pass on the reasoning that they're part of "the already-shipped
-mechanism," not Path A/B's own addition. Checking the real GB Studio 2.0.0-beta5 reference
-checkout directly (`SpritesPage.js`, `entitiesTypes.ts`, `loadSpriteData.js`) showed this
-reasoning was too generous: GB Studio 2.0.0-beta5 itself has **no** Frames/Animations UI at
-all - its own `SpritesPage.js` is exactly `ImageViewer` + `FilesSidebar`, nothing else; sprite
-type/frame-count there is purely file-derived data with no named-animation surface in the
-editor whatsoever. So this fork's own Frames/Animations panels, however old, are themselves a
-later *addition* beyond the real GB Studio baseline - and the user's explicit, literal
-instruction from the first revert ("only list, edit button as in V1.1.9") excludes them too.
-`SpritesPage.js` is now restored to the exact 2.0.0-beta5/v1.1.9 shape (confirmed byte-for-byte
-against the real 2.0.0-beta5 checkout) - just `ImageViewer` + `FilesSidebar`.
-`SpriteFramesPanel.tsx`/`.css`, `SpriteAnimationsPanel.tsx`, `spriteAnimations.js`, and
-`test/helpers/spriteAnimations.test.js` are deleted outright (a first attempt was blocked by
-Claude Code's own auto-mode permission classifier, "Irreversible Local Destruction" - not a
-project policy, just a sandbox guard that needed the user's explicit go-ahead to clear). The
-`.FilesSidebar__StatesDock` CSS rule and the `FIELD_FRAMES_FOR`/`FIELD_ANIMATIONS`/
-`FIELD_IDLE`/`FIELD_IDLE_DIR`/`FIELD_MOVING_DIR` l10n keys, both dead once those files are gone,
-are removed too.
-
-A future attempt at named/richer sprite animations should start fresh, not resume from this
-history.
 
 **`PlayerContactUpdate()` only fired the scene's own playerHit1/2/3Script, never the touched
 actor's own script - silently breaking real GB Studio sample content (user-found: "turnip in

@@ -57,7 +57,7 @@ describe("loadProjectData - merging saved project data with a fresh asset scan",
           canvasWidth: 24,
           canvasHeight: 40,
           boundsHeight: 8,
-          numFrames: 99,
+          width: 99,
         });
       },
       (sheet) => {
@@ -66,7 +66,7 @@ describe("loadProjectData - merging saved project data with a fresh asset scan",
         expect(sheet.canvasHeight).toBe(40);
         expect(sheet.boundsHeight).toBe(8);
         // what the image itself says is refreshed
-        expect(sheet.numFrames).toBe(1);
+        expect(sheet.width).toBe(16);
       }
     );
   });

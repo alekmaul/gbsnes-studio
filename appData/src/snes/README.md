@@ -91,16 +91,7 @@ the odd frame — an `816-tcc` codegen ceiling, degrades gracefully).
   - Legacy events (`EVENT_MATH_*` etc.) are handled: `compileSnesData` runs `migrateProject`
     (idempotent) first.
   - 32x32-tile backgrounds are the max and fit `SC_32x32` exactly - `SC_64x64` isn't needed.
-  - **Per-actor sprites** - `snesgfx.imageToSpriteData` converts a sprite sheet's frame(s) into
-    OBJ tiles. The OBJ sheet at VRAM `0x4000` is **per scene** (`SceneInit` DMAs
-    `scene_spr_ptrs[scene_index]` + its 8-palette CGRAM image): player = slot 0, that scene's
-    actor sheets = 1..7. The scene blob's `[24]` table (`sprite_type[8] / _frames[8] / _pal[8]`,
-    right after `w,h`) fills the mutable `sprite_*_for_slot[]`. Actor blob byte 4 = the per-scene
-    slot; `SceneInit` sets `actors[i].frame_offset = slot * 2` (OBJ grid TL tile for the "down"/only
-    frame); a 3-frame sheet's up/side frames additionally land in two dedicated regions (see
-    "Directional actor sprites" below) and `SceneRenderActors` picks the right one at render
-    time from the actor's current facing. Player uses `PLAYER_SPRITE_SLOT`. One 16-colour OBJ
-    palette (the player sprite's) is shared.
+  - **Sprites**: since replaced, see "Sprites" below.
 
 - **M5b** `src/ui.c` — `CHOICE` (0x27) and `MENU` (0x5C). `UIShowMenu(flag, str, cancel_cfg)`:
   options are `\n`-separated lines drawn instantly with a `>` cursor at column `TXT_COL0`;
@@ -298,37 +289,12 @@ blank/transparent portrait (reading untouched zero tiles at 64). Confirmed with 
 in Mesen before and after the fix. Not caught earlier because M5c and M5d's own Mesen checks
 never screenshotted both features in the same run.
 
-**Actor sprite frames (M7-cont.).** Phase 1: a 3-frame sheet (down/up/side, GB Studio's
-`numFrames===3` `SPRITE_ACTOR` convention) shows the right frame for the way it's facing, from
-`actors[i].dir_x`/`dir_y` recomputed **fresh on every render call** (mirroring GB's own
-`SceneRenderActor_b`). `snesgfx.js` extracts all 3 frames (12 OBJ tiles); `snesFixedAssets.js`
-put the "up"/"side" frames in two new 8-slot OBJ regions (`ACTOR_UP_TILE0=96`,
-`ACTOR_SIDE_TILE0=128`) *appended after* the existing actor/emote/avatar regions - `placeTiles`'s
-fixed `16 + 2*slot` bottom-row offset is only collision-free for 8 slots per region (the
-`AVATAR_SLOT0` bug's root cause), so a same-pattern new region beats widening slot 0-7.
-`compileSnesData.js` emits a per-actor `sprite_type` scene-blob byte + a `PLAYER_SPRITE_TYPE`
-define. A nice consequence: `EVENT_ACTOR_SET_DIRECTION` works with zero extra opcode plumbing -
-its `ACTOR_SET_DIRECTION` (0x07) already sets `dir_x`/`dir_y`, and the render picks it up.
-
-**Phase 2 (walk-cycle animation, done).** A 6-frame sheet (`SPRITE_ACTOR_ANIMATED`,
-`numFrames===6`, laid out down-a/down-b/up-a/up-b/side-a/side-b) walk-cycles between its two
-poses per direction while the actor moves. The OBJ sheet grew 160→**256 tiles** (the whole first
-OBJ name page) - three more 8-slot regions for the "B" poses (`ACTOR_DOWN_B_TILE0=160`,
-`ACTOR_UP_B_TILE0=192`, `ACTOR_SIDE_B_TILE0=224`). Per-actor sprite_type is now
-movement-type-aware, matching GB's `spriteTypeDec`: a 6-frame sheet on a *non-moving* actor is
-`SPRITE_STATIC` with `frames_len` 6 (a manual/auto cycle through all 6 frames - a torch), not a
-walk cycle. `compileSnesData.js` emits `sprite_frames_for_slot[]` (1/3/6) so `SceneInit` derives
-`frames_len` (`frames_len_for()`), plus `anim_speed`/`animate` scene-blob bytes (actor entry
-7→9 bytes). `scene.c`'s `SceneAnimateActors` (ported from GB's own frame-cycle loop) steps
-`actors[i].frame` on the `/8` tick, gated by `anim_speed` (4 fastest .. 0 slowest, default 3),
-while the actor `moving` (walk) or has the `animate` flag (decorative). A new `actors[i].anim_hold`
-counter bridges the 1-frame `moving`=0 dips at tile boundaries so a continuously-walking sprite
-doesn't stutter or reset; an idle walk sprite settles back to pose 0. Verified in Mesen (real
-PPU OAM tile/flip) - player and a random-walk NPC on a 6-frame sheet both cycled the correct
-A↔B pose per direction (down 0↔160, up 96↔192, side 128↔224 with hflip when facing left) at the
-default speed, and snapped to the standing pose when idle. 3-frame and 1-frame sheets are
-provably unchanged (`frames_len` 1 → `SceneAnimateActors` skips them; the render path for
-`SPRITE_ACTOR` is byte-identical to phase 1).
+**Sprites** (`src/sprites.c`, `src/sprites.h`): each sheet a scene can show is a "slot" with
+named states, 8 animations per state (down, right, up, left, then the same moving) and frames
+made of 8x8 / 16x16 hardware sprites. The data format is documented in
+`src/lib/compiler/compileSnesSprites.js`. Per scene: up to 32 slots and 512 OBJ tiles (tiles
+32-95 are the emotes and dialogue portraits), loaded by `SceneInit`; OBJ palettes 1 and 2 belong
+to emotes and portraits. OAM is rebuilt every frame from sprite 1, sprite 0 being the portrait.
 
 **Correction (M11, this claim was actually stale/wrong):** a re-audit of `script_cmds.c`'s
 opcode table against `scriptCommands.js` for the M11 supported-events documentation pass found
@@ -386,19 +352,6 @@ ports). Remaining known gaps are visual/asset-pipeline or documented restriction
 coverage: `PLAYER_SET_SPRITE` only working for already-loaded sheets (above), the two built-in
 BRR sound effects (no per-project SFX assets - GB Studio 1.2.2 has none), and only 6 distinct
 actor OBJ palettes (see below).
-
-**Per-sprite OBJ palettes (done):** each used sprite slot draws its own 16-colour OBJ palette.
-The SNES has 8 OBJ palettes (CGRAM 128..255, 16 colours each); palettes 1 and 2 stay reserved
-for the emote bubbles and dialogue-avatar portraits, so `compileSnesData.js` assigns actor
-sprite slots from the pool `{0, 3, 4, 5, 6, 7}` and emits `sprite_pal_for_slot[8]`. A project
-with 7-8 distinct sprite sheets on screen reuses palette 0 for the overflow. `spr_pal` grew
-from one palette to the whole OBJ CGRAM image (8*32 bytes); `game.c`'s `oamInitGfxSet` uploads
-it wholesale, then its own `dmaCopyCGram` calls reclaim palettes 1/2 for emotes/avatars.
-`scene.c`'s `SceneRenderActors` passes `sprite_pal_for_slot[actors[i].frame_offset >> 1]` as
-the OAM palette - `frame_offset` is always `slot*2` (SceneInit / `PLAYER_SET_SPRITE`), so a
-runtime sprite swap picks up the new sheet's palette with no extra plumbing. Verified in Mesen
-(Test_ActorInvoke: player's OAM sprite on OBJ palette 0, the signpost NPC on palette 3, their
-CGRAM contents genuinely different; emote/avatar palettes intact after the wholesale upload).
 
 **Input-script / timer-script execution (M7-cont., done):** `SET_INPUT_SCRIPT`,
 `REMOVE_INPUT_SCRIPT`, `SET_TIMER_SCRIPT`, `TIMER_RESTART`, `TIMER_DISABLE` all run for real now

@@ -116,12 +116,9 @@ const snesTarget = {
   // inert since this was null) - the compiled ROM's real capacity is
   // always MAX_ACTORS regardless of scene size, on both targets.
   maxActorsSmall: 10,
-  // No per-scene sprite-frame budget (fixed 256-tile OBJ sheet); the real
-  // limit is the number of distinct actor sprite sheets loaded at once
-  // (compileSnesData.js SPRITE_SLOTS, v1.1.4). Shown in the scene info bar
-  // for SNES.
-  maxSpriteFrames: null,
-  maxSpriteSheets: 8,
+  // Sprite sheets loaded at once by a scene, the player's included
+  // (MAX_SCENE_SPRITES, sprites.h). Shown in the scene info bar.
+  maxSpriteSheets: 32,
   // No v1.1.4 equivalent - the SNES's 128-sprite OAM budget is far larger
   // than the Game Boy's, this was never a practical scene-authoring
   // constraint worth warning about.

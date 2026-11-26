@@ -34,8 +34,7 @@ describe("compile targets", () => {
     // targets/snes.js's own comment for the full reasoning.
     expect(snes.maxBackgroundWidth).toBe(2040);
     expect(snes.maxBackgroundHeight).toBe(512);
-    expect(snes.maxSpriteFrames).toBeNull();
-    expect(snes.maxSpriteSheets).toBe(8);
+    expect(snes.maxSpriteSheets).toBe(32);
     expect(snes.maxTextLineChars).toBe(27);
     expect(snes.maxTextLineCharsWithAvatar).toBe(23);
     expect(snes.maxTextTotalChars).toBe(78);

@@ -51,6 +51,6 @@ Every other scene type still only ever uses the plain Solid swatch.
 
 ## Scene limits
 
-The status bar under each scene shows `A: n/19`, `S: n/8` and `T: n/30` - actors, sprite
+The status bar under each scene shows `A: n/19`, `S: n/32` and `T: n/30` - actors, sprite
 sheets and triggers. See [Limits](scene-limits.html) for the full numbers, including the
 VRAM budget behind them.

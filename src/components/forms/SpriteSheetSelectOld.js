@@ -3,49 +3,21 @@ import PropTypes from "prop-types";
 import { connect } from "react-redux";
 import Select, { components } from "react-select";
 import SpriteSheetCanvas from "../world/SpriteSheetCanvas";
-import l10n from "../../lib/helpers/l10n";
 import { SpriteShape } from "../../store/stateShape";
 import { groupBy } from "../../lib/helpers/array";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
 
 const groupByPlugin = groupBy("plugin");
 
-const type = t => s => s.type === t;
-
 const buildOptions = (memo, plugin, spriteSheets) => {
   memo.push({
-    label:
-      l10n("FIELD_SPRITE_ANIMATED_ACTORS") + (plugin ? ` - ${plugin}` : ""),
-    options: spriteSheets.filter(type("actor_animated")).map(spriteSheet => {
+    label: plugin && plugin !== "undefined" ? plugin : "",
+    options: spriteSheets.map(spriteSheet => {
       return {
         value: spriteSheet.id,
         label: spriteSheet.name
       };
     })
-  });
-  memo.push({
-    label: l10n("FIELD_SPRITE_ACTORS") + (plugin ? ` - ${plugin}` : ""),
-    options: spriteSheets.filter(type("actor")).map(spriteSheet => {
-      return {
-        value: spriteSheet.id,
-        label: spriteSheet.name
-      };
-    })
-  });
-  memo.push({
-    label: l10n("FIELD_SPRITES") + (plugin ? ` - ${plugin}` : ""),
-    options: spriteSheets
-      .filter(s => s.type !== "actor_animated" && s.type !== "actor")
-      .map(spriteSheet => {
-        return {
-          value: spriteSheet.id,
-          label:
-            spriteSheet.name +
-            (spriteSheet.numFrames > 1
-              ? ` (${spriteSheet.numFrames} ${l10n("FIELD_SPRITE_FRAMES")})`
-              : ``)
-        };
-      })
   });
 };
 

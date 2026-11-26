@@ -4,6 +4,7 @@ import styled, { css } from "styled-components";
 import l10n from "../../lib/helpers/l10n";
 import { RootState } from "../../store/configureStore";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
+import { countSpriteSheetTiles } from "../../store/features/entities/entitiesHelpers";
 import {
   SpriteSheet,
   ActorDirection,
@@ -135,16 +136,6 @@ const NoValue = styled.div`
   width: 24px;
 `;
 
-const typeLabel = (spriteSheet?: SpriteSheet): string => {
-  if (!spriteSheet) {
-    return "";
-  }
-  if (spriteSheet.type === "actor_animated" || spriteSheet.type === "actor") {
-    return l10n("ACTOR");
-  }
-  return l10n("FIELD_SPRITE");
-};
-
 export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   name,
   value,
@@ -163,6 +154,9 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const spriteSheet = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, value || optionalValue || "")
+  );
+  const numTiles = useSelector((state: RootState) =>
+    countSpriteSheetTiles(state.project.present.entities, spriteSheet)
   );
   const [isOpen, setIsOpen] = useState<boolean>(false);
   const [buttonFocus, setButtonFocus] = useState<boolean>(false);
@@ -259,13 +253,11 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
               <SpriteInfoTitle>{spriteSheet?.name}</SpriteInfoTitle>
               <SpriteInfoRow>
                 <SpriteInfoField>{l10n("FIELD_TYPE")}:</SpriteInfoField>
-                {typeLabel(spriteSheet)}
+                {l10n("FIELD_SPRITE")}
               </SpriteInfoRow>
               <SpriteInfoRow>
-                <SpriteInfoField>
-                  {l10n("FIELD_SPRITE_FRAMES")}:
-                </SpriteInfoField>
-                {spriteSheet?.numFrames}
+                <SpriteInfoField>{l10n("FIELD_TILES")}:</SpriteInfoField>
+                {numTiles}
               </SpriteInfoRow>
             </SpriteInfo>
           )}

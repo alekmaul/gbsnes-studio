@@ -1,5 +1,3 @@
-import { SPRITE_TYPE_STATIC, SPRITE_TYPE_ACTOR_ANIMATED, SPRITE_TYPE_ACTOR } from "../../consts";
-
 const DIR_LOOKUP = {
   down: 1,
   left: 2,
@@ -159,36 +157,6 @@ export const operatorDec = (operator) => OPERATOR_LOOKUP[operator] || 1;
 export const rpnOperatorDec = (operator) => RPN_OPERATOR_LOOKUP[operator];
 
 export const rpnFunctionDec = (fn) => RPN_FUNCTION_LOOKUP[fn];
-
-export const spriteTypeDec = (spriteType, numFrames) => {
-  if (spriteType === SPRITE_TYPE_STATIC) {
-    // If movement type is static and cycling frames, always set as static sprite
-    return 0;
-  }
-  if (numFrames === 6) {
-    return 2; // Actor Animated
-  }
-  if (numFrames === 3) {
-    return 1; // Actor
-  }
-  // Static;
-  return 0;
-};
-
-export const actorFramesPerDir = (spriteType, numFrames) => {
-  if (spriteType === SPRITE_TYPE_STATIC) {
-    // If movement type is static and cycling frames
-    return numFrames;
-  }
-  if (numFrames === 6) {
-    return 2; // Actor Animated
-  }
-  if (numFrames === 3) {
-    return 1; // Actor
-  }
-  // Static;
-  return numFrames;
-};
 
 export const isMBC1 = (cartType) => cartType === "03" || cartType === "02";
 

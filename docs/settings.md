@@ -21,10 +21,10 @@ Platform" selector at all - every project targets the Super Nintendo.
 
 This card also lists a few fixed per-scene resource limits worth knowing up front:
 
-- Up to 8 distinct sprite sheets per scene (the player plus up to 7 actor sheets) - a scene
-  needing more falls the extras back to a shared slot.
+- Up to 32 sprite sheets per scene, the player's included - see
+  [Sprites](sprites.html#limits).
 - Up to 4 projectiles (`Launch Projectile` / `Weapon Attack`) in flight at once per scene.
-- Up to 4 actors with a running `On Update` script at once per scene.
+- Up to 16 actors with a running `On Update` script at once per scene.
 
 <img src="/gbsnes-studio/assets/images/screenshots/snes-options.png" alt="SNES Options" width="600" />
 

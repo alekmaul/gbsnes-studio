@@ -5,7 +5,6 @@ import {
   ACTOR_SET_DIRECTION,
   ACTOR_SET_FRAME,
   ACTOR_SET_FRAME_TO_VALUE,
-  ACTOR_SET_FLIP,
   ACTOR_PUSH,
   ACTOR_SET_COLLISIONS,
   TEXT,
@@ -132,15 +131,12 @@ import {
   actorRelativeDec,
   moveTypeDec,
   heightDec,
-  actorFramesPerDir,
-  spriteTypeDec,
   textSpeedDec,
   rpnOperatorDec,
   rpnFunctionDec,
 } from "./helpers";
 import { hi, lo } from "../helpers/8bit";
 import trimlines, { encodeTextSpeedCodes } from "../helpers/trimlines";
-import { SPRITE_TYPE_ACTOR } from "../../consts";
 import { is16BitCType } from "../helpers/engineFields";
 import { nextVariable } from "../helpers/variables";
 import target from "./targets";
@@ -251,12 +247,6 @@ class ScriptBuilder {
     output.push(cmd(ACTOR_SET_FRAME_TO_VALUE));
     output.push(hi(variableIndex));
     output.push(lo(variableIndex));
-  };
-
-  actorSetFlip = (flip) => {
-    const output = this.output;
-    output.push(cmd(ACTOR_SET_FLIP));
-    output.push(flip ? 1 : 0);
   };
 
   actorPush = (continueUntilCollision = false) => {

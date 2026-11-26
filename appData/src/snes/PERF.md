@@ -55,7 +55,7 @@ whether or not a scene routes through the Map Engine (previously BG1's tilemap s
 
 | Words | Region | Size |
 | --- | --- | --- |
-| `0x0000–0x0FFF` | OBJ tiles (the 256-tile sheet: actor direction + walk-cycle frames, emotes, avatars — fills the whole first OBJ name page) | 4 KW |
+| `0x0000–0x1FFF` | OBJ tiles (the scene's sprite sheets, emotes and portraits; uploaded per scene, only as many as used) | up to 8 KW → **512 tiles** |
 | `0x2000–0x5FFF` | BG1 tileset | 16 KW → **1024-tile cap** (`targets/snes.js` `maxTilesetTiles`) |
 | `0x6000–~0x6758` | BG3 font | ~1.8 KW (235 2bpp tiles, `UI_FONT_SIZE` 3760 B = 1880 words - the old version of this table had a stale, too-small figure for this region, corrected here) |
 | `0x6800–0x77FF` | BG1 tilemap | 4 KW (all of it for an `SC_64x64` scene or the Map Engine's own `SC_64x32`; less for a smaller `SC_32x32` scene) — also PVSnesLib's own hardcoded Map Engine address (`map.h`: "layer address is 6800 for Layer 1"), so this never moves by routing |
@@ -67,9 +67,8 @@ layout's tight 4 KW). Two things can still sit at a real ceiling: the **1024-til
 budget** (`maxTilesetTiles` - also the real hardware ceiling now, not just a VRAM-layout choice:
 a tilemap cell's own tile-index field is only 10 bits, `snesgfx.js`'s packed
 `tile|pal<<10|prio<<13|xflip<<14|yflip<<15` format, so 1024 is the most any background could
-ever address no matter how much VRAM it were given) and the **256-tile OBJ sheet** (the first
-name page is full after walk-cycle frames were added — more OBJ tiles would need the 2nd page,
-unaffected by this VRAM move).
+ever address no matter how much VRAM it were given) and the **512 OBJ tiles** (both name
+pages, ending where BG1's tiles start).
 
 **Background streaming, for a scene wider than 64 tiles (v4, user-found — Space Battle/
 `leaving_earth.png`, 255 tiles wide).** The BG1 tilemap region above is a **hard 64×64-tile
@@ -276,6 +275,23 @@ nothing measurable at idle. It does **not** by itself re-confirm the ~90% (movin
 ~54 fps (heavy collision) numbers further down this doc, which specifically need real movement
 to exercise - those numbers are carried forward unchanged, not re-verified this pass.
 
+### 2026-11-26: sprite system from GB Studio 3.2.1
+
+Frames made of several hardware sprites are drawn by `sprites.c`. With one function call per
+sprite, 14 standing actors no longer fitted in a frame (the earlier fixed 16x16 renderer did);
+writing the OAM entry inside the frame loop recovered most of it. Mesen, main loop ticks per
+video frame, Top Down scene, actors of 7 different 16x16 sheets:
+
+| Actors | earlier renderer | one call per sprite | current |
+| --- | --- | --- | --- |
+| 6 / 10, standing | 1.00 | 1.00 | 1.00 |
+| 10, walking | 0.99 | — | 0.99 |
+| 14, standing | 1.00 | 0.50 | 0.89 |
+| 14, walking | 0.99 | 0.50 | 0.79 |
+
+Space Battle (15 On Update scripts): 0.47, against 0.44 with the earlier renderer. The rest of
+the gap on crowded scenes needs `SpriteDrawFrame` in assembly (not done).
+
 ### Not done — future work
 
 - Hand-optimising the render / actor-update hot path (or the parts of it that `816-opt` leaves
@@ -284,8 +300,8 @@ to exercise - those numbers are carried forward unchanged, not re-verified this 
 - Re-measuring the exact fps ratio after the movement/collision cleanup above (same Mesen Lua
   method as the table above) — expected to help most on a frame where several actors' AI ticks
   used to coincide, but not re-profiled with numbers yet.
-- **Practical guidance until then:** on the SNES target, a scene with more than ~5–6
-  simultaneously *moving* actors may still drop the odd frame. Static NPCs, dialogue, camera work,
+- **Practical guidance until then:** a scene with more than ~10 actors on screen starts
+  dropping frames. Static NPCs, dialogue, camera work,
   music and large backgrounds are all fine.
 
 ---

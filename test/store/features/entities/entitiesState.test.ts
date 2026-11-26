@@ -252,7 +252,7 @@ test("Should add new sprite sheet if loaded while project is open", () => {
   const loadSpriteSheet: SpriteSheet = {
     ...dummySpriteSheet,
     id: "sprite1",
-    numFrames: 6,
+    width: 96,
   };
 
   const action = projectActions.loadSprite.fulfilled(
@@ -266,7 +266,7 @@ test("Should add new sprite sheet if loaded while project is open", () => {
   expect(state.spriteSheets.ids.length).toBe(0);
   const newState = reducer(state, action);
   expect(newState.spriteSheets.ids.length).toBe(1);
-  expect(newState.spriteSheets.entities["sprite1"]?.numFrames).toBe(6);
+  expect(newState.spriteSheets.entities["sprite1"]?.width).toBe(96);
 });
 
 test("Should update sprite sheet if modified while project is open", () => {
@@ -288,7 +288,7 @@ test("Should update sprite sheet if modified while project is open", () => {
     ...dummySpriteSheet,
     id: "sprite1",
     filename: "sprite1.png",
-    numFrames: 8,
+    width: 128,
   };
 
   const action = projectActions.loadSprite.fulfilled(
@@ -302,7 +302,7 @@ test("Should update sprite sheet if modified while project is open", () => {
   expect(state.spriteSheets.ids.length).toBe(1);
   const newState = reducer(state, action);
   expect(newState.spriteSheets.ids.length).toBe(1);
-  expect(newState.spriteSheets.entities["sprite1"]?.numFrames).toBe(8);
+  expect(newState.spriteSheets.entities["sprite1"]?.width).toBe(128);
 });
 
 test("Should remove sprite sheets that are deleted while project is open", () => {
@@ -422,11 +422,10 @@ describe("sprites", () => {
     );
     const reloaded = reducer(
       edited,
-      loadSpriteAction({ filename: "sprite1.png", width: 64, numFrames: 4 })
+      loadSpriteAction({ filename: "sprite1.png", width: 64 })
     );
     const sheet = reloaded.spriteSheets.entities["sprite1"]!;
     expect(sheet.width).toBe(64);
-    expect(sheet.numFrames).toBe(4);
     expect(sheet.canvasWidth).toBe(40);
     expect(sheet.boundsHeight).toBe(8);
     expect(sheet.states).toEqual(state.spriteSheets.entities["sprite1"]!.states);

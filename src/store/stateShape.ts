@@ -33,8 +33,7 @@ export const SceneShape = PropTypes.shape({
 export const SpriteShape = PropTypes.shape({
   id: PropTypes.string.isRequired,
   name: PropTypes.string.isRequired,
-  filename: PropTypes.string.isRequired,
-  numFrames: PropTypes.number
+  filename: PropTypes.string.isRequired
 });
 
 export const SettingsShape = PropTypes.shape({

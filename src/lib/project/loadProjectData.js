@@ -60,7 +60,7 @@ const loadProject = async (projectPath) => {
   // field (see its own comment) - never generalized until now. Fixed by
   // spreading the SAVED object first (preserving every custom field) and
   // the fresh file-scan object second (so file-derived fields like
-  // filename/numFrames/type/inode/_v still get refreshed), matching the
+  // filename/width/height/inode/_v still get refreshed), matching the
   // already-correct merge direction `entitiesState.ts`'s own `loadSprite`/
   // `loadBackground`/etc. reducers use for an in-session asset rescan
   // (`{...existingAsset, ...payload.data, id: existingId}}`) - this file

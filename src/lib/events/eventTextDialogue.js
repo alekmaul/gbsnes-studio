@@ -33,7 +33,7 @@ const fields = [
     label: l10n("FIELD_TEXT_AVATAR"),
     defaultValue: "",
     optional: true,
-    filter: sprite => sprite.numFrames === 1,
+    filter: sprite => sprite.width === 16 && sprite.height === 16,
     postUpdate: (args, prevArgs) => {
       const { maxPerLine, maxTotal } = wrapLimits(!!args.avatarId);
       return {

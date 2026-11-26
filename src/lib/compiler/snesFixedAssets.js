@@ -4,27 +4,16 @@
  * real data compiler (compileSnesData.js) and the throwaway generator
  * (appData/src/snes/tools/gen-dummy-gfx.js) so both emit byte-identical data.
  *
- * This module only builds the FIXED prefix of the per-scene OBJ sheet (16-wide
- * tile grid): slot k -> tiles 2k, 2k+1, 2k+16, 2k+17.
- *   0-31    actor "down" pose A  (slot 0 seeded with the placeholder)
+ * This module only builds the fixed part of a scene's OBJ tiles (16-wide tile
+ * grid, slot k -> tiles 2k, 2k+1, 2k+16, 2k+17):
+ *   0-31    the placeholder sprite (used by the dummy data only)
  *   32-63   the 8 emotes
- *   64-95   up to 8 dialogue avatars
- * These 96 tiles stay at these exact addresses - unchanged since M5c/M7.
- * Everything past tile 96 (up to the real 512-tile, 2-OBJ-page budget - see
- * CLAUDE.md's "Fixed VRAM layout" entry) is now dynamically packed PER SCENE
- * by compileSnesData.js's own createScenePacker() (M8.3,
- * SPRITE_EDITOR_PROGRESS.md) - not built here, since it depends on which
- * actor sheets and how many real frames each one actually uses in a given
- * scene. Used to be 5 fixed 32-tile "pose" regions (down/up/side x A/B,
- * always fully reserved regardless of real demand, capping out at 256 tiles
- * total) - see packSceneSprites.js's own header comment for the real
- * replacement and CLAUDE.md for the migration history.
+ *   64-95   up to 8 dialogue portraits, placed by compileSnesData.js
+ * The sprite sheets of each scene fill the rest of the 512 tiles
+ * (compileSnesSprites.js packSceneSprites, reserving tiles 32-95).
  *
  * OBJ palettes (8, CGRAM 128..255, 16 colours each): palette 1 = the emotes,
- * palette 2 = the dialogue avatars, so actor sprite slots draw their own
- * 16-colour palette from the pool {0, 3, 4, 5, 6, 7} (compileSnesData.js's
- * ACTOR_OBJ_PAL_POOL / sprite_pal_for_slot[]). A project with 7-8 distinct
- * sprite sheets reuses palette 0 for the overflow.
+ * palette 2 = the dialogue portraits, the sprite sheets share the others.
  */
 const path = require("path");
 const getPixels = require("util").promisify(require("get-pixels"));
@@ -72,34 +61,9 @@ const UI_CURSOR_TILE = NUM_UI_GLYPHS + 10; // menu ">" pointer
 const NUM_EMOTES = 8;
 const EMOTE_TILE0 = 32; // OBJ grid tile of emote 0
 const AVATAR_TILE0 = 64; // OBJ grid tile of avatar 0
-// placeTiles(slot, ...) (compileSnesData.js) writes tile 2*slot - AVATAR_SLOT0
-// must be AVATAR_TILE0/2, not a "logical slot number" in some other unit.
-// Was 16 (-> tile 32, the SAME range as the emotes above it): avatars silently
-// overwrote emote 0's tile data, and the engine's own AVATAR_TILE0-relative
-// reads (ui.c) found only the untouched zero-filled placeholder at tile 64,
-// so TEXT_WITH_AVATAR rendered a blank portrait. Found while re-deriving this
-// layout for the sprite-direction-frames work below - not caught by earlier
-// per-feature Mesen checks because they didn't screenshot emotes and avatars
-// in the same run.
+// Portrait k sits at slot AVATAR_SLOT0 + k, i.e. tile AVATAR_TILE0 + 2k
 const AVATAR_SLOT0 = 32;
-// M8.3 (SPRITE_EDITOR_PROGRESS.md): the fixed "down"/"up"/"side" x "A"/"B"
-// pose regions that used to live right after this (tiles 96-255, 5 x 8-slot
-// regions, ACTOR_UP_TILE0/ACTOR_SIDE_TILE0/ACTOR_DOWN_B_TILE0/ACTOR_UP_B_TILE0/
-// ACTOR_SIDE_B_TILE0) are gone - every actor sheet's "extra" poses (anything
-// beyond its own primary/frame-0 pose, which still always lives at this
-// sheet's own slot k, unchanged) are now packed on demand, per scene, across
-// the full tiles-96-511 space by compileSnesData.js's own
-// createScenePacker() (packSceneSprites.js) - see that module and
-// compileSnesData.js's buildSceneSprites for the real placement logic, and
-// scene.c's extra_pose_down_b/up_a/up_b/side_a/side_b arrays (SceneInit-
-// loaded per scene) for how the engine reads it back at a runtime address
-// instead of a compile-time offset. This let a scene's real extra-pose
-// budget grow from a fixed 160 tiles (always reserved, regardless of
-// demand) to up to 416 tiles, packed only as needed.
-const SHEET_TILES = 256; // fills most of the first OBJ name page (0-95 are
-// real: placeholder + emotes + avatars; 96-255 are always zero here now -
-// compileSnesData.js pads this base out to the full 512-tile budget and
-// packs the dynamic region itself, see the comment above).
+const SHEET_TILES = 256; // size of the fixed sheet; only tiles 0-95 are used
 
 // 8-bit r,g,b (0..31 each) -> BGR555 low/high bytes
 const palBytes = colours => {

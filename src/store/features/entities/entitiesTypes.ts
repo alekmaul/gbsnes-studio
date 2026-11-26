@@ -189,8 +189,6 @@ export type SpriteSheet = {
   states: string[];
   // The remaining fields are only read by the current compiler, until it
   // compiles states and animations
-  numFrames: number;
-  type: SpriteType;
   animationType?: SpriteAnimationType;
   frameSequence?: number[];
 };

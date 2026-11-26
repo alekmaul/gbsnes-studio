@@ -128,3 +128,29 @@ export const denormalizeSprite = ({
   };
   return denormalize(sprite, spriteSheetsSchema, entities);
 };
+
+// 8x8 tiles of video memory the frames of a sprite sheet show, each picture
+// counted once. The build may need fewer: it also reuses mirrored and
+// identical pixels.
+export const countSpriteSheetTiles = (
+  entities: EntitiesState,
+  spriteSheet?: SpriteSheet
+): number => {
+  const slices = new Map<string, number>();
+  spriteSheet?.states?.forEach((stateId) => {
+    entities.spriteStates.entities[stateId]?.animations.forEach((animId) => {
+      entities.spriteAnimations.entities[animId]?.frames.forEach((frameId) => {
+        entities.metasprites.entities[frameId]?.tiles.forEach((tileId) => {
+          const tile = entities.metaspriteTiles.entities[tileId];
+          if (tile) {
+            slices.set(
+              `${tile.sliceX},${tile.sliceY},${tile.size}`,
+              tile.size === 16 ? 4 : 1
+            );
+          }
+        });
+      });
+    });
+  });
+  return Array.from(slices.values()).reduce((total, n) => total + n, 0);
+};

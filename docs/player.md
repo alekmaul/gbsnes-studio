@@ -22,11 +22,8 @@ changes the player's graphics mid-game, and the change persists across scene tra
 switch it back manually if it should only be temporary.
 
 {: .note }
-> A scene pre-loads up to 8 sprite sheets when it starts. Switching to one of those is
-> instant. Switching to any other sheet loads its graphics while the game runs, into a
-> slot reserved for that actor - up to 2 such actors per scene. A 3rd one, or a Free-form
-> (Metasprite) sheet, can't be switched this way: the event then has no effect, and the build
-> shows a warning.
+> A scene loads every sheet it can show when it starts, those of _Set Sprite Sheet_ events
+> included, so switching is instant. See [Sprites](sprites.html#limits).
 
 When switching scenes, the player always becomes visible at the new scene's start position,
 regardless of any earlier _Actor: Hide_. To keep the player hidden going into a scene (for a

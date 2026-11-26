@@ -16,7 +16,6 @@ import {
   SelectCommonProps,
 } from "../ui/form/Select";
 import SpriteSheetCanvas from "../world/SpriteSheetCanvas";
-import l10n from "../../lib/helpers/l10n";
 
 interface SpriteSheetSelectProps extends SelectCommonProps {
   name: string;
@@ -29,46 +28,19 @@ interface SpriteSheetSelectProps extends SelectCommonProps {
   optionalLabel?: string;
 }
 
-const type = (t: string) => (s: SpriteSheet) => s.type === t;
-
 const buildOptions = (
   memo: OptGroup[],
   plugin: string | undefined,
   spriteSheets: SpriteSheet[]
 ) => {
   memo.push({
-    label:
-      l10n("FIELD_SPRITE_ANIMATED_ACTORS") + (plugin ? ` - ${plugin}` : ""),
-    options: spriteSheets.filter(type("actor_animated")).map((spriteSheet) => {
+    label: plugin || "",
+    options: spriteSheets.map((spriteSheet) => {
       return {
         value: spriteSheet.id,
         label: spriteSheet.name,
       };
     }),
-  });
-  memo.push({
-    label: l10n("FIELD_SPRITE_ACTORS") + (plugin ? ` - ${plugin}` : ""),
-    options: spriteSheets.filter(type("actor")).map((spriteSheet) => {
-      return {
-        value: spriteSheet.id,
-        label: spriteSheet.name,
-      };
-    }),
-  });
-  memo.push({
-    label: l10n("FIELD_SPRITES") + (plugin ? ` - ${plugin}` : ""),
-    options: spriteSheets
-      .filter((s) => s.type !== "actor_animated" && s.type !== "actor")
-      .map((spriteSheet) => {
-        return {
-          value: spriteSheet.id,
-          label:
-            spriteSheet.name +
-            (spriteSheet.numFrames > 1
-              ? ` (${spriteSheet.numFrames} ${l10n("FIELD_SPRITE_FRAMES")})`
-              : ``),
-        };
-      }),
   });
 };
 

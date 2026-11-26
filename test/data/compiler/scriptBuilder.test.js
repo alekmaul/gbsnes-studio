@@ -5,7 +5,6 @@ import {
   ACTOR_MOVE_TO,
   ACTOR_SET_DIRECTION,
   ACTOR_SET_FRAME,
-  ACTOR_SET_FLIP,
   ACTOR_PUSH,
   TEXT,
   TEXT_MULTI,
@@ -288,20 +287,6 @@ test("Should set missing or empty of frame to 0", () => {
   sb.actorSetFrame();
   sb.actorSetFrame("");
   expect(output).toEqual([cmd(ACTOR_SET_FRAME), 0, cmd(ACTOR_SET_FRAME), 0]);
-});
-
-test("Should be able to set flip state of active actor", () => {
-  const output = [];
-  const sb = new ScriptBuilder(output);
-  sb.actorSetFlip(true);
-  expect(output).toEqual([cmd(ACTOR_SET_FLIP), 1]);
-});
-
-test("Should be able to unset flip state of active actor", () => {
-  const output = [];
-  const sb = new ScriptBuilder(output);
-  sb.actorSetFlip(false);
-  expect(output).toEqual([cmd(ACTOR_SET_FLIP), 0]);
 });
 
 test("Should be able to push active actor", () => {
