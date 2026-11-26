@@ -1,5 +1,6 @@
-import { useState, useEffect, useRef } from "react";
-import clamp from "../../../lib/helpers/clamp";
+import { useState, useEffect, useRef, useCallback } from "react";
+import clamp from "lib/helpers/clamp";
+import isEqual from "lodash/isEqual";
 
 type SplitDirection = "horizontal" | "vertical";
 
@@ -46,64 +47,60 @@ const useSplitPane = ({
         }
         return Math.floor(v * (unCollapsedNewHeight / unCollapsedHeight));
       });
-
-      setSizes(resetHeights);
+      if (!isEqual(sizes, resetHeights)) {
+        setSizes(resetHeights);
+      }
     }
-  }, [maxTotal]);
+  }, [collapsedSize, height, maxTotal, setSizes, sizes]);
 
-  const resizePaneBy = (resizePane: number, resizeBy: number) => {
-    setSizes(
-      toSplitRel(
-        resizeAbsPaneBy(
-          resizePane,
-          resizeBy,
-          startAbsSizes.current,
-          minSizes,
-          maxTotal
+  const resizePaneBy = useCallback(
+    (resizePane: number, resizeBy: number) => {
+      setSizes(
+        toSplitRel(
+          resizeAbsPaneBy(
+            resizePane,
+            resizeBy,
+            startAbsSizes.current,
+            minSizes,
+            maxTotal
+          )
         )
-      )
-    );
-  };
+      );
+    },
+    [maxTotal, minSizes, setSizes]
+  );
 
-  useEffect(() => {
-    if (isResizing) {
-      window.addEventListener("mousemove", onDragMove);
-      window.addEventListener("mouseup", onDragStop);
-      return () => {
-        window.removeEventListener("mousemove", onDragMove);
-        window.removeEventListener("mouseup", onDragStop);
-      };
-    }
-  }, [isResizing, sizes]);
-
-  const onDragStop = () => {
+  const onDragStop = useCallback(() => {
     setIsResizing(false);
-  };
+  }, [setIsResizing]);
 
-  const onDragMove = (e: MouseEvent) => {
-    if (direction === "vertical") {
-      resizePaneBy(resizeIndex, e.pageY - startOffset.current);
-    } else {
-      resizePaneBy(resizeIndex, e.pageX - startOffset.current);
-    }
-  };
+  const onDragMove = useCallback(
+    (e: MouseEvent) => {
+      if (direction === "vertical") {
+        resizePaneBy(resizeIndex, e.pageY - startOffset.current);
+      } else {
+        resizePaneBy(resizeIndex, e.pageX - startOffset.current);
+      }
+    },
+    [direction, resizeIndex, resizePaneBy]
+  );
 
-  const onDragStart = (index: number) => (
-    e: React.MouseEvent<HTMLElement, MouseEvent>
-  ) => {
-    startAbsSizes.current = toSplitAbs(sizes);
-    setIsResizing(true);
-    setResizeIndex(index);
-    if (direction === "horizontal") {
-      startOffset.current = e.pageX;
-    } else {
-      startOffset.current = e.pageY;
-    }
-  };
+  const onDragStart =
+    (index: number) => (e: React.MouseEvent<HTMLElement, MouseEvent>) => {
+      startAbsSizes.current = toSplitAbs(sizes);
+      setIsResizing(true);
+      setResizeIndex(index);
+      if (direction === "horizontal") {
+        startOffset.current = e.pageX;
+      } else {
+        startOffset.current = e.pageY;
+      }
+    };
 
   const resetSizes = (newSizes: number[]) => {
-    const numCollapsed = newSizes.filter((size) => size === collapsedSize)
-      .length;
+    const numCollapsed = newSizes.filter(
+      (size) => size === collapsedSize
+    ).length;
     if (numCollapsed === newSizes.length) {
       // If all panes collapsed open last pane fully
       setSizes(
@@ -184,6 +181,17 @@ const useSplitPane = ({
     }
   };
 
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener("mousemove", onDragMove);
+      window.addEventListener("mouseup", onDragStop);
+      return () => {
+        window.removeEventListener("mousemove", onDragMove);
+        window.removeEventListener("mouseup", onDragStop);
+      };
+    }
+  }, [isResizing, onDragMove, onDragStop, sizes]);
+
   return [onDragStart, onTogglePane];
 };
 
@@ -204,7 +212,7 @@ export const toSplitRel = (arr: number[]) => {
   });
 };
 
-var add = (a: number, b: number) => a + b;
+const add = (a: number, b: number) => a + b;
 
 export const resizeAbsPaneBy = (
   resizePane: number,

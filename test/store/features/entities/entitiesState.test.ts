@@ -497,6 +497,7 @@ describe("sprites", () => {
     const cloned = reducer(
       state,
       actions.cloneMetasprite({
+        spriteSheetId: "sprite1",
         spriteAnimationId: animationId,
         metaspriteId: frame,
       })

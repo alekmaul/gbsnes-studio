@@ -551,6 +551,43 @@ const editSpriteSheet: CaseReducer<
   });
 };
 
+// "Auto-detect animations": rebuild the default state from the image
+const autodetectSprite: CaseReducer<
+  EntitiesState,
+  PayloadAction<{ spriteSheetId: string }>
+> = (state, action) => {
+  const spriteSheet = state.spriteSheets.entities[action.payload.spriteSheetId];
+
+  if (!spriteSheet || spriteSheet.height !== 16) {
+    return;
+  }
+
+  const detected = detectClassic(spriteSheet.width, {
+    stateId: spriteSheet.states[0],
+  });
+  metaspriteTilesAdapter.addMany(
+    state.metaspriteTiles,
+    detected.metaspriteTiles
+  );
+  metaspritesAdapter.addMany(state.metasprites, detected.metasprites);
+  spriteAnimationsAdapter.addMany(
+    state.spriteAnimations,
+    detected.spriteAnimations
+  );
+  spriteStatesAdapter.upsertOne(state.spriteStates, detected.state);
+
+  spriteSheetsAdapter.updateOne(state.spriteSheets, {
+    id: spriteSheet.id,
+    changes: {
+      canvasWidth: 16,
+      canvasHeight: 16,
+      states: spriteSheet.states.length
+        ? spriteSheet.states
+        : [detected.state.id],
+    },
+  });
+};
+
 /**************************************************************************
  * Metasprites
  */
@@ -2682,6 +2719,7 @@ const entitiesSlice = createSlice({
      */
 
     editSpriteSheet,
+    autodetectSprite,
 
     /**************************************************************************
      * Metasprites
@@ -2689,7 +2727,10 @@ const entitiesSlice = createSlice({
 
     addMetasprite: {
       reducer: addMetasprite,
-      prepare: (payload: { spriteAnimationId: string }) => {
+      prepare: (payload: {
+        spriteSheetId: string;
+        spriteAnimationId: string;
+      }) => {
         return {
           payload: {
             ...payload,
@@ -2701,6 +2742,7 @@ const entitiesSlice = createSlice({
     cloneMetasprite: {
       reducer: cloneMetasprite,
       prepare: (payload: {
+        spriteSheetId: string;
         spriteAnimationId: string;
         metaspriteId: string;
       }) => {

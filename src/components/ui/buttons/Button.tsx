@@ -1,14 +1,16 @@
 import { ReactNode } from "react";
 import PropTypes from "prop-types";
 import styled, { css } from "styled-components";
-import { ThemeInterface } from "../theme/ThemeInterface";
+import { ThemeInterface } from "ui/theme/ThemeInterface";
 
 export interface ButtonProps {
   readonly size?: "small" | "medium" | "large";
   readonly variant?: "normal" | "primary" | "transparent";
   readonly selected?: boolean;
+  readonly active?: boolean;
   readonly children?: ReactNode;
   readonly theme?: ThemeInterface;
+  readonly disabled?: boolean;
 }
 
 export const Button = styled.button<ButtonProps>`
@@ -20,7 +22,7 @@ export const Button = styled.button<ButtonProps>`
   height: 28px;
   min-width: 24px;
   white-space: nowrap;
-  padding: 0px 15px;
+  padding: 0px 10px;
   box-sizing: border-box;
   font-weight: normal;
   border-width: 1px;
@@ -28,9 +30,13 @@ export const Button = styled.button<ButtonProps>`
   flex-shrink: 0;
 
   svg {
+    height: 17px;
+    width: 17px;
     max-width: 100%;
     max-height: 100%;
+    min-width: 17px;
     fill: ${(props) => props.theme.colors.button.text};
+    opacity: ${(props) => (props.disabled ? 0.3 : 1)};
   }
 
   ${(props) => (props.size === "small" ? smallStyles : "")}
@@ -90,16 +96,35 @@ const primaryStyles = css`
   }
 `;
 
-const transparentStyles = css`
+const transparentStyles = css<ButtonProps>`
   background: transparent;
   border-color: transparent;
+  color: ${(props) => props.theme.colors.button.text};
 
-  :hover {
-    background: rgba(128, 128, 128, 0.3);
-  }
-  :active {
-    background: rgba(128, 128, 128, 0.4);
-  }
+  ${(props) =>
+    !props.disabled
+      ? css`
+          :hover {
+            background: rgba(128, 128, 128, 0.1);
+          }
+          :active {
+            background: rgba(128, 128, 128, 0.2);
+          }
+        `
+      : ""}
+
+  ${(props) =>
+    props.active
+      ? css`
+          background: rgba(128, 128, 128, 0.3);
+          :hover {
+            background: rgba(128, 128, 128, 0.3);
+          }
+          :active {
+            background: rgba(128, 128, 128, 0.2);
+          }
+        `
+      : ""}
 `;
 
 Button.defaultProps = {

@@ -1,11 +1,19 @@
-import React, { FC } from "react";
+import React, { FC, ReactNode } from "react";
 import styled from "styled-components";
 import {
   ActorIcon,
+  AnimationIcon,
   ArrowIcon,
+  SpriteIcon,
   TriggerIcon,
   VariableIcon,
-} from "../icons/Icons";
+  NoiseIcon,
+  DutyIcon,
+  WaveIcon,
+  SongIcon,
+  FolderFilledIcon,
+  BackgroundIcon,
+} from "ui/icons/Icons";
 
 interface EntityListItemWrapperProps {
   nestLevel?: number;
@@ -15,8 +23,25 @@ interface EntityListItemProps {
   item: {
     name: string;
     labelColor?: string;
+    warning?: string;
   };
-  type: "scene" | "actor" | "trigger" | "variable";
+  type:
+    | "custom"
+    | "folder"
+    | "scene"
+    | "actor"
+    | "trigger"
+    | "variable"
+    | "sprite"
+    | "animation"
+    | "state"
+    | "background"
+    | "sound"
+    | "song"
+    | "duty"
+    | "wave"
+    | "noise";
+  icon?: ReactNode;
   nestLevel?: number;
   collapsed?: boolean;
   collapsable?: boolean;
@@ -74,6 +99,10 @@ const EnitityLabel = styled.div`
   flex-grow: 1;
 `;
 
+const EnitityWarningLabel = styled.span`
+  color: red;
+`;
+
 const EntityLabelColor = styled.div.attrs<EntityLabelColorProps>((props) => ({
   className: `label--${props.color}`,
 }))`
@@ -87,6 +116,7 @@ const EntityLabelColor = styled.div.attrs<EntityLabelColorProps>((props) => ({
 export const EntityListItem: FC<EntityListItemProps> = ({
   item,
   type,
+  icon,
   nestLevel,
   collapsable,
   collapsed,
@@ -98,6 +128,12 @@ export const EntityListItem: FC<EntityListItemProps> = ({
         <NavigatorArrow open={!collapsed} onClick={() => onToggleCollapse?.()}>
           <ArrowIcon />
         </NavigatorArrow>
+      )}
+      {type === "custom" && icon && <EnitityIcon>{icon}</EnitityIcon>}
+      {type === "folder" && (
+        <EnitityIcon>
+          <FolderFilledIcon />
+        </EnitityIcon>
       )}
       {type === "actor" && (
         <EnitityIcon>
@@ -114,7 +150,47 @@ export const EntityListItem: FC<EntityListItemProps> = ({
           <VariableIcon />
         </EnitityIcon>
       )}
-      <EnitityLabel>{item.name}</EnitityLabel>
+      {type === "sprite" && (
+        <EnitityIcon>
+          <SpriteIcon />
+        </EnitityIcon>
+      )}
+      {type === "animation" && (
+        <EnitityIcon>
+          <AnimationIcon />
+        </EnitityIcon>
+      )}
+      {type === "background" && (
+        <EnitityIcon>
+          <BackgroundIcon />
+        </EnitityIcon>
+      )}
+      {type === "song" && (
+        <EnitityIcon>
+          <SongIcon />
+        </EnitityIcon>
+      )}
+      {type === "duty" && (
+        <EnitityIcon>
+          <DutyIcon />
+        </EnitityIcon>
+      )}
+      {type === "wave" && (
+        <EnitityIcon>
+          <WaveIcon />
+        </EnitityIcon>
+      )}
+      {type === "noise" && (
+        <EnitityIcon>
+          <NoiseIcon />
+        </EnitityIcon>
+      )}
+      <EnitityLabel>
+        {item.name}{" "}
+        {item.warning && (
+          <EnitityWarningLabel> ({item.warning})</EnitityWarningLabel>
+        )}
+      </EnitityLabel>
       {item.labelColor && <EntityLabelColor color={item.labelColor} />}
     </EnitityListItem>
   );

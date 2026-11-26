@@ -9,7 +9,13 @@ import {
   DRAG_PLAYER,
 } from "../../../consts";
 import { zoomIn, zoomOut } from "../../../lib/helpers/zoom";
-import { Actor, Trigger, SceneData, Variable } from "../entities/entitiesTypes";
+import {
+  Actor,
+  Trigger,
+  SceneData,
+  Variable,
+  MetaspriteTileSize,
+} from "../entities/entitiesTypes";
 import navigationActions from "../navigation/navigationActions";
 import projectActions from "../project/projectActions";
 import settingsActions from "../settings/settingsActions";
@@ -34,7 +40,21 @@ export type EditorSelectionType =
   | "customEvent"
   | "variable";
 
-export type ZoomSection = "world" | "sprites" | "backgrounds" | "ui";
+export type ZoomSection =
+  | "world"
+  | "sprites"
+  | "backgrounds"
+  | "ui"
+  | "spriteTiles";
+
+// Rectangle picked in the tile palette: x/y in image pixels, width/height in
+// tiles of the current tile size
+export interface SpriteTileSelection {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 export interface EditorState {
   tool: Tool;
@@ -81,15 +101,21 @@ export interface EditorState {
   filesSidebarWidth: number;
   navigatorSplitSizes: number[];
   focusSceneId: string;
-  // M9 (SPRITE_EDITOR_PROGRESS.md) - the free-form metasprite canvas's own
-  // transient editing state, matching GB Studio's real editor.selectedMetaspriteTileIds/
-  // editor.spriteTileSelection fields. metaspriteTool picks what a click on the
-  // canvas does; spriteTileSelection is the pending "stamp" picked from the
-  // tile palette (undefined = no stamp pending, normal select/drag mode).
+  zoomSpriteTiles: number;
+  selectedSpriteSheetId: string;
+  selectedSpriteStateId: string;
+  selectedAnimationId: string;
+  selectedMetaspriteId: string;
   selectedMetaspriteTileIds: string[];
-  selectedMetaspriteFrameIndex: number;
-  metaspriteTool: "select" | "place" | "erase";
-  spriteTileSelection?: { x: number; y: number; width: number; height: number };
+  showSpriteGrid: boolean;
+  showOnionSkin: boolean;
+  playSpriteAnimation: boolean;
+  spriteTileSelection?: SpriteTileSelection;
+  // Size of the hardware sprites placed from the tile palette
+  spriteTileSize: MetaspriteTileSize;
+  showSpriteBoundingBox: boolean;
+  replaceSpriteTileMode: boolean;
+  precisionTileMode: boolean;
 }
 
 export const initialState: EditorState = {
@@ -134,10 +160,20 @@ export const initialState: EditorState = {
   clipboardVariables: [],
   navigatorSplitSizes: [300, 100, 100],
   focusSceneId: "",
+  zoomSpriteTiles: 400,
+  selectedSpriteSheetId: "",
+  selectedSpriteStateId: "",
+  selectedAnimationId: "",
+  selectedMetaspriteId: "",
   selectedMetaspriteTileIds: [],
-  selectedMetaspriteFrameIndex: 0,
-  metaspriteTool: "select",
+  showSpriteGrid: true,
+  showOnionSkin: false,
+  playSpriteAnimation: false,
   spriteTileSelection: undefined,
+  spriteTileSize: 16,
+  showSpriteBoundingBox: false,
+  replaceSpriteTileMode: false,
+  precisionTileMode: false,
 };
 
 const editorSlice = createSlice({
@@ -351,6 +387,10 @@ const editorSlice = createSlice({
           state.zoomUI = calculateZoomIn(state.zoomUI);
           break;
         }
+        case "spriteTiles": {
+          state.zoomSpriteTiles = calculateZoomIn(state.zoomSpriteTiles);
+          break;
+        }
       }
     },
 
@@ -383,6 +423,10 @@ const editorSlice = createSlice({
           state.zoomUI = calculateZoomOut(state.zoomUI);
           break;
         }
+        case "spriteTiles": {
+          state.zoomSpriteTiles = calculateZoomOut(state.zoomSpriteTiles);
+          break;
+        }
       }
     },
 
@@ -402,6 +446,10 @@ const editorSlice = createSlice({
         }
         case "ui": {
           state.zoomUI = 100;
+          break;
+        }
+        case "spriteTiles": {
+          state.zoomSpriteTiles = 400;
           break;
         }
       }
@@ -473,46 +521,110 @@ const editorSlice = createSlice({
       state.focusSceneId = action.payload;
     },
 
-    setSelectedMetaspriteTileId: (state, action: PayloadAction<string>) => {
-      state.selectedMetaspriteTileIds = action.payload ? [action.payload] : [];
+    setSelectedSpriteSheetId: (state, action: PayloadAction<string>) => {
+      state.selectedSpriteSheetId = action.payload;
+      state.selectedSpriteStateId = "";
+      state.selectedAnimationId = "";
+      state.selectedMetaspriteId = "";
+      state.selectedMetaspriteTileIds = [];
+      state.playSpriteAnimation = false;
+      state.replaceSpriteTileMode = false;
+      state.spriteTileSelection = undefined;
     },
+
+    setSelectedAnimationId: (
+      state,
+      action: PayloadAction<{
+        animationId: string;
+        stateId: string;
+      }>
+    ) => {
+      state.selectedAnimationId = action.payload.animationId;
+      state.selectedSpriteStateId = action.payload.stateId;
+      state.selectedMetaspriteId = "";
+      state.selectedMetaspriteTileIds = [];
+      state.playSpriteAnimation = false;
+      state.replaceSpriteTileMode = false;
+    },
+
+    setSelectedMetaspriteId: (state, action: PayloadAction<string>) => {
+      state.selectedMetaspriteId = action.payload;
+      state.selectedMetaspriteTileIds = [];
+      state.replaceSpriteTileMode = false;
+    },
+
+    setSelectedMetaspriteTileId: (state, action: PayloadAction<string>) => {
+      state.selectedMetaspriteTileIds = [action.payload];
+      state.playSpriteAnimation = false;
+      state.replaceSpriteTileMode = false;
+    },
+
     setSelectedMetaspriteTileIds: (state, action: PayloadAction<string[]>) => {
       state.selectedMetaspriteTileIds = action.payload;
+      state.playSpriteAnimation = false;
+      state.replaceSpriteTileMode = false;
     },
-    toggleSelectedMetaspriteTileId: (state, action: PayloadAction<string>) => {
-      if (state.selectedMetaspriteTileIds.includes(action.payload)) {
-        state.selectedMetaspriteTileIds = state.selectedMetaspriteTileIds.filter(
-          (id) => id !== action.payload
-        );
-      } else {
-        state.selectedMetaspriteTileIds = [
-          ...state.selectedMetaspriteTileIds,
-          action.payload,
-        ];
-      }
-    },
+
     resetSelectedMetaspriteTileIds: (state) => {
       state.selectedMetaspriteTileIds = [];
+      state.playSpriteAnimation = false;
+      state.replaceSpriteTileMode = false;
     },
-    setSelectedMetaspriteFrameIndex: (state, action: PayloadAction<number>) => {
-      state.selectedMetaspriteFrameIndex = action.payload;
-      state.selectedMetaspriteTileIds = [];
-    },
-    setMetaspriteTool: (
-      state,
-      action: PayloadAction<EditorState["metaspriteTool"]>
-    ) => {
-      state.metaspriteTool = action.payload;
-      if (action.payload !== "place") {
-        state.spriteTileSelection = undefined;
+
+    toggleSelectedMetaspriteTileId: (state, action: PayloadAction<string>) => {
+      if (state.selectedMetaspriteTileIds.indexOf(action.payload) > -1) {
+        // Don't remove if this is the last selected tile
+        if (state.selectedMetaspriteTileIds.length > 1) {
+          state.selectedMetaspriteTileIds =
+            state.selectedMetaspriteTileIds.filter(
+              (id) => id !== action.payload
+            );
+        }
+      } else {
+        state.selectedMetaspriteTileIds.push(action.payload);
       }
+      state.playSpriteAnimation = false;
     },
+
+    setShowOnionSkin: (state, action: PayloadAction<boolean>) => {
+      state.showOnionSkin = action.payload;
+    },
+
+    setShowSpriteGrid: (state, action: PayloadAction<boolean>) => {
+      state.showSpriteGrid = action.payload;
+    },
+
+    setPlaySpriteAnimation: (state, action: PayloadAction<boolean>) => {
+      state.playSpriteAnimation = action.payload;
+    },
+
     setSpriteTileSelection: (
       state,
-      action: PayloadAction<EditorState["spriteTileSelection"]>
+      action: PayloadAction<SpriteTileSelection>
     ) => {
       state.spriteTileSelection = action.payload;
-      state.metaspriteTool = action.payload ? "place" : "select";
+      state.selectedMetaspriteTileIds = [];
+    },
+
+    resetSpriteTileSelection: (state) => {
+      state.spriteTileSelection = undefined;
+    },
+
+    setShowSpriteBoundingBox: (state, action: PayloadAction<boolean>) => {
+      state.showSpriteBoundingBox = action.payload;
+    },
+
+    setReplaceSpriteTileMode: (state, action: PayloadAction<boolean>) => {
+      state.replaceSpriteTileMode = action.payload;
+    },
+
+    setPrecisionTileMode: (state, action: PayloadAction<boolean>) => {
+      state.precisionTileMode = action.payload;
+    },
+
+    setSpriteTileSize: (state, action: PayloadAction<MetaspriteTileSize>) => {
+      state.spriteTileSize = action.payload;
+      state.spriteTileSelection = undefined;
     },
   },
   extraReducers: (builder) =>
@@ -533,6 +645,37 @@ const editorSlice = createSlice({
         state.scene = action.payload.sceneId;
         state.entityId = action.payload.triggerId;
         state.worldFocus = true;
+      })
+      .addCase(entitiesActions.addMetasprite, (state, action) => {
+        state.selectedMetaspriteId = action.payload.metaspriteId;
+        state.selectedMetaspriteTileIds = [];
+      })
+      .addCase(entitiesActions.cloneMetasprite, (state, action) => {
+        state.selectedMetaspriteId = action.payload.newMetaspriteId;
+        state.selectedMetaspriteTileIds = [];
+      })
+      .addCase(entitiesActions.addMetaspriteTile, (state, _action) => {
+        state.spriteTileSelection = undefined;
+      })
+      .addCase(entitiesActions.addSpriteState, (state, action) => {
+        state.selectedSpriteStateId = action.payload.spriteStateId;
+        state.selectedAnimationId = "";
+        state.selectedMetaspriteTileIds = [];
+      })
+      .addCase(entitiesActions.removeMetasprite, (state, _action) => {
+        state.selectedMetaspriteId = "";
+        state.selectedMetaspriteTileIds = [];
+      })
+      .addCase(entitiesActions.removeSpriteState, (state, _action) => {
+        state.selectedSpriteStateId = "";
+        state.selectedAnimationId = "";
+        state.selectedMetaspriteId = "";
+        state.selectedMetaspriteTileIds = [];
+      })
+      .addCase(entitiesActions.autodetectSprite, (state, _action) => {
+        state.selectedAnimationId = "";
+        state.selectedMetaspriteId = "";
+        state.selectedMetaspriteTileIds = [];
       })
       .addCase(entitiesActions.addCustomEvent, (state, action) => {
         state.type = "customEvent";

@@ -7,6 +7,7 @@ import soundFxMiddleware from "./features/soundfx/soundfxMiddleware";
 import warningsMiddleware from "./features/warnings/warningsMiddleware";
 import undoMiddleware from "./features/undo/undoMiddleware";
 import clipboardMiddleware from "./features/clipboard/clipboardMiddleware";
+import spriteClipboardMiddleware from "./features/clipboard/spriteClipboardMiddleware";
 import projectMiddleware from "./features/project/projectMiddleware";
 import engineMiddleware from "./features/engine/engineMiddleware";
 
@@ -31,6 +32,7 @@ const store = configureStore({
     warningsMiddleware,
     undoMiddleware,
     clipboardMiddleware,
+    spriteClipboardMiddleware,
   ]),
 });
 

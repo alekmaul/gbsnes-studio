@@ -15,6 +15,7 @@ export interface RelativePortalProps {
   offsetX?: number;
   offsetY?: number;
   pin?: PinDirection;
+  zIndex?: number;
 }
 
 const pinStyles: Record<PinDirection, CSSProperties> = {
@@ -40,22 +41,53 @@ const pinStyles: Record<PinDirection, CSSProperties> = {
   },
 };
 
+const MIN_MARGIN = 10;
+
 export const RelativePortal: FC<RelativePortalProps> = ({
   children,
   offsetX = 0,
   offsetY = 0,
   pin = "top-left",
+  zIndex,
 }) => {
   const ref = useRef<HTMLDivElement>(null);
+  const contentsRef = useRef<HTMLDivElement>(null);
+
   const [x, setX] = useState(0);
   const [y, setY] = useState(0);
 
   useLayoutEffect(() => {
     const update = () => {
       const rect = ref.current?.getBoundingClientRect();
+      const contentsHeight = contentsRef.current?.offsetHeight || 0;
+      const contentsWidth = contentsRef.current?.offsetWidth || 0;
+
       if (rect) {
-        setY(rect.top + offsetY);
-        setX(rect.left + offsetX);
+        let newY = rect.top + offsetY;
+        let newX = rect.left + offsetX;
+
+        if (pin === "bottom-left" || pin === "bottom-right") {
+          if (newY - contentsHeight - MIN_MARGIN < 0) {
+            newY = contentsHeight + MIN_MARGIN;
+          }
+        } else {
+          if (newY + contentsHeight + MIN_MARGIN > window.innerHeight) {
+            newY = window.innerHeight - contentsHeight - MIN_MARGIN;
+          }
+        }
+
+        if (pin === "bottom-right" || pin === "top-right") {
+          if (newX - contentsWidth - MIN_MARGIN < 0) {
+            newX = contentsWidth + MIN_MARGIN;
+          }
+        } else {
+          if (newX + contentsWidth + MIN_MARGIN > window.innerWidth) {
+            newX = window.innerWidth - contentsWidth - MIN_MARGIN;
+          }
+        }
+
+        setY(newY);
+        setX(newX);
       }
     };
     update();
@@ -63,21 +95,23 @@ export const RelativePortal: FC<RelativePortalProps> = ({
     return () => {
       clearInterval(timer);
     };
-  }, [ref]);
+  }, [ref, offsetX, offsetY, pin]);
 
   return (
     <>
-      <div ref={ref} />
+      <div ref={ref} style={{ zIndex: zIndex }} />
       <Portal>
         <div
           style={{
             position: "fixed",
             left: x,
             top: y,
-            zIndex: 1,
+            zIndex,
           }}
         >
-          <div style={pinStyles[pin]}>{children}</div>
+          <div ref={contentsRef} style={pinStyles[pin]}>
+            {children}
+          </div>
         </div>
       </Portal>
     </>

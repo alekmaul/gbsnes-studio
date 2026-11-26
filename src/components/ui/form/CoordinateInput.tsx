@@ -56,7 +56,7 @@ export const CoordinateInput: FC<CoordinateInputProps> = ({
       id={name}
       name={name}
       type="number"
-      value={value}
+      value={value !== undefined ? value : ""}
       min={min}
       max={max}
       step={step}

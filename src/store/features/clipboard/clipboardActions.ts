@@ -24,6 +24,22 @@ const copyEvent = createAction<ScriptEvent>("clipboard/copyEvent");
 const copyScript = createAction<ScriptEvent[]>("clipboard/copyScript");
 const pasteCustomEvents = createAction<void>("clipboard/pasteCustomEvents");
 
+const copyMetaspriteTiles = createAction<{
+  metaspriteTileIds: string[];
+}>("clipboard/copyMetaspriteTiles");
+const copyMetasprites = createAction<{ metaspriteIds: string[] }>(
+  "clipboard/copyMetasprites"
+);
+const copySpriteState = createAction<{ spriteStateId: string }>(
+  "clipboard/copySpriteState"
+);
+const pasteSprite = createAction<{
+  spriteSheetId: string;
+  metaspriteId: string;
+  spriteAnimationId: string;
+  spriteStateId: string;
+}>("clipboard/pasteSprite");
+
 const copySelectedEntity = () => (
   dispatch: ThunkDispatch<RootState, unknown, AnyAction>,
   getState: () => RootState
@@ -127,5 +143,9 @@ export default {
   copySelectedEntity,
   pasteClipboardEntity,
   pasteClipboardEntityInPlace,
-  pasteCustomEvents
+  pasteCustomEvents,
+  copyMetaspriteTiles,
+  copyMetasprites,
+  copySpriteState,
+  pasteSprite,
 };
