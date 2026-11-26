@@ -39,18 +39,34 @@ u8 scene_num_triggers = 0;
 u8 scene_width = SCENE_TILE_W;
 u8 scene_height = SCENE_TILE_H;
 
+/* rows of the 224 line screen */
+#define SCENE_SCREEN_ROWS 28
+
 /* Horizontal background streaming (v4) - see SceneStreamBackground's own
  * comment (scene.h). 0xff = no active streaming background (the common
  * case - reset every SceneInit, only set when bg_map_w[bg_index] > 64). */
 static u8 stream_bg_index = 0xff;
 static u16 stream_bg_w = 0;
 static u8 stream_bg_h = 0;
-/* World tile-column currently occupying VRAM tile-column 0 of the 64-wide
- * ring buffer - i.e. VRAM column (worldCol & 63) always holds world column
- * worldCol, kept true by streaming a column in/out exactly as it crosses
- * the loaded window's edge. Starts at 0 (SceneInit's own initial DMA
- * already loads world columns 0-63 into VRAM columns 0-63 unchanged). */
-static u16 stream_window_left = 0;
+/* First world tile column held by the 64-wide ring buffer, i.e. VRAM column
+ * (worldCol & 63) holds world column worldCol for worldCol in
+ * [left, left + 64). One per parallax band: the rows of a band show the part
+ * of the background its own scroll reaches, so each band streams its own
+ * rows. Without bands only the first one is used. All start at 0: SceneInit's
+ * DMA loads world columns 0-63. */
+static u16 stream_window_left[MAX_PARALLAX_LAYERS];
+
+/* Columns waiting for the next vertical blank. SceneStreamPrepare() reads them
+ * from ROM during the frame, SceneStreamBackground() sends each one with a
+ * single DMA (vram_column.asm). An entry is the rows of a column which lie in
+ * one 32x32 screen of the tilemap. */
+#define STREAM_QUEUE 8
+#define STREAM_ENTRY_ROWS 32
+extern void DmaColumnVram(const u16 *data, u16 vram, u16 bytes);
+static u16 stream_data[STREAM_QUEUE * STREAM_ENTRY_ROWS];
+static u16 stream_dest[STREAM_QUEUE];
+static u16 stream_bytes[STREAM_QUEUE];
+static u16 stream_queued = 0;
 
 /* v4 (Map Engine streaming) - see scene.h's own comment. Reset every
  * SceneInit; mutually exclusive with stream_bg_index != 0xff. */
@@ -888,6 +904,7 @@ void SceneInit(void)
      * or leaves it black if a fade-in is pending after a SWITCH_SCENE. */
     WaitForVBlank();
     setScreenOff();
+    stream_queued = 0; /* nothing left of the previous scene */
     dmaCopyVram((u8 *)bg_tiles_ptrs[bg_index], BG1_GFX_VRAM, bg_tiles_len[bg_index]);
     if (!use_map_engine)
     {
@@ -949,7 +966,10 @@ void SceneInit(void)
             stream_bg_index = bg_index;
             stream_bg_w = bg_map_w[bg_index];
             stream_bg_h = bg_map_h[bg_index];
-            stream_window_left = 0;
+            for (i = 0; i < MAX_PARALLAX_LAYERS; i++)
+            {
+                stream_window_left[i] = 0;
+            }
         }
         else
         {
@@ -1183,75 +1203,153 @@ static u16 BgMapWordOffset(u8 col, u8 row)
     return ((u16)(qy * 2 + qx) << 10) + ((u16)ly << 5) + lx;
 }
 
-/* Streams one world column's worth of tile data (every row, up to the
- * background's real height or 64, whichever is smaller) from the full ROM
- * tilemap (bg_fullmap_ptrs) into the VRAM ring-buffer slot worldCol&63 -
- * see stream_window_left's own comment for the addressing scheme. One
- * dmaCopyVram per row (2 bytes each): a background's real tile data isn't
- * contiguous column-to-column in either the ROM source (row-major, w
- * apart) or the VRAM destination (quadrant-shaped, 32 or 64 words apart
- * depending on row) - see PERF.md for the CPU-budget context this was
- * verified against. */
-static void StreamColumn(u16 worldCol)
+/* Queues the rows [first, end) of one world column from the full ROM tilemap
+ * (bg_fullmap_ptrs) for the VRAM ring-buffer slot worldCol&63 - see
+ * stream_window_left's own comment for the addressing scheme. Returns 0, and
+ * queues nothing, when there is no room left. A background's tile data isn't
+ * contiguous along a column (row-major, w apart), hence the copy. */
+static u16 StreamColumn(u16 worldCol, u16 first, u16 end)
 {
     u8 vramCol = (u8)(worldCol & 63);
-    u8 maxRow = (stream_bg_h < 64) ? stream_bg_h : 64;
-    u8 row;
-    const u8 *full = bg_fullmap_ptrs[stream_bg_index];
-    for (row = 0; row < maxRow; row++)
+    u16 row, stop, n;
+    const u16 *src;
+    u16 *dst;
+
+    /* rows of both 32x32 screens need two entries */
+    if (stream_queued >= STREAM_QUEUE) return 0;
+    if (first < 32)
     {
-        u16 srcIdx = ((u16)row * stream_bg_w + worldCol) * 2;
-        /* BgMapWordOffset is a pure in-window offset (0-based, mirroring
-         * compileSnesData.js's own mapByteIndex, which has no notion of a
-         * VRAM base either) - BG1_MAP_VRAM must be added here explicitly.
-         * v4 (user-asked VRAM unification): this used to be a no-op (base
-         * 0x0000) while this streaming path's own SceneInit DMA also used
-         * 0x0000 - now that BG1's tilemap lives at a fixed BG1_MAP_VRAM
-         * (0x6800) regardless of routing, forgetting this base here would
-         * have silently streamed columns into OBJ's new graphics region at
-         * the bottom of VRAM instead of the actual tilemap. */
-        u16 dstWord = BG1_MAP_VRAM + BgMapWordOffset(vramCol, row);
-        dmaCopyVram((u8 *)(full + srcIdx), dstWord, 2);
+        if (end > 32)
+        {
+            if (stream_queued + 2 > STREAM_QUEUE) return 0;
+        }
     }
+
+    row = first;
+    while (row < end)
+    {
+        stop = end;
+        if (row < 32)
+        {
+            if (stop > 32) stop = 32;
+        }
+        /* BgMapWordOffset is a pure in-window offset (mirroring
+         * compileSnesData.js's mapByteIndex): BG1_MAP_VRAM is added here */
+        stream_dest[stream_queued] =
+            BG1_MAP_VRAM + BgMapWordOffset(vramCol, (u8)row);
+        stream_bytes[stream_queued] = (stop - row) << 1;
+        src = (const u16 *)(bg_fullmap_ptrs[stream_bg_index] +
+                            ((row * stream_bg_w + worldCol) << 1));
+        dst = &stream_data[stream_queued * STREAM_ENTRY_ROWS];
+        for (n = row; n < stop; n++)
+        {
+            *dst++ = *src;
+            src += stream_bg_w;
+        }
+        stream_queued++;
+        row = stop;
+    }
+    return 1;
 }
 
-/* Streams at most STREAM_MAX_COLUMNS_PER_FRAME columns per call - caps the
+/* Queues at most STREAM_MAX_COLUMNS_PER_FRAME columns per band - caps the
  * worst case (a scripted teleport/SWITCH_SCENE-style jump far from the
  * loaded window, or a single very fast frame) so one frame's vblank can't
  * be blown by an unbounded catch-up; the window just catches up over the
  * next few frames instead; ordinary walking speed never gets close to this
  * limit (see the plan's own Mesen verification). */
-#define STREAM_MAX_COLUMNS_PER_FRAME 4
-void SceneStreamBackground(void)
+#define STREAM_MAX_COLUMNS_PER_FRAME 2
+/* Moves the window of the rows [first, end) towards what `scroll` shows */
+static void StreamRows(u16 band, u16 first, u16 end, s16 scroll)
 {
     s16 target_col;
+    u16 left;
     u8 n;
 
-    if (stream_bg_index == 0xff) return;
-
-    target_col = (s16)(scroll_x >> 3);
+    target_col = scroll >> 3;
     if (target_col < 0) target_col = 0;
     if (target_col > (s16)(stream_bg_w - 64)) target_col = (s16)(stream_bg_w - 64);
 
+    left = stream_window_left[band];
     n = STREAM_MAX_COLUMNS_PER_FRAME;
-    while ((u16)target_col > stream_window_left && n)
+    while ((u16)target_col > left && n)
     {
-        /* window slides right by 1: world column (stream_window_left+64)
-         * becomes newly visible on the right edge, reusing the VRAM slot
-         * world column stream_window_left just vacated on the left. */
-        StreamColumn(stream_window_left + 64);
-        stream_window_left++;
+        /* window slides right by 1: world column (left+64) becomes newly
+         * visible on the right edge, reusing the VRAM slot world column
+         * left just vacated. */
+        if (!StreamColumn(left + 64, first, end)) break;
+        left++;
         n--;
     }
     n = STREAM_MAX_COLUMNS_PER_FRAME;
-    while ((u16)target_col < stream_window_left && n)
+    while ((u16)target_col < left && n)
     {
-        /* window slides left by 1: symmetric case, world column
-         * (stream_window_left-1) becomes newly visible on the left edge. */
-        stream_window_left--;
-        StreamColumn(stream_window_left);
+        /* window slides left by 1: symmetric case, world column (left-1)
+         * becomes newly visible on the left edge. */
+        if (!StreamColumn(left - 1, first, end)) break;
+        left--;
         n--;
     }
+    stream_window_left[band] = left;
+}
+
+void SceneStreamPrepare(void)
+{
+    u16 band, first, end, maxRow, by_band;
+
+    if (stream_bg_index == 0xff) return;
+
+    maxRow = stream_bg_h;
+    if (maxRow > 64) maxRow = 64;
+
+    /* The bands are rows of the screen: they are also rows of the background
+     * only when the scene doesn't scroll vertically (as parallax requires) */
+    by_band = 0;
+    if (parallax_active)
+    {
+        if (stream_bg_h <= SCENE_SCREEN_ROWS) by_band = 1;
+    }
+    if (!by_band)
+    {
+        StreamRows(0, 0, maxRow, scroll_x);
+        return;
+    }
+
+    first = 0;
+    for (band = 0; band < MAX_PARALLAX_LAYERS; band++)
+    {
+        if (parallax_lines[band] == 0) break;
+        end = first + (parallax_lines[band] >> 3);
+        /* the last band keeps its scroll down to the bottom of the screen */
+        if (band == MAX_PARALLAX_LAYERS - 1) end = maxRow;
+        else if (parallax_lines[band + 1] == 0) end = maxRow;
+        if (end > maxRow) end = maxRow;
+        StreamRows(band, first, end, ParallaxBandScroll(band));
+        first = end;
+    }
+}
+
+void SceneStreamBackground(void)
+{
+    u16 i;
+    for (i = 0; i < stream_queued; i++)
+    {
+        DmaColumnVram(&stream_data[i * STREAM_ENTRY_ROWS], stream_dest[i],
+                      stream_bytes[i]);
+    }
+    stream_queued = 0;
+}
+
+/* For a scene starting with its camera beyond the first 64 columns: loads
+ * what it shows while the screen is still blanked */
+void SceneStreamCatchUp(void)
+{
+    do
+    {
+        SceneStreamPrepare();
+        if (stream_queued == 0) break;
+        SceneStreamBackground();
+    } while (1);
 }
 
 /*--------------------------------------------------------------------------- */

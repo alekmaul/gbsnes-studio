@@ -319,6 +319,10 @@ int main(void)
                 scene_index = scene_next_index;
                 SceneInit();
                 CameraInit();
+                if (!map_engine_active)
+                {
+                    SceneStreamCatchUp(); /* the screen is still blanked */
+                }
                 if (scene_fade_pending)
                 {
                     scene_fade_pending = 0;
@@ -354,6 +358,12 @@ int main(void)
             x_pos = (u16)scroll_x;
             y_pos = (u16)scroll_y;
             mapUpdate();
+        }
+        else
+        {
+            /* the columns of a streamed background to send at the next
+             * vertical blank, for the camera computed above */
+            SceneStreamPrepare();
         }
 
         spcProcess(); // must run every frame - streams soundbank data to the APU

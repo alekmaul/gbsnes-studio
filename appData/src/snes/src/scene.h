@@ -161,7 +161,12 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir);
  * every other wide scene now streams through PVSnesLib's own Map Engine
  * instead, which this hand-rolled path can't be combined with parallax's
  * banded HDMA (see game.c/scene.c SceneInit for why). */
+/* ... in two steps: read the columns the camera needs during the frame, then
+ * send them to VRAM during the vertical blank */
+void SceneStreamPrepare(void);
 void SceneStreamBackground(void);
+/* Both at once, until the background shows what the camera does (blank screen) */
+void SceneStreamCatchUp(void);
 
 /* v4 (Map Engine streaming): set by SceneInit when this scene's background
  * needs streaming AND has no active parallax - PVSnesLib's own mapLoad/

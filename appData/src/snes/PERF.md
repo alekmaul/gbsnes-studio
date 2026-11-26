@@ -76,15 +76,17 @@ ceiling** (`SC_64x64`'s real VRAM capacity) — a wider background can't have it
 resident in VRAM at once. `compileSnesData.js` still loads the initial 64-tile window at
 `SceneInit` exactly as any other background does, but also emits the background's *complete*,
 unclamped tilemap as a second ROM array (`bg<i>_fullmap`, `bg_fullmap_ptrs[]` — null for every
-background that already fits). `scene.c`'s `SceneStreamBackground()` runs once per frame,
-during vblank right after `bgSetScroll`, and streams in new tile columns from that ROM array as
-the camera scrolls past the loaded window — one `dmaCopyVram` per row (a background's row data
-isn't contiguous column-to-column in either the ROM source or the quadrant-shaped VRAM
-destination — see `BgMapWordOffset`'s own comment), capped at
-`STREAM_MAX_COLUMNS_PER_FRAME` (4) so a worst-case jump (a scripted teleport landing far from
-the loaded window) can't blow one frame's vblank — the window just catches up over the next few
-frames instead. Horizontal only (no current scene exceeds 64 tiles tall); vertical streaming
-would follow the same principle if ever needed.
+background that already fits). `scene.c` streams in new tile columns from that ROM array as the
+camera scrolls past the loaded window, at most `STREAM_MAX_COLUMNS_PER_FRAME` (2) per parallax
+band and per frame; a farther jump catches up over the next frames, and a scene's start is loaded
+while the screen is blanked. Horizontal only (no current scene exceeds 64 tiles tall).
+
+2026-11-26: the columns used to be written during the vertical blank with one `dmaCopyVram` per
+row, from 816-tcc code: about 3 scanlines a row, 80 to 90 lines for a column, when the blank has
+37. VRAM ignored the rest, leaving wrong tiles. Now `SceneStreamPrepare()` copies them to a WRAM
+queue during the frame and `SceneStreamBackground()` sends each with a single DMA stepping 32
+words (`vram_column.asm`); streaming, the HDMA table and the dialogue box all end before the
+picture starts (measured in Mesen on the parallax sample).
 
 Two real bugs were found and fixed on the way here, both worth remembering if this code is
 touched again: an **SC_64x64 tilemap is four separate 32×32-tile "screens"** (VRAM word offsets

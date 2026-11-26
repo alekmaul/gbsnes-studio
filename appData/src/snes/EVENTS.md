@@ -139,9 +139,17 @@ fixed `[MAX_PARALLAX_LAYERS(3)*2]` band table (after the scene blob's header - s
 `game.c`'s main loop calls `ParallaxUpdate()` once per frame, right after the existing
 `bgSetScroll(0, scroll_x, scroll_y)` call, only while `parallax_active` is set - `scroll_y`
 (vertical) is still owned by the plain `bgSetScroll` call either way. Leaving a parallax scene
-for one with none explicitly disables HDMA channel 3 (`setModeHdmaReset`) in `SceneInit` - it's
-a **sticky** register (`REG_HDMAEN`), so without this a scene with no parallax at all would
-otherwise keep replaying the *previous* scene's stale HDMA table over its own `BG1HOFS` forever.
+for one with none disables HDMA channel 3 (`REG_HDMAEN = 0`) in `SceneInit` - the register is
+**sticky**, so without this a scene with no parallax would keep replaying the previous scene's
+table over its own `BG1HOFS`. (PVSnesLib's `setModeHdmaReset()` doesn't disable a channel: it
+enables it.) An HDMA entry covers 127 lines at most, so `ParallaxUpdate()` splits taller bands.
+
+**Backgrounds wider than 64 tiles.** Only 64 tile columns are in VRAM, so they are streamed
+from ROM as the camera moves. With parallax, **each band streams its own rows following its own
+scroll** (a slow band still shows columns the fast ones have left behind). This needs a scene one
+screen high, like parallax itself: a taller one is streamed as a whole, following the camera.
+Columns are read during the frame (`SceneStreamPrepare`) and sent with one DMA each during the
+vertical blank (`vram_column.asm`).
 
 **Verified (M8, v4)**: a real Mesen run with a 2-band scene (`{height:8, speed:1}, {height:10,
 speed:-1}`) at a real non-zero `scroll_x` (104, from a wide test scene and an off-centre player

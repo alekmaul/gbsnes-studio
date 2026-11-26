@@ -17,6 +17,9 @@ extern u8 parallax_lines[MAX_PARALLAX_LAYERS];
 extern s8 parallax_shift[MAX_PARALLAX_LAYERS];
 extern u8 parallax_active;
 
+/* How far band `band` is scrolled, in pixels, for the current camera */
+s16 ParallaxBandScroll(u16 band);
+
 /* Rebuilds HDMATable16 from the current scene's bands + scroll_x (game.c)
  * and arms HDMA channel 3 via PVSnesLib's setParallaxScrolling(0) (BG1).
  * Call once per frame, in vblank, alongside bgSetScroll - X-axis only, so

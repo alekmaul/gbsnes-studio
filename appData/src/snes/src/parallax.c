@@ -27,32 +27,38 @@ u8 parallax_active = 0;
 
 extern s16 scroll_x; /* game.c - the same value bgSetScroll(0, ...) uses */
 
+/* An HDMA table entry covers 127 lines at most: above, the top bit of its
+ * count means something else */
+#define HDMA_MAX_LINES 127
+
+s16 ParallaxBandScroll(u16 band)
+{
+    if (parallax_shift[band] > 0) return scroll_x >> parallax_shift[band];
+    if (parallax_shift[band] < 0) return scroll_x << (-parallax_shift[band]);
+    return scroll_x;
+}
+
 void ParallaxUpdate(void)
 {
-    u8 i;
+    u8 i, lines, part;
     u16 idx = 0;
-    s16 shifted;
+    u16 shifted;
 
     for (i = 0; i < MAX_PARALLAX_LAYERS; i++)
     {
         if (parallax_lines[i] == 0) break;
 
-        if (parallax_shift[i] > 0)
+        shifted = (u16)ParallaxBandScroll(i);
+        lines = parallax_lines[i];
+        while (lines)
         {
-            shifted = scroll_x >> parallax_shift[i];
+            part = lines;
+            if (part > HDMA_MAX_LINES) part = HDMA_MAX_LINES;
+            HDMATable16[idx] = part;
+            *(u16 *)&HDMATable16[idx + 1] = shifted;
+            idx += 3;
+            lines -= part;
         }
-        else if (parallax_shift[i] < 0)
-        {
-            shifted = scroll_x << (-parallax_shift[i]);
-        }
-        else
-        {
-            shifted = scroll_x;
-        }
-
-        HDMATable16[idx] = parallax_lines[i];
-        *(u16 *)&HDMATable16[idx + 1] = (u16)shifted;
-        idx += 3;
     }
     HDMATable16[idx] = 0; /* terminator - PVSnesLib requires this */
 
