@@ -51,6 +51,12 @@
 
   "// 6": "Form Fields ----------------------------------------------",
 
+  "FIELD_IDLE": "À l'arrêt",
+  "FIELD_IDLE_DIR": "Arrêt {direction}",
+  "FIELD_MOVING_DIR": "Mouvement {direction}",
+  "FIELD_JUMPING_DIR": "Saut {direction}",
+  "FIELD_CLIMBING": "Escalade",
+  "FIELD_HOVER": "Survol",
   "FIELD_NAME": "Nom",
   "FIELD_AUTHOR": "Auteur",
   "FIELD_NOTES": "Notes",

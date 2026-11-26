@@ -10,6 +10,7 @@ import {
   Emote,
 } from "../../../../src/store/features/entities/entitiesTypes";
 import actions from "../../../../src/store/features/entities/entitiesActions";
+import { denormalizeEntities } from "../../../../src/store/features/entities/entitiesHelpers";
 import projectActions, {
   ProjectData,
 } from "../../../../src/store/features/project/projectActions";
@@ -333,743 +334,222 @@ test("Should remove sprite sheets that are deleted while project is open", () =>
   expect(newState.spriteSheets.ids.length).toBe(0);
 });
 
-test("Should edit a sprite sheet's animationType override and bounds", () => {
-  const state: EntitiesState = {
-    ...initialState,
-    spriteSheets: {
-      entities: {
-        sprite1: {
-          ...dummySpriteSheet,
-          id: "sprite1",
-        },
-      },
-      ids: ["sprite1"],
-    },
-  };
+const loadSpriteAction = (data: Partial<SpriteSheet>) =>
+  projectActions.loadSprite.fulfilled(
+    // (removed sheets are remembered by inode: use one no other test uses)
+    { data: { ...dummySpriteSheet, inode: "sprites", ...data } },
+    "randomid",
+    "sprite1.png"
+  );
 
-  const action = actions.editSpriteSheet({
-    spriteSheetId: "sprite1",
-    changes: {
-      animationType: "multi_movement",
-      boundsX: 0,
-      boundsY: 0,
-      boundsWidth: 16,
-      boundsHeight: 16,
-    },
-  });
+// A real previous dispatch: its result is frozen by immer, unlike a hand
+// written state
+const stateWithSprite = (data: Partial<SpriteSheet> = {}) =>
+  reducer(
+    initialState,
+    loadSpriteAction({
+      id: "sprite1",
+      filename: "sprite1.png",
+      width: 48,
+      ...data,
+    })
+  );
 
-  const newState = reducer(state, action);
-  const sprite = newState.spriteSheets.entities["sprite1"];
-  expect(sprite?.animationType).toBe("multi_movement");
-  expect(sprite?.boundsWidth).toBe(16);
-  expect(sprite?.boundsHeight).toBe(16);
-});
+const firstSpriteState = (state: EntitiesState) =>
+  state.spriteStates.entities[
+    state.spriteSheets.entities["sprite1"]!.states[0]
+  ]!;
 
-test("Should add a named state to a sprite sheet", () => {
-  const state: EntitiesState = {
-    ...initialState,
-    spriteSheets: {
-      entities: {
-        sprite1: {
-          ...dummySpriteSheet,
-          id: "sprite1",
-        },
-      },
-      ids: ["sprite1"],
-    },
-  };
+const framesOf = (state: EntitiesState, animationIndex: number) =>
+  state.spriteAnimations.entities[
+    firstSpriteState(state).animations[animationIndex]
+  ]!.frames;
 
-  const action = actions.addSpriteState({
-    spriteSheetId: "sprite1",
-    name: "Jump",
-    targetSpriteSheetId: "sprite2",
-  });
-
-  const newState = reducer(state, action);
-  const states = newState.spriteSheets.entities["sprite1"]?.states;
-  expect(states?.length).toBe(1);
-  expect(states?.[0].name).toBe("Jump");
-  expect(states?.[0].spriteSheetId).toBe("sprite2");
-});
-
-test("Should edit a named state on a sprite sheet", () => {
-  const state: EntitiesState = {
-    ...initialState,
-    spriteSheets: {
-      entities: {
-        sprite1: {
-          ...dummySpriteSheet,
-          id: "sprite1",
-          states: [{ id: "state1", name: "Jump", spriteSheetId: "sprite2" }],
-        },
-      },
-      ids: ["sprite1"],
-    },
-  };
-
-  const action = actions.editSpriteState({
-    spriteSheetId: "sprite1",
-    stateId: "state1",
-    changes: { name: "Climb" },
-  });
-
-  const newState = reducer(state, action);
-  const states = newState.spriteSheets.entities["sprite1"]?.states;
-  expect(states?.[0].name).toBe("Climb");
-  expect(states?.[0].spriteSheetId).toBe("sprite2");
-});
-
-test("Should remove a named state from a sprite sheet", () => {
-  const state: EntitiesState = {
-    ...initialState,
-    spriteSheets: {
-      entities: {
-        sprite1: {
-          ...dummySpriteSheet,
-          id: "sprite1",
-          states: [{ id: "state1", name: "Jump", spriteSheetId: "sprite2" }],
-        },
-      },
-      ids: ["sprite1"],
-    },
-  };
-
-  const action = actions.removeSpriteState({
-    spriteSheetId: "sprite1",
-    stateId: "state1",
-  });
-
-  const newState = reducer(state, action);
-  expect(newState.spriteSheets.entities["sprite1"]?.states).toEqual([]);
-});
-
-describe("metasprites (M9, SPRITE_EDITOR_PROGRESS.md)", () => {
-  test("Should add a tile to a frame, creating the frame on demand", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: { ...dummySpriteSheet, id: "sprite1", metaspriteMode: true },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.addMetaspriteTile({
+const addTile = (
+  state: EntitiesState,
+  metaspriteId: string,
+  x: number,
+  y: number,
+  size: 8 | 16
+) =>
+  reducer(
+    state,
+    actions.addMetaspriteTile({
       spriteSheetId: "sprite1",
-      frameIndex: 0,
-      x: 0,
-      y: 0,
-      sliceX: 16,
+      metaspriteId,
+      x,
+      y,
+      sliceX: 0,
       sliceY: 0,
-    });
-
-    const newState = reducer(state, action);
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.length).toBe(1);
-    const tileId = sheet?.metasprites?.[0].tiles[0] as string;
-    expect(tileId).toBeTruthy();
-    expect(sheet?.metaspriteTiles?.[tileId]).toEqual({
-      id: tileId,
-      x: 0,
-      y: 0,
-      sliceX: 16,
-      sliceY: 0,
+      size,
       flipX: false,
       flipY: false,
       priority: false,
-    });
-  });
+    })
+  );
 
-  test("Should place a 2nd frame's first tile without disturbing frame 0", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: { ...dummySpriteSheet, id: "sprite1", metaspriteMode: true },
-        },
-        ids: ["sprite1"],
-      },
-    };
+const tilesOf = (state: EntitiesState, metaspriteId: string) =>
+  state.metasprites.entities[metaspriteId]!.tiles.map(
+    (id) => state.metaspriteTiles.entities[id]!
+  );
 
-    const state1 = reducer(
-      state,
-      actions.addMetaspriteTile({
-        spriteSheetId: "sprite1",
-        frameIndex: 0,
-        x: 0,
-        y: 0,
-        sliceX: 0,
-        sliceY: 0,
-      })
-    );
-    const newState = reducer(
-      state1,
-      actions.addMetaspriteTile({
-        spriteSheetId: "sprite1",
-        frameIndex: 2,
-        x: 16,
-        y: 0,
-        sliceX: 32,
-        sliceY: 0,
-      })
-    );
-
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.length).toBe(3);
-    expect(sheet?.metasprites?.[0].tiles.length).toBe(1);
-    expect(sheet?.metasprites?.[1].tiles.length).toBe(0);
-    expect(sheet?.metasprites?.[2].tiles.length).toBe(1);
-  });
-
-  test("Should move tiles to absolute positions", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["tile1"] }],
-            metaspriteTiles: {
-              tile1: {
-                id: "tile1",
-                x: 0,
-                y: 0,
-                sliceX: 0,
-                sliceY: 0,
-                flipX: false,
-                flipY: false,
-                priority: false,
-              },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.moveMetaspriteTiles({
-      spriteSheetId: "sprite1",
-      metaspriteTiles: [{ metaspriteTileId: "tile1", x: 32, y: -16 }],
-    });
-
-    const newState = reducer(state, action);
-    const tile = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles?.tile1;
-    expect(tile?.x).toBe(32);
-    expect(tile?.y).toBe(-16);
-  });
-
-  test("Should nudge selected tiles by a relative offset", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["tile1"] }],
-            metaspriteTiles: {
-              tile1: {
-                id: "tile1",
-                x: 10,
-                y: 10,
-                sliceX: 0,
-                sliceY: 0,
-                flipX: false,
-                flipY: false,
-                priority: false,
-              },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.moveMetaspriteTilesRelative({
-      spriteSheetId: "sprite1",
-      metaspriteTileIds: ["tile1"],
-      x: -2,
-      y: 5,
-    });
-
-    const newState = reducer(state, action);
-    const tile = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles?.tile1;
-    expect(tile?.x).toBe(8);
-    expect(tile?.y).toBe(15);
-  });
-
-  test("Should flip a single tile horizontally in place (mirrors around its own center)", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["tile1"] }],
-            metaspriteTiles: {
-              tile1: {
-                id: "tile1",
-                x: 0,
-                y: 0,
-                sliceX: 0,
-                sliceY: 0,
-                flipX: false,
-                flipY: false,
-                priority: false,
-              },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.flipXMetaspriteTiles({
-      spriteSheetId: "sprite1",
-      metaspriteTileIds: ["tile1"],
-    });
-
-    const newState = reducer(state, action);
-    const tile = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles?.tile1;
-    expect(tile?.flipX).toBe(true);
-    expect(tile?.x).toBe(0); // a single tile mirrors around its own center -> unchanged position
-  });
-
-  test("Should flip a 2-tile selection as a group, mirroring position around the pair's shared center", () => {
-    // two 16px tiles side by side: x=0 and x=16 (a 32px-wide pose)
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["left", "right"] }],
-            metaspriteTiles: {
-              left: {
-                id: "left",
-                x: 0,
-                y: 0,
-                sliceX: 0,
-                sliceY: 0,
-                flipX: false,
-                flipY: false,
-                priority: false,
-              },
-              right: {
-                id: "right",
-                x: 16,
-                y: 0,
-                sliceX: 16,
-                sliceY: 0,
-                flipX: false,
-                flipY: false,
-                priority: false,
-              },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.flipXMetaspriteTiles({
-      spriteSheetId: "sprite1",
-      metaspriteTileIds: ["left", "right"],
-    });
-
-    const newState = reducer(state, action);
-    const tiles = newState.spriteSheets.entities["sprite1"]?.metaspriteTiles;
-    // the pair swaps sides: the tile that was at x=0 is now at x=16, and vice versa
-    expect(tiles?.left.x).toBe(16);
-    expect(tiles?.right.x).toBe(0);
-    expect(tiles?.left.flipX).toBe(true);
-    expect(tiles?.right.flipX).toBe(true);
-  });
-
-  test("Should reorder tiles to front/back within a frame without touching other frames", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["a", "b", "c"] }],
-            metaspriteTiles: {
-              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-              b: { id: "b", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-              c: { id: "c", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const toFront = reducer(
-      state,
-      actions.sendMetaspriteTilesToFront({
-        spriteSheetId: "sprite1",
-        metaspriteTileIds: ["a"],
-        frameIndex: 0,
-      })
-    );
-    expect(toFront.spriteSheets.entities["sprite1"]?.metasprites?.[0].tiles).toEqual([
-      "b",
-      "c",
-      "a",
-    ]);
-
-    const toBack = reducer(
-      toFront,
-      actions.sendMetaspriteTilesToBack({
-        spriteSheetId: "sprite1",
-        metaspriteTileIds: ["a"],
-        frameIndex: 0,
-      })
-    );
-    expect(toBack.spriteSheets.entities["sprite1"]?.metasprites?.[0].tiles).toEqual([
-      "a",
-      "b",
-      "c",
+describe("sprites", () => {
+  test("Should detect a classic 3 frame sheet loaded while the project is open", () => {
+    const state = stateWithSprite();
+    expect(firstSpriteState(state).animationType).toBe("multi");
+    expect(firstSpriteState(state).flipLeft).toBe(true);
+    expect(firstSpriteState(state).animations.length).toBe(8);
+    // Facing down uses the first 16x16 frame of the image
+    expect(tilesOf(state, framesOf(state, 3)[0])).toMatchObject([
+      { x: 0, y: 0, sliceX: 0, sliceY: 0, size: 16 },
     ]);
   });
 
-  test("Should remove selected tiles from both the frame's list and the sheet's tile map", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["a", "b"] }],
-            metaspriteTiles: {
-              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-              b: { id: "b", x: 16, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.removeMetaspriteTiles({
-      spriteSheetId: "sprite1",
-      metaspriteTileIds: ["a"],
-      frameIndex: 0,
-    });
-
-    const newState = reducer(state, action);
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.[0].tiles).toEqual(["b"]);
-    expect(sheet?.metaspriteTiles?.a).toBeUndefined();
-    expect(sheet?.metaspriteTiles?.b).toBeDefined();
+  test("Should give a sheet which is not 16px high an empty state", () => {
+    const state = stateWithSprite({ height: 32 });
+    expect(firstSpriteState(state).animationType).toBe("multi_movement");
+    expect(state.metaspriteTiles.ids.length).toBe(0);
   });
 
-  test("Should drop a tile that ends up entirely outside the sheet's canvas bounds", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            canvasWidth: 16,
-            canvasHeight: 16,
-            metasprites: [{ id: "meta1", tiles: ["inside", "outside"] }],
-            metaspriteTiles: {
-              inside: { id: "inside", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-              outside: { id: "outside", x: 200, y: 200, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.removeMetaspriteTilesOutsideCanvas({
-      spriteSheetId: "sprite1",
-      frameIndex: 0,
-    });
-
-    const newState = reducer(state, action);
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.[0].tiles).toEqual(["inside"]);
-    expect(sheet?.metaspriteTiles?.inside).toBeDefined();
-    expect(sheet?.metaspriteTiles?.outside).toBeUndefined();
-  });
-
-  test("Should bulk-edit a multi-tile selection's shared fields (e.g. priority)", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta1", tiles: ["a", "b"] }],
-            metaspriteTiles: {
-              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-              b: { id: "b", x: 16, y: 0, sliceX: 16, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const action = actions.editMetaspriteTiles({
-      spriteSheetId: "sprite1",
-      metaspriteTileIds: ["a", "b"],
-      changes: { priority: true },
-    });
-
-    const newState = reducer(state, action);
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metaspriteTiles?.a.priority).toBe(true);
-    expect(sheet?.metaspriteTiles?.b.priority).toBe(true);
-  });
-
-  test("Should add a frame to the end of an already-populated metasprites array", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            animationType: "fixed",
-            metasprites: [{ id: "meta1", tiles: [] }],
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const newState = reducer(state, actions.addMetaspriteFrame({ spriteSheetId: "sprite1" }));
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.length).toBe(2);
-    expect(sheet?.metasprites?.[1].tiles).toEqual([]);
-  });
-
-  test("Should seed from numFrames the first time a frame is added to an untouched sheet", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            animationType: "fixed",
-            numFrames: 3,
-            // metasprites never created - no tile placed, "+" never clicked yet.
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const newState = reducer(state, actions.addMetaspriteFrame({ spriteSheetId: "sprite1" }));
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    // 3 real image-implied frames preserved, plus the 1 newly added one.
-    expect(sheet?.metasprites?.length).toBe(4);
-  });
-
-  test("Should remove the selected frame and its own tiles", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            animationType: "fixed",
-            metasprites: [
-              { id: "meta0", tiles: ["a"] },
-              { id: "meta1", tiles: ["b"] },
-              { id: "meta2", tiles: [] },
-            ],
-            metaspriteTiles: {
-              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-              b: { id: "b", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const newState = reducer(
+  test("Should keep edited sprite settings when the image changes", () => {
+    const state = stateWithSprite();
+    const edited = reducer(
       state,
-      actions.removeMetaspriteFrame({ spriteSheetId: "sprite1", frameIndex: 1 })
-    );
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.map((m) => m.id)).toEqual(["meta0", "meta2"]);
-    expect(sheet?.metaspriteTiles?.a).toBeDefined(); // frame 0's own tile untouched
-    expect(sheet?.metaspriteTiles?.b).toBeUndefined(); // the removed frame's own tile is gone
-  });
-
-  test("Should seed from numFrames before removing a frame from an untouched sheet", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            animationType: "fixed",
-            numFrames: 3,
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const newState = reducer(
-      state,
-      actions.removeMetaspriteFrame({ spriteSheetId: "sprite1", frameIndex: 2 })
-    );
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.length).toBe(2);
-  });
-
-  test("Should never remove the last remaining frame - keeps exactly one empty frame instead", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            animationType: "fixed",
-            metasprites: [{ id: "meta0", tiles: ["a"] }],
-            metaspriteTiles: {
-              a: { id: "a", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const newState = reducer(
-      state,
-      actions.removeMetaspriteFrame({ spriteSheetId: "sprite1", frameIndex: 0 })
-    );
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.metasprites?.length).toBe(1);
-    expect(sheet?.metasprites?.[0].tiles).toEqual([]);
-  });
-
-  test("Should add a tile to a named animation state without touching the sheet's own default metasprites", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-            metasprites: [{ id: "meta0", tiles: ["default1"] }],
-            metaspriteTiles: {
-              default1: { id: "default1", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-            },
-            animStates: [
-              {
-                id: "state1",
-                name: "Walk",
-                animationType: "fixed",
-                metasprites: [{ id: "stateMeta0", tiles: [] }],
-                metaspriteTiles: {},
-                canvasWidth: 16,
-                canvasHeight: 16,
-              },
-            ],
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
-
-    const newState = reducer(
-      state,
-      actions.addMetaspriteTile({
+      actions.editSpriteSheet({
         spriteSheetId: "sprite1",
-        animStateId: "state1",
-        frameIndex: 0,
-        x: 0,
-        y: 0,
-        sliceX: 16,
-        sliceY: 0,
+        changes: { canvasWidth: 40, boundsHeight: 8 },
       })
     );
-    const sheet = newState.spriteSheets.entities["sprite1"];
-    expect(sheet?.animStates?.[0].metasprites?.[0].tiles.length).toBe(1);
-    // the sheet's own default state is untouched
-    expect(sheet?.metasprites?.[0].tiles).toEqual(["default1"]);
+    const reloaded = reducer(
+      edited,
+      loadSpriteAction({ filename: "sprite1.png", width: 64, numFrames: 4 })
+    );
+    const sheet = reloaded.spriteSheets.entities["sprite1"]!;
+    expect(sheet.width).toBe(64);
+    expect(sheet.numFrames).toBe(4);
+    expect(sheet.canvasWidth).toBe(40);
+    expect(sheet.boundsHeight).toBe(8);
+    expect(sheet.states).toEqual(state.spriteSheets.entities["sprite1"]!.states);
   });
 
-  test("Should add, edit and remove a named animation state", () => {
-    const state: EntitiesState = {
-      ...initialState,
-      spriteSheets: {
-        entities: {
-          sprite1: {
-            ...dummySpriteSheet,
-            id: "sprite1",
-            metaspriteMode: true,
-          },
-        },
-        ids: ["sprite1"],
-      },
-    };
+  test("Should add 8x8 and 16x16 tiles to a frame", () => {
+    const state = stateWithSprite({ height: 32 });
+    const frame = framesOf(state, 0)[0];
+    const next = addTile(addTile(state, frame, 0, 0, 16), frame, 0, 16, 8);
+    expect(tilesOf(next, frame).map((t) => t.size)).toEqual([16, 8]);
+  });
 
-    const addedState = reducer(
-      state,
-      actions.addAnimState({ spriteSheetId: "sprite1", name: "Walk" })
-    );
-    const added = addedState.spriteSheets.entities["sprite1"]?.animStates;
-    expect(added?.length).toBe(1);
-    expect(added?.[0].name).toBe("Walk");
-    expect(added?.[0].animationType).toBe("fixed");
-    expect(added?.[0].metasprites).toEqual([{ id: added?.[0].metasprites[0].id, tiles: [] }]);
-    const stateId = added?.[0].id as string;
+  test("Should mirror a mix of tile sizes around their shared bounds", () => {
+    const state = stateWithSprite({ height: 32 });
+    const frame = framesOf(state, 0)[0];
+    const added = addTile(addTile(state, frame, 0, 0, 16), frame, 16, 16, 8);
+    const ids = added.metasprites.entities[frame]!.tiles;
 
-    const editedState = reducer(
-      addedState,
-      actions.editAnimState({
+    const flippedX = reducer(
+      added,
+      actions.flipXMetaspriteTiles({
         spriteSheetId: "sprite1",
-        animStateId: stateId,
-        changes: { name: "Run", animationType: "multi_movement" },
+        metaspriteTileIds: ids,
       })
     );
-    const edited = editedState.spriteSheets.entities["sprite1"]?.animStates;
-    expect(edited?.[0].name).toBe("Run");
-    expect(edited?.[0].animationType).toBe("multi_movement");
+    expect(tilesOf(flippedX, frame)).toMatchObject([
+      { x: 8, y: 0, flipX: true },
+      { x: 0, y: 16, flipX: true },
+    ]);
 
-    const removedState = reducer(
-      editedState,
-      actions.removeAnimState({ spriteSheetId: "sprite1", animStateId: stateId })
+    const flippedY = reducer(
+      added,
+      actions.flipYMetaspriteTiles({
+        spriteSheetId: "sprite1",
+        metaspriteTileIds: ids,
+      })
     );
-    expect(removedState.spriteSheets.entities["sprite1"]?.animStates).toEqual([]);
+    expect(tilesOf(flippedY, frame)).toMatchObject([
+      { x: 0, y: 8, flipY: true },
+      { x: 16, y: 0, flipY: true },
+    ]);
+  });
+
+  test("Should remove only the tiles dragged outside the canvas", () => {
+    const state = stateWithSprite({ height: 32 });
+    const frame = framesOf(state, 0)[0];
+    // Canvas is 32x32
+    let next = addTile(state, frame, 0, 0, 16);
+    next = addTile(next, frame, 0, -8, 8);
+    next = addTile(next, frame, 0, -8, 16);
+    next = reducer(
+      next,
+      actions.removeMetaspriteTilesOutsideCanvas({
+        spriteSheetId: "sprite1",
+        metaspriteId: frame,
+      })
+    );
+    expect(tilesOf(next, frame).map((t) => [t.y, t.size])).toEqual([
+      [0, 16],
+      [-8, 16],
+    ]);
+  });
+
+  test("Should clone and remove frames, keeping at least one", () => {
+    const state = stateWithSprite();
+    const animationId = firstSpriteState(state).animations[3];
+    const frame = framesOf(state, 3)[0];
+    const cloned = reducer(
+      state,
+      actions.cloneMetasprite({
+        spriteAnimationId: animationId,
+        metaspriteId: frame,
+      })
+    );
+    const [first, second] = framesOf(cloned, 3);
+    expect(first).toBe(frame);
+    expect(tilesOf(cloned, second)[0].id).not.toBe(tilesOf(cloned, first)[0].id);
+
+    const removeFrame = (s: EntitiesState, metaspriteId: string) =>
+      reducer(
+        s,
+        actions.removeMetasprite({
+          spriteSheetId: "sprite1",
+          spriteAnimationId: animationId,
+          metaspriteId,
+        })
+      );
+    const one = removeFrame(cloned, second);
+    expect(framesOf(one, 3)).toEqual([first]);
+    const emptied = removeFrame(one, first);
+    expect(framesOf(emptied, 3)).toEqual([first]);
+    expect(tilesOf(emptied, first)).toEqual([]);
+  });
+
+  test("Should add and remove a sprite state", () => {
+    const state = stateWithSprite();
+    const added = reducer(
+      state,
+      actions.addSpriteState({ spriteSheetId: "sprite1" })
+    );
+    const states = added.spriteSheets.entities["sprite1"]!.states;
+    expect(states.length).toBe(2);
+    expect(added.spriteStates.entities[states[1]]!.name).toBe("New State");
+
+    const removed = reducer(
+      added,
+      actions.removeSpriteState({
+        spriteSheetId: "sprite1",
+        spriteStateId: states[1],
+      })
+    );
+    expect(removed.spriteSheets.entities["sprite1"]!.states).toEqual([
+      states[0],
+    ]);
+  });
+
+  test("Should save sprite sheets with their states nested", () => {
+    const state = stateWithSprite();
+    const [sheet] = denormalizeEntities(state).spriteSheets;
+    expect(sheet.states[0].animations[3].frames[0].tiles[0]).toMatchObject({
+      size: 16,
+      sliceX: 0,
+    });
   });
 });
 

@@ -1,5 +1,15 @@
 import { normalize, denormalize, schema } from "normalizr";
-import { ProjectEntitiesData, EntitiesState, EntityKey } from "./entitiesTypes";
+import {
+  ProjectEntitiesData,
+  EntitiesState,
+  EntityKey,
+  SpriteSheet,
+  SpriteSheetData,
+  Metasprite,
+  MetaspriteTile,
+  SpriteAnimation,
+  SpriteState,
+} from "./entitiesTypes";
 import { EntityId, Dictionary } from "@reduxjs/toolkit";
 
 const backgroundSchema = new schema.Entity("backgrounds");
@@ -17,7 +27,19 @@ eventSchema.define({
   }
 });
 */
-const spriteSheetsSchema = new schema.Entity("spriteSheets");
+const metaspriteTilesSchema = new schema.Entity("metaspriteTiles");
+const metaspritesSchema = new schema.Entity("metasprites", {
+  tiles: [metaspriteTilesSchema],
+});
+const spriteAnimationsSchema = new schema.Entity("spriteAnimations", {
+  frames: [metaspritesSchema],
+});
+const spriteStatesSchema = new schema.Entity("spriteStates", {
+  animations: [spriteAnimationsSchema],
+});
+const spriteSheetsSchema = new schema.Entity("spriteSheets", {
+  states: [spriteStatesSchema],
+});
 const fontsSchema = new schema.Entity("fonts");
 const emotesSchema = new schema.Entity("emotes");
 const soundEffectsSchema = new schema.Entity("soundEffects");
@@ -70,6 +92,10 @@ export const denormalizeEntities = (
     scenes: state.scenes.entities,
     backgrounds: state.backgrounds.entities,
     spriteSheets: state.spriteSheets.entities,
+    metasprites: state.metasprites.entities,
+    metaspriteTiles: state.metaspriteTiles.entities,
+    spriteAnimations: state.spriteAnimations.entities,
+    spriteStates: state.spriteStates.entities,
     customEvents: state.customEvents.entities,
     music: state.music.entities,
     fonts: state.fonts.entities,
@@ -79,4 +105,26 @@ export const denormalizeEntities = (
     engineFieldValues: state.engineFieldValues.entities
   };
   return denormalize(input, projectSchema, entities);
+};
+
+export const denormalizeSprite = ({
+  sprite,
+  metasprites,
+  metaspriteTiles,
+  spriteAnimations,
+  spriteStates,
+}: {
+  sprite: SpriteSheet;
+  metasprites: Dictionary<Metasprite>;
+  metaspriteTiles: Dictionary<MetaspriteTile>;
+  spriteAnimations: Dictionary<SpriteAnimation>;
+  spriteStates: Dictionary<SpriteState>;
+}): SpriteSheetData => {
+  const entities = {
+    metasprites,
+    metaspriteTiles,
+    spriteAnimations,
+    spriteStates,
+  };
+  return denormalize(sprite, spriteSheetsSchema, entities);
 };

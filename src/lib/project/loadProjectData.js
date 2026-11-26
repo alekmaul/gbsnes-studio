@@ -8,6 +8,7 @@ import loadAllFontData from "./loadFontData";
 import loadAllEmoteData from "./loadEmoteData";
 import loadAllSfxData from "./loadSfxData";
 import migrateProject from "./migrateProject";
+import upgradeSpriteSheet from "../sprite/upgradeSpriteSheet";
 import { indexByFn, indexBy } from "../helpers/array";
 import { setDefault } from "../helpers/setDefault";
 
@@ -81,24 +82,46 @@ const loadProject = async (projectPath) => {
     })
     .sort(sortByName);
 
-  // Merge stored sprite data with file system data - see the backgrounds
-  // comment above for the full story (this is the exact field this bug was
-  // actually found with: a Free-form sprite sheet's metaspriteMode/
-  // canvasWidth/canvasHeight/metasprites/metaspriteTiles).
+  // Merge stored sprite data with file system data: what the file itself
+  // says (size, frames, checksum) comes from the fresh scan, everything the
+  // Sprites page edits comes from the saved project.
   const oldSpriteByFilename = indexByFilename(json.spriteSheets || []);
   const oldSpriteByInode = indexByInode(json.spriteSheets || []);
 
+  const spriteSheetEditorKeys = [
+    "symbol",
+    "states",
+    "numTiles",
+    "canvasWidth",
+    "canvasHeight",
+    "boundsX",
+    "boundsY",
+    "boundsWidth",
+    "boundsHeight",
+    "animSpeed"
+  ];
+
   const fixedSpriteIds = sprites
     .map((sprite) => {
-      const oldSprite = oldSpriteByFilename[elemKey(sprite)] || oldSpriteByInode[sprite.inode];
-      if (oldSprite) {
-        return {
-          ...oldSprite,
-          ...sprite,
-          id: oldSprite.id,
-        };
+      const oldSprite =
+        oldSpriteByFilename[elemKey(sprite)] || oldSpriteByInode[sprite.inode];
+      if (!oldSprite) {
+        return upgradeSpriteSheet(sprite);
       }
-      return sprite;
+      const edited = {};
+      spriteSheetEditorKeys.forEach((key) => {
+        if (oldSprite[key] !== undefined) {
+          edited[key] = oldSprite[key];
+        }
+      });
+      return upgradeSpriteSheet({
+        ...oldSprite,
+        ...sprite,
+        ...edited,
+        // A sheet saved without states has none, not the scan's empty list
+        states: oldSprite.states,
+        id: oldSprite.id
+      });
     })
     .sort(sortByName);
 

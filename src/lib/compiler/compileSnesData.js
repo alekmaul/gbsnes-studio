@@ -383,37 +383,18 @@ const compileSnesData = async (
   // swap event silently never got a slot (0xFF, the opcode's own no-op guard),
   // even though the author genuinely referenced it. Recurses into nested
   // branches the same way.
-  // ACTOR_SET_STATE/PLAYER_SET_STATE (named animation states, v4) compile
-  // through the exact same actorSetSprite/playerSetSprite helpers as
-  // ACTOR_SET_SPRITE/PLAYER_SET_SPRITE (see eventActorSetState.js), but their
-  // JSON only carries stateId - the real target sheet is one level removed,
-  // resolved via the *referenced* sheet's own states[] (Phase 2). Mirrors
-  // eventActorSetState.js's own resolution exactly so the scanner and the
-  // compiler never disagree on which sheet an event actually swaps to.
-  const resolveStateTargetSpriteSheetId = (args) => {
-    const sheet = spriteById(args.spriteSheetId);
-    const state = sheet && sheet.states && sheet.states.find((s) => s.id === args.stateId);
-    return state ? state.spriteSheetId : args.spriteSheetId;
-  };
   const scanRuntimeSpriteIds = (evs, ids) => {
     (evs || []).forEach((ev) => {
       if (ev.command && ev.args) {
-        let targetId;
         if (
-          ev.command === "EVENT_LAUNCH_PROJECTILE" ||
+          (ev.command === "EVENT_LAUNCH_PROJECTILE" ||
           ev.command === "EVENT_WEAPON_ATTACK" ||
           ev.command === "EVENT_ACTOR_SET_SPRITE" ||
-          ev.command === "EVENT_PLAYER_SET_SPRITE"
+          ev.command === "EVENT_PLAYER_SET_SPRITE") &&
+          isSprite(ev.args.spriteSheetId) &&
+          ids.indexOf(ev.args.spriteSheetId) === -1
         ) {
-          targetId = ev.args.spriteSheetId;
-        } else if (
-          ev.command === "EVENT_ACTOR_SET_STATE" ||
-          ev.command === "EVENT_PLAYER_SET_STATE"
-        ) {
-          targetId = resolveStateTargetSpriteSheetId(ev.args);
-        }
-        if (isSprite(targetId) && ids.indexOf(targetId) === -1) {
-          ids.push(targetId);
+          ids.push(ev.args.spriteSheetId);
         }
       }
       if (ev.children) {
@@ -458,8 +439,7 @@ const compileSnesData = async (
   };
 
   // ---- runtime sprite-sheet streaming (v4 follow-up) -------------------
-  // Player/Actor: Set Sprite Sheet (and Set Animation State, which resolves
-  // to the same underlying swap) only work above if the target sheet is one
+  // Player/Actor: Set Sprite Sheet only works above if the target sheet is one
   // of the 8 regularly pre-loaded ones (sceneSpriteIds). A sheet referenced
   // ONLY as an overflow target used to be a silent no-op - see EVENTS.md's
   // own history. This gives a SPECIFIC actor that targets such a sheet its
@@ -473,8 +453,7 @@ const compileSnesData = async (
   // dedicated streaming slot in one scene), not a per-project setting.
   const MAX_STREAM_SLOTS = 2;
 
-  // Which REAL actor index (0 = player) a Set Sprite Sheet/Set Animation
-  // State event targets - mirrors scriptBuilder.js's own getActorById/
+  // Which REAL actor index (0 = player) a Set Sprite Sheet event targets - mirrors scriptBuilder.js's own getActorById/
   // actorSetActive $self$ resolution exactly (confirmed against the real
   // source, not guessed): "$self$" means the player in a scene/trigger
   // script (entity.id never matches scene.actors[].id there), or the owning
@@ -496,14 +475,8 @@ const compileSnesData = async (
         if (ev.command === "EVENT_PLAYER_SET_SPRITE") {
           targetId = ev.args.spriteSheetId;
           actorIndex = 0;
-        } else if (ev.command === "EVENT_PLAYER_SET_STATE") {
-          targetId = resolveStateTargetSpriteSheetId(ev.args);
-          actorIndex = 0;
         } else if (ev.command === "EVENT_ACTOR_SET_SPRITE") {
           targetId = ev.args.spriteSheetId;
-          actorIndex = resolveStreamActorIndex(ev.args.actorId, selfActorIndex, actors);
-        } else if (ev.command === "EVENT_ACTOR_SET_STATE") {
-          targetId = resolveStateTargetSpriteSheetId(ev.args);
           actorIndex = resolveStreamActorIndex(ev.args.actorId, selfActorIndex, actors);
         }
         if (isSprite(targetId)) {
@@ -602,7 +575,7 @@ const compileSnesData = async (
   // Over-budget warning, computed only now that streaming is known: a sheet
   // beyond the regular 8 is only a real problem if nothing covers it. A
   // sheet counts as covered by streaming only when its ONLY references are
-  // Set Sprite Sheet/Set Animation State events from actors that actually
+  // Set Sprite Sheet events from actors that actually
   // got a streaming slot - an actor's own default sheet, the player's
   // sheet, or a Launch Projectile/Weapon Attack target beyond the budget
   // still falls back to slot 0, and so does a swap from an actor that was
@@ -1479,7 +1452,6 @@ const compileSnesData = async (
     "EVENT_ACTOR_SET_POSITION_RELATIVE",
     "EVENT_ACTOR_SET_POSITION_TO_VALUE",
     "EVENT_ACTOR_SET_SPRITE",
-    "EVENT_ACTOR_SET_STATE",
     "EVENT_ACTOR_SHOW",
     "EVENT_ACTOR_START_UPDATE",
     "EVENT_ACTOR_STOP_UPDATE",
@@ -1515,7 +1487,6 @@ const compileSnesData = async (
     "EVENT_OVERLAY_SHOW",
     "EVENT_PLAYER_BOUNCE",
     "EVENT_PLAYER_SET_SPRITE",
-    "EVENT_PLAYER_SET_STATE",
     "EVENT_REMOVE_INPUT_SCRIPT",
     "EVENT_RESET_VARIABLES",
     "EVENT_SAVE_DATA",

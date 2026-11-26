@@ -1,3 +1,4 @@
+const Path = require("path");
 const plugins = require("./webpack.plugins");
 const CopyPlugin = require("copy-webpack-plugin");
 
@@ -21,7 +22,13 @@ module.exports = {
   },
   plugins: mainPlugins,
   resolve: {
-    extensions: [".js", ".ts", ".jsx", ".tsx", ".css"]
+    extensions: [".js", ".ts", ".jsx", ".tsx", ".css"],
+    alias: {
+      store: Path.resolve(__dirname, "src/store"),
+      lib: Path.resolve(__dirname, "src/lib"),
+      ui: Path.resolve(__dirname, "src/components/ui"),
+      components: Path.resolve(__dirname, "src/components"),
+    }
   },
   externals: {
     "about-window": "about-window"

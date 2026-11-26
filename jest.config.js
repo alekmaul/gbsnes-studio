@@ -8,5 +8,7 @@ module.exports = {
   collectCoverageFrom: ["src/**/*.{js,jsx,ts,tsx}", "!src/**/*.d.ts"],
   moduleNameMapper: {
     electron: "<rootDir>/test/__mocks__/electronMock.js",
+    "^(store|lib|components)/(.*)$": "<rootDir>/src/$1/$2",
+    "^ui/(.*)$": "<rootDir>/src/components/ui/$1",
   },
 };

@@ -5,6 +5,8 @@ import sizeOf from "image-size";
 import { stat } from "fs-extra";
 import parseAssetPath from "../helpers/path/parseAssetPath";
 import { spriteTypeFromNumFrames } from "../helpers/gbstudio";
+import { checksumFile } from "../helpers/checksum";
+import { toValidSymbol } from "../helpers/symbols";
 
 const FRAME_SIZE = 16;
 
@@ -17,15 +19,30 @@ const loadSpriteData = projectRoot => async filename => {
     const size = await sizeOfAsync(filename);
     const fileStat = await stat(filename, { bigint: true });
     const inode = fileStat.ino.toString();
+    const checksum = await checksumFile(filename);
     const numFrames = size.width / FRAME_SIZE;
+    const name = file.replace(/.png/i, "");
     return {
       id: uuidv4(),
       plugin,
-      name: file.replace(/.png/i, ""),
+      name,
+      symbol: toValidSymbol(`sprite_${name}`),
       numFrames,
       type: spriteTypeFromNumFrames(numFrames),
       filename: file,
       inode,
+      checksum,
+      width: size.width,
+      height: size.height,
+      states: [],
+      numTiles: 0,
+      canvasWidth: 32,
+      canvasHeight: 32,
+      boundsX: 0,
+      boundsY: 0,
+      boundsWidth: 16,
+      boundsHeight: 16,
+      animSpeed: 15,
       _v: Date.now()
     };
   } catch (e) {

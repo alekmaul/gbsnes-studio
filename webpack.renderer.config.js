@@ -1,3 +1,4 @@
+const Path = require("path");
 const rules = require("./webpack.rules");
 const plugins = require("./webpack.plugins");
 const CopyPlugin = require("copy-webpack-plugin");
@@ -59,6 +60,10 @@ module.exports = {
     extensions: [".js", ".ts", ".jsx", ".tsx", ".css"],
     alias: {
       "react-dom": "@hot-loader/react-dom",
+      store: Path.resolve(__dirname, "src/store"),
+      lib: Path.resolve(__dirname, "src/lib"),
+      ui: Path.resolve(__dirname, "src/components/ui"),
+      components: Path.resolve(__dirname, "src/components"),
     },
   },
   externals: {

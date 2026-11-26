@@ -35,3 +35,6 @@ export const groupBy = property => arr =>
   }, {});
 
 export const flatten = arr => [].concat(...arr);
+
+export const swap = (x, y, [...xs]) =>
+  xs.length > 1 ? (([xs[x], xs[y]] = [xs[y], xs[x]]), xs) : xs;

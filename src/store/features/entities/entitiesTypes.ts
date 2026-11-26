@@ -106,164 +106,99 @@ export type EngineFieldValue = {
   value: number | string | boolean | undefined;
 };
 
-// "Sprite Swap" in the editor (user-asked rename, v4 follow-up) - this
-// fork's own older, whole-sheet-swap mechanism (switching an actor to an
-// entirely different SpriteSheet entity at runtime, Actor/Player: Set
-// Sprite Swap). Kept as-is, type name unchanged on purpose (only the
-// *display* label changed, not this stored field name or the scripting
-// event's own command id - no existing project's data format is
-// affected). Not to be confused with AnimState below, GB Studio 3.2.1's
-// own, different "SpriteState" concept (named pose-sets *within* one
-// sheet) - the two share a name upstream but are genuinely different
-// features, hence the rename here to avoid exactly that confusion.
-export type SpriteState = {
-  id: string;
-  name: string;
-  spriteSheetId: string;
-};
+// Sprite system ported from GB Studio 3.2.1: a sheet has named states, each
+// state has 8 animations (components/sprites/helpers.ts says what each one
+// means per animationType), each animation is a list of frames (metasprites)
+// and each frame is a list of placed tiles.
+export type SpriteAnimationType =
+  | "fixed"
+  | "fixed_movement"
+  | "multi"
+  | "multi_movement"
+  | "platform_player"
+  | "cursor";
 
-// The 3 real values this engine can render, a subset of GB Studio's own 6
-// (fixed/fixed_movement/multi/multi_movement/platform_player/cursor) - the
-// other 3 have no backing here (no Platformer/Point-and-Click genre on this
-// top-down-only SNES fork). Maps 1:1 onto the already-shipped pixel-geometry
-// detection in snesgfx.js's imageToSpriteData: fixed -> SPRITE_STATIC,
-// multi -> SPRITE_ACTOR (3-frame, side auto-mirrored), multi_movement ->
-// SPRITE_ACTOR_ANIMATED (6-frame, same mirroring). See SPRITE_EDITOR_PROGRESS.md.
-//
-// M9 (SPRITE_EDITOR_PROGRESS.md) correction, caught before building UI on
-// top of it: free-form metasprite mode is NOT a 4th value of this enum - a
-// metasprite sheet still needs to say which of these 3 pose behaviours
-// (frame count + direction meaning) it follows, since metasprite mode only
-// changes what one frame's CONTENT is, not the frame count/meaning. See
-// SpriteSheet.metaspriteMode below, a separate, orthogonal flag.
-export type SpriteAnimationType = "fixed" | "multi" | "multi_movement";
+// SNES difference: GB places 8x16 tiles, this engine places 8x8 or 16x16
+// hardware sprites, and colours come straight from the PNG (no OBJ palette
+// choice).
+export type MetaspriteTileSize = 8 | 16;
 
-// M9 (SPRITE_EDITOR_PROGRESS.md) - one individually-placed OBJ tile within a
-// free-form metasprite frame. Deliberately a smaller shape than GB Studio's
-// own MetaspriteTile: no objPalette/paletteIndex fields - this engine
-// already assigns one OBJ palette per ACTOR SLOT (ACTOR_OBJ_PAL_POOL /
-// sprite_pal_for_slot[], compileSnesData.js), not per-tile, so every tile in
-// a metasprite necessarily shares its actor's one assigned palette; a
-// per-tile palette choice would have no real backing on this hardware
-// model and is intentionally not offered.
 export type MetaspriteTile = {
   id: string;
-  // Placement offset in pixels, relative to this metasprite's own origin
-  // (not the source PNG) - where this tile is drawn.
+  // Position of the tile's bottom-left corner, in pixels, relative to the
+  // bottom-left corner of the 16px wide box centred at the bottom of the
+  // canvas. y grows upwards.
   x: number;
   y: number;
-  // Which 8x8 pixel region of the SpriteSheet's own source PNG this tile's
-  // pixel data is sliced from.
+  // Top-left corner of the tile's pixels in the source PNG
   sliceX: number;
   sliceY: number;
+  size: MetaspriteTileSize;
   flipX: boolean;
   flipY: boolean;
-  // OBJ-below-BG1.1 priority bit (matches this engine's existing
-  // TILE_PROP_PRIORITY concept for BG tiles, consts.js) - authored here but
-  // NOT YET wired to the engine (SceneRenderActors hardcodes priority 2 for
-  // every actor OAM write today); a real multi-OAM render loop consuming
-  // per-tile priority is part of M9.4, not built yet. Kept now rather than
-  // added later so an author's choice here survives that future step
-  // instead of needing every project's metasprites re-authored.
   priority: boolean;
 };
 
-// M9 (SPRITE_EDITOR_PROGRESS.md) - one metasprite frame: an ordered list of
-// MetaspriteTile ids (back-to-front paint order, matching GB Studio's own
-// convention), looked up in the owning SpriteSheet's own metaspriteTiles map.
 export type Metasprite = {
   id: string;
   tiles: string[];
 };
 
-// Named animation states (v4 follow-up) - matches GB Studio 3.2.1's own
-// real SpriteState concept (a NEW, distinct name from this fork's older,
-// unrelated SpriteState above - the "Sprite Swap" whole-sheet-switch
-// feature - see that type's own comment and consts.js/en.json for why the
-// two needed separating). A metaspriteMode sheet's own top-level
-// metasprites/metaspriteTiles/animationType/canvasWidth/canvasHeight
-// (above) are this sheet's default/implicit state ("state 0" - the exact
-// byte offset the engine's metasprite_frame_base[slot] already resolves
-// to, see scene.c's own anim_state_offset comment) and are NEVER touched
-// by this feature; animStates below holds any *additional* named states
-// beyond it, each a self-contained pose-set with its own animationType
-// (so e.g. a 1-frame "Hurt" state and a 6-frame "Walk" state can coexist
-// on one sheet) switched at runtime via Actor/Player: Set Animation
-// State (ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE, index 0 always means
-// "back to this sheet's own default state").
-export type AnimState = {
+export type MetaspriteData = Omit<Metasprite, "tiles"> & {
+  tiles: MetaspriteTile[];
+};
+
+export type SpriteState = {
   id: string;
   name: string;
   animationType: SpriteAnimationType;
-  metasprites: Metasprite[];
-  metaspriteTiles: Record<string, MetaspriteTile>;
-  canvasWidth: number;
-  canvasHeight: number;
+  flipLeft: boolean;
+  animations: string[];
+};
+
+export type SpriteStateData = Omit<SpriteState, "animations"> & {
+  animations: SpriteAnimationData[];
+};
+
+export type SpriteAnimation = {
+  id: string;
+  frames: string[];
+};
+
+export type SpriteAnimationData = Omit<SpriteAnimation, "frames"> & {
+  frames: MetaspriteData[];
 };
 
 export type SpriteSheet = {
   id: string;
   name: string;
+  symbol: string;
   filename: string;
-  type: SpriteType;
-  numFrames: number;
+  width: number;
+  height: number;
+  numTiles: number;
+  checksum: string;
   plugin?: string;
   inode: string;
   _v: number;
-  states?: SpriteState[];
-  // Overrides the auto-detected animationType derived from `type`/`numFrames`
-  // above; undefined keeps today's pure auto-detect behaviour unchanged.
+  canvasWidth: number;
+  canvasHeight: number;
+  boundsX: number;
+  boundsY: number;
+  boundsWidth: number;
+  boundsHeight: number;
+  animSpeed: number | null;
+  states: string[];
+  // The remaining fields are only read by the current compiler, until it
+  // compiles states and animations
+  numFrames: number;
+  type: SpriteType;
   animationType?: SpriteAnimationType;
-  // Authored editor metadata, not compiled into assets.c - this engine's
-  // actor collision is tile-based (can_step/npc_blocking), not per-sprite
-  // bounds. Kept for schema parity / a future hook, documented as inert.
-  // See SPRITE_EDITOR_PROGRESS.md.
-  boundsX?: number;
-  boundsY?: number;
-  boundsWidth?: number;
-  boundsHeight?: number;
-  // M9 (SPRITE_EDITOR_PROGRESS.md) - free-form per-tile authoring, an
-  // opt-in ADDITION to animationType above, not a value of it (M10's
-  // "coexist, don't replace" decision): animationType still says which of
-  // the 3 real pose behaviours (frame count + direction meaning) this sheet
-  // follows; metaspriteMode only changes what one frame's CONTENT is - an
-  // authored list of individually-placed tiles (metasprites[i], below)
-  // instead of a single fixed 16x16 block automatically sliced from the
-  // source PNG. false/undefined keeps today's behaviour completely
-  // unchanged regardless of animationType. Not yet consumed by the
-  // compiler or engine - M9's current scope is the data layer + editor
-  // only (M9.1-M9.2); compiling/rendering a real multi-tile metasprite is
-  // M9.3/M9.4, not done yet.
-  metaspriteMode?: boolean;
-  // metasprites[i] is frame i's own tile list, in the SAME index order/
-  // meaning the existing fixed/multi/multi_movement frame convention
-  // already uses (see SpriteAnimationType's own comment) - undefined/
-  // missing entries are empty frames (render nothing yet). metaspriteTiles
-  // is every placed tile for this sheet, keyed by id, for O(1) lookup
-  // during interactive editing (drag/select) regardless of how many
-  // metasprites/tiles exist - avoids an O(n) scan through nested arrays on
-  // every pointer-move while dragging a multi-tile selection. canvasWidth/
-  // Height is the editable per-frame canvas size once metaspriteMode is on
-  // (default 16x16, matching every other sheet's fixed single-block size) -
-  // unlike the plain (metaspriteMode false) case, whose "Canvas Size" stays
-  // fixed read-only info (every frame there is always exactly one 16x16
-  // block), metasprite mode is specifically for composing something BIGGER
-  // than that from multiple real tiles, so this has to be a real, authored
-  // field once that mode is on.
-  metasprites?: Metasprite[];
-  metaspriteTiles?: Record<string, MetaspriteTile>;
-  canvasWidth?: number;
-  canvasHeight?: number;
-  // Named animation states (v4 follow-up) - see AnimState's own comment
-  // above. undefined/empty = no extra states, identical compiled output
-  // to before this feature existed.
-  animStates?: AnimState[];
-  // Editable frame list for a normal (non-Free-form) static auto-cycle
-  // sheet: an ordered list of the PNG's own frame indices, e.g. [0, 1, 1]
-  // to repeat frame 2. Undefined = the PNG's frames in order (0..n-1).
-  // Compiled through the regular sprite path (compileSnesData.js), max 6
-  // frames. Ignored for directional sheets and Free-form sheets.
   frameSequence?: number[];
+};
+
+export type SpriteSheetData = Omit<SpriteSheet, "states"> & {
+  states: SpriteStateData[];
 };
 
 // M5 (v4): first-class Font/Emote entities (assets/fonts/*.png,
@@ -342,7 +277,7 @@ export type SceneData = Omit<Scene, "actors" | "triggers"> & {
 export type ProjectEntitiesData = {
   scenes: SceneData[];
   backgrounds: Background[];
-  spriteSheets: SpriteSheet[];
+  spriteSheets: SpriteSheetData[];
   customEvents: CustomEvent[];
   music: Music[];
   fonts: Font[];
@@ -357,6 +292,10 @@ export interface EntitiesState {
   scenes: EntityState<Scene>;
   backgrounds: EntityState<Background>;
   spriteSheets: EntityState<SpriteSheet>;
+  metasprites: EntityState<Metasprite>;
+  metaspriteTiles: EntityState<MetaspriteTile>;
+  spriteAnimations: EntityState<SpriteAnimation>;
+  spriteStates: EntityState<SpriteState>;
   customEvents: EntityState<CustomEvent>;
   music: EntityState<Music>;
   fonts: EntityState<Font>;
