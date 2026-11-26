@@ -282,15 +282,17 @@ sprite, 14 standing actors no longer fitted in a frame (the earlier fixed 16x16 
 writing the OAM entry inside the frame loop recovered most of it. Mesen, main loop ticks per
 video frame, Top Down scene, actors of 7 different 16x16 sheets:
 
-| Actors | earlier renderer | one call per sprite | current |
-| --- | --- | --- | --- |
-| 6 / 10, standing | 1.00 | 1.00 | 1.00 |
-| 10, walking | 0.99 | — | 0.99 |
-| 14, standing | 1.00 | 0.50 | 0.89 |
-| 14, walking | 0.99 | 0.50 | 0.79 |
+| Actors | earlier renderer | one call per sprite | one C loop | `sprites_draw.asm` |
+| --- | --- | --- | --- | --- |
+| 6 / 10, standing | 1.00 | 1.00 | 1.00 | 1.00 |
+| 10, walking | 0.99 | — | 0.99 | 0.99 |
+| 14, standing | 1.00 | 0.50 | 0.89 | 0.99 |
+| 14, walking | 0.99 | 0.50 | 0.79 | 0.94 |
 
-Space Battle (15 On Update scripts): 0.47, against 0.44 with the earlier renderer. The rest of
-the gap on crowded scenes needs `SpriteDrawFrame` in assembly (not done).
+Space Battle (15 On Update scripts): 0.48, against 0.44 with the earlier renderer.
+`SpriteDrawList` was checked against the C loop on 1500 random sprite lists and positions
+(identical OAM). What is left of `SceneRenderActors`' time is its C part (actor loop, animation
+choice, finding the frame).
 
 ### Not done — future work
 
@@ -300,8 +302,8 @@ the gap on crowded scenes needs `SpriteDrawFrame` in assembly (not done).
 - Re-measuring the exact fps ratio after the movement/collision cleanup above (same Mesen Lua
   method as the table above) — expected to help most on a frame where several actors' AI ticks
   used to coincide, but not re-profiled with numbers yet.
-- **Practical guidance until then:** a scene with more than ~10 actors on screen starts
-  dropping frames. Static NPCs, dialogue, camera work,
+- **Practical guidance until then:** a scene with 14 or more walking actors on screen drops
+  the odd frame. Static NPCs, dialogue, camera work,
   music and large backgrounds are all fine.
 
 ---

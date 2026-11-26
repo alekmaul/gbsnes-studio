@@ -15,6 +15,10 @@
 #define SCREEN_W 256
 #define SCREEN_H 224
 
+/* sprites_draw.asm */
+extern u16 SpriteDrawList(const unsigned char *sprites, u16 count, s16 x,
+                          s16 y, u16 oam);
+
 static const unsigned char *scene_data;
 static const unsigned char *slot_data[MAX_SCENE_SPRITES];
 static const unsigned char *slot_frames[MAX_SCENE_SPRITES];
@@ -185,15 +189,10 @@ void SpritePush(s16 x, s16 y, u8 tile, u8 attr, u8 large)
     oam_next = o + 4;
 }
 
-/* The same job as SpritePush() for every sprite of a frame, written out in the
- * loop: under 816-tcc a function call per sprite costs more than the work, and
- * 14 actors no longer fitted in a video frame. */
 void SpriteDrawFrame(u8 slot, u8 frame, s16 x, s16 y)
 {
     const unsigned char *frames;
     const unsigned char *p;
-    u16 o, high, sx, sy, reach;
-    u8 n, i, v;
 
     if (slot >= slot_count) return;
     /* Nothing of a frame is further than 128 pixels from its actor: skip
@@ -207,43 +206,8 @@ void SpriteDrawFrame(u8 slot, u8 frame, s16 x, s16 y)
     if (frame >= frames[0]) return;
     frames += 1 + ((u16)frame << 1);
     p = slot_data[slot] + (frames[0] | ((u16)frames[1] << 8));
-    n = *p;
-    p++;
-    o = oam_next;
-    while (n)
-    {
-        sx = x + (s8)p[0];
-        sy = y + (s8)p[1];
-        reach = 7;
-        if (p[4]) reach = 15;
-        /* visible when -reach <= position < screen size, which is a single
-         * unsigned comparison once shifted by reach */
-        if ((u16)(sx + reach) < (u16)(SCREEN_W + reach))
-        {
-            if ((u16)(sy + reach) < (u16)(SCREEN_H + reach))
-            {
-                if (o < OAM_BYTES)
-                {
-                    oamMemory[o] = (u8)sx;
-                    oamMemory[o + 1] = (u8)sy;
-                    oamMemory[o + 2] = p[2];
-                    oamMemory[o + 3] = p[3];
-
-                    i = (u8)((o >> 2) & 3);
-                    high = OAM_BYTES + (o >> 4);
-                    v = oamMemory[high] & oam_high_clear[i];
-                    if (sx & 0x100) v |= oam_high_x[i]; /* negative x */
-                    if (p[4]) v |= oam_high_large[i];
-                    oamMemory[high] = v;
-
-                    o += 4;
-                }
-            }
-        }
-        p += 5;
-        n--;
-    }
-    oam_next = o;
+    /* the loop over the frame's sprites is in sprites_draw.asm */
+    oam_next = SpriteDrawList(p + 1, p[0], x, y, oam_next);
 }
 
 void SpritesEnd(void)

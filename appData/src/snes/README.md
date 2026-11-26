@@ -294,7 +294,8 @@ named states, 8 animations per state (down, right, up, left, then the same movin
 made of 8x8 / 16x16 hardware sprites. The data format is documented in
 `src/lib/compiler/compileSnesSprites.js`. Per scene: up to 32 slots and 512 OBJ tiles (tiles
 32-95 are the emotes and dialogue portraits), loaded by `SceneInit`; OBJ palettes 1 and 2 belong
-to emotes and portraits. OAM is rebuilt every frame from sprite 1, sprite 0 being the portrait.
+to emotes and portraits. OAM is rebuilt every frame from sprite 1, sprite 0 being the portrait;
+the loop writing a frame's sprites is `src/sprites_draw.asm` (`SpriteDrawList`).
 
 **Correction (M11, this claim was actually stale/wrong):** a re-audit of `script_cmds.c`'s
 opcode table against `scriptCommands.js` for the M11 supported-events documentation pass found

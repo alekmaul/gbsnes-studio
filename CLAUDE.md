@@ -1049,9 +1049,9 @@ than redesigning** when something is missing.
   and portraits; sheets share OBJ palettes 0 and 3-7. All loaded with the scene (no runtime
   streaming). Transparency everywhere: the top-left pixel's colour, or alpha < 128.
 - **Engine**: `sprites.c`/`.h` (slots, animations, OAM). OAM is rebuilt each frame, front-most
-  first, from sprite 1; sprite 0 is the dialogue portrait. `SpriteDrawFrame` writes
-  `oamMemory` inside its own loop on purpose: one function call per sprite cost too much under
-  816-tcc (see `PERF.md`). Actors far off-screen skip their animation update.
+  first, from sprite 1; sprite 0 is the dialogue portrait. The loop writing a frame's sprites
+  is assembly, `src/sprites_draw.asm` (`SpriteDrawList`): in C under 816-tcc it was too slow
+  for 14 actors (see `PERF.md`). Actors far off-screen skip their animation update.
 - **Dialogue portrait**: BG3's box tiles have priority and hide every sprite, so `ui.c` opens a
   2x2 transparent hole under the portrait and `compileSnesAvatars` composes it over the box
   background.
