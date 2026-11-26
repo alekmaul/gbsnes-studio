@@ -7,7 +7,8 @@
 #
 # Config comes from decision D3 of the M0 cadrage:
 #   LoROM + FastROM, SRAM 8 KB (SRAMSIZE=03).
-# makeBuild.js overrides ROMTITLE / COUNTRY / SRAMSIZE / ROMSIZE per project.
+# A build replaces the settings below, in its own copy of this file, with the
+# project's (buildSnesRom.js), so an exported source builds the same ROM.
 #---------------------------------------------------------------------------------
 
 ifeq ($(strip $(PVSNESLIB_HOME)),)

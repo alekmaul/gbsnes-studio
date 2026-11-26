@@ -140,6 +140,79 @@ const resolvePvsHome = async ({ progress }) => {
   return dest;
 };
 
+// The cartridge header holds 21 characters of upper case ASCII. No double
+// quote: it would end the string the assembler reads the title from.
+const headerTitle = (title) =>
+  String(title || "GB STUDIO")
+    .toUpperCase()
+    .replace(/[^\x20-\x7E]|"/g, " ")
+    .slice(0, 21);
+
+// ROM + save RAM, or ROM only
+const cartridgeType = (sramSize) => (sramSize !== "00" ? "02" : "00");
+
+const MAKE_SETTINGS =
+  "ROMTITLE|CARTRIDGETYPE|ROMSIZE|ROMBANKS|SRAMSIZE|COUNTRY";
+
+// The engine's Makefile with the project's header settings, so that `make` on an
+// exported source builds the same cartridge as the app, rather than PVSnesLib's
+// defaults (256 KB, no save RAM). Returns null if the file doesn't include
+// snes_rules, the place the settings have to come before.
+const makefileWithSettings = (makefile, opts) => {
+  const include = /^include[ \t].*snes_rules.*$/m;
+  // characters which make or the sed building hdr.asm would interpret
+  const title =
+    headerTitle(opts.title)
+      .replace(/[/\\&'"$#`|;()<>]/g, " ")
+      .trim() || "GB STUDIO";
+  const settings = [
+    `export ROMTITLE ?= ${title}`,
+    `export CARTRIDGETYPE ?= ${cartridgeType(opts.sramSize)}`,
+    `export ROMSIZE ?= ${opts.romSize}`,
+    `export ROMBANKS ?= ${opts.romBanks}`,
+    `export SRAMSIZE ?= ${opts.sramSize}`,
+    `export COUNTRY ?= ${opts.country}`,
+  ].join("\n");
+  const others = makefile.replace(
+    new RegExp(
+      `^(export[ \\t]+)?(${MAKE_SETTINGS})[ \\t]*[:?]?=.*\\r?\\n`,
+      "gm"
+    ),
+    ""
+  );
+  if (!include.test(others)) {
+    return null;
+  }
+  // FASTROM stays where the engine's Makefile sets it, if it does
+  const fast = `FASTROM := ${opts.fastrom ? 1 : 0}`;
+  const fastLine = /^FASTROM[ \t]*[:?]?=[^\r\n]*/m;
+  const hasFast = fastLine.test(others);
+  return others
+    .replace(fastLine, fast)
+    .replace(
+      include,
+      (line) => `${hasFast ? "" : `${fast}\n`}${settings}\n\n${line}`
+    );
+};
+
+const writeMakefileSettings = async (buildRoot, opts, warnings) => {
+  const file = Path.join(buildRoot, "Makefile");
+  let makefile;
+  try {
+    makefile = await fs.readFile(file, "utf8");
+  } catch (e) {
+    return; // an engine without a Makefile can't be built with make anyway
+  }
+  const updated = makefileWithSettings(makefile, opts);
+  if (updated === null) {
+    warnings(
+      "The engine's Makefile doesn't include snes_rules: the project's ROM settings were not written to it."
+    );
+    return;
+  }
+  await fs.writeFile(file, updated, "utf8");
+};
+
 const generateHeader = async (pvsHome, buildRoot, opts) => {
   const template = await fs.readFile(
     Path.join(pvsHome, HDR_TEMPLATE_REL),
@@ -148,11 +221,8 @@ const generateHeader = async (pvsHome, buildRoot, opts) => {
   const subs = {
     "@HIROMDEF@": opts.hirom ? ".DEFINE HIROM 1" : "",
     "@FASTROMDEF@": opts.fastrom ? ".DEFINE FASTROM 1" : "",
-    "@ROMTITLE@": String(opts.title || "GB STUDIO")
-      .toUpperCase()
-      .replace(/[^\x20-\x7E]/g, " ")
-      .slice(0, 21),
-    "@CARTRIDGETYPE@": opts.sramSize !== "00" ? "02" : "00",
+    "@ROMTITLE@": headerTitle(opts.title),
+    "@CARTRIDGETYPE@": cartridgeType(opts.sramSize),
     "@ROMSIZE@": opts.romSize,
     "@SRAMSIZE@": opts.sramSize,
     "@COUNTRY@": opts.country,
@@ -273,7 +343,7 @@ const buildSnesRom = async ({
   const { banks, romSize } = romSizing(settings.snesRomBanks || 8);
 
   progress("Generating SNES header");
-  await generateHeader(pvsHome, buildRoot, {
+  const header = {
     hirom,
     fastrom,
     title: data.name,
@@ -281,7 +351,9 @@ const buildSnesRom = async ({
     romBanks: banks,
     sramSize: settings.snesSramSize || "03", // D3: 8 KB battery-backed save
     country: settings.snesRegion === "pal" ? "02" : "01",
-  });
+  };
+  await generateHeader(pvsHome, buildRoot, header);
+  await writeMakefileSettings(buildRoot, header, warnings);
 
   const { cFiles, sFiles } = await collectSources(buildRoot);
   if (cFiles.length === 0) {
@@ -388,4 +460,4 @@ const buildSnesRom = async ({
 };
 
 export default buildSnesRom;
-export { resolvePvsHome, filterLog };
+export { resolvePvsHome, filterLog, makefileWithSettings };

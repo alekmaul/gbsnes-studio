@@ -182,7 +182,8 @@ A user's own "Eject Build" compiles with plain `make` (no Node/Electron) via
 `appData/src/snes/Makefile` + the vendored `devkitsnes/snes_rules` — a genuinely separate code
 path from `buildSnesRom.js` (different file-discovery rules), so a file the JS build finds
 anywhere can still be invisible to real `make`; keep new source files under `src/`'s first two
-levels.
+levels. `buildSnesRom.js` writes the project's header settings (ROM size, region, SRAM, title)
+into the build's copy of that Makefile, so `make` doesn't fall back to snes_rules' defaults.
 
 ### Events are the extension point
 

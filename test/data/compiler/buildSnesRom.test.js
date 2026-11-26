@@ -1,7 +1,10 @@
 import fs from "fs-extra";
 import os from "os";
 import Path from "path";
-import buildSnesRom, { filterLog } from "../../../src/lib/compiler/buildSnesRom";
+import buildSnesRom, {
+  filterLog,
+  makefileWithSettings,
+} from "../../../src/lib/compiler/buildSnesRom";
 import { engineRoot, pvsneslibVendorDir } from "../../../src/consts";
 
 const vendored = pvsneslibVendorDir();
@@ -29,6 +32,57 @@ describe("filterLog", () => {
     expect(filterLog("C:/tmp/build/src/game.c:42: warning: real thing")).toBe(
       "game.c:42: warning: real thing"
     );
+  });
+});
+
+describe("makefileWithSettings", () => {
+  const engineMakefile = () =>
+    fs.readFileSync(Path.join(engineRoot, "snes", "Makefile"), "utf8");
+  const options = {
+    title: "My Game: \"one\" & two/three",
+    fastrom: true,
+    romSize: "0A",
+    romBanks: 32,
+    sramSize: "05",
+    country: "02",
+  };
+  // the value make will see: one assignment each, before snes_rules
+  const value = (makefile, name) => {
+    const lines = makefile
+      .split(/\r?\n/)
+      .filter((l) => new RegExp(`^(export )?${name} *[:?]?=`).test(l));
+    expect(lines.length).toBe(1);
+    expect(makefile.indexOf(lines[0])).toBeLessThan(
+      makefile.indexOf("include ${PVSNESLIB_HOME}")
+    );
+    return lines[0].split("=")[1].trim();
+  };
+
+  test("writes the project's cartridge settings into the engine Makefile", () => {
+    const out = makefileWithSettings(engineMakefile(), options);
+    expect(value(out, "ROMBANKS")).toBe("32");
+    expect(value(out, "ROMSIZE")).toBe("0A");
+    expect(value(out, "SRAMSIZE")).toBe("05");
+    expect(value(out, "CARTRIDGETYPE")).toBe("02");
+    expect(value(out, "COUNTRY")).toBe("02");
+    expect(value(out, "FASTROM")).toBe("1");
+    // nothing make or the shell would interpret
+    expect(value(out, "ROMTITLE")).toBe("MY GAME:  ONE    TWO");
+    expect(out).toContain("export ROMNAME  := game");
+  });
+
+  test("writes a ROM only, slow cartridge, and can be applied again", () => {
+    const out = makefileWithSettings(
+      makefileWithSettings(engineMakefile(), options),
+      { ...options, fastrom: false, sramSize: "00" }
+    );
+    expect(value(out, "FASTROM")).toBe("0");
+    expect(value(out, "CARTRIDGETYPE")).toBe("00");
+    expect(value(out, "SRAMSIZE")).toBe("00");
+  });
+
+  test("leaves alone a Makefile without snes_rules", () => {
+    expect(makefileWithSettings("all:\n\techo\n", options)).toBeNull();
   });
 });
 
