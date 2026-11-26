@@ -3,7 +3,10 @@ import { useSelector } from "react-redux";
 import uniq from "lodash/uniq";
 import { RootState } from "../../store/configureStore";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
-import { SpriteSheet } from "../../store/features/entities/entitiesTypes";
+import {
+  SpriteSheet,
+  ActorDirection,
+} from "../../store/features/entities/entitiesTypes";
 import {
   Option,
   OptGroup,
@@ -18,7 +21,7 @@ import l10n from "../../lib/helpers/l10n";
 interface SpriteSheetSelectProps extends SelectCommonProps {
   name: string;
   value?: string;
-  direction?: string;
+  direction?: ActorDirection;
   frame?: number;
   onChange?: (newId: string) => void;
   filter?: (spriteSheet: SpriteSheet) => boolean;
@@ -162,7 +165,7 @@ export const SpriteSheetSelect: FC<SpriteSheetSelectProps> = ({
           <SingleValueWithPreview
             preview={
               <SpriteSheetCanvas
-                spriteSheetId={value}
+                spriteSheetId={value || ""}
                 direction={direction}
                 frame={frame}
               />

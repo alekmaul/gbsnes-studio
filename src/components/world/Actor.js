@@ -41,6 +41,7 @@ class Actor extends Component {
               spriteSheetId={spriteSheetId}
               direction={direction}
               frame={spriteType === SPRITE_TYPE_STATIC ? frame : 0}
+              offsetPosition
             />
           )}
         </div>

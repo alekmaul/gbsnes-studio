@@ -4,7 +4,10 @@ import styled, { css } from "styled-components";
 import l10n from "../../lib/helpers/l10n";
 import { RootState } from "../../store/configureStore";
 import { spriteSheetSelectors } from "../../store/features/entities/entitiesState";
-import { SpriteSheet } from "../../store/features/entities/entitiesTypes";
+import {
+  SpriteSheet,
+  ActorDirection,
+} from "../../store/features/entities/entitiesTypes";
 import { SelectMenu, selectMenuStyleProps } from "../ui/form/Select";
 import { RelativePortal } from "../ui/layout/RelativePortal";
 import SpriteSheetCanvas from "../world/SpriteSheetCanvas";
@@ -13,7 +16,7 @@ import { SpriteSheetSelect } from "./SpriteSheetSelect";
 interface SpriteSheetSelectProps {
   name: string;
   value?: string;
-  direction?: string;
+  direction?: ActorDirection;
   includeInfo?: boolean;
   frame?: number;
   onChange?: (newId: string) => void;
@@ -243,7 +246,7 @@ export const SpriteSheetSelectButton: FC<SpriteSheetSelectProps> = ({
           {spriteSheet ? (
             <PreviewWrapper>
               <SpriteSheetCanvas
-                spriteSheetId={value || optionalValue}
+                spriteSheetId={value || optionalValue || ""}
                 direction={direction}
                 frame={frame}
               />
