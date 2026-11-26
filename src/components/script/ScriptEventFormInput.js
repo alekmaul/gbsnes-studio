@@ -29,6 +29,7 @@ import CollisionMaskPicker from "../forms/CollisionMaskPicker";
 import { EventValueShape, EventDefaultValueShape } from "../../store/stateShape";
 import l10n from "../../lib/helpers/l10n";
 import EngineFieldSelect from "../forms/EngineFieldSelect";
+import AnimationStateSelect from "../forms/AnimationStateSelect";
 import { SliderField } from "../ui/form/SliderField";
 import { CheckboxField } from "../ui/form/CheckboxField";
 import { Input } from "../ui/form/Input";
@@ -204,6 +205,16 @@ class ScriptEventFormInput extends Component {
           filter={field.filter}
           optional={field.optional}
           onChange={this.onChange}
+        />
+      );
+    }
+    if (type === "animationstate") {
+      return (
+        <AnimationStateSelect
+          name={id}
+          value={value}
+          onChange={this.onChange}
+          allowDefault
         />
       );
     }

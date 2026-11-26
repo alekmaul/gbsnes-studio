@@ -110,8 +110,7 @@ import {
   ACTOR_START_UPDATE,
   MOSAIC_SET,
   SOUND_PLAY_CUSTOM,
-  PLAYER_SET_ANIM_STATE,
-  ACTOR_SET_ANIM_STATE
+  ACTOR_SET_STATE
 } from "../events/scriptCommands";
 import {
   getActorIndex,
@@ -362,22 +361,18 @@ class ScriptBuilder {
   // at compile time (0 = this sheet's own default state, 1+ = animStates[N-1] -
   // see eventActorSetAnimState.js/eventPlayerSetAnimState.js's own
   // resolution against the *currently selected* sheet's animStates[]).
-  // ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c) just index
+  // ACTOR_SET_STATE/PLAYER_SET_STATE (script_cmds.c) just index
   // the compiled anim_state_dir[slot] directly - no sheet lookup at
-  // runtime, unlike ACTOR_SET_SPRITE's own ARG16 project-sprite-index.
-  actorSetAnimState = (stateIndex) => {
+  // Show a state of the active actor's sprite sheet (player included). The
+  // engine takes the position of the name among the project's state names.
+  actorSetState = (stateName) => {
     const output = this.output;
-    output.push(cmd(ACTOR_SET_ANIM_STATE));
-    output.push(stateIndex & 0xff);
+    const { stateOrder = [""] } = this.options;
+    output.push(cmd(ACTOR_SET_STATE));
+    output.push(Math.max(0, stateOrder.indexOf(stateName || "")));
   };
 
   // Player
-
-  playerSetAnimState = (stateIndex) => {
-    const output = this.output;
-    output.push(cmd(PLAYER_SET_ANIM_STATE));
-    output.push(stateIndex & 0xff);
-  };
 
   playerSetSprite = (spriteSheetId, persist) => {
     const output = this.output;

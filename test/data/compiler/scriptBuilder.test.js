@@ -80,8 +80,7 @@ import {
   SOUND_PLAY_BEEP,
   SOUND_PLAY_CRASH,
   SOUND_PLAY_CUSTOM,
-  PLAYER_SET_ANIM_STATE,
-  ACTOR_SET_ANIM_STATE,
+  ACTOR_SET_STATE,
   SET_TIMER_SCRIPT,
   TIMER_RESTART,
   TIMER_DISABLE,
@@ -1402,18 +1401,20 @@ test("Should be able to set the mosaic effect, non-blocking", () => {
   expect(output).toEqual([cmd(MOSAIC_SET), 8, 1, 0, 0]);
 });
 
-test("Should be able to set the active actor's named animation state", () => {
+test("Should be able to set the active actor's sprite state by name", () => {
   const output = [];
-  const sb = new ScriptBuilder(output);
-  sb.actorSetAnimState(2);
-  expect(output).toEqual([cmd(ACTOR_SET_ANIM_STATE), 2]);
-});
-
-test("Should be able to set the player's named animation state", () => {
-  const output = [];
-  const sb = new ScriptBuilder(output);
-  sb.playerSetAnimState(1);
-  expect(output).toEqual([cmd(PLAYER_SET_ANIM_STATE), 1]);
+  const sb = new ScriptBuilder(output, { stateOrder: ["", "Jump", "Swim"] });
+  sb.actorSetState("Swim");
+  sb.actorSetState("");
+  sb.actorSetState("Unknown");
+  expect(output).toEqual([
+    cmd(ACTOR_SET_STATE),
+    2,
+    cmd(ACTOR_SET_STATE),
+    0,
+    cmd(ACTOR_SET_STATE),
+    0,
+  ]);
 });
 
 test("Should be able to load data", () => {

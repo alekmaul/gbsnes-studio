@@ -16,12 +16,8 @@
  * original v1.1.4 SNES port and never actually revisited - a stale
  * placeholder, not a real hardware ceiling: actors[]/triggers[] are plain
  * static arrays (a few hundred extra WRAM bytes at these sizes, on a chip
- * where WRAM sits at ~14% used per PERF.md), and every per-scene OAM id this
- * engine hands out (EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID, scene.c/ui.c)
- * is already derived from MAX_ACTORS via `<< 2`, so raising it shifts them
- * automatically with zero risk of colliding with the 128-hardware-sprite
- * OAM budget (20 actors + 1 emote + 4 projectiles + 1 avatar = 26 logical
- * users, nowhere close to 128). Now matches B exactly. */
+ * where WRAM sits at ~14% used per PERF.md). Hardware sprites are handed
+ * out each frame (sprites.c). Matches B exactly. */
 #define MAX_ACTORS 20
 #define MAX_TRIGGERS 30
 /* Projectiles (v4). B (GB Studio 3.x) allows 5 concurrent projectiles per
@@ -29,16 +25,6 @@
  * constraint (actors use ~10 of 128 hardware sprites), it's just no reason
  * to go bigger than what a scene realistically needs at once. */
 #define MAX_PROJECTILES 4
-/* Runtime sprite-sheet streaming (v4 follow-up). MUST match
- * compileSnesData.js's own #define MAX_STREAM_SLOTS exactly (guarded by
- * test/data/compiler/compileSnesData.test.js, same convention as every
- * other dual compiler/engine constant in this codebase, e.g.
- * SCENE_COL_DIR_BYTES). How many actors can simultaneously hold a
- * dedicated, non-shared OBJ streaming slot in one scene - see scene.h's
- * own STREAM_SLOT_TILE_BASE/STREAM_SLOT_INDEX comment for the full
- * design. */
-#define MAX_STREAM_SLOTS 2
-
 /* Placeholder until the M7 data compiler emits the real count (data_ptrs.h) */
 #ifndef NUM_VARIABLES
 #define NUM_VARIABLES 128
@@ -48,14 +34,6 @@ typedef struct
 {
     const unsigned char *ptr;
 } BANK_PTR;
-
-/* SPRITE_TYPE from GameTypes.h - drives the facing-frame offset in render */
-enum
-{
-    SPRITE_STATIC = 0,
-    SPRITE_ACTOR,
-    SPRITE_ACTOR_ANIMATED
-};
 
 /* MOVEMENT_TYPE from GameTypes.h */
 enum
@@ -76,10 +54,16 @@ typedef struct
 {
     s16 x, y;
     s8 dir_x, dir_y;
+    /* Sprite (sprites.h): the scene slot of its sheet, the sheet's state,
+     * the animation being played, its current frame and its first and last
+     * frames, all positions in the slot's frame table */
+    u8 slot;
+    u8 state;
+    u8 anim;
     u8 frame;
-    u8 frame_offset;
-    u8 frames_len;
-    u8 animate;      /* always-cycle flag (decorative sprites) */
+    u8 frame_start;
+    u8 frame_end;
+    u8 animate;      /* also cycle the frames while standing still */
     u8 anim_hold;    /* frames since last moved - bridges the 1-frame gaps at
                         tile boundaries so a walk cycle doesn't stutter/reset */
     u8 enabled;
@@ -91,13 +75,11 @@ typedef struct
                    and can't be walked into or interacted with. Rendering
                    (SceneRenderActors) and per-frame animation cycling
                    (SceneAnimateActors) are unaffected - only `enabled`. */
-    u8 flip;
     u8 moving;
     u8 move_speed;
     u8 anim_speed;
     u8 collisions_enabled;
     u8 movement_type;
-    u8 sprite_type;
     BANK_PTR events_ptr;
     /* Projectiles (v4). collision_group is a bitmask (1=player, 2/4/8=group
      * 1/2/3 - collisionGroupDec(), src/lib/compiler/helpers.js) - what this
@@ -124,48 +106,6 @@ typedef struct
      * u8, for the same project-wide-index reason as hit1/2/3_idx above. */
     u16 update_idx;
     u8 update_ctx;
-    /* Named animation states (v4 follow-up) - a metaspriteMode sheet can
-     * author several independent named pose-sets (Idle/Walk/Attack, each
-     * with its own animationType/frame set), compiled into the SAME
-     * per-slot metasprite blob metasprite_frame_base[slot] already points
-     * at (see scene.c's own comment on anim_state_offset's use in
-     * SceneRenderActors/actor_metasprite_pose). 0 = this actor's sheet's
-     * own default/implicit state - the exact byte offset
-     * metasprite_frame_base[slot] already resolves to today, so a sheet
-     * with no extra states behaves completely unchanged. Set by
-     * ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c), alongside
-     * sprite_type/frames_len (same pattern ACTOR_SET_SPRITE already uses
-     * for switching to a different sheet's own defaults). */
-    u16 anim_state_offset;
-    /* Frame/flip override (v4 follow-up). Actor: Set Frame / Set Frame to
-     * Variable / Set Flip used to only have a real effect on a
-     * non-directional ("fixed") sheet - a directional ("multi"/
-     * "multi_movement") sheet's render path (actor_render_tile/
-     * actor_metasprite_pose, scene.c) recomputes pose+flip from dir_x/dir_y
-     * fresh every frame, so an explicit frame/flip was silently overwritten
-     * the very next render. frame_override (set by those 3 opcodes,
-     * cleared by Actor: Set Direction - script_cmds.c) makes the render
-     * path trust actors[i].frame/flip as-is instead of deriving them from
-     * facing, for exactly as long as the author hasn't re-asserted a
-     * direction. Does not defeat a moving/auto-animating actor's own
-     * walk-cycle tick (SceneAnimateActors) overwriting frame again on its
-     * own cadence - same pre-existing caveat the "fixed" sheet case always
-     * had for an animate-flagged actor, now just also true here. */
-    u8 frame_override;
-    /* Runtime sprite-sheet streaming (v4 follow-up). 0xFF = this actor
-     * never streams (the overwhelming common case - every existing
-     * project is unaffected); else which of this scene's own
-     * MAX_STREAM_SLOTS dedicated streaming regions this actor currently
-     * occupies. Set by SceneInit from the compiled scene blob (a scene
-     * decides, at compile time, which specific actors are EVER allowed
-     * to stream, and reserves one exclusive OBJ slot + OBJ palette per
-     * such actor - never shared with any other actor, so a stream can
-     * never silently change what a different actor renders). Read by
-     * Script_ActorSetSprite_b/Script_PlayerSetSprite_b (script_cmds.c) to
-     * know where to DMA a target sheet's own data into; see scene.h's own
-     * STREAM_SLOT_TILE_BASE/STREAM_SLOT_INDEX comment for the full
-     * addressing design. */
-    u8 stream_slot;
 } ACTOR;
 
 typedef struct

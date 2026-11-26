@@ -6,6 +6,8 @@ import {
   actorSelectors,
   sceneSelectors,
   spriteSheetSelectors,
+  spriteStateSelectors,
+  spriteAnimationSelectors,
 } from "../../store/features/entities/entitiesState";
 import { DropdownButton } from "../ui/buttons/DropdownButton";
 import { EditableText } from "../ui/form/EditableText";
@@ -33,10 +35,6 @@ import castEventValue from "../../lib/helpers/castEventValue";
 import { CheckboxField } from "../ui/form/CheckboxField";
 import DirectionPicker from "../forms/DirectionPicker";
 import {
-  SPRITE_TYPE_ACTOR,
-  SPRITE_TYPE_ACTOR_ANIMATED,
-  SPRITE_TYPE_ANIMATED,
-  SPRITE_TYPE_STATIC,
 } from "../../consts";
 import { SpriteSheetSelectButton } from "../forms/SpriteSheetSelectButton";
 import { WorldEditor } from "./WorldEditor";
@@ -44,7 +42,6 @@ import ScriptEditorDropdownButton from "../script/ScriptEditorDropdownButton";
 import { SidebarTabs } from "./Sidebar";
 import ScriptEditor from "../script/ScriptEditor";
 import { NumberField } from "../ui/form/NumberField";
-import { SpriteTypeSelect } from "../forms/SpriteTypeSelect";
 import { AnimationSpeedSelect } from "../forms/AnimationSpeedSelect";
 import { MovementSpeedSelect } from "../forms/MovementSpeedSelect";
 import CollisionMaskPicker from "../forms/CollisionMaskPicker";
@@ -106,6 +103,12 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
   );
   const spriteSheet = useSelector((state: RootState) =>
     spriteSheetSelectors.selectById(state, actor?.spriteSheetId || "")
+  );
+  const spriteState = useSelector((state: RootState) =>
+    spriteStateSelectors.selectById(state, spriteSheet?.states[0] || "")
+  );
+  const spriteAnimations = useSelector((state: RootState) =>
+    spriteAnimationSelectors.selectEntities(state)
   );
   const [clipboardData, setClipboardData] = useState<any>(null);
   const [notesOpen, setNotesOpen] = useState<boolean>(!!actor?.notes);
@@ -246,32 +249,23 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
   }
 
   const showDirectionInput =
-    spriteSheet &&
-    spriteSheet.type !== SPRITE_TYPE_STATIC &&
-    spriteSheet.type !== SPRITE_TYPE_ANIMATED &&
-    actor.spriteType !== SPRITE_TYPE_STATIC;
+    spriteState &&
+    spriteState.animationType !== "fixed" &&
+    spriteState.animationType !== "fixed_movement";
 
-  const showFrameInput =
-    spriteSheet &&
-    spriteSheet.numFrames > 1 &&
-    actor.spriteType === SPRITE_TYPE_STATIC;
+  // Frames of the longest animation of the sheet's default state
+  const numFrames = Math.max(
+    0,
+    ...(spriteState?.animations || []).map(
+      (id) => spriteAnimations[id]?.frames.length || 0
+    )
+  );
 
-  const showSpriteTypeSelect =
-    spriteSheet &&
-    spriteSheet.type !== "static" &&
-    spriteSheet.type !== "animated";
+  const showFrameInput = numFrames > 1;
 
-  const showAnimatedCheckbox =
-    actor.animSpeed !== null &&
-    spriteSheet &&
-    spriteSheet.numFrames > 1 &&
-    (actor.spriteType === SPRITE_TYPE_STATIC ||
-      spriteSheet.type !== SPRITE_TYPE_ACTOR);
+  const showAnimatedCheckbox = actor.animSpeed !== null && numFrames > 1;
 
-  const showAnimSpeed =
-    spriteSheet &&
-    (spriteSheet.type === SPRITE_TYPE_ACTOR_ANIMATED ||
-      (actor.spriteType === SPRITE_TYPE_STATIC && spriteSheet.numFrames > 1));
+  const showAnimSpeed = numFrames > 1;
 
   const showCollisionGroup = !actor.isPinned;
 
@@ -425,9 +419,7 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
                   name="actorSprite"
                   value={actor.spriteSheetId}
                   direction={actor.direction}
-                  frame={
-                    actor.spriteType === SPRITE_TYPE_STATIC ? actor.frame : 0
-                  }
+                  frame={actor.frame}
                   onChange={onChangeField("spriteSheetId")}
                   includeInfo
                 />
@@ -452,19 +444,10 @@ export const ActorEditor: FC<ActorEditorProps> = ({ id, sceneId }) => {
                   label={l10n("FIELD_INITIAL_FRAME")}
                   placeholder="0"
                   min={0}
-                  max={(spriteSheet?.numFrames || 1) - 1}
+                  max={numFrames - 1}
                   value={actor.frame}
                   onChange={onChangeFieldInput("frame")}
                 />
-              )}
-              {showSpriteTypeSelect && (
-                <FormField name="spriteType" label={l10n("FIELD_ACTOR_TYPE")}>
-                  <SpriteTypeSelect
-                    name="spriteType"
-                    value={actor.spriteType}
-                    onChange={onChangeField("spriteType")}
-                  />
-                </FormField>
               )}
             </FormRow>
             {showAnimatedCheckbox && (

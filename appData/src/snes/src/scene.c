@@ -113,70 +113,13 @@ static u8 timer_script_time[NUM_TIMER_CONTEXTS];
 static BANK_PTR timer_script_ptr[NUM_TIMER_CONTEXTS];
 
 /* SHOW_SPRITES / HIDE_SPRITES. GB toggles a single hardware OAM-enable bit;
- * here SceneRenderActors just skips the oamSetEx(...OBJ_SHOW) every frame
- * while hidden. Reset to visible on every scene load, matching GB's
+ * here SceneRenderActors just doesn't draw the actors while hidden. Reset to visible on every scene load, matching GB's
  * SceneInit (SHOW_SPRITES right before DISPLAY_ON). */
 static u8 sprites_hidden = 0;
 
-/* Per-scene OBJ slot tables, filled by SceneInit from the scene blob's [24]
- * sprite table (was compile-time-const, project-wide - now every scene loads
- * its own <=8 sheets). sprite_slot_for_index points at the current scene's
- * project-index -> slot map (PLAYER_SET_SPRITE). Mutable: the toolchain does
- * not pre-zero .bss, so SceneInit always writes all 8. */
-u8 sprite_type_for_slot[SPRITE_POSE_SLOTS];
-u8 sprite_frames_for_slot[SPRITE_POSE_SLOTS];
-u8 sprite_pal_for_slot[SPRITE_POSE_SLOTS]; /* sized for streaming too - see scene.h */
-u8 sprite_oam_ids_for_slot[SPRITE_POSE_SLOTS]; /* M7 groundwork, see scene.h */
-const unsigned char *sprite_slot_for_index = 0;
-
-/* M7 groundwork, see scene.h - .bss isn't pre-zeroed either, SceneInit
- * always fills every entry up to scene_num_actors before anything reads it. */
-u16 actor_oam_base[MAX_ACTORS];
-
-/* M9.4 - see scene.h's own comment. All computed fresh in SceneInit, right
- * after the actor_oam_base[] prefix-sum loop, before anything else reads
- * them. */
-u16 actor_oam_total;
-u16 emote_oid;
-u16 projectile_oid_base;
-u16 avatar_oid;
-
-/* M8.3 (SPRITE_EDITOR_PROGRESS.md): a slot's "extra" poses (anything beyond
- * its own primary/frame-0 pose, which still always lives at a fixed address
- * derived from the slot number itself - see actor_render_tile's own `fo`)
- * used to be at a fixed, compile-time offset from `fo` (ACTOR_UP_TILE0 etc,
- * now removed) - every slot's "up" pose 96 tiles past its "down" pose, no
- * matter what. Now each slot's real extra poses are packed on demand, per
- * scene, by compileSnesData.js's createScenePacker() (packSceneSprites.js),
- * so their VRAM address varies and has to be read back at runtime instead.
- * Each byte is a HALF-tile-base (real tile index = value << 1 - every
- * packer placement is 2-aligned, so this fits the full 0-511 tile range in
- * one byte); 0 = this pose was never placed for this slot (fewer real
- * frames than the pose needs) - never actually read in that case, since
- * sprite_frames_for_slot[]/direction gating already decide whether a given
- * pose is ever asked for. Filled by SceneInit from the scene blob's own
- * trailing [40] table (after the collision bitmap - see its own comment). */
-u8 extra_pose_down_b[SPRITE_POSE_SLOTS];
-u8 extra_pose_up_a[SPRITE_POSE_SLOTS];
-u8 extra_pose_up_b[SPRITE_POSE_SLOTS];
-u8 extra_pose_side_a[SPRITE_POSE_SLOTS];
-u8 extra_pose_side_b[SPRITE_POSE_SLOTS];
-/* M9.4 - see scene.h's own comment. .bss isn't pre-zeroed either, so
- * SceneInit always writes every entry (NULL or a real pointer) before
- * SceneRenderActors ever reads one. */
-const unsigned char *metasprite_frame_base[SPRITE_POSE_SLOTS];
-
-/* Named animation states (v4 follow-up) - see scene.h's own comment and
- * SceneInit's own parsing of the scene blob's trailing has_anim_states
- * section. anim_state_count[slot] is how many *extra* states (beyond the
- * sheet's own default/implicit state 0) this slot's sheet authors;
- * anim_state_dir[slot] points at that slot's own directory of
- * {frames_len, spriteType, byteOffset(u16)} entries, one per extra state,
- * or 0 if anim_state_count[slot] is 0. Same "always written before any
- * reader runs" discipline as metasprite_frame_base above. */
-u8 has_anim_states;
-u8 anim_state_count[SPRITE_POSE_SLOTS];
-const unsigned char *anim_state_dir[SPRITE_POSE_SLOTS];
+/* The animation the genre forces on the player (ANIM_NONE: from its
+ * direction and movement). Reset by SceneInit. */
+static u8 player_anim_override = ANIM_NONE;
 
 /* Adventure genre, Option 1 (box-sweep collision) - see scene.h's own
  * comment. .bss isn't pre-zeroed either, but SceneInit always writes all
@@ -184,20 +127,21 @@ const unsigned char *anim_state_dir[SPRITE_POSE_SLOTS];
  * only reader) can ever run. */
 s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bounds_bottom;
 
+void ScenePlayerSetSheet(u8 slot)
+{
+    ActorSetSheet(&actors[0], slot);
+    SpriteBounds(slot, &player_bounds_left, &player_bounds_right,
+                 &player_bounds_top, &player_bounds_bottom);
+}
+
 /* MUSIC_PLAY preload (v4, "Space Battle" fix) - see scene.h's own comment. */
 u8 scene_music_preload;
 
 /* Projectiles (v4, LAUNCH_PROJECTILE / WEAPON_ATTACK). A small fixed pool -
- * no free-list, just a linear scan for a free slot each spawn (MAX_PROJECTILES
- * is small enough this is cheaper than maintaining a list). sprite_slot is
- * this *scene's* OBJ slot (0-7, already resolved at compile time by
- * scriptBuilder.js's _projectileSpriteSlot - see compileSnesData.js's
- * sceneSpriteIds/sceneProjectileSpriteIds), so rendering borrows whichever
- * actor sheet's tiles/palette are already loaded there - no dedicated
- * projectile VRAM region exists or is needed. Direction-only movement (no
- * angle/trig, matching this engine's other movement everywhere else) and
- * always-destroy-on-hit (this fork's LAUNCH_PROJECTILE payload has no
- * "strong"/destroyOnHit flag - see scriptBuilder.js's 5-byte wire format). */
+ * no free-list, just a linear scan for a free slot each spawn. sprite_slot is
+ * this scene's slot of the projectile's sheet: it plays the animation of that
+ * sheet facing the way it flies. Direction-only movement (no angle/trig,
+ * matching this engine's other movement) and always destroyed on hit. */
 typedef struct
 {
     u8 active;
@@ -205,6 +149,7 @@ typedef struct
     s8 dir_x, dir_y;
     u8 speed;
     u8 sprite_slot;
+    u8 frame, frame_start, frame_end; /* positions in the slot's frame table */
     u8 collision_group;  /* what this projectile IS - selects which of the
                              hit actor's scripts fires (see below) */
     u8 collision_mask;   /* which actor collision_group(s) it can hit */
@@ -231,51 +176,6 @@ static u16 player_hit_idx[3];
 #define PLAYER_IFRAMES 60 /* ~1s at 60fps - no visual flash during it (GB's
                               own "flash" cue) yet, a documented simplification */
 static u8 player_iframes = 0;
-/* M7 fix (SPRITE_EDITOR_PROGRESS.md, found during the M7 OAM rework): this
- * used to be `(u16)(MAX_ACTORS + 1) << 2` - the *literal same expression* as
- * ui.c's AVATAR_OID, so the dialogue avatar and projectile pool slot 0
- * silently shared one hardware OAM id (both written every frame, SceneUpdate
- * then UIUpdate in game.c's main loop). One OAM id per pool slot, right
- * after the emote's own (EMOTE_OID, defined further down next to
- * SceneRenderActors) - now genuinely distinct from AVATAR_OID because both
- * are derived from the same tight scheme instead of two independently-hand-
- * picked constants that happened to collide. All three (EMOTE_OID/
- * PROJECTILE_OID_BASE/AVATAR_OID) assumed every actor costs exactly 1 OAM id
- * - flagged here, at the time, as needing to become real runtime values the
- * moment that stopped being true. M9.4 (SPRITE_EDITOR_PROGRESS.md) is that
- * moment: all three are now real u16 globals (projectile_oid_base, emote_oid,
- * avatar_oid - scene.h), computed once in SceneInit right after the
- * actor_oam_base[] prefix-sum loop from its own real running total
- * (actor_oam_total), not compile-time constants anymore.
- *
- * M8.3 correction (SPRITE_EDITOR_PROGRESS.md, user-found: snesgbs2's Sample
- * Town - 9 actors on screen at once - rendered no sprites at all): the
- * `<< 2` this comment's own first line describes as "the literal same
- * expression" was dropped here (and from EMOTE_OID/AVATAR_OID/the
- * actor_oam_base[] prefix sum below) on the theory that it was "incidental
- * `i << 2` spacing... reserved 4 ids/actor for no real reason." That theory
- * was wrong - confirmed by reading PVSnesLib's own real oamSet/oamSetEx/
- * oamSetVisible asm (sprites.asm) directly: every `id` parameter these
- * functions take is a **byte offset** into the real OAM shadow buffer
- * (`oamMemory`), not a plain sprite index - oamSet's own prologue does
- * `tax` on the raw 16-bit `id` then `sta.l oamMemory+0,x`, and oamSetEx's
- * `id >> 4` computation for the packed high-attribute table only produces
- * the right byte (4 sprites/byte, so byte = id/16 when id is itself
- * already sprite*4) under exactly this same assumption. Passing a plain
- * sprite count (0,1,2,...) instead of a byte offset (0,4,8,...) makes each
- * actor's OAM write partially overlap the next one's 4-byte slot - which
- * is exactly why only the very first field (X) of actor 0 ever looked
- * right in a real multi-actor Mesen check: Y/tile/attr all live at byte
- * offsets a later actor's own (wrongly 1-apart, not 4-apart) write then
- * clobbers. The real id-84 collision this comment documents was never
- * about removing `<<2` - 84 was always `(MAX_ACTORS+1) << 2`, i.e. this
- * exact value once `<<2` is restored; the actual pre-M7 bug was that
- * PROJECTILE_OID_BASE and AVATAR_OID were independently hand-picked
- * *equal* expressions, not that either was wrong to scale by 4. `<<2` is
- * restored here and on every other OID derived the same way (now via
- * projectile_oid_base, a real runtime value - see this comment's own first
- * paragraph and scene.h). */
-
 /* SCENE_PUSH_STATE / SCENE_POP_STATE / SCENE_STATE_RESET / SCENE_POP_ALL_STATE.
  * A small stack of (scene, player tile pos, player facing) snapshots, e.g. for
  * a pause-menu scene that later returns exactly where the player left off.
@@ -816,84 +716,18 @@ void SceneRequestSwitch(u16 index, u8 tile_x, u8 tile_y, u8 dir)
  * top over time; re-derived from the real byte offsets, not assumed):
  *   [0] bg_index  [1] num_actors  [2] num_triggers  [3..4] scene_script_idx
  *   [5] width     [6] height      [7] scene_type (genre dispatch byte)
- *   [8..31]  (24 bytes) per-scene OBJ slot table: sprite_type[8],
- *            sprite_frames[8], sprite_pal[8]
- *   [32..37] (6 bytes) up to 3 banded parallax layers: {lines, shift} each
- *   [38..43] (6 bytes) On Player Hit script indices (collision group 1/2/3)
+ *   [8..13]  (6 bytes) up to 3 banded parallax layers: {lines, shift} each
+ *   [14..19] (6 bytes) On Player Hit script indices (collision group 1/2/3)
  *   actors   (19 bytes each): tile_x, tile_y, dir, movement_type,
- *                       sprite_idx, script_idx (2B), sprite_type, anim_speed,
+ *                       sprite_slot, script_idx (2B), frame, anim_speed,
  *                       animate, collision_group, hit1_idx (2B), hit2_idx (2B),
  *                       hit3_idx (2B), update_idx (2B)
  *   triggers (7 bytes each): tile_x, tile_y, w, h, type, script_idx (2B)
  *   collision bitmap: ceil(width * height / 8) bytes, row-major, bit set = solid
- *   (trailing, variable-length, appended in this order - see each one's own
- *   parsing comment below rather than fixed offsets here): M8.3's [40]
- *   extra-pose table, M9.4's [2*SPRITE_SLOTS] metasprite-frame table, then
- *   Adventure genre Option 1's [4] player collision-bounds bytes (left,
- *   right, top, bottom - signed, see scene.h's player_bounds_* comment),
- *   then the MUSIC_PLAY preload's [1] byte (0xff = none, see scene.h's
- *   scene_music_preload comment)
- *
-
- * Every *_idx/script_idx field is a 2-byte little-endian event_ptrs[] index
- * (v4 fix, user-found: "the triggers are not working when I press A" in a
- * real multi-scene project) - it's a project-wide index shared across every
- * scene's scripts, cumulatively growing as compileSnesData.js compiles scene
- * after scene, so it routinely exceeds 255 well before the last scene of a
- * real game. A 1-byte field silently wrapped mod 256, making a later scene's
- * actor/trigger/hit/update script reference a random wrong script - not
- * just triggers, every one of these fields shares the same index space.
+ *   [1] MUSIC_PLAY preload (0xff = none)
+ *   [1] has_col_dir flag, then width * height bytes if set
+ * The sprites of a scene are separate data, see sprites.h.
  */
-
-/* frames_len from the per-actor sprite_type + the sheet's frame count:
- * a 6-frame SPRITE_ACTOR_ANIMATED walks 2 poses per direction; a SPRITE_STATIC
- * sheet with 2-6 frames auto-cycles all of them (GB Studio's "animated" type -
- * a 2-frame duck, a 4-frame torch, ...); a 3-frame SPRITE_ACTOR and 1-frame
- * sheet are a single frame. */
-u8 frames_len_for(u8 sprite_type, u8 slot)
-{
-    if (sprite_type == SPRITE_ACTOR_ANIMATED) return 2;
-    if (sprite_type == SPRITE_STATIC)
-    {
-        /* M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite) sheet's
-         * "fixed" animationType has no 2-6 cap - its real frame count is
-         * however many frames were authored, read straight from
-         * sprite_frames_for_slot[] (compileSnesData.js already clamps it to
-         * 255 there). Only ever true for a metaspriteMode slot - every
-         * legacy sheet still falls through to the capped check below,
-         * unchanged. */
-        if (metasprite_frame_base[slot]) return sprite_frames_for_slot[slot];
-        /* n == 3: if the SHEET itself is directional (a static actor
-         * override on a down/up/side sheet - e.g. a Turnip), stay on frame
-         * 0. If the sheet itself is a static auto-cycle (a 3-entry frame
-         * list, or a 3-frame PNG set to "Fixed"), cycle all 3. Nested ifs,
-         * not &&, per this file's 816-tcc boolean-chain rule. */
-        u8 n = sprite_frames_for_slot[slot];
-        if (n == 2) return 2;
-        if (n == 3)
-        {
-            if (sprite_type_for_slot[slot] == SPRITE_STATIC) return 3;
-            return 1;
-        }
-        if (n >= 4 && n <= 6) return n;
-    }
-    return 1;
-}
-
-/* How many real authored poses Actor: Set Frame / Set Frame to Variable can
- * pick between while frame_override is active - the sheet's own real pose
- * count, NOT frames_len (which deliberately stays 1/2 for SPRITE_ACTOR/
- * SPRITE_ACTOR_ANIMATED above, to drive the walk cycle and every other
- * frames_len_for() caller correctly - this is a separate concern). A
- * directional sheet has 3 (down/up/side) or 6 (down-A/B, up-A/B, side-A/B)
- * real poses regardless of frames_len; a non-directional ("fixed") sheet's
- * pose count IS frames_len, unchanged from today. */
-u8 override_frame_count(u8 sprite_type, u8 frames_len)
-{
-    if (sprite_type == SPRITE_ACTOR) return 3;
-    if (sprite_type == SPRITE_ACTOR_ANIMATED) return 6;
-    return frames_len ? frames_len : 1;
-}
 
 /* v2 M6: up to 6 BG palette regions per scene, matching GB Studio 2.0.0-
  * beta5's colour model (Palette.c: a 48-byte, 6x8-colour-DMG-packed blob
@@ -968,18 +802,7 @@ void SceneInit(void)
     scene_type = s[7];
     p = s + 8;
 
-    /* [32] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
-     * sprite_pal[8], sprite_oam_ids[8] (M7 groundwork, see scene.h) -
-     * see compileSnesData.js. */
-    for (i = 0; i < SPRITE_SLOTS; i++)
-    {
-        sprite_type_for_slot[i] = p[i];
-        sprite_frames_for_slot[i] = p[SPRITE_SLOTS + i];
-        sprite_pal_for_slot[i] = p[2 * SPRITE_SLOTS + i];
-        sprite_oam_ids_for_slot[i] = p[3 * SPRITE_SLOTS + i];
-    }
-    sprite_slot_for_index = scene_sprite_slot_ptrs[scene_index];
-    p += 4 * SPRITE_SLOTS;
+    SpritesLoadScene(scene_index);
 
     /* M6 (v4): [MAX_PARALLAX_LAYERS*2] banded X-axis parallax table - see
      * compileSnesData.js and parallax.c. lines=0 in slot 0 means no
@@ -1089,10 +912,9 @@ void SceneInit(void)
     SceneUploadBgPalette(bg_index);
     /* UI (BG3) palette -> CGRAM 16..19 (palette field 4), after the BG palette. */
     dmaCopyCGram((u8 *)ui_pal, 16, UI_PAL_SIZE);
-    /* this scene's OBJ tile sheet (8 KB) + 8-palette CGRAM image (bakes in the
-     * emote / avatar palettes at OBJ pal 1 / 2). v4: OBJ now lives at 0x0000
-     * (was 0x4000) - see game.c's fixed VRAM map comment. */
-    dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], OBJ_GFX_VRAM, SPR_TILES_SIZE);
+    /* this scene's OBJ tiles + 8-palette CGRAM image (with the emote and
+     * avatar palettes at OBJ pal 1 / 2) */
+    dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], OBJ_GFX_VRAM, scene_spr_len[scene_index]);
     dmaCopyCGram((u8 *)scene_spr_pal_ptrs[scene_index], 128, SPR_PAL_SIZE);
 
     if (use_map_engine)
@@ -1144,20 +966,12 @@ void SceneInit(void)
     actors[0].enabled = 1;
     actors[0].active = 1;
     actors[0].moving = 0;
-    actors[0].flip = 0;
-    actors[0].frame = 0;
     actors[0].animate = 0;
     actors[0].anim_hold = 0;
     actors[0].anim_speed = PLAYER_ANIM_SPEED;
-    actors[0].frame_offset = PLAYER_SPRITE_SLOT * 2; /* OBJ grid TL tile */
-    /* v4: the player's sheet can now vary per scene (Scene.playerSpriteSheetId),
-     * so its type/frame count can't be a compile-time constant any more -
-     * read the same per-scene sprite_type_for_slot[]/sprite_frames_for_slot[]
-     * arrays SceneInit already just DMA'd above, same as every other actor. */
-    actors[0].sprite_type = sprite_type_for_slot[PLAYER_SPRITE_SLOT];
-    actors[0].frames_len = frames_len_for(sprite_type_for_slot[PLAYER_SPRITE_SLOT], PLAYER_SPRITE_SLOT);
-    actors[0].anim_state_offset = 0; /* this sheet's own default/implicit state */
-    actors[0].frame_override = 0;
+    /* the player's sheet is always the scene's first slot */
+    player_anim_override = ANIM_NONE;
+    ScenePlayerSetSheet(PLAYER_SPRITE_SLOT);
     actors[0].move_speed = 1;
     actors[0].collisions_enabled = 1;
     /* Projectiles (v4): the player is always collision_group "player" (bit
@@ -1176,21 +990,16 @@ void SceneInit(void)
         actors[i].y = ((s16)p[1] << 3) + 8;
         dir_to_vec(p[2], &actors[i].dir_x, &actors[i].dir_y);
         actors[i].movement_type = p[3];
-        actors[i].frame_offset = p[4] * 2; /* sprite slot -> OBJ grid TL tile */
-        actors[i].flip = 0;
-        actors[i].frame = 0;
         actors[i].anim_hold = 0;
         actors[i].moving = 0;
         actors[i].enabled = 1;
         actors[i].active = 1;
         actors[i].move_speed = 1;
         actors[i].collisions_enabled = 1;
-        actors[i].sprite_type = p[7];
         actors[i].anim_speed = p[8];
         actors[i].animate = p[9];
-        actors[i].frames_len = frames_len_for(p[7], p[4]);
-        actors[i].anim_state_offset = 0; /* this sheet's own default/implicit state */
-        actors[i].frame_override = 0;
+        ActorSetSheet(&actors[i], p[4]);
+        ActorSetFrameOffset(&actors[i], p[7]);
         actors[i].events_ptr = event_ptrs[p[5] | ((u16)p[6] << 8)];
         /* Projectiles (v4): [10]=collision_group, [11..16]=hit1/2/3_idx (2
          * bytes each) - see compileSnesData.js actorEntries and
@@ -1215,81 +1024,10 @@ void SceneInit(void)
         actors[i].enabled = 0;
         actors[i].active = 0;
         actors[i].update_ctx = UPDATE_CTX_NONE;
-        /* M9.4: no longer hides this slot's own OAM id here (i<<2) - that
-         * only ever worked because EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID
-         * were fixed constants always placed right after MAX_ACTORS' worth
-         * of ids. Now that those are real per-scene values (can be smaller
-         * than MAX_ACTORS*4), a flat 0..MAX_ACTORS-1 sweep here could either
-         * clobber a lower-numbered emote/projectile/avatar id before it's
-         * even computed, or (just as bad) stop short of a stale id a
-         * previous, bigger-cast scene left visible. See the single
-         * actor_oam_total..hardware-ceiling sweep below instead, done once
-         * real OIDs are known. */
     }
 
-    /* M7 groundwork (SPRITE_EDITOR_PROGRESS.md) - real per-actor OAM id
-     * base, a prefix sum over sprite_oam_ids_for_slot[] (just read above).
-     * actors[i].frame_offset>>1 is this actor's sprite slot - same lookup
-     * sprite_pal_for_slot[] already uses in SceneRenderActors.
-     *
-     * M8.3 correction (user-found: snesgbs2's Sample Town, 9 actors on
-     * screen at once, rendered no sprites at all): this prefix sum used to
-     * accumulate in units of 1 (`j += sprite_oam_ids_for_slot[...]`,
-     * producing actor_oam_base[i] == i), on the theory that the pre-M7
-     * `i << 2` spacing it replaced was "incidental" and "wasted" space, not
-     * a real requirement. That was wrong - PVSnesLib's own oamSet/oamSetEx/
-     * oamSetVisible asm (sprites.asm) takes `id` as a **byte offset** into
-     * the real OAM shadow buffer (4 bytes/sprite: X, Y, tile, attr), not a
-     * sprite index - oamSet's prologue does `tax` on the raw `id` then
-     * `sta.l oamMemory+0,x` directly, and oamSetEx's `id >> 4` (to find the
-     * packed-high-attribute-table byte, 4 sprites/byte) only lands on the
-     * right byte when `id` is already `spriteIndex * 4`. Passing a plain
-     * unscaled index made every actor's 4-byte OAM write overlap the next
-     * one's, corrupting Y/tile/attr while leaving X (byte 0 of actor 0's
-     * own slot, the only byte no other actor's write could reach) looking
-     * fine in isolation - exactly the "nothing renders" symptom this fix
-     * resolves. Every entry of sprite_oam_ids_for_slot[] is still 1 today
-     * (nothing yet emits a real >1 OAM-entries-per-pose cost), so this now
-     * computes exactly actor_oam_base[i] == i*4 - byte-for-byte equivalent
-     * to the original pre-M7 `i << 2` scheme, restoring it without losing
-     * the real per-slot-cost plumbing M7 built around it. */
-    j = 0;
-    for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
-    {
-        actor_oam_base[i] = j;
-        j += (u16)sprite_oam_ids_for_slot[actors[i].frame_offset >> 1] << 2;
-    }
-    /* M9.4 (SPRITE_EDITOR_PROGRESS.md): real runtime OIDs, replacing the old
-     * MAX_ACTORS-derived compile-time constants - see scene.h's own comment.
-     * `j` here is this loop's own final running total: the real byte-offset
-     * just past the last actor's OAM range THIS SCENE actually uses. Placed
-     * back-to-back (emote, then the whole projectile pool, then avatar),
-     * same tight scheme the old constants used, just computed instead of
-     * hand-picked. Unlike the old fixed constants, these are now genuinely
-     * scene-relative - a scene with fewer actors than MAX_ACTORS-1 gets
-     * smaller values than the old 80/84/100, not the same ones (only a
-     * scene using every one of the MAX_ACTORS-1 real actor slots would
-     * land back on those exact old numbers). */
-    actor_oam_total = j;
-    emote_oid = actor_oam_total;
-    projectile_oid_base = emote_oid + 4;
-    avatar_oid = projectile_oid_base + ((u16)MAX_PROJECTILES << 2);
-
-    /* Because these are now scene-relative, a scene switch from a
-     * bigger-cast scene to a smaller one can leave a stale, still-visible
-     * sprite stranded at an OAM id this scene's own actor_oam_total..
-     * avatar_oid range no longer reaches (e.g. an avatar visible right as
-     * SWITCH_SCENE fires, landing at a higher id than the new scene's own,
-     * smaller avatar_oid). Sweep everything from this scene's own real
-     * total through the full 128-sprite hardware ceiling unconditionally -
-     * emote/projectile/avatar's own per-frame update routines immediately
-     * re-establish the right state for whichever of those ids this scene
-     * actually uses, same "hide now, let the owning subsystem redraw next
-     * frame" reasoning the old per-actor-slot loop above already used. */
-    for (j = actor_oam_total; j < ((u16)128 << 2); j += 4)
-    {
-        oamSetVisible(j, OBJ_HIDE);
-    }
+    /* none of the previous scene's sprites may stay on screen */
+    SpritesHideAll();
 
     /* On Update subsystem (v4): fresh pool for this scene (a previous
      * scene's contexts point at bytecode addresses that are meaningless
@@ -1303,18 +1041,10 @@ void SceneInit(void)
         ActorStartUpdate(i);
     }
 
-    /* Projectiles (v4): a fresh scene starts with none in flight - clear the
-     * pool and hide their OAM entries, same reasoning as the unused-actor
-     * loop just above (SceneInit is the only place stale ones would
-     * otherwise linger from the previous scene). */
+    /* Projectiles (v4): a fresh scene starts with none in flight */
     for (i = 0; i < MAX_PROJECTILES; i++)
     {
         projectiles[i].active = 0;
-        /* M8.3 correction: `+ (i << 2)`, not plain `+ i` - same byte-offset
-         * fix as PROJECTILE_OID_BASE's own comment and actor_oam_base[]'s
-         * prefix sum above (M7 mistakenly dropped this). Each projectile is
-         * still exactly 1 real OAM entry. */
-        oamSetVisible(projectile_oid_base + ((u16)i << 2), OBJ_HIDE);
     }
     /* Contact-damage iframes shouldn't carry across a scene switch either. */
     player_iframes = 0;
@@ -1345,46 +1075,6 @@ void SceneInit(void)
     }
     p += col_bytes;
 
-    /* M8.3: [40] extra-pose half-tile-base table - 5 arrays of SPRITE_SLOTS
-     * bytes (down-B, up-A, up-B, side-A, side-B), appended after the
-     * collision bitmap (whose own length is variable) - see
-     * compileSnesData.js's own comment at this table's emission for why it
-     * lives here instead of alongside the [32] sprite-slot table above. The
-     * M9.4 metasprite-frame-data section (below) is now the real last thing
-     * in the scene blob instead. */
-    for (i = 0; i < SPRITE_SLOTS; i++)
-    {
-        extra_pose_down_b[i] = p[i];
-        extra_pose_up_a[i] = p[SPRITE_SLOTS + i];
-        extra_pose_up_b[i] = p[2 * SPRITE_SLOTS + i];
-        extra_pose_side_a[i] = p[3 * SPRITE_SLOTS + i];
-        extra_pose_side_b[i] = p[4 * SPRITE_SLOTS + i];
-    }
-    p += 5 * SPRITE_SLOTS;
-
-    /* M9.4 (SPRITE_EDITOR_PROGRESS.md): [2*SPRITE_SLOTS] trailing per-slot
-     * free-form metasprite frame data - see scene.h's own comment on
-     * metasprite_frame_base and compileSnesData.js's emission. Self-skipping
-     * (slotByteLen covers this slot's whole frameOffset table + entry data),
-     * so no separate size bookkeeping is needed here - p always ends up
-     * exactly past the end of the scene blob once this loop finishes. */
-    for (i = 0; i < SPRITE_SLOTS; i++)
-    {
-        u16 slotByteLen = p[0] | ((u16)p[1] << 8);
-        p += 2;
-        metasprite_frame_base[i] = slotByteLen ? p : 0;
-        p += slotByteLen;
-    }
-
-    /* Adventure genre, Option 1: [4] trailing player collision-bounds bytes
-     * (left, right, top, bottom - signed, see scene.h's player_bounds_*
-     * comment and compileSnesData.js's own emission). */
-    player_bounds_left = (s8)p[0];
-    player_bounds_right = (s8)p[1];
-    player_bounds_top = (s8)p[2];
-    player_bounds_bottom = (s8)p[3];
-    p += 4;
-
     /* MUSIC_PLAY preload (v4, "Space Battle" fix): [1] trailing byte - see
      * scene.h's own comment on scene_music_preload and
      * compileSnesData.js's hoistSceneMusicPreload. */
@@ -1413,93 +1103,6 @@ void SceneInit(void)
             scene_col_dir[k] = p[k];
         }
         p += (u16)scene_width * scene_height;
-    }
-
-    /* Named animation states (v4 follow-up): [1] has_anim_states flag, the
-     * real last thing in the scene blob now - 0 (the overwhelming common
-     * case: no metaspriteMode sheet in this scene authors any extra named
-     * state beyond its own default) skips straight past this with just the
-     * one flag byte. Otherwise, for each of the SPRITE_SLOTS slots: [1]
-     * stateCount (0 = this slot's sheet has no extra states), then
-     * stateCount * [frames_len(u8), spriteType(u8), byteOffset(u16)] -
-     * byteOffset is relative to metasprite_frame_base[slot] (the exact
-     * pointer a sheet's own default/implicit state - "state 0" - already
-     * used before this feature existed), see
-     * ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c) and
-     * compileSnesData.js's own emission. */
-    has_anim_states = p[0];
-    p += 1;
-    if (has_anim_states)
-    {
-        for (i = 0; i < SPRITE_SLOTS; i++)
-        {
-            anim_state_count[i] = p[0];
-            p += 1;
-            anim_state_dir[i] = anim_state_count[i] ? p : 0;
-            p += (u16)anim_state_count[i] * 4;
-        }
-    }
-    else
-    {
-        for (i = 0; i < SPRITE_SLOTS; i++)
-        {
-            anim_state_count[i] = 0;
-            anim_state_dir[i] = 0;
-        }
-    }
-
-    /* Runtime sprite-sheet streaming (v4 follow-up): [1] the player's own
-     * stream_slot, [scene_num_actors] one per actor (same order as the
-     * actor-entry table parsed further up), [MAX_STREAM_SLOTS] which real
-     * OBJ palette register each of this scene's streaming slots uses -
-     * see compileSnesData.js's own matching emission comment. The real
-     * last thing in the scene blob now. Unconditional, no flag byte - the
-     * payload size is always known as soon as scene_num_actors was parsed
-     * above - 0xFF for every actor in the overwhelming common case where
-     * this scene never uses streaming at all (see gbs_types.h's own
-     * ACTOR.stream_slot comment). */
-    actors[0].stream_slot = p[0];
-    p += 1;
-    for (i = 1; i <= scene_num_actors && i < MAX_ACTORS; i++)
-    {
-        actors[i].stream_slot = p[i - 1];
-    }
-    p += scene_num_actors;
-    /* Every stream slot's own 5 extra-pose addresses are a fixed function
-     * of its tile base alone (STREAM_SLOT_TILE_BASE/INDEX, scene.h) -
-     * identical in every scene regardless of whether that scene even
-     * uses streaming, so these never need to be read from the blob at
-     * all, unlike a regular slot's own extra_pose_* entries (whose real
-     * address varies per scene, per createScenePacker()). Only the OBJ
-     * palette register assignment is genuinely per-scene (it depends on
-     * how many of that scene's OWN regular sheets already claimed a
-     * register - compileSnesData.js's own objPalForSlot/
-     * objPalForStreamSlot), so that one byte per slot still comes from
-     * the blob. */
-    for (i = 0; i < MAX_STREAM_SLOTS; i++)
-    {
-        u8 base = STREAM_SLOT_TILE_BASE(i);
-        u8 ssIdx = STREAM_SLOT_INDEX(i);
-        extra_pose_down_b[ssIdx] = (u8)((base + 2) >> 1);
-        extra_pose_up_a[ssIdx] = (u8)((base + 4) >> 1);
-        extra_pose_up_b[ssIdx] = (u8)((base + 6) >> 1);
-        extra_pose_side_a[ssIdx] = (u8)((base + 8) >> 1);
-        extra_pose_side_b[ssIdx] = (u8)((base + 10) >> 1);
-        sprite_pal_for_slot[ssIdx] = p[0];
-        p += 1;
-        /* Every other per-slot table is read at this index too (render
-         * path, frames_len_for, Set Animation State - see scene.h's
-         * STREAM_SLOT_INDEX comment), so give each a real value instead
-         * of whatever .bss held: a stream target is always a legacy
-         * (non-metasprite) sheet, 1 OAM entry, no named anim states.
-         * sprite_type/frames get their real values from the stream
-         * target itself in ActorStreamSprite (script_cmds.c). */
-        metasprite_frame_base[ssIdx] = 0;
-        sprite_oam_ids_for_slot[ssIdx] = 1;
-        anim_state_count[ssIdx] = 0;
-        anim_state_dir[ssIdx] = 0;
-        sprite_type_for_slot[ssIdx] = 0;
-        sprite_frames_for_slot[ssIdx] = 1;
     }
 
     actor_move_settings = 0;
@@ -1857,14 +1460,8 @@ void Start_PointNClick(void)
     camera_offset_x = 0;
     camera_offset_y = 0;
 
-    // GB forces sprite_type to SPRITE_STATIC regardless of what the assigned
-    // sheet's own frame count implied (frames_len_for() already ran in
-    // SceneInit, before startFuncs[] - so a directional 3-frame sheet keeps
-    // frames_len 1 and Update_PointNClick's hover frame never shows, exactly
-    // matching GB's `frames_len != 1` guard there), so ANY sheet's frame 0/1
-    // can be repurposed as a flat "normal cursor"/"hovering cursor" pair
-    // rather than a direction pose.
-    actors[0].sprite_type = SPRITE_STATIC;
+    // the cursor sheet's two animations, see Update_PointNClick
+    player_anim_override = ANIM_CURSOR;
     actors[0].dir_x = 0;
     actors[0].dir_y = 1;
 }
@@ -2003,13 +1600,13 @@ void Update_PointNClick(void)
     is_hover_actor = hit_actor != 0xFF && actors[hit_actor].events_ptr.ptr[0] != 0;
     is_hover_trigger = hit_trigger != 0xFF && triggers[hit_trigger].events_ptr.ptr[0] != 0;
 
-    if ((is_hover_actor || is_hover_trigger) && actors[0].frames_len != 1)
+    if (is_hover_actor || is_hover_trigger)
     {
-        actors[0].frame = 1;
+        player_anim_override = ANIM_CURSOR_HOVER;
     }
     else
     {
-        actors[0].frame = 0;
+        player_anim_override = ANIM_CURSOR;
     }
 
     if ((joy & KEY_A) && !(prev_joy & KEY_A))
@@ -2431,6 +2028,35 @@ void Start_Platform(void)
     camera_offset_y = 0;
 }
 
+// Which animation the player shows, as GB Studio's platform.c chooses it
+static void PlatformAnimate(void)
+{
+    u8 facing_left = 0;
+    u8 anim;
+    if (actors[0].dir_x < 0) facing_left = 1;
+    if (plat_on_ladder)
+    {
+        anim = ANIM_CLIMB;
+        actors[0].animate = (u8)(plat_vel_y != 0);
+    }
+    else if (!plat_grounded)
+    {
+        anim = facing_left ? ANIM_JUMP_LEFT : ANIM_JUMP_RIGHT;
+        actors[0].animate = 1;
+    }
+    else
+    {
+        anim = facing_left ? 3 : 1; /* idle */
+        actors[0].animate = 0;
+        if (plat_vel_x != 0)
+        {
+            anim += 4; /* moving */
+            actors[0].animate = 1;
+        }
+    }
+    player_anim_override = anim;
+}
+
 void Update_Platform(void)
 {
     s16 px, py;
@@ -2750,7 +2376,7 @@ void Update_Platform(void)
 
     actors[0].x = px;
     actors[0].y = py;
-    actors[0].animate = (u8)(plat_grounded && plat_vel_x != 0);
+    PlatformAnimate();
 
     tile_x = SceneActorTileX(0);
     tile_y = SceneActorTileY(0);
@@ -3281,15 +2907,9 @@ static void SceneUpdateAi(void)
     }
 }
 
-// Walk-cycle animation (M7-cont. phase 2). Ported from the GB engine's own
-// frame-cycle loop (Scene_b.c): on the /8 tick, for each actor whose
-// anim_speed threshold is met, step actors[i].frame through 0..frames_len-1
-// while it is moving (a real walk cycle) or has the "animate" flag (a
-// decorative always-cycling sprite, e.g. a torch). An idle walk sprite settles
-// back to pose 0. anim_speed: 4 fastest (every 8 frames) .. 0 slowest (128).
-// Perf: local pointer, same table[i]-vs-pointer fix as the other actor-loop
-// functions in this file - actors[i] was re-indexed up to 8 times per actor
-// here.
+// Steps the frames of each actor's animation while it moves, or all the time
+// with its "animate" flag. anim_speed: 4 fastest (every 8 frames) .. 0
+// slowest (128).
 static void SceneAnimateActors(void)
 {
     u8 i, thr, do_anim;
@@ -3300,7 +2920,7 @@ static void SceneAnimateActors(void)
     {
         ACTOR *a = &actors[i];
         if (!a->enabled) continue;
-        if (a->frames_len <= 1) continue;
+        if (a->frame_end == a->frame_start) continue;
 
         thr = 7;
         if (a->anim_speed == 3) thr = 15;
@@ -3312,23 +2932,13 @@ static void SceneAnimateActors(void)
         do_anim = 0;
         if (a->animate) do_anim = 1;
         /* anim_hold bridges the 1-frame `moving`=0 dips at tile boundaries so a
-         * continuously-walking actor keeps cycling. */
-        if (a->moving || a->anim_hold)
-        {
-            if (a->sprite_type != SPRITE_STATIC) do_anim = 1;
-        }
+         * continuously-walking actor keeps cycling. The platform player says
+         * itself when it animates. */
+        if (a->moving) do_anim = 1;
+        if (a->anim_hold) do_anim = 1;
+        if (!do_anim) continue;
 
-        if (!do_anim)
-        {
-            /* settled idle (anim_hold ran out) -> back to the standing pose */
-            if (a->sprite_type == SPRITE_ACTOR_ANIMATED && a->anim_hold == 0)
-            {
-                a->frame = 0;
-            }
-            continue;
-        }
-
-        if (a->frame + 1 >= a->frames_len) a->frame = 0;
+        if (a->frame >= a->frame_end) a->frame = a->frame_start;
         else a->frame++;
     }
 }
@@ -3520,441 +3130,40 @@ static void SceneUpdateEmote(void)
     }
 }
 
-/* M8.3 correction - see the PROJECTILE_OID_BASE comment above (scene.h's
- * emote_oid doc): `<<2` is required (oamSet's `id` is a byte offset, not a
- * sprite index), restored here after M7 mistakenly dropped it. M9.4: a real
- * runtime value (emote_oid, scene.h) instead of a compile-time constant. */
-
-// M7-cont. sprite frames, M8.3 (SPRITE_EDITOR_PROGRESS.md) VRAM addressing.
-// A 3-frame SPRITE_ACTOR sheet has one pose per direction (down =
-// frame_offset, up/side read from extra_pose_up_a[]/extra_pose_side_a[],
-// flipped when dir_x<0). A 6-frame SPRITE_ACTOR_ANIMATED sheet adds a 2nd
-// walk pose per direction (the "_b" arrays); SceneAnimateActors toggles
-// actors[i].frame 0<->1 while the actor moves. A 6-frame sheet on a
-// non-moving actor is SPRITE_STATIC with frames_len 6 - actors[i].frame
-// (0..5) then picks the sheet frame directly, in the order down-A, down-B,
-// up-A, up-B, side-A, side-B. Facing for the ACTOR/ANIMATED cases is derived
-// from dir_x/dir_y fresh every call, matching the GB engine's
-// SceneRenderActor_b.
-// M8.3: every pose beyond the primary/frame-0 one (which still always
-// lives at `fo` itself, unchanged) used to be `fo + <fixed compile-time
-// offset>` (ACTOR_UP_TILE0 etc, a project-wide constant - any slot's "up"
-// pose was always exactly 96 tiles past its own "down" pose). Now each
-// slot's real extra poses are packed on demand, per scene, so their VRAM
-// address varies per slot and is read back from the extra_pose_*[] arrays
-// (SceneInit) instead - `<<1` converts the stored half-tile-base back to a
-// real tile index (every packer placement is 2-aligned, see scene.h).
-// Perf: takes the caller's already-computed ACTOR* directly (its one call
-// site, in SceneRenderActors, already has one) instead of an index it
-// would have to re-derive `actors[i]` from all over again - same
-// table[i]-vs-pointer fix as npc_blocking/actor_try_move/Update_TopDown,
-// applied here since `frame` alone was re-indexed up to 5 times in the
-// SPRITE_STATIC cycle below. Runs for every actor, every frame,
-// uncapped - unlike SceneAnimateActors (throttled to 1-in-8 frames).
-// M8.3: returns a real VRAM tile index, not a slot-relative byte - an extra
-// pose packed into the dynamic region (tiles 96-511) can exceed 255, so this
-// (and every variable that carries its result - see SceneRenderActors'
-// `tile`) must stay u16 the whole way to oamSet's own u16 gfxoffset param.
-// A u8 here would silently truncate any pose placed past tile 255.
-static u16 actor_render_tile(ACTOR *a, u8 *flip_out)
-{
-    u8 fo = a->frame_offset;
-    u8 st = a->sprite_type;
-    u8 slot = fo >> 1;
-    u8 pose_b = 0;
-    u8 frame = a->frame;
-
-    if (st == SPRITE_STATIC)
-    {
-        *flip_out = a->flip;
-        if (a->frames_len <= 1) return fo;
-        /* 6-frame manual/auto cycle */
-        if (frame == 1) return (u16)extra_pose_down_b[slot] << 1;
-        if (frame == 2) return (u16)extra_pose_up_a[slot] << 1;
-        if (frame == 3) return (u16)extra_pose_up_b[slot] << 1;
-        if (frame == 4) return (u16)extra_pose_side_a[slot] << 1;
-        if (frame == 5) return (u16)extra_pose_side_b[slot] << 1;
-        return fo;
-    }
-
-    /* v4 follow-up: Actor: Set Frame/Set Flip on a directional sheet - see
-     * gbs_types.h's frame_override comment. `frame` is already clamped to
-     * a real pose index by override_frame_count() at the Set Frame/Set
-     * Frame to Variable call site, so this only ever reads a pose this
-     * sheet really has. SPRITE_ACTOR (3 real poses: down/up/side) has its
-     * own mapping here, NOT the 6-frame A/B cascade above - a 3-frame
-     * sheet never populates extra_pose_*_b[] at all, so frame values past
-     * 2 can never occur for it (override_frame_count() caps at 3). */
-    if (a->frame_override)
-    {
-        *flip_out = a->flip;
-        if (st == SPRITE_ACTOR)
-        {
-            if (frame == 1) return (u16)extra_pose_up_a[slot] << 1;
-            if (frame == 2) return (u16)extra_pose_side_a[slot] << 1;
-            return fo;
-        }
-        /* SPRITE_ACTOR_ANIMATED - same 6-pose order as the SPRITE_STATIC
-         * cycle above. */
-        if (frame == 1) return (u16)extra_pose_down_b[slot] << 1;
-        if (frame == 2) return (u16)extra_pose_up_a[slot] << 1;
-        if (frame == 3) return (u16)extra_pose_up_b[slot] << 1;
-        if (frame == 4) return (u16)extra_pose_side_a[slot] << 1;
-        if (frame == 5) return (u16)extra_pose_side_b[slot] << 1;
-        return fo;
-    }
-
-    if (st == SPRITE_ACTOR_ANIMATED)
-    {
-        if (frame & 1) pose_b = 1;
-    }
-
-    if (a->dir_y < 0) /* up */
-    {
-        *flip_out = 0;
-        return (u16)(pose_b ? extra_pose_up_b[slot] : extra_pose_up_a[slot]) << 1;
-    }
-    if (a->dir_x != 0) /* side */
-    {
-        *flip_out = a->dir_x < 0 ? 1 : 0;
-        return (u16)(pose_b ? extra_pose_side_b[slot] : extra_pose_side_a[slot]) << 1;
-    }
-    /* down / idle */
-    *flip_out = 0;
-    return pose_b ? (u16)extra_pose_down_b[slot] << 1 : fo;
-}
-
-/* M9.4 (SPRITE_EDITOR_PROGRESS.md): resolves which authored metasprite
- * frame index an actor's current pose/direction maps to - the SAME index
- * space a metaspriteMode sheet's own frames are authored in
- * (entitiesTypes.ts/MetaspriteFramesTimeline.tsx: a "fixed"/"multi"/
- * "multi_movement" metasprite sheet follows the exact same frame
- * convention a legacy sheet's own frames already do), confirmed directly
- * against actor_render_tile's own SPRITE_STATIC branch above: frame 0-5
- * already resolve to pose index 0-5 in exactly this order (primary,
- * down-B, up-A, up-B, side-A, side-B) - so no remapping is needed between
- * authoring and this lookup.
- * Deliberately duplicated from actor_render_tile rather than refactored
- * into it - that function is the single most bug-history-documented piece
- * of this file (three real OAM X/Y-wraparound bugs and a priority-layer
- * bug, all recorded as comments right there); this keeps the legacy path
- * provably untouched, and this new function only ever has to resolve a
- * plain pose INDEX, not a real VRAM tile address. */
-static u8 actor_metasprite_pose(ACTOR *a, u8 *flip_out)
-{
-    u8 st = a->sprite_type;
-    u8 pose_b = 0;
-
-    if (st == SPRITE_STATIC)
-    {
-        *flip_out = a->flip;
-        return a->frame;
-    }
-    /* v4 follow-up: Actor: Set Frame/Set Flip override (gbs_types.h) - a->frame
-     * is already clamped to a real compact pose index (0-2 for SPRITE_ACTOR,
-     * 0-5 for SPRITE_ACTOR_ANIMATED) by override_frame_count() at the Set
-     * Frame/Set Frame to Variable call site, which is exactly this
-     * function's own existing index convention - no remapping needed. */
-    if (a->frame_override)
-    {
-        *flip_out = a->flip;
-        return a->frame;
-    }
-    if (st == SPRITE_ACTOR_ANIMATED && (a->frame & 1))
-    {
-        pose_b = 1;
-    }
-    /* SPRITE_ACTOR (a "multi" metasprite sheet) authors exactly 3 COMPACT
-     * frames (down,up,side - MetaspriteFramesTimeline.tsx's own
-     * frameCountFor), not 6 - compileSnesData.js's encodeMetaspriteSlot
-     * packs sheet.metasprites[] 1:1 with no gap-filling, so this has to
-     * return compact indices {0,1,2} for that type, not the 6-slot
-     * numbering SPRITE_ACTOR_ANIMATED's own 6 real authored frames already
-     * naturally match. Caught before the side-mirroring verification below
-     * - reading pose index 4 against a 3-entry frameOffset table would have
-     * read past the real data. */
-    if (a->dir_y < 0) /* up */
-    {
-        *flip_out = 0;
-        return (st == SPRITE_ACTOR) ? 1 : (pose_b ? 3 : 2);
-    }
-    if (a->dir_x != 0) /* side */
-    {
-        *flip_out = a->dir_x < 0 ? 1 : 0;
-        return (st == SPRITE_ACTOR) ? 2 : (pose_b ? 5 : 4);
-    }
-    /* down / idle */
-    *flip_out = 0;
-    return (st == SPRITE_ACTOR) ? 0 : (pose_b ? 1 : 0);
-}
-
+/* One frame of the sprites, front-most first: the emote bubble, then the
+ * player and the actors (projectiles follow, see ProjectilesUpdate) */
 static void SceneRenderActors(void)
 {
-    u8 i, flip;
-    u16 tile; /* M8.3: a packed extra-pose address can exceed 255 (tiles
-               * 96-511) - oamSet's own gfxoffset param is u16, this just
-               * has to stay wide the whole way there. */
-    u16 oid;
-    s16 x_rel, y_rel;
-    u8 slot; /* M9.4: hoisted so both the metasprite and legacy branches
-              * below (and the disabled/hidden branch) share one lookup. */
-    /* M9.4: a metasprite actor's own per-tile render locals. Declared here
-     * (not in a nested block) matching this function's own existing flat
-     * declaration style. */
-    u8 meta_pose, meta_mirror, meta_j, meta_n, meta_flags;
-    u8 meta_flip_x, meta_flip_y, meta_pri, meta_visible;
-    s8 meta_dx, meta_dy;
-    s16 meta_x, meta_y;
-    u16 meta_tile, meta_oid, meta_frame_off;
-    const unsigned char *meta_base;
-    const unsigned char *meta_e;
-    /* Only the used slots - SceneInit hid slots > scene_num_actors once. */
-    for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
-    {
-        ACTOR *a = &actors[i];
-        oid = actor_oam_base[i]; /* M7: real per-actor base, see scene.h */
-        slot = a->frame_offset >> 1;
-        x_rel = a->x - scroll_x - 8;
-        y_rel = a->y - scroll_y - 16;
-        /* v4 fix (user-found, No$sns: "the rock and duck [show up] at the
-         * bottom of the screen" while scrolling Sample Town, a 448x448px
-         * scene - far bigger than this ever got exercised on before).
-         * oamSet's x/y are u16; this engine used to hand it x_rel/y_rel
-         * (s16, can go negative) with no range check at all, relying
-         * entirely on OAM hardware coordinate wraparound (Y is 8 bits -
-         * period 256; X is 9 bits - period 512) to hide off-screen actors.
-         * That only works within one wrap period of the screen edge - an
-         * actor further away than that (any scene bigger than ~256x256px,
-         * not just Sample Town) wraps back into a visible-looking position
-         * instead of disappearing, exactly what the user saw. Now an
-         * explicit distance check gates whether this actor is drawn at
-         * all - genuinely off-screen actors are hidden outright rather
-         * than trusted to wrap correctly.
-         *
-         * v4 follow-up fix (user-found, No$sns: an actor's OAM X snapping
-         * to 0 at a specific, exactly-reproducible scroll position - not
-         * the original bug's random-looking wraparound). The original
-         * +32px margin on the right edge (x_rel < 288) was itself wrong:
-         * SNES OAM X is a 9-bit *signed* field - 0..255 are real on-screen
-         * positions (naturally clipped by the PPU past column 255, no
-         * special handling needed for a sprite hanging off the right
-         * edge), but 256..511 are the *negative* half (256 = -256, not
-         * "256"). x_rel in [256, 287] fell straight into that negative
-         * half - 256 cast to u16 and handed to oamSet came back out as
-         * raw X 0 (confirmed on real hardware: OAM low byte 0x00), i.e.
-         * the sprite rendered pinned to the *left* screen edge instead of
-         * being invisible off the right one. There is no legitimate use
-         * for x_rel > 255 here - a sprite past the right edge just needs
-         * to be culled, not encoded - so the upper X bound is exactly the
-         * screen width, no margin.
-         *
-         * v4 fix (user-found, No$sns OAM viewer: a sprite with OAM Y=0xF8
-         * showing a sliver at the TOP of the screen instead of staying
-         * fully hidden below the bottom edge). The claim just above this -
-         * "Y has no equivalent hardware ambiguity, its own 256 upper bound
-         * was already correct" - was wrong: unlike X (9-bit, wraps at 512,
-         * far past the 256px screen width, so the exact-256 cutoff above
-         * has no wrap risk at all), Y is only 8-bit and wraps at 256, which
-         * is *close* to the real 224px visible height. A 16px-tall sprite
-         * (OBJ_LARGE) at y_rel in (224, 240] is safely invisible (rows
-         * 224-255, entirely below row 223, no wrap) - but y_rel in
-         * (240, 255] wraps: e.g. y_rel=248 spans OAM rows 248-263, and
-         * 256-263 wrap to rows 0-7, showing the sprite's own bottom 8 rows
-         * as a phantom sliver at the top of the screen. Matching X's own
-         * treatment exactly (cull at the real visible boundary, not the
-         * hardware wrap period) removes the unsafe window entirely: 224 is
-         * this target's real NTSC visible height (also used verbatim by
-         * cam_max_y two lines below/game.c's cam_max_y - no named constant
-         * exists for it here). */
-        if (metasprite_frame_base[slot])
-        {
-            /* M9.4 (SPRITE_EDITOR_PROGRESS.md): a Free-form (Metasprite)
-             * actor - loop over this frame's own placed tiles instead of
-             * the single oamSet the legacy branch below still does
-             * unchanged. See scene.h's metasprite_frame_base comment for
-             * the wire format and encodeMetaspriteSlot (compileSnesData.js)
-             * for how it's built. */
-            if (a->enabled && !sprites_hidden)
-            {
-                meta_pose = actor_metasprite_pose(a, &flip);
-                /* User-asked (M9.4): a "multi"/"multi_movement" sheet's
-                 * side pose auto-mirrors the whole placed-tile set for the
-                 * opposite facing direction, matching the existing
-                 * single-tile convention every other actor sheet already
-                 * has (actor_render_tile's own dir_x<0 hardware hflip).
-                 * SPRITE_STATIC's `flip` is a separate, per-actor manual
-                 * flip control (a->flip) - XORed into each tile's own
-                 * flipX below with no position change, not this same
-                 * whole-composition mirror (never asked for, and a
-                 * position-mirror for a non-directional sheet has no
-                 * "opposite side" to mirror toward). */
-                meta_mirror = (a->sprite_type != SPRITE_STATIC) && flip;
-                /* Named animation states (v4 follow-up): anim_state_offset
-                 * is 0 for every actor still on this sheet's own default
-                 * state (the exact byte metasprite_frame_base[slot] always
-                 * pointed at before this feature existed), so this is a
-                 * no-op for every untouched project. */
-                meta_base = metasprite_frame_base[slot] + a->anim_state_offset;
-                meta_frame_off = meta_base[(u16)meta_pose * 2] |
-                                  ((u16)meta_base[(u16)meta_pose * 2 + 1] << 8);
-                meta_e = meta_base + meta_frame_off;
-                meta_n = *meta_e++;
-                /* Avoids a comma-operator increment clause
-                 * (`meta_j++, meta_e += 4`) - untested syntax on this
-                 * engine, no existing loop anywhere in this file uses one.
-                 * Ruled out as the cause of this change's own real Mesen
-                 * bug (that was compileSnesData.js's spriteTypeForActor,
-                 * see its own comment) by testing this rewrite in
-                 * isolation first and seeing the exact same symptom
-                 * persist - kept anyway, advancing meta_e explicitly costs
-                 * nothing and avoids relying on untested syntax. */
-                for (meta_j = 0; meta_j < meta_n; meta_j++)
-                {
-                    meta_dx = (s8)meta_e[0];
-                    meta_dy = (s8)meta_e[1];
-                    meta_tile = (u16)meta_e[2] << 1;
-                    meta_flags = meta_e[3];
-                    meta_flip_x = meta_flags & 1;
-                    meta_flip_y = (meta_flags & 2) ? 1 : 0;
-                    meta_pri = (meta_flags & 4) ? 3 : 2;
-                    if (meta_mirror)
-                    {
-                        /* Mirrors this tile's own position around the
-                         * canvas's horizontal center (dx is already
-                         * center-relative - see compileSnesData.js's own
-                         * dx = tile.x - canvasWidth/2) and flips its pixels
-                         * to match - a rigid mirror of the whole
-                         * composition, not a per-tile-independent flip. */
-                        meta_dx = (s8)(-(s16)meta_dx - 16);
-                        meta_flip_x = meta_flip_x ? 0 : 1;
-                    }
-                    else if (a->sprite_type == SPRITE_STATIC && a->flip)
-                    {
-                        meta_flip_x = meta_flip_x ? 0 : 1;
-                    }
-                    meta_x = a->x - scroll_x + meta_dx;
-                    meta_y = a->y - scroll_y + meta_dy;
-                    meta_oid = oid + ((u16)meta_j << 2);
-                    /* Same off-screen culling / OAM X/Y-wraparound safety
-                     * this function's own single-tile path below needs
-                     * (see its extensive comment) - a wide/tall composed
-                     * sprite's outer tiles can cross these bounds even when
-                     * the actor's own anchor doesn't, so each tile needs
-                     * its own check, not just the actor's.
-                     * Deliberately NOT a single 4-term && chain, matching
-                     * this engine's own established defensive convention
-                     * for new code (the documented 816-tcc 3+-term &&/||
-                     * miscompile class - can_step/in_box/col_solid's own
-                     * fix history) - though the real bug hit during this
-                     * change's own Mesen verification turned out to be
-                     * elsewhere (compileSnesData.js's spriteTypeForActor,
-                     * see its own comment), not this chain; kept this way
-                     * anyway since it costs nothing and matches precedent. */
-                    meta_visible = 1;
-                    if (meta_x <= -32) meta_visible = 0;
-                    if (meta_x >= 256) meta_visible = 0;
-                    if (meta_y <= -32) meta_visible = 0;
-                    if (meta_y >= 224) meta_visible = 0;
-                    if (meta_visible)
-                    {
-                        oamSetEx(meta_oid, OBJ_LARGE, OBJ_SHOW);
-                        oamSet(meta_oid, (u16)meta_x, (u16)meta_y, meta_pri,
-                               meta_flip_x, meta_flip_y, meta_tile,
-                               sprite_pal_for_slot[slot]);
-                    }
-                    else
-                    {
-                        oamSetVisible(meta_oid, OBJ_HIDE);
-                    }
-                    meta_e += 4;
-                }
-                /* Hide this actor's own unused trailing sub-ids (this
-                 * frame has fewer tiles than this slot's own cross-frame
-                 * worst case, sprite_oam_ids_for_slot[slot]) so a smaller
-                 * frame never leaves a stale sprite from a bigger one. */
-                for (; meta_j < sprite_oam_ids_for_slot[slot]; meta_j++)
-                {
-                    oamSetVisible(oid + ((u16)meta_j << 2), OBJ_HIDE);
-                }
-            }
-            else
-            {
-                for (meta_j = 0; meta_j < sprite_oam_ids_for_slot[slot]; meta_j++)
-                {
-                    oamSetVisible(oid + ((u16)meta_j << 2), OBJ_HIDE);
-                }
-            }
-        }
-        else if (a->enabled && !sprites_hidden &&
-            x_rel > -32 && x_rel < 256 &&
-            y_rel > -32 && y_rel < 224)
-        {
-            tile = actor_render_tile(a, &flip);
-            // oamSet(id, x, y, priority, hflip, vflip, gfxoffset, pal)
-            // frame_offset is always slot*2 (SceneInit / PLAYER_SET_SPRITE), so
-            // frame_offset>>1 is the sprite slot -> its per-sheet OBJ palette.
-            // -8 x / -16 y: a 16x16 sprite whose feet sit at the bottom of the
-            // actor's tile, matching the GB engine (actor pos = tile*8+8, GB
-            // OAM shows at pos - {8,16}); -8 y put every sprite a tile too low
-            // (an actor placed "on the stairs" rendered one row below them).
-            // v4 fix (user-found: "the sprites are displayed behind the
-            // current BG"): priority 2, NOT 0. The M7 comment that used to
-            // sit here got Mode 1's real layer order backwards - the
-            // authoritative table (fullsnes' Background Priority Chart) is,
-            // front to back with BG3 kept "priority high" as this engine
-            // sets it: BG3.1 > OBJ3 > BG1.1 > BG2.1 > OBJ2 > BG1.0 > BG2.0 >
-            // OBJ1 > OBJ0 > BG3.0 > Backdrop. So OBJ0 sits BELOW BG1.0/
-            // BG2.0 (every ORDINARY tile, not just a painted priority one) -
-            // priority 0 hid every actor behind the plain scene background.
-            // Priority 2 sits below BG1.1/BG2.1 (still correctly occluded by
-            // a painted "priority" tile - see EVENTS.md) but above BG1.0/
-            // BG2.0, so ordinary tiles no longer cover the sprite. This is
-            // also just reverting to what this code did before M7 (v4).
-            //
-            // v4 fix (user-found, No$sns OAM viewer: a duck actor scrolled
-            // just past the left edge - x_rel a small negative number -
-            // rendered pinned near the RIGHT edge instead, at the wrapped
-            // low byte of x_rel). oamSetEx MUST run before oamSet, not
-            // after: PVSnesLib's oamSetEx (sprites.asm) unconditionally
-            // clears this sprite's OAM high-table X-MSB bit on its
-            // OBJ_SHOW path (`and.l oamHideand,x` on the show branch) -
-            // it doesn't know or care about X, it's just resetting
-            // whatever oamSetVisible's own hide path leaves behind. oamSet
-            // is the one that correctly computes and writes that same bit
-            // from x_rel's sign (a real read-modify-write, verified in the
-            // upstream pvsneslib/pvsneslib/source/sprites.asm). Calling
-            // oamSetEx after oamSet silently zeroed the bit oamSet had just
-            // set, so any sprite with a negative x_rel (already handled by
-            // the -32..256 cull check above) had its OAM X reinterpreted as
-            // a small *positive* value near the right edge instead of the
-            // correct near-left-edge/off-screen position.
-            oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
-            oamSet(oid, (u16)x_rel, (u16)y_rel, 2,
-                   flip, 0, tile, sprite_pal_for_slot[a->frame_offset >> 1]);
-        }
-        else
-        {
-            oamSetVisible(oid, OBJ_HIDE);
-        }
-    }
+    u8 i, forced;
+    s16 x, y;
+
+    SpritesBegin();
 
     if (emote_time != 0)
     {
-        /* v4 fix: priority 2, same reasoning/reversion as the actor oamSet
-         * above - the emote bubble is a world-space sprite (floats above
-         * the actor's head), so it should respect priority tiles the same
-         * way (and not be hidden behind ordinary BG1 tiles either). */
         ACTOR *ea = &actors[emote_actor];
-        // v4 fix: oamSetEx before oamSet - same X-MSB-clobbering reasoning
-        // as the actor oamSet above.
-        oamSetEx(emote_oid, OBJ_LARGE, OBJ_SHOW);
-        oamSet(emote_oid, ea->x - scroll_x - 8,
-               ea->y - scroll_y - 32, 2, 0, 0,
-               EMOTE_TILE0 + emote_id * 2, 1);
+        /* a 16x16 bubble above the actor, OBJ palette 1, priority 2 */
+        SpritePush(ea->x - scroll_x - 8, ea->y - scroll_y - 32,
+                   EMOTE_TILE0 + (emote_id << 1), 0x22, 1);
     }
-    else
+
+    for (i = 0; i <= scene_num_actors && i < MAX_ACTORS; i++)
     {
-        oamSetVisible(emote_oid, OBJ_HIDE);
+        ACTOR *a = &actors[i];
+        if (!a->enabled) continue;
+        /* actors too far to be seen cost nothing more: their animation is
+         * brought up to date when they come back (a scene can hold 20) */
+        x = a->x - scroll_x;
+        if (x < -144) continue;
+        if (x > 384) continue;
+        y = a->y - scroll_y;
+        if (y < -144) continue;
+        if (y > 352) continue;
+        forced = ANIM_NONE;
+        if (i == 0) forced = player_anim_override;
+        ActorUpdateAnimation(a, forced);
+        if (sprites_hidden) continue;
+        SpriteDrawFrame(a->slot, a->frame, x, y);
     }
 }
 
@@ -3972,6 +3181,28 @@ void ProjectileSpawn(s16 x, s16 y, s8 dir_x, s8 dir_y, u8 speed, u8 sprite_slot,
         projectiles[i].dir_y = dir_y;
         projectiles[i].speed = speed;
         projectiles[i].sprite_slot = sprite_slot;
+        {
+            /* the sheet's animation facing the way it flies - or, for a
+             * motionless weapon hitbox, the way its owner faces */
+            s8 fx = dir_x;
+            s8 fy = dir_y;
+            u8 anim = 0;
+            if (fx == 0)
+            {
+                if (fy == 0)
+                {
+                    fx = actors[script_actor].dir_x;
+                    fy = actors[script_actor].dir_y;
+                }
+            }
+            if (fy < 0) anim = 2;
+            else if (fx > 0) anim = 1;
+            else if (fx < 0) anim = 3;
+            SpriteAnimationRange(sprite_slot, 0, anim,
+                                 &projectiles[i].frame_start,
+                                 &projectiles[i].frame_end);
+            projectiles[i].frame = projectiles[i].frame_start;
+        }
         projectiles[i].collision_group = collision_group;
         projectiles[i].collision_mask = collision_mask;
         projectiles[i].ttl = ttl;
@@ -4003,11 +3234,7 @@ void ProjectilesUpdate(void)
     u8 i, j;
     for (i = 0; i < MAX_PROJECTILES; i++)
     {
-        u16 oid;
-        u8 tile, flip;
-
         if (!projectiles[i].active) continue;
-        oid = projectile_oid_base + ((u16)i << 2); /* M8.3: byte offset, see scene.h's own comment; M9.4: a real runtime value */
 
         if (projectiles[i].ttl)
         {
@@ -4015,7 +3242,6 @@ void ProjectilesUpdate(void)
             if (!projectiles[i].ttl)
             {
                 projectiles[i].active = 0;
-                oamSetVisible(oid, OBJ_HIDE);
                 continue;
             }
         }
@@ -4030,7 +3256,6 @@ void ProjectilesUpdate(void)
             projectiles[i].y < 0 || projectiles[i].y >= ((s16)scene_height << 3))
         {
             projectiles[i].active = 0;
-            oamSetVisible(oid, OBJ_HIDE);
             continue;
         }
 
@@ -4058,7 +3283,6 @@ void ProjectilesUpdate(void)
                     if (!script_ptr) run_script(event_ptrs[idx], 0);
                 }
                 projectiles[i].active = 0;
-                oamSetVisible(oid, OBJ_HIDE);
             }
         }
         if (!projectiles[i].active) continue;
@@ -4082,27 +3306,22 @@ void ProjectilesUpdate(void)
 
             projectile_fire_hit_script(j, projectiles[i].collision_group);
             projectiles[i].active = 0;
-            oamSetVisible(oid, OBJ_HIDE);
             break;
         }
         if (!projectiles[i].active) continue;
 
-        /* Render: borrows sprite_slot's own tiles/palette (already loaded by
-         * SceneInit for whichever actor/player sheet occupies that slot this
-         * scene - see the PROJECTILE struct's own comment). Always frame 0,
-         * h-flipped moving left - a full 4-direction facing pick (matching
-         * actor_render_tile) was skipped for this first pass: most
-         * projectile art (bullets, arrows fired only sideways) doesn't need
-         * it, and it can be added later without changing the wire format. */
-        tile = projectiles[i].sprite_slot * 2;
-        flip = projectiles[i].dir_x < 0 ? 1 : 0;
-        /* v4 fix: priority 2, same reasoning as the actor/emote oamSet
-         * above - a world-space sprite, same layer as actors. oamSetEx
-         * before oamSet - same X-MSB-clobbering reasoning as the actor
-         * oamSet above. */
-        oamSetEx(oid, OBJ_LARGE, OBJ_SHOW);
-        oamSet(oid, projectiles[i].x - scroll_x - 4, projectiles[i].y - scroll_y - 4, 2,
-               flip, 0, tile, sprite_pal_for_slot[projectiles[i].sprite_slot]);
+        if ((time & 7) == 0)
+        {
+            if (projectiles[i].frame >= projectiles[i].frame_end)
+                projectiles[i].frame = projectiles[i].frame_start;
+            else
+                projectiles[i].frame++;
+        }
+        /* centred on the hitbox: a frame's own origin is 8px below its
+         * middle for a 16x16 sprite */
+        SpriteDrawFrame(projectiles[i].sprite_slot, projectiles[i].frame,
+                        projectiles[i].x - scroll_x,
+                        projectiles[i].y - scroll_y + 8);
     }
 }
 
@@ -4210,6 +3429,7 @@ void SceneUpdate(void)
     SceneCheckTriggers();
     SceneRenderActors();
     ProjectilesUpdate();
+    SpritesEnd();
     PlayerContactUpdate();
     UpdateScriptsProcess();
 }

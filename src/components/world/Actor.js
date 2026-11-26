@@ -4,7 +4,6 @@ import cx from "classnames";
 import { connect } from "react-redux";
 import SpriteSheetCanvas from "./SpriteSheetCanvas";
 import { ActorShape } from "../../store/stateShape";
-import { SPRITE_TYPE_STATIC } from "../../consts";
 import { actorSelectors } from "../../store/features/entities/entitiesState";
 import editorActions from "../../store/features/editor/editorActions";
 
@@ -24,7 +23,7 @@ class Actor extends Component {
 
   render() {
     const { actor, selected, showSprite } = this.props;
-    const { x, y, spriteSheetId, direction, spriteType, frame } = actor;
+    const { x, y, spriteSheetId, direction, frame } = actor;
     return (
       <>
         {selected && actor.isPinned && <div className="Actor__ScreenPreview" />}
@@ -40,7 +39,7 @@ class Actor extends Component {
             <SpriteSheetCanvas
               spriteSheetId={spriteSheetId}
               direction={direction}
-              frame={spriteType === SPRITE_TYPE_STATIC ? frame : 0}
+              frame={frame}
               offsetPosition
             />
           )}

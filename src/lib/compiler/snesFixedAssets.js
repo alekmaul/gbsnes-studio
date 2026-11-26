@@ -300,7 +300,16 @@ const buildUiGfx = async (uiDir, fontPath) => {
   const palOut = [];
   for (const w of words) palOut.push(w & 0xff, (w >> 8) & 0xff);
 
-  return { font: out, palette: palOut };
+  // The box interior as it appears on screen: the dialogue portraits are
+  // composed over it (compileSnesSprites.js compileSnesAvatars)
+  const boxFill = Array.from({ length: 8 }, (_, y) =>
+    Array.from({ length: 8 }, (__, x) => {
+      const c = [0, 1, 2].map(i => frame.px.get(8 + x, 8 + y, i));
+      return palColours[idxOf(c) - 1];
+    })
+  );
+
+  return { font: out, palette: palOut, boxFill };
 };
 
 const SPR_PALETTE = [
@@ -424,6 +433,7 @@ const snesFixedAssets = async ({ uiAssetDir, emoteFilenames, fontFilename } = {}
   return {
     uiFont: ui.font,
     uiPaletteBytes: ui.palette,
+    uiBoxFill: ui.boxFill,
     spriteTiles: sheet,
     spritePaletteBytes: palBytes(SPR_PALETTE),
     // palBytes() takes already-5-bit (0..31) components, matching

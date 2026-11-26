@@ -130,6 +130,65 @@ const createTileSet = () => {
   return { tiles, add };
 };
 
+/* ---- dialogue portraits ------------------------------------------------- */
+
+// The portraits of one scene: the top left 16x16 of each image, drawn over the
+// dialogue box background (boxFill, 8x8 colours) because the engine opens a
+// hole in the box to show them - BG3 would hide any sprite behind it. They
+// share one OBJ palette.
+export const compileSnesAvatars = async (filenames, boxFill) => {
+  const warnings = [];
+  const colors = [[0, 0, 0]];
+  const indexByColor = new Map();
+  let overflow = false;
+  const colorIndex = (color) => {
+    const key = rgbToBGR555(color[0], color[1], color[2]);
+    let index = indexByColor.get(key);
+    if (index === undefined) {
+      if (colors.length < MAX_SPRITE_COLORS) {
+        index = colors.length;
+        colors.push(color);
+      } else {
+        index = nearestColor(colors, color);
+        overflow = true;
+      }
+      indexByColor.set(key, index);
+    }
+    return index;
+  };
+
+  // The box colours come first, they must not be approximated
+  boxFill.forEach((row) => row.forEach(colorIndex));
+
+  const avatars = [];
+  for (let i = 0; i < filenames.length; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const image = await readImage(filenames[i]);
+    const quad = (ox, oy) =>
+      tileFromIndices(
+        Array.from({ length: 8 }, (_, y) =>
+          Array.from({ length: 8 }, (__, x) =>
+            colorIndex(image.colorAt(ox + x, oy + y) || boxFill[y][x])
+          )
+        )
+      );
+    avatars.push([quad(0, 0), quad(8, 0), quad(0, 8), quad(8, 8)]);
+  }
+  if (overflow) {
+    warnings.push(
+      `The dialogue portraits of a scene use more than ${
+        MAX_SPRITE_COLORS - 1
+      } colours between them - the extra ones are approximated.`
+    );
+  }
+
+  return {
+    avatars,
+    paletteBytes: paletteBytes(colors.map((c) => rgbToBGR555(...c))),
+    warnings,
+  };
+};
+
 /* ---- one sprite sheet --------------------------------------------------- */
 
 const firstIndexOfMatch = (list, pattern) => {
@@ -375,9 +434,10 @@ const assignPalettes = (sheets, registers, warnings, sceneName) => {
 // Free space in the OBJ tile area, a grid 16 tiles wide. A 16x16 sprite uses
 // tiles n, n+1, n+16 and n+17: placed on even rows and columns only, which
 // also keeps it inside one 256 tile page.
-const createVram = (totalTiles, reservedTiles) => {
+const createVram = (totalTiles, reserved) => {
   const used = new Array(totalTiles).fill(false);
-  used.fill(true, 0, reservedTiles);
+  reserved.forEach(([start, end]) => used.fill(true, start, end));
+  const available = used.filter((u) => !u).length;
   const data = new Array(totalTiles * 32).fill(0);
   const placed = new Map();
 
@@ -411,9 +471,15 @@ const createVram = (totalTiles, reservedTiles) => {
     return null;
   };
 
-  const usedTiles = () => used.lastIndexOf(true) + 1;
+  // Length of the area holding what was placed (a 16x16 tile ends on the
+  // second tile of its lower row)
+  const usedTiles = () =>
+    Array.from(placed.keys()).reduce((max, key) => {
+      const size = key.startsWith("8:") ? 1 : 18;
+      return Math.max(max, placed.get(key) + size);
+    }, 0);
 
-  return { data, place, usedTiles };
+  return { data, place, usedTiles, available };
 };
 
 const u16 = (value) => [value & 0xff, (value >> 8) & 0xff];
@@ -469,7 +535,7 @@ const encodeSlot = (sheet, entriesByFrame, stateOrder) => {
 /*
  * sheets: compiled sheets, in slot order. options:
  *   stateOrder     getSpriteStateOrder() of the project
- *   reservedTiles  tiles at the start of OBJ VRAM used by something else
+ *   reserved       [first, end[ tile ranges of OBJ VRAM used by something else
  *   palettes       OBJ palette registers the sheets may use
  *   sceneName      for warnings
  * Returns { tiles, tileCount, paletteBytes (all 8 OBJ palettes), data,
@@ -479,13 +545,13 @@ export const packSceneSprites = (
   sheets,
   {
     stateOrder = [""],
-    reservedTiles = 0,
+    reserved = [],
     palettes = [0, 1, 2, 3, 4, 5, 6, 7],
     sceneName = "",
   } = {}
 ) => {
   const warnings = [];
-  const vram = createVram(OBJ_VRAM_TILES, reservedTiles);
+  const vram = createVram(OBJ_VRAM_TILES, reserved);
   const assigned = assignPalettes(sheets, palettes, warnings, sceneName);
 
   const remapped = sheets.map((sheet, i) =>
@@ -512,7 +578,7 @@ export const packSceneSprites = (
   if (overflow) {
     warnings.push(
       `Scene '${sceneName}' needs more than the ` +
-        `${OBJ_VRAM_TILES - reservedTiles} sprite tiles available - some ` +
+        `${vram.available} sprite tiles available - some ` +
         `parts of its sprites are missing. Use fewer sprite sheets or frames.`
     );
   }

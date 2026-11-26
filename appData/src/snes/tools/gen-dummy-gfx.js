@@ -6,7 +6,7 @@
  *       bg 0 = the hand-rolled 64x64 dummy map (M4c collision demo)
  *       bg 1 = a REAL GB Studio background (mabe_house.png) run through
  *              src/lib/compiler/snesgfx.js  <- the M6 converter, on hardware
- *   - a 16x16 player sprite sheet
+ *   - a 16x16 placeholder sprite and its animation data
  *   - the BG3 dialogue font + palette + strings (M5)
  *   - scene blobs, scripts, event/string pointer tables
  *
@@ -329,119 +329,59 @@ const scriptEmpty = [
 const MOVE_AI_RANDOM_WALK = 5;
 
 // ---- scene data blobs ----------------------------------------------
-// header:  [bg_index, num_actors, num_triggers, scene_script_idx, width,
+// The layout compileSnesData.js writes (see SceneInit, scene.c):
+// header:  [bg_index, num_actors, num_triggers, scene_script_idx (2B), width,
 //           height, scene_type]
-// M6 (v4): [MAX_PARALLAX_LAYERS*2] banded parallax table follows the [32]
-// sprite-slot table below (compileSnesData.js) - all-zero (no parallax) in
-// both dummy scenes. Projectiles follow-up (v4): a further [3] On Player Hit
-// script-index table (collision group 1/2/3) follows the parallax table.
-// actor:   [tile_x, tile_y, dir, movement_type, sprite_idx, script_idx,
-//           sprite_type(0 static/1 actor/2 actor-animated), anim_speed, animate,
-//           collision_group, hit1_idx, hit2_idx, hit3_idx, update_idx] (14, v4)
-// trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx]     (6)
-// then the collision bitmap: ceil(width*height/8) bytes
+// then     parallax bands [3 * {lines, shift}], On Player Hit scripts [3 * 2B]
+// actor:   [tile_x, tile_y, dir, movement_type, sprite_slot, script_idx (2B),
+//           frame, anim_speed, animate, collision_group, hit1..3_idx (3 * 2B),
+//           update_idx (2B)]
+// trigger: [tile_x, tile_y, w, h, type(0=walk,1=action), script_idx (2B)]
+// then     the collision bitmap, ceil(width*height/8) bytes,
+//          [MUSIC_PLAY preload, 0xff = none], [has_col_dir = 0]
 //
-// v2 M5a-e: scene_type indexes states.h's startFuncs[]/updateFuncs[] - all
-// 5 slots are now real genres (0 Top Down, 1 Platformer, 2 Adventure,
-// 3 Shoot Em Up, 4 Point and Click), GB Studio 2.0.0-beta5's real
-// scene.type numbering, not M5's build order. Both dummy scenes below stay
-// Top Down - neither exercises the other 4 genres' dispatch slots, since
-// this generator can't be re-run yet (M7) to add real fixtures for them.
+// Both dummy scenes are Top Down (states.h).
 const SCENE_TYPE_TOPDOWN = 0;
-const SPRITE_STATIC = 0;
-// [32] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
-// sprite_pal[8], sprite_oam_ids[8] (M7, SPRITE_EDITOR_PROGRESS.md -
-// compileSnesData.js). Dummy: slot 0 static, palettes 0/3..7, every slot
-// still costs exactly 1 real OAM id (no metasprite data generates this
-// fixture, M8).
-const dummySprSlots = [].concat(
-  [SPRITE_STATIC, 0, 0, 0, 0, 0, 0, 0],
-  [1, 1, 1, 1, 1, 1, 1, 1],
-  [0, 3, 4, 5, 6, 7, 0, 0],
-  [1, 1, 1, 1, 1, 1, 1, 1]
-);
-const dummyParallax = [0, 0, 0, 0, 0, 0]; // MAX_PARALLAX_LAYERS(3) * 2, no parallax
-// [3] On Player Hit script indices (collision group 1/2/3), v4 follow-up -
-// unreachable in this dummy fixture (nothing spawns a projectile), so any
-// valid event_ptrs[] index is a fine placeholder, same reasoning as the
-// per-actor hit1/2/3_idx placeholders below.
-const dummyPlayerHit0 = [EV_SCENE0, EV_SCENE0, EV_SCENE0];
-const dummyPlayerHit1 = [EV_SCENE1, EV_SCENE1, EV_SCENE1];
-// M8.3 (SPRITE_EDITOR_PROGRESS.md): [40] extra-pose half-tile-base table (5
-// arrays of SPRITE_SLOTS(8) bytes), appended at the very end of the scene
-// blob - see compileSnesData.js's own comment at this table's emission.
-// All zero here: neither dummy scene's slot-0 sheet (SPRITE_STATIC, 1
-// frame) ever needs an "extra" pose beyond its own primary one.
-const dummyExtraPoses = new Array(5 * 8).fill(0);
-// M9.4 (SPRITE_EDITOR_PROGRESS.md): [2*SPRITE_SLOTS] per-slot free-form
-// metasprite frame data, appended after dummyExtraPoses - see
-// compileSnesData.js's own comment at this table's emission and scene.h's
-// comment on metasprite_frame_base. All-zero `slotByteLen` here: neither
-// dummy scene uses metaspriteMode on any sheet.
-const dummyMetasprites = new Array(2 * 8).fill(0);
-// Adventure genre, Option 1 (box-sweep collision): [4] trailing player
-// collision-bounds bytes (left, right, top, bottom - signed), appended
-// after dummyMetasprites - see compileSnesData.js's own emission and
-// scene.h's comment on player_bounds_*. Neither dummy scene uses the
-// Adventure genre (both are SCENE_TYPE_TOPDOWN above), so these are never
-// actually read - the values reproduce the legacy centered-16x16 box
-// (compileSnesData.js's own documented default for no authored bounds)
-// rather than being meaningless, in case that ever changes.
-const dummyPlayerBounds = [-8 & 0xff, 7, -16 & 0xff, 0xff]; // left,right,top,bottom
-// MUSIC_PLAY preload (v4, "Space Battle" fix): [1] trailing byte, 0xff =
-// none - neither dummy scene's own init script has a hoistable MUSIC_PLAY
-// (this generator doesn't compile real scripts), so there's nothing to
-// preload for either one.
-const dummyMusicPreload = [0xff];
-// Ladders / one-way platforms (v4): [1] has_col_dir flag, the real last
-// thing in the scene blob now - 0 = no directional-collision table, see
-// scene.c's own comment on platform_has_col_dir/scene_col_dir and
-// compileSnesData.js's emission. Neither dummy scene uses the Platform
-// genre (both SCENE_TYPE_TOPDOWN) or paints any directional/ladder
-// collision tile, so there's no table to emit either way.
-const dummyHasColDir = [0];
-// Named animation states (v4 follow-up): [1] has_anim_states flag, the
-// real last thing in the scene blob now - 0 = no sheet in this scene
-// authors any extra named state, see scene.c's own comment on
-// has_anim_states/anim_state_count/anim_state_dir and compileSnesData.js's
-// emission. Neither dummy scene's slot-0 sheet (SPRITE_STATIC, 1 frame)
-// authors any extra state.
-const dummyHasAnimStates = [0];
-// Runtime sprite-sheet streaming (v4 follow-up): [1] player_stream_slot,
-// [this scene's own actor count] one per actor, [MAX_STREAM_SLOTS] which
-// real OBJ palette register each streaming slot uses - the real last
-// thing in the scene blob now, see compileSnesData.js's own emission and
-// scene.c's comment on this section. Neither dummy scene uses streaming
-// at all (0xff for every actor; the unused palette-register bytes are a
-// harmless placeholder 0).
-const MAX_STREAM_SLOTS = 2; // must match gbs_types.h's own #define
-const dummyPlayerStreamSlot = [0xff];
-const dummyStreamPalForSlot = new Array(MAX_STREAM_SLOTS).fill(0);
+const word = (n) => [n & 0xff, (n >> 8) & 0xff];
+const noParallax = [0, 0, 0, 0, 0, 0];
+const playerHit = (ev) => [...word(ev), ...word(ev), ...word(ev)];
+const trigger = (x, y, w, h, ev) => [x, y, w, h, 0, ...word(ev)];
+const trailing = [0xff, 0];
 const scene0 = [
-  0, 1, 2, EV_SCENE0, MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
-  ...dummySprSlots,
-  ...dummyParallax,
-  ...dummyPlayerHit0,
-  18, 24, 8, MOVE_AI_RANDOM_WALK, 0, EV_NPC, SPRITE_STATIC, 3, 0, // wandering NPC (off the walk path)
-  0, EV_NPC, EV_NPC, EV_NPC, // v4: collision_group 0 (none) - hit1/2/3_idx unreachable, EV_NPC is just a valid placeholder
-  EV_EMPTY, // On Update subsystem (v4): no update script authored - see EV_EMPTY above
-  32, 47, 2, 2, 0, EV_TRIG_A,      // walk trigger 2 tiles below the move target
-  50, 50, 4, 4, 0, EV_TRIG_B,      // walk trigger -> scene 1
+  0, 1, 2, ...word(EV_SCENE0), MAP_W, MAP_H, SCENE_TYPE_TOPDOWN, // bg 0 = the 64x64 dummy map
+  ...noParallax,
+  ...playerHit(EV_SCENE0),
+  // wandering NPC (off the walk path), no collision group, no update script
+  18, 24, 8, MOVE_AI_RANDOM_WALK, 0, ...word(EV_NPC), 0, 3, 0, 0,
+  ...playerHit(EV_NPC), ...word(EV_EMPTY),
+  ...trigger(32, 47, 2, 2, EV_TRIG_A), // walk trigger 2 tiles below the move target
+  ...trigger(50, 50, 4, 4, EV_TRIG_B), // walk trigger -> scene 1
   ...collision,
-  ...dummyExtraPoses,
-  ...dummyMetasprites,
-  ...dummyPlayerBounds,
-  ...dummyMusicPreload,
-  ...dummyHasColDir,
-  ...dummyHasAnimStates,
-  ...dummyPlayerStreamSlot,
-  0xff, // scene0's one actor (the wandering NPC) - never streams
-  ...dummyStreamPalForSlot
+  ...trailing
 ];
 // scene 1 = bg 1 (mabe_house, 20x18), open floor, one line of text on entry.
 const SCENE1_W = 20, SCENE1_H = 18;
 const scene1Collision = new Array((SCENE1_W * SCENE1_H + 7) >> 3).fill(0);
-const scene1 = [1, 0, 0, EV_SCENE1, SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN, ...dummySprSlots, ...dummyParallax, ...dummyPlayerHit1, ...scene1Collision, ...dummyExtraPoses, ...dummyMetasprites, ...dummyPlayerBounds, ...dummyMusicPreload, ...dummyHasColDir, ...dummyHasAnimStates, ...dummyPlayerStreamSlot, ...dummyStreamPalForSlot];
+const scene1 = [
+  1, 0, 0, ...word(EV_SCENE1), SCENE1_W, SCENE1_H, SCENE_TYPE_TOPDOWN,
+  ...noParallax,
+  ...playerHit(EV_SCENE1),
+  ...scene1Collision,
+  ...trailing
+];
+
+// ---- sprite data (see compileSnesSprites.js) --------------------------
+// One slot: the placeholder, a single 16x16 frame at OBJ tile 0, palette 0,
+// priority 2, used by the player and the NPC.
+const spriteData = [
+  1, ...word(3), // slot count, offset of slot 0
+  -8 & 0xff, 7, -16 & 0xff, -1 & 0xff, // bounds
+  1, ...word(9), // one state, its animations at +9
+  ...word(25), // frame table at +25
+  ...new Array(16).fill(0), // 8 animations, all frame 0
+  1, ...word(28), // one frame, at +28
+  1, -8 & 0xff, -16 & 0xff, 0, 0x20, 1 // one 16x16 sprite
+];
 
 // ---- emit -------------------------------------------------------------
 function cArray(name, bytes, type = "unsigned char") {
@@ -469,13 +409,9 @@ const repoSrc = path.resolve(__dirname, "..", "src");
   const fixed = await snesFixedAssets();
   const uiFont = fixed.uiFont;
   const uiPal = fixed.uiPaletteBytes;
-  // M8.3 (SPRITE_EDITOR_PROGRESS.md): pad the fixed 256-tile prefix
-  // (placeholder/emotes/avatars, tiles 0-95 real, 96-255 always zero now)
-  // out to the full 512-tile, 2-OBJ-page budget - matches
-  // compileSnesData.js's own buildSceneSprites exactly, see its comment.
-  // Neither dummy scene ever needs an "extra" pose (both use a 1-frame
-  // SPRITE_STATIC sheet), so the dynamic region (96-511) stays all zero.
-  const sprSheet = fixed.spriteTiles.concat(new Array(512 * 32 - fixed.spriteTiles.length).fill(0));
+  // The OBJ tiles: placeholder, emotes and avatars, the first 96 tiles
+  const sprSheet = fixed.spriteTiles.slice(0, 96 * 32);
+  while (sprSheet.length < 96 * 32) sprSheet.push(0);
   const emotePal = fixed.emotePaletteBytes;
   const UI_FILL_TILE = fixed.UI_FILL_TILE;
   const NUM_UI_GLYPHS = fixed.NUM_UI_GLYPHS;
@@ -483,7 +419,7 @@ const repoSrc = path.resolve(__dirname, "..", "src");
   const UI_CURSOR_TILE = fixed.UI_CURSOR_TILE;
 
   // scene_spr_pal_N is the whole OBJ CGRAM image (8 palettes * 32 bytes) for a
-  // scene: palette 0 = placeholder, 1 = emotes, 2 = avatar 0, 3..7 = per-sprite.
+  // scene: palette 0 = placeholder, 1 = emotes, 2 = avatar 0.
   // The real compiler (compileSnesData.js) fills the rest per scene.
   const sprPal = new Array(8 * 32).fill(0);
   const putPal = (n, bytes) =>
@@ -543,18 +479,12 @@ const repoSrc = path.resolve(__dirname, "..", "src");
  * not in assets.c - see compileSnesData.js. */
 extern const unsigned char scene_spr_0[${sprSheet.length}];
 extern const unsigned char scene_spr_pal_0[${sprPal.length}];
+extern const unsigned char scene_sprdata_0[${spriteData.length}];
 extern const unsigned char *const scene_spr_ptrs[2];
+extern const unsigned short scene_spr_len[2];
 extern const unsigned char *const scene_spr_pal_ptrs[2];
+extern const unsigned char *const scene_sprite_data_ptrs[2];
 extern const unsigned char *const scene_sprite_slot_ptrs[2];
-// Runtime sprite-sheet streaming (v4 follow-up) - see compileSnesData.js's
-// own matching comment. This dummy fixture's one sheet is never a
-// streaming target anywhere, so every entry here is a harmless 0/all-zero
-// placeholder (NUM_SPRITE_SHEETS is 1 below, so each table has exactly 1
-// entry).
-extern const unsigned char *const stream_tile_ptrs[1];
-extern const unsigned char *const stream_pal_ptrs[1];
-extern const unsigned char stream_type_for_index[1];
-extern const unsigned char stream_frames_for_index[1];
 extern const unsigned char ui_font[${uiFont.length}];
 extern const unsigned char ui_pal[${uiPal.length}];
 
@@ -597,9 +527,6 @@ extern const unsigned char *const scenes[];
 #define NUM_SCENES 2
 #define NUM_BGS ${bgs.length}
 #define NUM_SPRITE_SHEETS 1
-#define SPRITE_SLOTS 8
-#define MAX_STREAM_SLOTS 2 // must match gbs_types.h's own #define
-#define SPR_TILES_SIZE ${sprSheet.length}
 #define SPR_PAL_SIZE   ${sprPal.length}
 #define UI_FONT_SIZE  ${uiFont.length}
 #define UI_PAL_SIZE   ${uiPal.length}
@@ -660,6 +587,9 @@ extern const unsigned char *const scenes[];
   assetsData["scene_spr_pal_0_data.as"] = asmAsset("scene_spr_pal_0", [
     { label: "scene_spr_pal_0", bytes: sprPal }
   ]);
+  assetsData["scene_sprdata_0_data.as"] = asmAsset("scene_sprdata_0", [
+    { label: "scene_sprdata_0", bytes: spriteData }
+  ]);
   // Map Engine streaming (v4) - always emitted (scene.c references it
   // unconditionally), all-zero (T_EMPTY) same as compileSnesData.js's own
   // shared blob - collision stays on this engine's own bitmap, never the
@@ -680,12 +610,10 @@ extern const unsigned char *const scenes[];
 
 ${cArray("scene_spr_slot_0", [0])}
 const unsigned char *const scene_spr_ptrs[2] = { scene_spr_0, scene_spr_0 };
+const unsigned short scene_spr_len[2] = { ${sprSheet.length}, ${sprSheet.length} };
 const unsigned char *const scene_spr_pal_ptrs[2] = { scene_spr_pal_0, scene_spr_pal_0 };
+const unsigned char *const scene_sprite_data_ptrs[2] = { scene_sprdata_0, scene_sprdata_0 };
 const unsigned char *const scene_sprite_slot_ptrs[2] = { scene_spr_slot_0, scene_spr_slot_0 };
-const unsigned char *const stream_tile_ptrs[1] = { 0 };
-const unsigned char *const stream_pal_ptrs[1] = { 0 };
-const unsigned char stream_type_for_index[1] = { 0 };
-const unsigned char stream_frames_for_index[1] = { 0 };
 const unsigned char *const bg_tiles_ptrs[${bgs.length}] = { ${bgs
     .map(b => `${b.name}_tiles`)
     .join(", ")} };

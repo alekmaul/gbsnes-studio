@@ -12,8 +12,6 @@ import {
 } from "@reduxjs/toolkit";
 import { normalize, denormalize, schema } from "normalizr";
 import {
-  SPRITE_TYPE_STATIC,
-  SPRITE_TYPE_ACTOR,
   COLLISION_ALL,
   TILE_PROPS,
   DRAG_PLAYER,
@@ -1658,7 +1656,6 @@ const addActor: CaseReducer<
       frame: 0,
       animate: false,
       spriteSheetId,
-      spriteType: SPRITE_TYPE_STATIC,
       direction: "down",
       moveSpeed: 1,
       animSpeed: 3,
@@ -1695,51 +1692,15 @@ const editActor: CaseReducer<
   PayloadAction<{ actorId: string; changes: Partial<Actor> }>
 > = (state, action) => {
   const actor = localActorSelectors.selectById(state, action.payload.actorId);
-  let patch = { ...action.payload.changes };
+  const patch = { ...action.payload.changes };
 
   if (!actor) {
     return;
   }
 
-  // If changed spriteSheetId
-  if (patch.spriteSheetId) {
-    const newSprite = localSpriteSheetSelectors.selectById(
-      state,
-      patch.spriteSheetId
-    );
-
-    if (newSprite) {
-      // If new sprite not an actor then reset sprite type back to static
-      if (newSprite.numFrames !== 3 && newSprite.numFrames !== 6) {
-        patch.spriteType = SPRITE_TYPE_STATIC;
-      }
-      const oldSprite = localSpriteSheetSelectors.selectById(
-        state,
-        actor.spriteSheetId
-      );
-      // If new sprite is an actor and old one wasn't reset sprite type to actor
-      if (
-        oldSprite &&
-        newSprite &&
-        oldSprite.id !== newSprite.id &&
-        oldSprite.numFrames !== 3 &&
-        oldSprite.numFrames !== 6 &&
-        (newSprite.numFrames === 3 || newSprite.numFrames === 6)
-      ) {
-        patch.spriteType = SPRITE_TYPE_ACTOR;
-      }
-
-      if (newSprite && newSprite.numFrames <= actor.frame) {
-        patch.frame = 0;
-      }
-    }
-  }
-  // If static and cycling frames start from frame 1 (facing downwards)
-  if (
-    (patch.animate && actor.spriteType === SPRITE_TYPE_STATIC) ||
-    patch.spriteType === SPRITE_TYPE_STATIC
-  ) {
-    patch.direction = "down";
+  // A new sheet starts from its first frame
+  if (patch.spriteSheetId && patch.spriteSheetId !== actor.spriteSheetId) {
+    patch.frame = 0;
   }
 
   actorsAdapter.updateOne(state.actors, {

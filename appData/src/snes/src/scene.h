@@ -14,7 +14,8 @@
  * (the dummy sprite has no facing frames yet - only left/right flip is applied).
  */
 #include "gbs_types.h"
-#include "assets.h" /* SPRITE_SLOTS */
+#include "assets.h"
+#include "sprites.h"
 
 /* v4 (user-asked): fixed VRAM layout (words) - every region lives at the
  * SAME address whether or not a scene routes through the Map Engine
@@ -24,8 +25,7 @@
  * named here instead of repeating hex literals so the two can't silently
  * drift apart again. BG3's own two regions (UI_FONT_VRAM/UI_MAP_VRAM) are
  * ui.c-local, not needed outside that file, but follow the exact same map:
- *   OBJ gfx   0x0000-0x1FFF (512 4bpp tiles, SPR_TILES_SIZE - M8.3 grew this
- *             from 256 to the full 2-OBJ-page budget, SPRITE_EDITOR_PROGRESS.md)
+ *   OBJ gfx   0x0000-0x1FFF (512 4bpp tiles, the two OBJ name pages)
  *   BG1 gfx   0x2000-0x5FFF (1024 4bpp tiles - targets/snes.js
  *             maxTilesetTiles, also the real ceiling: a tilemap cell's own
  *             tile-index field is only 10 bits, snesgfx.js's packed
@@ -40,110 +40,13 @@
 #define BG1_GFX_VRAM 0x2000
 #define BG1_MAP_VRAM 0x6800
 
-/* Runtime sprite-sheet streaming (v4 follow-up) - a scene with one or more
- * actors that need a real runtime VRAM swap (Player/Actor: Set Sprite
- * Sheet to a sheet beyond the 8 regular, compile-time-preloaded OBJ
- * slots - compileSnesData.js's own sceneSpriteIds) reserves one exclusive
- * 32-tile ("pair") region per such actor, right after the fixed 0-95
- * (primary-pose/emote/avatar) prefix every scene already reserves
- * (compileSnesData.js's own SHEET_RESERVED_TILES = 96 - both sides must
- * agree on this number exactly). Within stream slot k's own pair, the 6
- * possible poses (primary/down-A, down-B, up-A, up-B, side-A, side-B)
- * each get their own quadrant-aligned 2-tile base, mirroring
- * placeTiles()'s own {base,base+1,base+16,base+17} TL/TR/BL/BR
- * convention every regular slot's poses already use (SNES's own 16-wide
- * OBJ name-table addressing requires this exact layout for every 16x16
- * sprite, not just the primary pose) - local bases 0,2,4,6,8,10.
- * STREAM_SLOT_INDEX(k) is the "slot" value (frame_offset>>1) a stream
- * slot's *primary* pose resolves to - used purely as the array index
- * into the per-slot tables below (NOT a small 0/1 index - growing the
- * tables to cover this further address was simpler and lower-risk than
- * teaching the render path a second, parallel small-index scheme).
- * EVERY per-slot table is sized SPRITE_POSE_SLOTS, not SPRITE_SLOTS -
- * the render path (metasprite_frame_base, the extra_pose_ arrays,
- * sprite_pal_for_slot, sprite_oam_ids_for_slot), frames_len_for()
- * (sprite_frames_for_slot) and
- * Set Animation State (sprite_type_for_slot/anim_state_*) all index by
- * frame_offset>>1, so a streaming actor reads every one of them at its
- * stream index. Real bug found by Mesen verification: only 2 of these
- * were widened at first, and metasprite_frame_base[48] read garbage past
- * the end of an 8-entry array - every streamed actor became invisible.
- * SceneInit writes every stream index explicitly (no metasprite data,
- * 1 OAM entry, no anim states); ActorStreamSprite fills in the real
- * type/frame count when a stream happens. SPRITE_POSE_SLOTS covers the
- * LAST stream slot's own index (MAX_STREAM_SLOTS-1). */
-#define STREAM_SLOT_TILE_BASE(k) (96 + 32 * (k))
-#define STREAM_SLOT_INDEX(k) (STREAM_SLOT_TILE_BASE(k) / 2)
-#define SPRITE_POSE_SLOTS (STREAM_SLOT_INDEX(MAX_STREAM_SLOTS - 1) + 1)
-
-/* Per-scene OBJ slot tables - SceneInit fills them from the scene blob's [32]
- * sprite table each load (see compileSnesData.js). sprite_slot_for_index points
- * at the current scene's project-sprite-index -> slot map (PLAYER_SET_SPRITE). */
-extern u8 sprite_type_for_slot[SPRITE_POSE_SLOTS];
-extern u8 sprite_frames_for_slot[SPRITE_POSE_SLOTS];
-/* Sized SPRITE_POSE_SLOTS, not SPRITE_SLOTS - see STREAM_SLOT_INDEX's own
- * comment above for why: a streaming actor's frame_offset>>1 lands on a
- * real (larger) index into this array too, same as extra_pose_*[] below. */
-extern u8 sprite_pal_for_slot[SPRITE_POSE_SLOTS];
-/* Real-metasprite groundwork (SPRITE_EDITOR_PROGRESS.md M7) - how many real
- * OAM hardware sprites one actor using this sheet slot needs. Every entry is
- * compile-time 1 today (compileSnesData.js has no multi-tile metasprite data
- * to size this from yet, M8) - scaffolding only, but already read for real
- * by SceneInit's actor_oam_base[] prefix sum below, so the render loop is
- * ready for a real per-slot cost the moment M8 starts emitting one. */
-extern u8 sprite_oam_ids_for_slot[SPRITE_POSE_SLOTS];
-extern const unsigned char *sprite_slot_for_index;
-
-/* M8.3 (SPRITE_EDITOR_PROGRESS.md) - a slot's "extra" poses (anything beyond
- * its own primary/frame-0 pose), packed on demand per scene instead of at a
- * fixed compile-time offset - see scene.c's own header comment on these and
- * on actor_render_tile. Each byte is a HALF-tile-base (real VRAM tile index
- * = value << 1 - every placement from compileSnesData.js's
- * createScenePacker() is already 2-aligned, so the full 0-511 tile range
- * fits in one byte); 0 = this pose was never placed for this slot. */
-extern u8 extra_pose_down_b[SPRITE_POSE_SLOTS];
-extern u8 extra_pose_up_a[SPRITE_POSE_SLOTS];
-extern u8 extra_pose_up_b[SPRITE_POSE_SLOTS];
-extern u8 extra_pose_side_a[SPRITE_POSE_SLOTS];
-extern u8 extra_pose_side_b[SPRITE_POSE_SLOTS];
-
-/* M9.4 (SPRITE_EDITOR_PROGRESS.md): a slot using a free-form metasprite
- * sheet (Sprites page "Free-form (Metasprite)" mode) gets a real pointer
- * straight into the scene blob's own trailing per-slot frame-data section
- * (appended after extra_pose_side_b's own [40] table - see compileSnesData.js
- * and SceneInit's own parsing comment). NULL for every slot not using the
- * feature - the single existing condition SceneRenderActors branches on to
- * fall back to the untouched legacy single-OAM-per-pose path. Format per
- * slot: [frameOffset(u16) * sprite_frames_for_slot[slot]] (direct-indexed,
- * relative to the start of this slot's own frameOffset table), then for
- * each frame [entryCount(u8), entry*4 bytes {dx(s8),dy(s8),halfTileBase(u8),
- * flags(u8)}]. A pointer directly into the scene blob's own ROM-resident
- * data is safe for the scene's whole lifetime - the same pattern
- * sprite_slot_for_index already uses. */
-extern const unsigned char *metasprite_frame_base[SPRITE_POSE_SLOTS];
-
-/* Named animation states (v4 follow-up) - a metaspriteMode sheet can author
- * several independent named pose-sets (Idle/Walk/Attack) beyond its own
- * default/implicit state 0, compiled into the same per-slot metasprite
- * blob metasprite_frame_base[slot] already points at. anim_state_count[slot]
- * is how many *extra* states this slot's sheet authors (0 = none, every
- * ACTOR on this slot stays on state 0 forever, unchanged behaviour);
- * anim_state_dir[slot] points at an array of that many {frames_len(u8),
- * spriteType(u8), byteOffset(u16)} entries (state 1 at index 0, state 2 at
- * index 1, ...) - byteOffset is relative to metasprite_frame_base[slot]
- * itself. See ACTOR_SET_ANIM_STATE/PLAYER_SET_ANIM_STATE (script_cmds.c),
- * which read this to set an actor's own frames_len/sprite_type/
- * anim_state_offset (gbs_types.h), and compileSnesData.js's own emission. */
-extern u8 anim_state_count[SPRITE_POSE_SLOTS];
-extern const unsigned char *anim_state_dir[SPRITE_POSE_SLOTS];
-
-/* Adventure genre, Option 1 (box-sweep collision) - the player's real
- * collision bounding box, signed byte offsets from actors[0].x/actors[0].y
- * (left/top are typically negative, right/bottom typically small positive -
- * see compileSnesData.js's own conversion from the SpriteSheet's authored
- * boundsX/Y/Width/Height). Parsed once per scene load, read only by
- * Update_Adventure - every other genre is unaffected. */
+/* Adventure genre, Option 1 (box-sweep collision) - the collision box of the
+ * player's sprite sheet, signed byte offsets from actors[0].x/y. Read only by
+ * Update_Adventure. */
 extern s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bounds_bottom;
+
+/* Show another sprite sheet slot on the player (also changes its bounds) */
+void ScenePlayerSetSheet(u8 slot);
 
 /* MUSIC_PLAY preload (v4, "Space Battle" fix) - when a scene's own top-level
  * script unconditionally reaches a MUSIC_PLAY as (one of) its first actions,
@@ -156,51 +59,6 @@ extern s8 player_bounds_left, player_bounds_right, player_bounds_top, player_bou
  * the more CPU load is running concurrently, badly enough to never resolve
  * in a scene with many active On-Update contexts. */
 extern u8 scene_music_preload;
-
-/* Real per-actor OAM id base (SPRITE_EDITOR_PROGRESS.md M7) - a prefix sum
- * over sprite_oam_ids_for_slot[], computed once in SceneInit, replacing the
- * old incidental `i << 2` spacing (which reserved 4 ids/actor for no real
- * reason and happened to make EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID
- * collide - AVATAR_OID and PROJECTILE_OID_BASE were the literal same
- * expression, a real pre-existing bug, fixed alongside this). Valid for
- * indices 0..scene_num_actors (the only ones SceneRenderActors ever visits -
- * see its own `i <= scene_num_actors` loop bound). */
-extern u16 actor_oam_base[MAX_ACTORS];
-
-/* M9.4 (SPRITE_EDITOR_PROGRESS.md): EMOTE_OID/PROJECTILE_OID_BASE/AVATAR_OID
- * used to be compile-time constants derived from MAX_ACTORS, correct only
- * because every actor_oam_base[] entry cost exactly 1 OAM id (4 bytes) -
- * the moment a real metasprite slot costs more, the real actor total can
- * exceed that fixed assumption while the old constants stayed put,
- * corrupting whichever of these came "right after" actors in the old
- * scheme. Now real runtime values, computed once in SceneInit right after
- * the actor_oam_base[] prefix-sum loop: actor_oam_total is that loop's own
- * final running total (the real byte-offset just past the last actor's
- * OAM range); emote/projectile/avatar are each placed right after the
- * previous one, same tight back-to-back scheme as before, just computed
- * instead of hand-picked. On every scene that exists today (every
- * sprite_oam_ids_for_slot[] entry still 1 everywhere), these compute to
- * the exact same values the old constants had. */
-extern u16 actor_oam_total;
-extern u16 emote_oid;
-extern u16 projectile_oid_base;
-extern u16 avatar_oid;
-
-/* v4 fix (user-found: swapping sprite sheets at runtime left frames_len
- * stale - see Script_ActorSetSprite_b/Script_PlayerSetSprite_b in
- * script_cmds.c). Was file-local (static) to scene.c, only ever called from
- * SceneInit at actor spawn - exposed here so the runtime sprite-swap opcodes
- * can recompute it the same way instead of leaving the old sheet's value in
- * place. */
-u8 frames_len_for(u8 sprite_type, u8 slot);
-
-/* v4 follow-up (Actor: Set Frame / Set Flip on a directional sheet) - the
- * real authored pose count a frame_override value can select between,
- * separate from frames_len_for() above. See scene.c's own comment. Exposed
- * so Script_ActorSetFrame_b/Script_ActorSetFrameToVal_b (script_cmds.c) can
- * clamp the stored frame to a real pose index instead of frames_len_for()'s
- * own (deliberately different) 1/2 walk-cycle value. */
-u8 override_frame_count(u8 sprite_type, u8 frames_len);
 
 /* Dummy scenes reuse the M3 64x64 map (SceneInit's fallback when a scene
  * blob's width/height byte is 0 - dummy/test fixtures only, a real project

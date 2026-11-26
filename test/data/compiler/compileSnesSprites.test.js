@@ -3,6 +3,7 @@ import os from "os";
 import Path from "path";
 import { PNG } from "pngjs";
 import {
+  compileSnesAvatars,
   compileSpriteSheet,
   getSpriteStateOrder,
   packSceneSprites,
@@ -365,7 +366,7 @@ describe("packSceneSprites", () => {
     const b = await compileOne([["", "fixed", false, frames]], "a.png", "b");
     const scene = packSceneSprites([a.compiled, b.compiled], {
       palettes: [3],
-      reservedTiles: 96,
+      reserved: [[0, 96]],
     });
     expect(scene.warnings).toEqual([]);
     expect(scene.slotPalettes).toEqual([3, 3]);
@@ -400,7 +401,7 @@ describe("packSceneSprites", () => {
         .map((e) => e.tile)
     ).toEqual([3, 2, 0]);
 
-    const full = packSceneSprites([a.compiled], { reservedTiles: 510 });
+    const full = packSceneSprites([a.compiled], { reserved: [[0, 510]] });
     expect(full.warnings[0]).toMatch(/more than the 2 sprite tiles/);
     // only the 8x8 tiles fit
     expect(readSlot(full.data, 0).frame(0).length).toBe(2);
@@ -447,4 +448,50 @@ describe.each(["sneshtml", "snesgbs2"])("template %s", (name) => {
     }
     expect(frames).toBeGreaterThan(sheets.length);
   }, 60000);
+});
+
+describe("compileSnesAvatars", () => {
+  test("draws each portrait over the dialogue box background", async () => {
+    const dir = await fs.mkdtemp(Path.join(os.tmpdir(), "snes-avatar-"));
+    const fill = [224, 232, 224];
+    const boxFill = Array.from({ length: 8 }, () =>
+      Array.from({ length: 8 }, () => fill)
+    );
+    // see-through around one pixel of its own colour at 1,1
+    const write = (name, [r, g, b]) => {
+      const png = new PNG({ width: 16, height: 16 });
+      png.data.fill(0);
+      png.data.set([r, g, b, 255], (16 + 1) * 4);
+      const file = Path.join(dir, name);
+      fs.writeFileSync(file, PNG.sync.write(png));
+      return file;
+    };
+    const colors = [
+      [248, 0, 0],
+      [0, 0, 248],
+    ];
+
+    try {
+      const out = await compileSnesAvatars(
+        [write("a.png", colors[0]), write("b.png", colors[1])],
+        boxFill
+      );
+      const color = (index) => u16(out.paletteBytes, index * 2);
+
+      expect(out.warnings).toEqual([]);
+      expect(out.avatars.length).toBe(2);
+      out.avatars.forEach((quads, i) => {
+        const vram = [].concat(...quads);
+        expect(color(tilePixel(vram, 0, 1, 1))).toBe(rgbToBGR555(...colors[i]));
+        // every other pixel is the box, never see-through
+        [0, 1, 2, 3].forEach((tile) => {
+          const index = tilePixel(vram, tile, 5, 5);
+          expect(index).not.toBe(0);
+          expect(color(index)).toBe(rgbToBGR555(...fill));
+        });
+      });
+    } finally {
+      await fs.remove(dir);
+    }
+  });
 });

@@ -45,7 +45,6 @@ export const dummyActor: Actor = {
   id: "",
   name: "",
   spriteSheetId: "",
-  spriteType: "static",
   x: 0,
   y: 0,
   frame: 0,

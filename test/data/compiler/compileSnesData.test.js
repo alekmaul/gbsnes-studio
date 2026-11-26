@@ -62,42 +62,17 @@ describe("compileSnesData - Test_Math fixture", () => {
     expect(out.stats.variables).toBeGreaterThanOrEqual(0);
   });
 
-  // v2 M5a: the scene blob header gained a scene_type byte at position 6
-  // (after height, before the [32] sprite-slot table) - every offset past
-  // height in the old (v1.1.4) layout shifts by +1 here. M6 (v4): a further
-  // [6]-byte parallax table follows the sprite-slot table, shifting every
-  // offset past it by +6 on top of that. Projectiles follow-up (v4): a
-  // further [6]-byte playerHit1/2/3ScriptIdx table follows *that*, shifting
-  // every offset past it by +6 more on top of both. v4 fix (user-found: "the
-  // triggers are not working when I press A"): every event_ptrs[] script
-  // index (scene/playerHit/actor/hit/update/trigger) widened from 1 to 2
-  // bytes (little-endian) - a 1-byte index silently wrapped mod 256 once a
-  // real multi-scene project's cumulative script count passed 255. This
-  // shifts sceneScriptIdx (+1) and playerHit1/2/3ScriptIdx (+3) in the
-  // header, and every actor/trigger entry (+5/+1 bytes respectively). M7
-  // (SPRITE_EDITOR_PROGRESS.md): the sprite-slot table grew [24]->[32]
-  // (added sprite_oam_ids[8]), shifting every offset past it by +8 more.
-  test("scene blob header: [bg, nActors, nTriggers, scriptIdx, w, h, sceneType] + [32] sprite table + [6] parallax table + [6] playerHit table", () => {
+  // Script indices are 2 bytes (little endian): a project has more than 256
+  test("scene blob header, parallax and playerHit tables, then the actors", () => {
     const blob = out.stats.sceneBlobs[0];
     expect(blob.slice(0, 3)).toEqual([0, 1, 0]); // bgIndex, numActors, numTriggers
     expect(blob.slice(5, 7)).toEqual([20, 18]); // w, h
     expect(blob[7]).toBe(0); // scene.type undefined -> defaults to 0 (Top Down)
-    // [8..39] per-scene OBJ slot table: sprite_type[8], sprite_frames[8],
-    // sprite_pal[8], sprite_oam_ids[8]
-    expect(blob.slice(24, 32)).toEqual([0, 3, 4, 5, 6, 7, 0, 0]); // pal numbers
-    // every slot still costs exactly 1 real OAM id - no metasprite data
-    // exists yet to size this from (M8)
-    expect(blob.slice(32, 40)).toEqual([1, 1, 1, 1, 1, 1, 1, 1]);
-    // [40..45] parallax table (MAX_PARALLAX_LAYERS*2): no parallax on this fixture
-    expect(blob.slice(40, 46)).toEqual([0, 0, 0, 0, 0, 0]);
-    // [46..51] playerHit1/2/3ScriptIdx (2 bytes each, little-endian): none
-    // authored on this fixture, but still real (nonzero, since index 0 is
-    // the scene's own start script) event_ptrs[] indices pointing at
-    // trivially-empty compiled scripts.
-    expect(blob.slice(46, 52)).toEqual([1, 0, 2, 0, 3, 0]);
-    // first actor entry starts right after the playerHit table (at 52)
-    // x, y, dir(down=1), move(static=1), spriteSlot, scriptIdx (2 bytes), ...
-    expect(blob.slice(52, 59)).toEqual([9, 7, 1, 1, 0, 4, 0]);
+    expect(blob.slice(8, 14)).toEqual([0, 0, 0, 0, 0, 0]); // no parallax
+    // playerHit1/2/3 scripts, empty ones still compiled
+    expect(blob.slice(14, 20)).toEqual([1, 0, 2, 0, 3, 0]);
+    // x, y, dir(down=1), move(static=1), sprite slot, script (2 bytes)
+    expect(blob.slice(20, 27)).toEqual([9, 7, 1, 1, 0, 4, 0]);
   });
 
   test("the actor's first TEXT resolves to a string index", () => {
@@ -178,23 +153,12 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
       warnings: () => {},
     });
     const blob = out.stats.sceneBlobs[0];
-    // header(8) + sprite-slot table(32, M7) + parallax table(6) + playerHit
-    // table(6) + 0 actors + 0 triggers = 52 bytes before the ceil(w*h/8) =
-    // 45-byte collision bitmap, which is itself followed by the [40]
-    // extra-pose half-tile-base table (M8.3, SPRITE_EDITOR_PROGRESS.md), the
-    // [16] (2*SPRITE_SLOTS) metasprite-frame-data table (M9.4), the [4]
-    // player collision-bounds bytes (Adventure genre, Option 1), the [1]
-    // MUSIC_PLAY preload byte, the Ladders has_col_dir flag + table, the [1]
-    // hasAnimStates flag, and finally the runtime sprite-sheet streaming
-    // trailing bytes (v4 follow-up): [1] player_stream_slot + [0 actors] +
-    // [2] (MAX_STREAM_SLOTS) stream_pal_for_slot - all appended at the very
-    // end of the blob specifically so none ever shifts any of the
-    // fixed-offset assertions above/below them.
-    // This scene paints a lone COLLISION_TOP tile (tile 5), which is enough
-    // to make colDirBytes a real 1+w*h table, not just the [0] flag byte.
+    // header(8) + parallax(6) + playerHit(6), then the ceil(w*h/8) bitmap,
+    // the music preload byte and the has_col_dir flag + table (this scene
+    // paints a lone COLLISION_TOP tile, so there is one).
     const colLen = Math.ceil((w * h) / 8);
-    expect(blob.length).toBe(52 + colLen + 40 + 16 + 4 + 1 + 1 + 1 + w * h + 1 + 0 + 2);
-    const colByte = blob[52];
+    expect(blob.length).toBe(20 + colLen + 1 + 1 + w * h);
+    const colByte = blob[20];
     // bit i set <=> tile i was solid in the flat 1-bit bitmap. Any nonzero
     // flag byte counts as solid here - the real directional distinction
     // lives in the separate colDirBytes table Update_Platform alone reads.
@@ -211,13 +175,13 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
     // so most of the "bitmap" ended up reading whatever raw per-tile bytes
     // happened to land within the first colLen indices (mostly garbage
     // relative to real tile positions), not real per-tile solidity.
-    expect(blob.slice(53, 52 + colLen)).toEqual(new Array(colLen - 1).fill(0));
+    expect(blob.slice(21, 20 + colLen)).toEqual(new Array(colLen - 1).fill(0));
 
     // Ladders / one-way platforms (v4): tile 5's lone COLLISION_TOP byte
     // (not COLLISION_ALL) is exactly the case that makes colDirBytes a
     // real table instead of just the [0] flag - Update_Platform's own
     // directional/ladder data, independent of the flat bitmap above.
-    const dirStart = 52 + colLen + 40 + 16 + 4 + 1;
+    const dirStart = 20 + colLen + 1;
     expect(blob[dirStart]).toBe(1); // has_col_dir
     const dir = blob.slice(dirStart + 1, dirStart + 1 + w * h);
     expect(dir[0]).toBe(COLLISION_ALL);
@@ -229,213 +193,138 @@ describe("compileSnesData - collision bitmap (v2 M13, real user-found bug)", () 
   });
 });
 
-describe("compileSnesData - Free-form (Metasprite) sheet real wiring (M9.4)", () => {
-  // Mirrors this project's own established "minimal repro" convention: a
-  // from-scratch project with one actor on a metaspriteMode sprite sheet,
-  // reusing Test_Math's real static.png (16x16, a single real tile region)
-  // as the source - two placed tiles both referencing that same region (a
-  // plain stacked 16x16+16x16 = effectively a 16x32 composed sprite), which
-  // also exercises cross-tile VRAM dedup (two tiles, same source region,
-  // should collapse to the same packed quad).
-  const w = 20;
-  const h = 18;
-  const makeProject = () => ({
-    _version: "2.0.0",
-    _release: "6",
-    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
-    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
-    variables: [],
-    spriteSheets: [
-      {
-        id: "meta0",
-        filename: "static.png",
-        numFrames: 1,
-        metaspriteMode: true,
-        animationType: "fixed",
-        canvasWidth: 16,
-        canvasHeight: 32,
-        metaspriteTiles: {
-          top: { id: "top", x: 0, y: 0, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-          bottom: { id: "bottom", x: 0, y: 16, sliceX: 0, sliceY: 0, flipX: true, flipY: false, priority: true },
-        },
-        metasprites: [{ id: "frame0", tiles: ["top", "bottom"] }],
-      },
-    ],
-    scenes: [
-      {
-        id: "s0",
-        name: "metaspriteTest",
-        backgroundId: "bg",
-        width: w,
-        height: h,
-        actors: [{ id: "a0", x: 1, y: 1, spriteSheetId: "meta0", script: [] }],
-        triggers: [],
-        script: [],
-      },
-    ],
-  });
-
-  test("two tiles sharing a source region dedupe to the same VRAM quad, with correct dx/dy/flags", async () => {
-    const warnings = [];
-    const out = await compileSnesData(makeProject(), {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    const blob = out.stats.sceneBlobs[0];
-    // header(8) + sprite-slot(32) + parallax(6) + playerHit(6) + 1 actor
-    // (19 bytes/entry) + 0 triggers = 71 bytes before the collision bitmap,
-    // then [40] extra-pose, then the per-slot metasprite section (same
-    // layout the collision-bitmap test above documents, +19 for this
-    // scene's 1 actor). This fixture sets no project/scene-wide player
-    // sprite sheet, so the one actor's own sheet fills slot 0 (not slot 1 -
-    // there's no separate "player" entry reserving slot 0 when nothing
-    // configures one), confirmed directly against the real compiled bytes.
-    const colLen = Math.ceil((w * h) / 8);
-    const metaOffset = 8 + 32 + 6 + 6 + 19 + 0 + colLen + 40;
-
-    const slot0Len = blob[metaOffset] | (blob[metaOffset + 1] << 8);
-    expect(slot0Len).toBeGreaterThan(0);
-    const payload = blob.slice(metaOffset + 2, metaOffset + 2 + slot0Len);
-    // every other slot (1-7) is untouched -> [0,0] each.
-    for (let k = 1; k < 8; k++) {
-      const off = metaOffset + 2 + slot0Len + (k - 1) * 2;
-      expect(blob[off] | (blob[off + 1] << 8)).toBe(0);
-    }
-    // +4: Adventure genre Option 1's trailing player collision-bounds bytes,
-    // +1: the MUSIC_PLAY preload byte, +1: the Ladders has_col_dir flag,
-    // +1: the hasAnimStates flag - all appended after the metasprite table,
-    // see their own tests below. +1 (player_stream_slot) + 1 (this scene's
-    // one actor's own stream_slot) + 2 (MAX_STREAM_SLOTS stream_pal_for_slot)
-    // for the runtime sprite-sheet streaming trailing bytes (v4 follow-up),
-    // the real last thing in the blob now.
-    expect(blob.length).toBe(metaOffset + 2 + slot0Len + 7 * 2 + 4 + 1 + 1 + 1 + 1 + 1 + 2);
-    // 1 frame -> frameOffset table is exactly [2 bytes]; frame 0's own data
-    // starts right after it, at payload offset 2 (encodeMetaspriteSlot's
-    // own convention - offset is relative to the start of the payload).
-    const frameOffset0 = payload[0] | (payload[1] << 8);
-    expect(frameOffset0).toBe(2);
-    const entryCount = payload[frameOffset0];
-    expect(entryCount).toBe(2);
-
-    const entryBytes = (i) => payload.slice(frameOffset0 + 1 + i * 4, frameOffset0 + 1 + i * 4 + 4);
-    const toS8 = (b) => (b >= 128 ? b - 256 : b);
-
-    const [dxTop, dyTop, baseTop, flagsTop] = entryBytes(0);
-    // canvasWidth=16 -> dx = tile.x(0) - 16/2 = -8, matching the legacy
-    // actor_render_tile anchor exactly. canvasHeight=32 -> dy = tile.y(0) -
-    // 32 = -32 (the top tile sits a full 16px above the legacy -16 anchor).
-    expect(toS8(dxTop)).toBe(-8);
-    expect(toS8(dyTop)).toBe(-32);
-    expect(flagsTop).toBe(0); // no flip/priority authored on "top"
-
-    const [dxBottom, dyBottom, baseBottom, flagsBottom] = entryBytes(1);
-    expect(toS8(dxBottom)).toBe(-8);
-    // tile.y(16) - canvasHeight(32) = -16, exactly the legacy single-tile
-    // anchor - the "bottom" tile of a 16x32 composed sprite lands exactly
-    // where a plain 16x16 legacy sprite would.
-    expect(toS8(dyBottom)).toBe(-16);
-    expect(flagsBottom).toBe(1 | 4); // flipX + priority authored on "bottom"
-
-    // Both tiles reference the exact same source region (sliceX=0,sliceY=0,
-    // static.png's only 16x16 area) - createScenePacker.alloc() should
-    // dedupe them to the identical VRAM placement.
-    expect(baseTop).toBe(baseBottom);
-
-    expect(warnings).toEqual([]);
-  });
-
-  test("sprite_oam_ids_for_slot (M7) gets a real 2-entry cost for this slot, not the placeholder 1", async () => {
-    const out = await compileSnesData(makeProject(), {
-      projectRoot: PROJECT_DIR,
-      warnings: () => {},
-    });
-    const blob = out.stats.sceneBlobs[0];
-    // sprite_oam_ids[8] is the 4th of the 4 parallel [8]-byte arrays inside
-    // the [32]-byte sprite-slot table (sprite_type/frames/pal/oam_ids),
-    // starting right after the header's own 8 bytes.
-    const oamIdsOffset = 8 + 3 * 8;
-    expect(blob[oamIdsOffset]).toBe(2); // slot 0 = this actor's own sheet
-  });
-});
-
-describe("compileSnesData - OAM hardware-budget warning (M9.4 step 7)", () => {
-  // A metaspriteMode actor can now cost more than 1 real OAM id, so the
-  // 128-sprite hardware ceiling (never reachable before - every actor/
-  // emote/projectile/avatar cost exactly 1) genuinely can be exceeded by a
-  // scene leaning hard on big composed sprites. 7 tiles in one frame x
-  // snesTarget.maxActors (19) actors + the player, all sharing one slot
-  // (oamCostForId's own slot-0 fallback for an unconfigured player), well
-  // over 128 with emote/projectiles/avatar on top.
-  const w = 20;
-  const h = 18;
-  const makeProject = (actorCount, tilesPerFrame) => ({
-    _version: "2.0.0",
-    _release: "6",
-    settings: { target: "snes", startSceneId: "s0", startX: 0, startY: 0 },
-    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
-    variables: [],
-    spriteSheets: [
-      {
-        id: "meta0",
-        filename: "static.png",
-        numFrames: 1,
-        metaspriteMode: true,
-        animationType: "fixed",
-        canvasWidth: 16,
-        canvasHeight: 16 * tilesPerFrame,
-        metaspriteTiles: Object.fromEntries(
-          Array.from({ length: tilesPerFrame }, (_, i) => [
-            `t${i}`,
-            { id: `t${i}`, x: 0, y: i * 16, sliceX: 0, sliceY: 0, flipX: false, flipY: false, priority: false },
-          ])
-        ),
-        metasprites: [
-          { id: "frame0", tiles: Array.from({ length: tilesPerFrame }, (_, i) => `t${i}`) },
+describe("compileSnesData - sprites", () => {
+  const sheet = (id, tilesPerFrame, states = [""]) => ({
+    id,
+    name: id,
+    filename: "static.png",
+    states: states.map((name) => ({
+      id: `${id}-${name}`,
+      name,
+      animationType: "fixed",
+      flipLeft: false,
+      animations: Array.from({ length: 8 }, (_, i) => ({
+        id: `${i}`,
+        frames: [
+          {
+            id: `f${i}`,
+            tiles: Array.from({ length: tilesPerFrame }, (_, t) => ({
+              id: `t${t}`,
+              x: 0,
+              y: t,
+              sliceX: 0,
+              sliceY: 0,
+              size: 16,
+              flipX: false,
+              flipY: false,
+              priority: false,
+            })),
+          },
         ],
-      },
+      })),
+    })),
+  });
+
+  const project = (spriteSheets, actors, script = []) => ({
+    _version: "2.0.0",
+    _release: "7",
+    settings: {
+      target: "snes",
+      startSceneId: "s0",
+      startX: 0,
+      startY: 0,
+      playerSpriteSheetId: spriteSheets[0].id,
+    },
+    backgrounds: [
+      { id: "bg", filename: "placeholder.png", width: 20, height: 18 },
     ],
+    spriteSheets,
+    variables: [],
     scenes: [
       {
         id: "s0",
-        name: "oamBudgetTest",
+        name: "Town",
         backgroundId: "bg",
-        width: w,
-        height: h,
-        actors: Array.from({ length: actorCount }, (_, i) => ({
-          id: `a${i}`,
-          x: 1,
-          y: 1,
-          spriteSheetId: "meta0",
-          script: [],
-        })),
+        width: 20,
+        height: 18,
+        actors,
         triggers: [],
-        script: [],
+        script,
       },
     ],
   });
 
-  test("well under the real 128-id ceiling does not warn", async () => {
+  const actors = (count, spriteSheetId, extra = {}) =>
+    Array.from({ length: count }, (_, i) => ({
+      id: `a${i}`,
+      x: i,
+      y: 1,
+      spriteSheetId,
+      script: [],
+      ...extra,
+    }));
+
+  const compile = async (input) => {
     const warnings = [];
-    await compileSnesData(makeProject(4, 2), {
+    const out = await compileSnesData(input, {
       projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
+      warnings: (w) => warnings.push(w),
     });
-    // (4 actors + 1 player) * 2 + emote(1) + projectiles(4) + avatar(1) = 16
-    expect(warnings.some((w) => w.includes("hardware sprite slots"))).toBe(false);
+    return { out, warnings };
+  };
+
+  test("warns when a scene can need more than 128 hardware sprites", async () => {
+    const few = await compile(project([sheet("p", 2)], actors(10, "p")));
+    expect(few.warnings.filter((w) => /hardware sprites/.test(w))).toEqual([]);
+
+    const many = await compile(project([sheet("p", 8)], actors(19, "p")));
+    expect(many.warnings.find((w) => /hardware sprites/.test(w))).toMatch(
+      /'Town' can need 166 hardware sprites/
+    );
   });
 
-  test("over the real 128-id ceiling warns, naming the scene and the real total", async () => {
-    const warnings = [];
-    await compileSnesData(makeProject(snesTarget.maxActors, 7), {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    // (19 actors + 1 player) * 7 + emote(1) + projectiles(4) + avatar(1) = 146
-    const warning = warnings.find((w) => w.includes("hardware sprite slots"));
-    expect(warning).toBeTruthy();
-    expect(warning).toContain("oamBudgetTest");
-    expect(warning).toContain("146");
-    expect(warning).toContain("128");
+  test("an actor carries its sheet's slot and the frame it starts on", async () => {
+    const { out } = await compile(
+      project(
+        [sheet("p", 1), sheet("npc", 1)],
+        actors(1, "npc", { frame: 3 })
+      )
+    );
+    const actor = out.stats.sceneBlobs[0].slice(20, 39);
+    expect(actor[4]).toBe(1);
+    expect(actor[7]).toBe(3);
+  });
+
+  test("Set Animation State refers to the project's state names", async () => {
+    const { out } = await compile(
+      project([sheet("p", 1, ["", "Jump"])], [], [
+        {
+          id: "e1",
+          command: "EVENT_ACTOR_SET_STATE",
+          args: { actorId: "player", spriteStateId: "Jump" },
+        },
+      ])
+    );
+    const script = out.stats.scriptBytes[0];
+    expect(script.slice(-3, -1)).toEqual([0x7c, 1]);
+    // two states in the player's slot
+    const { data } = out.stats.sceneSprites[0];
+    expect(data[(data[1] | (data[2] << 8)) + 4]).toBe(2);
+  });
+
+  test("a scene holds more than 8 sprite sheets, and warns past 32", async () => {
+    const many = Array.from({ length: 34 }, (_, i) => sheet(`s${i}`, 1));
+    const people = (count) =>
+      many.slice(1, count).map((s, i) => actors(1, s.id)[0]);
+
+    const twelve = await compile(project(many.slice(0, 12), people(12)));
+    expect(twelve.out.stats.sceneSpriteIds[0].length).toBe(12);
+
+    const tooMany = await compile(project(many, people(34)));
+    expect(tooMany.out.stats.sceneSpriteIds[0].length).toBe(32);
+    expect(tooMany.warnings.some((w) => /more than 32 sprite/.test(w))).toBe(
+      true
+    );
   });
 });
 
@@ -471,50 +360,6 @@ describe("compileSnesData - scene_type (v2 M5a genre dispatch)", () => {
       warnings: () => {},
     });
     expect(out.stats.sceneBlobs[0][7]).toBe(0);
-  });
-});
-
-describe("compileSnesData - actor.spriteType (v2, replaces movementType inference)", () => {
-  const PROJECT_ROOT = Path.join(__dirname, "..", "..", "projects", "Test_ActorInvoke");
-
-  test("a moving actor with an explicit static spriteType still compiles as SPRITE_STATIC (0)", async () => {
-    const project = {
-      settings: { target: "snes", startSceneId: "s", startX: 1, startY: 1 },
-      backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
-      spriteSheets: [{ id: "npc", filename: "signpost.png", numFrames: 1 }],
-      variables: [],
-      scenes: [
-        {
-          id: "s",
-          name: "s",
-          backgroundId: "bg",
-          width: 20,
-          height: 18,
-          actors: [
-            {
-              id: "a0",
-              x: 5,
-              y: 5,
-              spriteSheetId: "npc",
-              movementType: "randomWalk", // moves, but...
-              spriteType: "static", // ...explicitly a decorative cycling sprite
-              script: [],
-            },
-          ],
-          triggers: [],
-          script: [],
-        },
-      ],
-    };
-    const out = await compileSnesData(project, {
-      projectRoot: PROJECT_ROOT,
-      warnings: () => {},
-    });
-    // actor entry starts right after [8]+[32]+[6]+[6]=[52] (M7 grew the
-    // sprite-slot table 24->32); spriteType is byte 7 of the 10-byte prefix
-    // (x,y,dir,move,slot,scriptIdx(2B),spriteType,...)
-    const actorEntry = out.stats.sceneBlobs[0].slice(52, 62);
-    expect(actorEntry[7]).toBe(0); // SPRITE_STATIC despite movementType=randomWalk
   });
 });
 
@@ -608,8 +453,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    // M7 shifted the parallax table 32->40 (sprite-slot table grew 24->32)
-    expect(out.stats.sceneBlobs[0].slice(40, 46)).toEqual([0, 0, 0, 0, 0, 0]);
+    expect(out.stats.sceneBlobs[0].slice(8, 14)).toEqual([0, 0, 0, 0, 0, 0]);
   });
 
   test("layer heights convert to scanlines and the last layer fills the rest of the screen", async () => {
@@ -623,7 +467,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
         warnings: () => {},
       }
     );
-    const table = out.stats.sceneBlobs[0].slice(40, 46);
+    const table = out.stats.sceneBlobs[0].slice(8, 14);
     // layer 0: 4 tiles * 8 = 32 lines, shift 2
     // layer 1 (last): auto-extends to 224 - 32 = 192 lines, shift 1
     expect(table).toEqual([32, 2, 192, 1, 0, 0]);
@@ -634,7 +478,7 @@ describe("compileSnesData - banded parallax scrolling (M6, v4)", () => {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    const table = out.stats.sceneBlobs[0].slice(40, 46);
+    const table = out.stats.sceneBlobs[0].slice(8, 14);
     // Single layer auto-extends to the full screen (224 lines); -1 as an
     // unsigned byte is 0xff (255), matching the engine's (s8) reinterpret.
     expect(table).toEqual([224, 255, 0, 0, 0, 0]);
@@ -714,13 +558,11 @@ describe("compileSnesData - per-scene Player Sprite Sheet override (v4)", () => 
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    // scene blob layout: [8]-byte header, then types[8] at offset 8..15,
-    // frames[8] at offset 16..23 (see the M6 describe block above).
-    const overriddenBlob = out.stats.sceneBlobs[0];
-    const defaultBlob = out.stats.sceneBlobs[1];
-    expect(overriddenBlob[16]).toBe(1); // static.png -> 1 frame
-    expect(defaultBlob[16]).toBe(6); // actor_animated.png -> 6 frames
-    expect(overriddenBlob[8]).not.toBe(defaultBlob[8]); // distinct sprite types too
+    expect(out.stats.sceneSpriteIds[0][0]).toBe(OVERRIDE_ID);
+    expect(out.stats.sceneSpriteIds[1][0]).toBe(PLAYER_DEFAULT_ID);
+    expect(out.stats.sceneSprites[0].data).not.toEqual(
+      out.stats.sceneSprites[1].data
+    );
   });
 
   test("no scene falls back to the removed PLAYER_SPRITE_TYPE/_PAL compile-time constants", async () => {
@@ -735,14 +577,7 @@ describe("compileSnesData - per-scene Player Sprite Sheet override (v4)", () => 
 });
 
 describe("compileSnesData - Adventure genre Option 1: player collision bounds (v4)", () => {
-  // The player's own SpriteSheet.boundsX/Y/Width/Height (SpriteInspector.tsx,
-  // already fully authorable - see entitiesTypes.ts's "kept for schema
-  // parity... not compiled into assets.c" comment this closes) become the
-  // scene blob's trailing [4] bytes (left, right, top, bottom - signed),
-  // read by scene.c's Update_Adventure box-sweep. Always the last 4 bytes
-  // of the blob (appended after the M9.4 metasprite table), regardless of
-  // genre - compiled unconditionally for every scene, same precedent as
-  // every other Engine-Fields-style "only one genre reads it" value.
+  // The player's collision box, read by Update_Adventure
   const PLAYER_ID = "581d34d0-9591-4e6e-a609-1d94f203b0cd";
 
   const baseProject = (spriteSheet) => ({
@@ -775,55 +610,41 @@ describe("compileSnesData - Adventure genre Option 1: player collision bounds (v
     ],
   });
 
-  test("authored boundsX/Y/Width/Height compile to the exact signed left/right/top/bottom bytes", async () => {
-    const project = baseProject({
-      id: PLAYER_ID,
-      filename: "static.png",
-      type: "static",
-      boundsX: 2,
-      boundsY: 3,
-      boundsWidth: 10,
-      boundsHeight: 12,
-    });
+  // The first slot of the scene's sprite data starts with its collision box
+  const playerBounds = async (project) => {
     const out = await compileSnesData(project, {
       projectRoot: PROJECT_DIR,
       warnings: () => {},
     });
-    const blob = out.stats.sceneBlobs[0];
-    // canvasWidth/Height default to 16 (not metaspriteMode) - same anchor
-    // formula already Mesen-verified for M9.4 metasprite tiles:
-    // left = boundsX - canvasWidth/2 = 2 - 8 = -6 (250)
-    // right = left + boundsWidth - 1 = -6 + 9 = 3
-    // top = boundsY - canvasHeight = 3 - 16 = -13 (243)
-    // bottom = top + boundsHeight - 1 = -13 + 11 = -2 (254)
-    // -6..-2: the player-bounds [4] bytes sit before the trailing [1]
-    // MUSIC_PLAY preload byte, [1] Ladders has_col_dir flag, [1]
-    // hasAnimStates flag, and the runtime sprite-sheet streaming trailing
-    // bytes (v4 follow-up: [1] player_stream_slot + [0 actors] + [2]
-    // MAX_STREAM_SLOTS stream_pal_for_slot) now, not at the very end of the
-    // blob anymore (this scene paints no collision tiles at all, so
-    // has_col_dir is just the one [0] byte, and has no actors either).
-    const tail = blob.slice(-10, -6);
-    expect([...tail]).toEqual([250, 3, 243, 254]);
+    const { data } = out.stats.sceneSprites[0];
+    const slot = data[1] | (data[2] << 8);
+    return data.slice(slot, slot + 4);
+  };
+
+  test("authored boundsX/Y/Width/Height compile to the exact signed left/right/top/bottom bytes", async () => {
+    // x from the left of the 16px box under the actor, y upwards from its
+    // feet: left = 2 - 8, right = left + 9, top = -(3 + 12), bottom = -3 - 1
+    expect(
+      await playerBounds(
+        baseProject({
+          id: PLAYER_ID,
+          filename: "static.png",
+          type: "static",
+          boundsX: 2,
+          boundsY: 3,
+          boundsWidth: 10,
+          boundsHeight: 12,
+        })
+      )
+    ).toEqual([250, 3, 241, 252]);
   });
 
-  test("no authored bounds default to the legacy centered-16x16 box, not zeros", async () => {
-    const project = baseProject({
-      id: PLAYER_ID,
-      filename: "static.png",
-      type: "static",
-    });
-    const out = await compileSnesData(project, {
-      projectRoot: PROJECT_DIR,
-      warnings: () => {},
-    });
-    const blob = out.stats.sceneBlobs[0];
-    // left=-8(248), right=7, top=-16(240), bottom=-1(255) - reproduces the
-    // legacy actor_render_tile -8/-16 anchor exactly, same values
-    // gen-dummy-gfx.js's own dummyPlayerBounds uses for the same reason.
-    // see the comment in the previous test for why not slice(-4).
-    const tail = blob.slice(-10, -6);
-    expect([...tail]).toEqual([248, 7, 240, 255]);
+  test("no authored bounds default to a 16x16 box above the actor's feet", async () => {
+    expect(
+      await playerBounds(
+        baseProject({ id: PLAYER_ID, filename: "static.png", type: "static" })
+      )
+    ).toEqual([248, 7, 240, 255]);
   });
 });
 
@@ -834,8 +655,7 @@ describe("compileSnesData - MUSIC_PLAY preload hoist (v4, 'Space Battle' fix)", 
   // contexts, to never resolve at all if MUSIC_PLAY runs at its normal
   // position in the script. When a scene's own top-level script
   // unconditionally reaches MUSIC_PLAY, compileSnesData.js hoists it out
-  // and records the track index as the scene blob's trailing [1] byte (the
-  // real last byte now, after the Adventure-genre bounds) instead -
+  // and records the track index in the scene blob instead -
   // SceneInit calls MusicPlay() with it directly, before the screen
   // unblanks. 0xff = no hoist (today's unchanged behaviour: MUSIC_PLAY
   // compiles normally into the scene's own script bytes).
@@ -875,15 +695,9 @@ describe("compileSnesData - MUSIC_PLAY preload hoist (v4, 'Space Battle' fix)", 
     ],
   });
 
-  // Last bytes of the scene blob: [4] player-bounds then [1] music
-  // preload (Adventure-genre bounds are unconditionally compiled for every
-  // scene regardless of genre - see the describe block above), followed by
-  // [1] Ladders has_col_dir flag (these fixtures paint no collision tiles,
-  // so it's always just the one [0] flag byte), [1] hasAnimStates flag, and
-  // the runtime sprite-sheet streaming trailing bytes (v4 follow-up: [1]
-  // player_stream_slot + [0 actors] + [2] MAX_STREAM_SLOTS
-  // stream_pal_for_slot) - 2 + 3 = 5 bytes after the music preload byte now.
-  const musicPreloadByte = (blob) => blob[blob.length - 6];
+  // The scene blob ends with the music preload byte and the has_col_dir flag
+  // (these scenes paint no collision tiles)
+  const musicPreloadByte = (blob) => blob[blob.length - 2];
   const anyScriptHasMusicOpcode = (out) =>
     out.stats.scriptBytes.some((bytes) => bytes.includes(MUSIC_OPCODE));
 
@@ -1507,292 +1321,6 @@ describe("compileSnesData - runtime sprite-swap events get a real slot (v4 fix)"
   });
 
 });
-
-// Runtime sprite-sheet streaming (v4 follow-up): a specific actor that
-// Set Sprite Sheet's to something beyond the scene's regular 8-sheet
-// budget gets its own dedicated streaming slot instead of staying a
-// silent no-op - see appData/src/snes/src/script_cmds.c's
-// ActorStreamSprite and gbs_types.h's own ACTOR.stream_slot comment for
-// the runtime side this exercises the compiled data for.
-describe("compileSnesData - runtime sprite-sheet streaming (v4 follow-up)", () => {
-  const PLAYER_ID = "player-sheet";
-  const FILLER_IDS = Array.from({ length: 7 }, (_, i) => `filler-${i}`);
-  const OVERFLOW_ID = "overflow-sheet";
-  const OVERFLOW_ID_2 = "overflow-sheet-2";
-  const OVERFLOW_ID_3 = "overflow-sheet-3";
-
-  // 7 filler actors (each its own distinct sheet) + the player's own sheet
-  // = exactly 8 distinct sheets, filling sceneSpriteIds' real SPRITE_SLOTS
-  // budget before any streaming actor is even considered.
-  const fillerActors = FILLER_IDS.map((id, i) => ({
-    id: `filler-actor-${i}`,
-    spriteSheetId: id,
-    x: i,
-    y: 0,
-    script: [],
-  }));
-
-  // One streaming actor (its own default sheet reuses PLAYER_ID, so it
-  // doesn't itself consume a 9th regular slot) whose script Set Sprite
-  // Sheet's to OVERFLOW_ID - not in the regular 8, so it's a genuine
-  // streaming need.
-  const streamingActor = (actorIdSuffix, overflowId) => ({
-    id: `streamer-${actorIdSuffix}`,
-    spriteSheetId: PLAYER_ID,
-    x: 0,
-    y: 1,
-    script: [
-      {
-        id: `ev-${actorIdSuffix}`,
-        command: "EVENT_ACTOR_SET_SPRITE",
-        args: { actorId: `streamer-${actorIdSuffix}`, spriteSheetId: overflowId },
-      },
-    ],
-  });
-
-  const baseProject = (extraSheets, actors) => ({
-    _version: "2.0.0",
-    _release: "7",
-    settings: {
-      target: "snes",
-      startSceneId: "s0",
-      startX: 0,
-      startY: 0,
-      playerSpriteSheetId: PLAYER_ID,
-    },
-    backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
-    spriteSheets: [
-      { id: PLAYER_ID, filename: "static.png", type: "static" },
-      ...FILLER_IDS.map((id) => ({ id, filename: "static.png", type: "static" })),
-      ...extraSheets,
-    ],
-    variables: [],
-    scenes: [
-      {
-        id: "s0",
-        name: "stream",
-        backgroundId: "bg",
-        width: 20,
-        height: 18,
-        actors: [...fillerActors, ...actors],
-        triggers: [],
-        script: [],
-      },
-    ],
-  });
-
-  test("a single actor beyond the regular 8-sheet budget gets a real dedicated streaming slot", async () => {
-    const project = baseProject(
-      [{ id: OVERFLOW_ID, filename: "static.png", type: "static" }],
-      [streamingActor("a", OVERFLOW_ID)]
-    );
-    const warnings = [];
-    const out = await compileSnesData(project, {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    // The player's own sheet + 7 fillers already fill the regular budget,
-    // so OVERFLOW_ID never gets a regular slot.
-    const overflowIndex = project.spriteSheets.findIndex((s) => s.id === OVERFLOW_ID);
-    expect(out.stats.sceneSlotForIndex[0][overflowIndex]).toBe(0xff);
-    // The streaming actor is actor index 8 (7 fillers at 1-7, this one at 8).
-    expect(out.stats.sceneStreamSlotForActor[0]).toEqual({ 8: 0 });
-    expect(out.stats.streamTargetSheetIds).toEqual([OVERFLOW_ID]);
-    expect(warnings.some((w) => w.includes("more than"))).toBe(false);
-    // 9 distinct sheets, but the 9th is fully covered by streaming - the
-    // old "only 8 fit - the rest fall back to slot 0" warning must not fire.
-    expect(warnings.some((w) => w.includes("fall back to slot 0"))).toBe(false);
-  });
-
-  test("an overflow sheet that's an actor's own default (not a swap target) still warns", async () => {
-    const project = baseProject(
-      [{ id: OVERFLOW_ID, filename: "static.png", type: "static" }],
-      [{ id: "ninth-default", spriteSheetId: OVERFLOW_ID, x: 0, y: 2, script: [] }]
-    );
-    const warnings = [];
-    await compileSnesData(project, {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    expect(
-      warnings.some((w) => w.includes("1 can't be loaded and fall back to slot 0"))
-    ).toBe(true);
-  });
-
-  test("more than MAX_STREAM_SLOTS (2) streaming actors - only the first 2 get a slot, the rest warn and stay a no-op", async () => {
-    const project = baseProject(
-      [
-        { id: OVERFLOW_ID, filename: "static.png", type: "static" },
-        { id: OVERFLOW_ID_2, filename: "static.png", type: "static" },
-        { id: OVERFLOW_ID_3, filename: "static.png", type: "static" },
-      ],
-      [
-        streamingActor("a", OVERFLOW_ID),
-        streamingActor("b", OVERFLOW_ID_2),
-        streamingActor("c", OVERFLOW_ID_3),
-      ]
-    );
-    const warnings = [];
-    const out = await compileSnesData(project, {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    // 7 fillers at actor index 1-7, the 3 streaming actors at 8, 9, 10.
-    expect(out.stats.sceneStreamSlotForActor[0]).toEqual({ 8: 0, 9: 1 });
-    expect(warnings.some((w) => w.includes("more than 2 actors"))).toBe(true);
-    // The 3rd actor's target really isn't loaded - the overflow warning
-    // reports exactly that one, and credits the other 2 to streaming.
-    expect(
-      warnings.some(
-        (w) =>
-          w.includes("(2 more handled by runtime streaming)") &&
-          w.includes("1 can't be loaded")
-      )
-    ).toBe(true);
-  });
-
-  test("a metaspriteMode sheet beyond the regular budget is not a supported streaming target yet - warns, stays a no-op", async () => {
-    const project = baseProject(
-      [{ id: OVERFLOW_ID, filename: "static.png", type: "static", metaspriteMode: true }],
-      [streamingActor("a", OVERFLOW_ID)]
-    );
-    const warnings = [];
-    const out = await compileSnesData(project, {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    expect(out.stats.sceneStreamSlotForActor[0]).toEqual({});
-    expect(out.stats.streamTargetSheetIds).toEqual([]);
-    expect(warnings.some((w) => w.includes("Free-form (Metasprite)"))).toBe(true);
-  });
-
-  // The JS-side MAX_STREAM_SLOTS (used for compile-time slot assignment)
-  // and gbs_types.h's own #define (used for the C-side array sizes/
-  // addressing - scene.h's STREAM_SLOT_TILE_BASE/INDEX) must agree exactly
-  // - a silent mismatch would compile fine (no link error) but corrupt
-  // VRAM/CGRAM at runtime the moment a 3rd-or-later stream slot was ever
-  // assigned. No existing test caught this, so added here directly rather
-  // than only relying on the two sides' own cross-referencing comments.
-  test("MAX_STREAM_SLOTS matches gbs_types.h's own #define exactly", () => {
-    const header = fs.readFileSync(
-      Path.join(__dirname, "..", "..", "..", "appData", "src", "snes", "src", "gbs_types.h"),
-      "utf8"
-    );
-    const match = header.match(/#define\s+MAX_STREAM_SLOTS\s+(\d+)/);
-    expect(match).not.toBeNull();
-    expect(Number(match[1])).toBe(2);
-  });
-});
-
-// Editable frame list on normal sprite sheets (SpriteSheet.frameSequence):
-// a static auto-cycle sheet's PNG frames reordered/repeated, compiled
-// through the regular sprite path - no Free-form needed.
-describe("compileSnesData - frame list on normal sprite sheets", () => {
-  const SHEET_ID = "seq-sheet";
-  const w = 20;
-  const h = 18;
-  const colLen = Math.ceil((w * h) / 8);
-  // header(8) + sprite-slot(32) + parallax(6) + playerHit(6)
-  const ACTORS_OFFSET = 52;
-
-  const project = (sheet, actors = []) => ({
-    _version: "2.0.0",
-    _release: "7",
-    settings: {
-      target: "snes",
-      startSceneId: "s0",
-      startX: 0,
-      startY: 0,
-      playerSpriteSheetId: SHEET_ID,
-    },
-    backgrounds: [{ id: "bg", filename: "placeholder.png", width: w, height: h }],
-    spriteSheets: [{ id: SHEET_ID, ...sheet }],
-    variables: [],
-    scenes: [
-      {
-        id: "s0",
-        name: "seq",
-        backgroundId: "bg",
-        width: w,
-        height: h,
-        actors,
-        triggers: [],
-        script: [],
-      },
-    ],
-  });
-  const compile = async (p) => {
-    const warnings = [];
-    const out = await compileSnesData(p, {
-      projectRoot: PROJECT_DIR,
-      warnings: (m) => warnings.push(m),
-    });
-    return { blob: out.stats.sceneBlobs[0], warnings };
-  };
-  const slotType = (blob) => blob[8]; // sprite_type[0]
-  const slotFrames = (blob) => blob[8 + 8]; // sprite_frames[0]
-  // extra-pose table (5 arrays of 8) right after actors + triggers + collision bitmap
-  const extraPose = (blob, nActors, key) =>
-    blob[ACTORS_OFFSET + nActors * 19 + colLen + key * 8];
-
-  test("[0, 1, 1] on a 'Fixed' sheet compiles 3 static frames, the repeat reusing the same tiles", async () => {
-    const { blob, warnings } = await compile(
-      project({
-        filename: "actor_animated.png",
-        type: "actor_animated",
-        animationType: "fixed",
-        frameSequence: [0, 1, 1],
-      })
-    );
-    expect(slotType(blob)).toBe(0);
-    expect(slotFrames(blob)).toBe(3);
-    const downB = extraPose(blob, 0, 0); // frame 1
-    const upA = extraPose(blob, 0, 1); // frame 2 (same PNG frame)
-    expect(downB).not.toBe(0);
-    expect(upA).toBe(downB);
-    expect(warnings).toEqual([]);
-  });
-
-  test("no frame list keeps the PNG's own frames, unchanged", async () => {
-    const { blob } = await compile(
-      project({ filename: "actor_animated.png", type: "actor_animated", animationType: "fixed" })
-    );
-    expect(slotType(blob)).toBe(0);
-    expect(slotFrames(blob)).toBe(6);
-  });
-
-  test("an entry beyond the image's frames is skipped with a warning", async () => {
-    const { blob, warnings } = await compile(
-      project({
-        filename: "actor_animated.png",
-        type: "actor_animated",
-        animationType: "fixed",
-        frameSequence: [0, 9],
-      })
-    );
-    expect(slotFrames(blob)).toBe(1);
-    expect(warnings.some((m) => m.includes("doesn't have"))).toBe(true);
-  });
-
-  test("a frame list is ignored on a directional sheet", async () => {
-    const { blob } = await compile(
-      project({ filename: "actor.png", type: "actor", frameSequence: [0, 0, 0] })
-    );
-    expect(slotType(blob)).toBe(1); // still SPRITE_ACTOR
-    expect(slotFrames(blob)).toBe(3);
-  });
-
-  test("an actor on a 3-frame 'Fixed' sheet gets the static type, not directional", async () => {
-    const { blob } = await compile(
-      project({ filename: "actor.png", type: "actor", animationType: "fixed" }, [
-        { id: "a0", spriteSheetId: SHEET_ID, x: 1, y: 1, movementType: "static", script: [] },
-      ])
-    );
-    expect(slotType(blob)).toBe(0);
-    expect(blob[ACTORS_OFFSET + 7]).toBe(0); // actor entry's sprite_type byte
-  });
-});
-
 // v4 fix (user-found: a real Shoot Em Up scene - 15 enemies each firing
 // EVENT_LAUNCH_PROJECTILE from their own Actor.updateScript ("On Update"
 // tab) - warned "Projectile sprite sheet not loaded in this scene" for

@@ -132,8 +132,8 @@ export const SOUND_PLAY_CUSTOM = "SOUND_PLAY_CUSTOM";
 // v4 follow-up: named animation states - a metaspriteMode sheet can author
 // several independent named pose-sets (Idle/Walk/Attack) beyond its own
 // default state, switched at runtime. See gbs_types.h's anim_state_offset.
-export const PLAYER_SET_ANIM_STATE = "PLAYER_SET_ANIM_STATE";
-export const ACTOR_SET_ANIM_STATE = "ACTOR_SET_ANIM_STATE";
+export const PLAYER_SET_STATE = "PLAYER_SET_STATE";
+export const ACTOR_SET_STATE = "ACTOR_SET_STATE";
 
 export const scriptCommands = [
   END,
@@ -259,8 +259,8 @@ export const scriptCommands = [
   ACTOR_START_UPDATE,
   MOSAIC_SET,
   SOUND_PLAY_CUSTOM,
-  PLAYER_SET_ANIM_STATE,
-  ACTOR_SET_ANIM_STATE,
+  PLAYER_SET_STATE,
+  ACTOR_SET_STATE,
 ];
 
 export const commandIndex = key => {

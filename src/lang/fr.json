@@ -1,5 +1,7 @@
 {
   "RTL": false,
+  "FIELD_ANIMATION_STATE": "État d'animation",
+  "EVENT_ACTOR_SET_STATE": "Acteur : définir l'état d'animation",
   "FIELD_ADD_ANIMATION_STATE": "Ajouter un nouvel état d'animation",
   "FIELD_ADD_FRAME": "Ajouter image",
   "FIELD_ANIMATIONS": "Animations",

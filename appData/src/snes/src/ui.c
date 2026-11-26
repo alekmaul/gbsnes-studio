@@ -8,7 +8,7 @@
 #include "ui.h"
 #include "assets.h"
 #include "script_runner.h"
-#include "scene.h" /* M9.4: avatar_oid (real runtime value, was AVATAR_OID) */
+#include "scene.h"
 
 /* provided by game.c */
 extern u16 prev_joy;
@@ -152,20 +152,9 @@ static u8 ui_ov_step_pending;
 static u8 ui_ov_step_row0;
 static u8 ui_ov_step_row1;
 
-/* M7 fix (SPRITE_EDITOR_PROGRESS.md): this used to be the *literal same
- * expression* as scene.c's PROJECTILE_OID_BASE, so the dialogue avatar and
- * projectile pool slot 0 silently shared one hardware OAM id. Now placed
- * right after the whole projectile pool instead of overlapping its first
- * slot - see PROJECTILE_OID_BASE's own comment in scene.c for the full
- * story and the same "assumes every actor costs 1 OAM id" caveat.
- *
- * M8.3 correction (SPRITE_EDITOR_PROGRESS.md): `<<2` is required - oamSet's
- * `id` is a byte offset into the real OAM shadow buffer, not a sprite
- * index (see the projectile_oid_base comment in scene.h for the real
- * PVSnesLib asm this was verified against) - restored here after M7
- * mistakenly dropped it. M9.4: avatar_oid (scene.h) is now a real runtime
- * value, computed once in SceneInit from the scene's own real actor OAM
- * total - no longer a MAX_ACTORS-derived compile-time constant. */
+/* The dialogue avatar is hardware sprite 0, in front of every other sprite
+ * (sprites.c leaves it alone). OAM ids are byte offsets. */
+#define AVATAR_OID 0
 
 /*--------------------------------------------------------------------------- */
 
@@ -181,6 +170,18 @@ static void ui_fill_box(u16 entry)
             ui_map[r * 32 + c] = entry;
         }
     }
+}
+
+/* The portrait is a sprite, and the box (BG3 with priority) hides every
+ * sprite: open a 2x2 hole where it sits. Its see-through pixels already hold
+ * the box background (compileSnesSprites.js). */
+static void ui_open_avatar_hole(void)
+{
+    u16 o = (u16)TXT_ROW0 * 32 + TXT_COL0;
+    ui_map[o] = UI_BLANK;
+    ui_map[o + 1] = UI_BLANK;
+    ui_map[o + 32] = UI_BLANK;
+    ui_map[o + 33] = UI_BLANK;
 }
 
 /* Draw the assets/ui/frame.png nine-slice around the box, shifted down by
@@ -232,6 +233,10 @@ static void ui_frame_box(void)
             else if (c == 31) t = rt;
             ui_map[r * 32 + c] = UI_ENTRY(t);
         }
+    }
+    if (ui_avatar_active)
+    {
+        if (ui_slide_off == 0) ui_open_avatar_hole();
     }
 }
 
@@ -468,6 +473,7 @@ void UIShowText(const unsigned char *str)
 void UIShowTextAvatar(const unsigned char *str, u8 avatar_index)
 {
     ui_avatar_active = 1;
+    ui_avatar_shown = 2; /* neither state: draw the sprite again */
     ui_avatar_tile = (u8)(AVATAR_TILE0 + avatar_index * 2);
     ui_begin_text(str, 4);
 }
@@ -553,6 +559,7 @@ static void ui_draw_cursor(void)
 void UIShowMenu(u16 flag, const unsigned char *str, u8 cancel_cfg, u8 layout)
 {
     u8 i;
+    ui_avatar_active = 0;
     ui_subst(str);
     ui_menu_count = 1;
     for (i = 0; i < ui_len; i++)
@@ -647,7 +654,9 @@ static void ui_render_avatar(void)
     {
         if (ui_slide_off == 0)
         {
-            if (ui_state == 1 || ui_state == 2) show = 1;
+            /* as long as the box is in place, closing included: the hole
+             * under the portrait stays open until the box moves */
+            if (ui_state != 0) show = 1;
         }
     }
     /* No transition since last frame - either still hidden (the common
@@ -658,12 +667,13 @@ static void ui_render_avatar(void)
     if (show)
     {
         /* box top-left: TXT_COL0*8, TXT_ROW0*8 */
-        oamSet(avatar_oid, TXT_COL0 * 8, TXT_ROW0 * 8, 2, 0, 0, ui_avatar_tile, 2);
-        oamSetEx(avatar_oid, OBJ_LARGE, OBJ_SHOW);
+        /* priority 3: nothing of the scene may cover it */
+        oamSetEx(AVATAR_OID, OBJ_LARGE, OBJ_SHOW);
+        oamSet(AVATAR_OID, TXT_COL0 * 8, TXT_ROW0 * 8, 3, 0, 0, ui_avatar_tile, 2);
     }
     else
     {
-        oamSetVisible(avatar_oid, OBJ_HIDE);
+        oamSetVisible(AVATAR_OID, OBJ_HIDE);
     }
 }
 
@@ -809,11 +819,8 @@ static void ui_update_overlay(void)
 
 /* ---- per-frame ---------------------------------------------------------- */
 
-void UIUpdate(void)
+static void ui_update_box(void)
 {
-    ui_update_overlay();
-    ui_render_avatar();
-
     if (ui_state == 0)
     {
         return;
@@ -972,6 +979,14 @@ void UIUpdate(void)
         ui_script_wait = 0;
         script_action_complete = 1;
     }
+}
+
+void UIUpdate(void)
+{
+    ui_update_overlay();
+    ui_update_box();
+    /* after the box, so that sprite and hole change on the same frame */
+    ui_render_avatar();
 }
 
 void UIFlush(void)

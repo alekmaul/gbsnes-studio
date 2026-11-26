@@ -686,181 +686,44 @@ void Script_ActorActivate_b(void)
     script_continue = 1;
 }
 
-// PLAYER_SET_SPRITE: arg is an index into the project's full spriteSheets[]
-// (compiler's getSpriteIndex) - unlike GB, this engine doesn't stream sprite
-// tiles into VRAM at runtime, so only a sheet already pre-loaded into one of
-// the SPRITE_SLOTS OBJ slots (because some actor/the player uses it) can
-// actually be switched to. sprite_slot_for_index[] (compileSnesData.js) maps
-// every project sprite to its slot, or 0xFF if it was never loaded - no-op
-// on 0xFF rather than pointing OAM at tiles that were never uploaded.
-// args grew by one in v2 (2.0.0-beta5): a "persist across scene switch" flag
-// appended after the sheet index - consumed by ADVANCE()'s table-driven
-// length but not acted on yet (this engine has no map_next_sprite-style
-// carry-over concept to hook it into).
-// Runtime sprite-sheet streaming (v4 follow-up) - see gbs_types.h's own
-// ACTOR.stream_slot comment and scene.h's STREAM_SLOT_TILE_BASE/INDEX for
-// the full design. Called only once the regular pre-loaded-slot lookup
-// above already failed (slot == 0xFF) - if this actor also has no
-// dedicated streaming slot reserved at compile time, or idx was never a
-// REAL streaming target anywhere (stream_tile_ptrs[idx] == 0 - e.g. a
-// Free-form/Metasprite sheet, not supported yet), this stays the exact
-// same silent no-op it always was.
-//
-// stream_tile_ptrs[idx] holds the sheet's own tile data as 2 CONTIGUOUS
-// halves - [all poses' own TL+TR tiles, pose order][all poses' own BL+BR
-// tiles, pose order], not per-pose-interleaved (compileSnesData.js's own
-// comment on this) - so exactly 2 dmaCopyVram calls land the whole
-// sheet, regardless of its real pose count (1-6), instead of one tiny
-// DMA per pose. dmaCopyVram's own destination is a VRAM WORD address, not
-// a tile index (confirmed against SceneInit's own identical pair of
-// calls) - base (a tile index, same unit frame_offset already uses
-// elsewhere) converts via *16 (32 bytes/tile = 16 words/tile); the BL/BR
-// half sits exactly 16 tiles below TL/TR in tile-index terms, matching
-// every other pose's own {base,base+1,base+16,base+17} quadrant layout.
-static void ActorStreamSprite(u8 actor_idx, u16 idx)
-{
-    u8 ss = actors[actor_idx].stream_slot;
-    u16 base;
-    u16 halfLen;
-    if (ss == 0xFF) return;
-    if (stream_tile_ptrs[idx] == 0) return;
-    base = STREAM_SLOT_TILE_BASE(ss);
-    halfLen = (u16)stream_frames_for_index[idx] * 2 * 32;
-    dmaCopyVram((u8 *)stream_tile_ptrs[idx], OBJ_GFX_VRAM + base * 16, halfLen);
-    dmaCopyVram((u8 *)stream_tile_ptrs[idx] + halfLen, OBJ_GFX_VRAM + (base + 16) * 16, halfLen);
-    /* dmaCopyCGram's destination is a COLOUR index, not a byte offset (same
-     * as SceneInit's own "128" = first OBJ colour) - 16 colours per OBJ
-     * palette. Real bug found by Mesen: *32 here landed this palette in a
-     * BG palette (and left the stream slot's own OBJ palette black). The
-     * length argument is still bytes (32 = 16 colours * 2). */
-    dmaCopyCGram((u8 *)stream_pal_ptrs[idx], 128 + (u16)sprite_pal_for_slot[STREAM_SLOT_INDEX(ss)] * 16, 32);
-    /* A stream slot is never shared, so its per-slot tables can safely be
-     * rewritten to describe the sheet now resident there - frames_len_for()
-     * reads sprite_frames_for_slot[], and Set Animation State's "back to
-     * default" (state 0) reads sprite_type_for_slot[], both at this index. */
-    sprite_type_for_slot[STREAM_SLOT_INDEX(ss)] = stream_type_for_index[idx];
-    sprite_frames_for_slot[STREAM_SLOT_INDEX(ss)] = stream_frames_for_index[idx];
-    actors[actor_idx].frame_offset = (u8)base;
-    actors[actor_idx].sprite_type = stream_type_for_index[idx];
-    actors[actor_idx].frames_len = frames_len_for(actors[actor_idx].sprite_type, STREAM_SLOT_INDEX(ss));
-    actors[actor_idx].frame = 0;
-    actors[actor_idx].flip = 0;
-    actors[actor_idx].frame_override = 0;
-}
-
+// PLAYER_SET_SPRITE / ACTOR_SET_SPRITE: args: sprite sheet index (2 bytes),
+// then for the player a "persist" flag, not acted on. The compiler loads every
+// sheet a scene's scripts can switch to; any other index does nothing.
 void Script_PlayerSetSprite_b(void)
 {
-    u16 idx = ARG16(0, 1);
-    if (idx < NUM_SPRITE_SHEETS)
+    u8 slot = SpriteSlotForIndex(ARG16(0, 1));
+    if (slot != 0xFF)
     {
-        u8 slot = sprite_slot_for_index[idx];
-        if (slot != 0xFF)
-        {
-            actors[0].frame_offset = slot * 2;
-            actors[0].sprite_type = sprite_type_for_slot[slot];
-            /* v4 fix: frames_len used to stay at the OLD sheet's value here -
-             * swapping to a sheet with more frames left the extra ones dead
-             * (frames_len still too small to animate past them), swapping to
-             * one with fewer read OBJ tile data this sheet's own upload never
-             * wrote (real corruption risk, not just "no effect"). Recomputed
-             * the same way SceneInit does at spawn. */
-            actors[0].frames_len = frames_len_for(actors[0].sprite_type, slot);
-            actors[0].frame = 0;
-            actors[0].flip = 0;
-            actors[0].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
-        }
-        else
-        {
-            ActorStreamSprite(0, idx);
-        }
+        ScenePlayerSetSheet(slot);
     }
     ADVANCE();
     script_continue = 1;
 }
 
-// ACTOR_SET_SPRITE (v4): the general-actor sibling of PLAYER_SET_SPRITE -
-// same pre-loaded-slot lookup (sprite_slot_for_index[], scene-relative,
-// see that opcode's own comment), just applied to script_actor instead of
-// the hardcoded player slot 0. Was Noop with a broken wire format inherited
-// from the original port: scriptBuilder.js's actorSetSprite() used to
-// resolve via getSpriteOffset()/scene.sprites, a GB-only field that never
-// exists on the SNES compile path (same root cause as the Projectiles
-// getSpriteSceneIndex bug fixed earlier this session) - always compiled a
-// dead 0. Rewritten to emit the same ARG16 project-sprite-index format
-// PLAYER_SET_SPRITE already uses, so this shares its exact real behaviour
-// and its exact real limitation (only a sheet already used somewhere in
-// this scene can be switched to - not a new gap, matches the already-
-// documented PLAYER_SET_SPRITE restriction).
 void Script_ActorSetSprite_b(void)
 {
-    u16 idx = ARG16(0, 1);
-    if (idx < NUM_SPRITE_SHEETS)
+    u8 slot = SpriteSlotForIndex(ARG16(0, 1));
+    if (slot != 0xFF)
     {
-        u8 slot = sprite_slot_for_index[idx];
-        if (slot != 0xFF)
-        {
-            actors[script_actor].frame_offset = slot * 2;
-            actors[script_actor].sprite_type = sprite_type_for_slot[slot];
-            /* v4 fix - see Script_PlayerSetSprite_b's own comment. */
-            actors[script_actor].frames_len =
-                frames_len_for(actors[script_actor].sprite_type, slot);
-            actors[script_actor].frame = 0;
-            actors[script_actor].flip = 0;
-            actors[script_actor].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
-        }
-        else
-        {
-            ActorStreamSprite(script_actor, idx);
-        }
+        if (script_actor == 0) ScenePlayerSetSheet(slot);
+        else ActorSetSheet(&actors[script_actor], slot);
     }
     ADVANCE();
     script_continue = 1;
 }
 
-// Named animation states (v4 follow-up). arg is a compile-time-resolved
-// state index for THIS actor's current sheet/slot - 0 is always the
-// sheet's own default/implicit state (the exact sprite_type/frames_len a
-// plain, state-less sheet already has), 1+ indexes anim_state_dir[slot]
-// (scene.c/scene.h, compileSnesData.js's own emission). A state index
-// past this slot's own anim_state_count is a no-op (e.g. the authored
-// sheet doesn't actually have that many states - shouldn't happen from a
-// compiled project, but matches this engine's own established "a bad
-// index does nothing, never reads out of bounds" convention elsewhere,
-// e.g. PLAYER_SET_SPRITE's own idx < NUM_SPRITE_SHEETS guard). Resets
-// frame/flip the same way a sheet SWAP (PLAYER_SET_SPRITE) already does -
-// a different pose-set starting mid-cycle would read another state's own
-// frame data at a stale index.
-static void ActorSetAnimState(u8 actor_idx, u8 state)
+// PLAYER_SET_STATE / ACTOR_SET_STATE: arg: the position of the state name in
+// the project's list of names; a sheet without it shows its default state.
+void Script_PlayerSetState_b(void)
 {
-    u8 slot = actors[actor_idx].frame_offset >> 1;
-    if (state == 0)
-    {
-        actors[actor_idx].sprite_type = sprite_type_for_slot[slot];
-        actors[actor_idx].frames_len = frames_len_for(actors[actor_idx].sprite_type, slot);
-        actors[actor_idx].anim_state_offset = 0;
-    }
-    else if (state <= anim_state_count[slot])
-    {
-        const unsigned char *entry = anim_state_dir[slot] + (u16)(state - 1) * 4;
-        actors[actor_idx].frames_len = entry[0];
-        actors[actor_idx].sprite_type = entry[1];
-        actors[actor_idx].anim_state_offset = entry[2] | ((u16)entry[3] << 8);
-    }
-    actors[actor_idx].frame = 0;
-    actors[actor_idx].flip = 0;
-    actors[actor_idx].frame_override = 0; /* v4 follow-up - stale pose index, see gbs_types.h */
-}
-
-void Script_PlayerSetAnimState_b(void)
-{
-    ActorSetAnimState(0, script_cmd_args[0]);
+    ActorSetState(&actors[0], script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
 
-void Script_ActorSetAnimState_b(void)
+void Script_ActorSetState_b(void)
 {
-    ActorSetAnimState(script_actor, script_cmd_args[0]);
+    ActorSetState(&actors[script_actor], script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
@@ -904,11 +767,6 @@ void Script_ActorSetDir_b(void)
     u8 d = script_cmd_args[0];
     actors[script_actor].dir_x = d == 2 ? -1 : d == 4 ? 1 : 0;
     actors[script_actor].dir_y = d == 8 ? -1 : d == 1 ? 1 : 0;
-    /* v4 follow-up: Set Direction is the canonical "resume automatic
-     * facing" signal - drops any Set Frame/Set Flip override so a
-     * directional sheet's render goes back to picking its pose from
-     * dir_x/dir_y again (see gbs_types.h's frame_override comment). */
-    actors[script_actor].frame_override = 0;
     ADVANCE();
     script_continue = 1;
 }
@@ -1178,40 +1036,31 @@ void Script_TextSetAnimSpeed_b(void)
     ADVANCE();
     script_continue = 1;
 }
-/* v4 follow-up: Set Frame / Set Frame to Variable / Set Flip used to only
- * have a real effect on a non-directional ("fixed") sheet - a directional
- * ("multi"/"multi_movement") sheet's render path recomputed pose+flip from
- * dir_x/dir_y fresh every frame, silently overwriting whatever these 3
- * opcodes just stored. frame_override (gbs_types.h) makes the render path
- * (actor_render_tile/actor_metasprite_pose, scene.c) trust the stored
- * frame/flip as-is on a directional sheet too, until Set Direction
- * (Script_ActorSetDir_b above) clears it again. The modulus here is
- * override_frame_count(), not frames_len - frames_len deliberately stays
- * 1/2 for SPRITE_ACTOR/SPRITE_ACTOR_ANIMATED to drive the walk cycle
- * correctly; the real authored pose count (3 or 6) is a separate number. */
+/* Set Frame picks a frame of the animation the actor is playing: bring that
+ * animation up to date first, in case the script just turned the actor. */
+static void ActorSetFrameValue(u8 value)
+{
+    ACTOR *a = &actors[script_actor];
+    ActorUpdateAnimation(a, ANIM_NONE);
+    ActorSetFrameOffset(a, value);
+}
+
 void Script_ActorSetFrame_b(void)
 {
-    u8 n = override_frame_count(actors[script_actor].sprite_type, actors[script_actor].frames_len);
-    actors[script_actor].flip = 0;
-    actors[script_actor].frame = script_cmd_args[0] % n;
-    actors[script_actor].frame_override = 1;
+    ActorSetFrameValue(script_cmd_args[0]);
     ADVANCE();
     script_continue = 1;
 }
+/* No authorable event: frames are mirrored on the Sprites page */
 void Script_ActorSetFlip_b(void)
 {
-    actors[script_actor].flip = script_cmd_args[0];
-    actors[script_actor].frame_override = 1;
     ADVANCE();
     script_continue = 1;
 }
 void Script_TextMulti_b(void) { UITextMulti(script_cmd_args[0]); ADVANCE(); script_continue = 1; }
 void Script_ActorSetFrameToVal_b(void)
 {
-    u8 n = override_frame_count(actors[script_actor].sprite_type, actors[script_actor].frames_len);
-    actors[script_actor].flip = 0;
-    actors[script_actor].frame = VAR(ARG16(0, 1)) % n;
-    actors[script_actor].frame_override = 1;
+    ActorSetFrameValue(VAR(ARG16(0, 1)));
     ADVANCE();
     script_continue = 1;
 }
@@ -1550,8 +1399,8 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ActorStartUpdate_b, 0) /* 0x78 ACTOR_START_UPDATE - v4, real On Update subsystem, see update_script.h */ \
     X(Script_MosaicSet_b, 4) /* 0x79 MOSAIC_SET - v4, hardware mosaic/pixelisation effect, see mosaic.h */ \
     X(Script_SoundPlayCustom_b, 2) /* 0x7A SOUND_PLAY_CUSTOM - v4, real per-project BRR sound effect, see music.h */ \
-    X(Script_PlayerSetAnimState_b, 1) /* 0x7B PLAYER_SET_ANIM_STATE - v4, named animation states, see gbs_types.h's anim_state_offset */ \
-    X(Script_ActorSetAnimState_b, 1) /* 0x7C ACTOR_SET_ANIM_STATE - v4, named animation states, see gbs_types.h's anim_state_offset */
+    X(Script_PlayerSetState_b, 1) /* 0x7B PLAYER_SET_STATE - sprite state */ \
+    X(Script_ActorSetState_b, 1) /* 0x7C ACTOR_SET_STATE - sprite state */
 
 #define X(fn, n) fn,
 const SCRIPT_CMD_FN script_cmds[SCRIPT_CMD_COUNT] = {SCRIPT_CMD_TABLE};

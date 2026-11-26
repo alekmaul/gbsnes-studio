@@ -224,7 +224,7 @@ int main(void)
     // hardware ceiling (a tilemap cell's tile-index field is only 10 bits -
     // snesgfx.js's packed tile|pal<<10|... format), so BG1's graphics
     // region now has exactly as much room as that format can ever address.
-    //   OBJ gfx    0x0000-0x0FFF (256 4bpp tiles, SPR_TILES_SIZE)
+    //   OBJ gfx    0x0000-0x1FFF (512 4bpp tiles)
     //   BG1 gfx    0x2000-0x5FFF (1024 4bpp tiles - the full tile-index range)
     //   BG3 gfx    0x6000-0x67FF (235 2bpp tiles: font/frame/cursor)
     //   BG1 map    0x6800-0x77FF (SC_64x64 budget, 4096 words - matches
@@ -236,7 +236,7 @@ int main(void)
      * emote and dialogue-avatar palettes at OBJ pal 1 / 2) are per-scene:
      * SceneInit uploads scene_index's. This boot call just sets the OBJ VRAM
      * base / sprite size and seeds the start scene's data. */
-    oamInitGfxSet((u8 *)scene_spr_ptrs[START_SCENE], SPR_TILES_SIZE,
+    oamInitGfxSet((u8 *)scene_spr_ptrs[START_SCENE], scene_spr_len[START_SCENE],
                   (u8 *)scene_spr_pal_ptrs[START_SCENE], SPR_PAL_SIZE, 0,
                   OBJ_GFX_VRAM, OBJ_SIZE8_L16);
     UIInit();

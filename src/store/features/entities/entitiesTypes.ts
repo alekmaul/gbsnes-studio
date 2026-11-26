@@ -1,7 +1,6 @@
 import { EntityState, Dictionary } from "@reduxjs/toolkit";
 
 export type ActorDirection = "up" | "down" | "left" | "right";
-export type ActorSpriteType = "static" | "actor";
 export type SpriteType = "static" | "animated" | "actor" | "actor_animated";
 
 export type ScriptEvent = {
@@ -19,7 +18,6 @@ export type Actor = {
   x: number;
   y: number;
   spriteSheetId: string;
-  spriteType: ActorSpriteType;
   frame: number;
   moveSpeed: number;
   animSpeed: number | null;

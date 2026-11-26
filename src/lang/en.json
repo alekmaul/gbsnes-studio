@@ -1,5 +1,6 @@
 {
   "RTL": false,
+  "FIELD_ANIMATION_STATE": "Animation State",
   "FIELD_ADD_ANIMATION_STATE": "Add Animation State",
   "FIELD_ANIMATIONS": "Animations",
   "FIELD_AUTODETECT_ANIMATIONS": "Auto Detect Animations",
@@ -556,7 +557,7 @@
   "EVENT_LAUNCH_PROJECTILE": "Item: Launch Projectile",
   "EVENT_IF_ACTOR_RELATIVE_TO_ACTOR": "If Actor Relative To Actor",
   "EVENT_ACTOR_SET_SPRITE": "Actor: Set Sprite Sheet",
-  "EVENT_ACTOR_SET_STATE": "Actor: Set Sprite Swap",
+  "EVENT_ACTOR_SET_STATE": "Actor: Set Animation State",
   "EVENT_PLAYER_SET_STATE": "Actor: Set Player Sprite Swap",
   "EVENT_ACTOR_SET_ANIM_STATE": "Actor: Set Animation State",
   "EVENT_PLAYER_SET_ANIM_STATE": "Player: Set Animation State",
