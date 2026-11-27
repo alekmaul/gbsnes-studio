@@ -127,7 +127,11 @@ jobs:
     # Runs once macOS reaches a terminal state (success, failure, or cancelled),
     # as long as Windows actually succeeded - macOS is not allowed to block it.
     if: ${{ always() && needs.build-windows.result == 'success' }}
-    runs-on: ubuntu-latest
+    # Not ubuntu-latest: from rpm 4.20 on, rpmbuild runs %install in a new
+    # per-package build folder, where the spec of the old
+    # electron-installer-redhat finds nothing to copy ("cp: cannot stat
+    # 'usr/*'"). Ubuntu 24.04 has rpm 4.18.
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
