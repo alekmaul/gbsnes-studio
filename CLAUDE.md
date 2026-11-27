@@ -173,8 +173,9 @@ selection — SNES is the only path). Stages:
 3. **`compileSnesMusic.js`** — converts each project `.mod` to Impulse Tracker (`mod2it.js`)
    and runs `smconv` to rebuild the snesmod soundbank (`res/soundbank.{bnk,h}`).
 4. **`buildSnesRom.js`** — pure JS orchestration (no `make`/shell): generates `hdr.asm`, runs
-   `816-tcc → 816-opt → wla-65816` per `.c` and `wla-65816` per `.asm`, links with `wlalink` →
-   `build/rom/game.sfc`. LoROM + FastROM, SRAM 8 KB, auto header (no JS header patching).
+   `816-tcc → 816-opt → constify → wla-65816` per `.c` and `wla-65816` per `.asm`, links with
+   `wlalink` → `build/rom/game.sfc`. LoROM + FastROM, SRAM 8 KB, auto header (no JS header
+   patching). `constify` (it reads the `.c` file) puts the `const` data in ROM.
 5. Web builds additionally copy `appData/snes-js-emulator` (a JS SNES emulator, `SnesJs`) and
    template the `index.html`.
 
@@ -468,7 +469,8 @@ by target, `undefined` target still falls back to gb).
   toolchain is present, and boot + run in Mesen.
 - **`src/lib/compiler/buildSnesRom.js`** — replaces `makeBuild.js` for SNES. Pure JS orchestration
   (no `make`/shell): generates `hdr.asm` from `devkitsnes/include/hdr.asm.in`, runs
-  `816-tcc → 816-opt → wla-65816` per `.c` and `wla-65816` per `.asm`, builds `linkfile`
+  `816-tcc → 816-opt → constify → wla-65816` per `.c` and `wla-65816` per `.asm`, builds
+  `linkfile`
   (+ `pvsneslib/lib/LoROM_FastROM/*.obj`), `wlalink` → `build/rom/game.sfc`. LoROM + FastROM,
   SRAM 8 KB, auto header (no JS header patching). Runs `816-opt` with `-q` (mirrors the
   `snes_rules` edit) and its `filterLog` also strips ANSI colour codes and drops the pure
@@ -838,16 +840,20 @@ by target, `undefined` target still falls back to gb).
   holds the committed dummy `.as`/`data.asm` (like `assets.c`); `.gitignore` only excludes the
   `.obj`/`.ps`/`.dbg` a standalone `make` drops there.
 - **Toolchain** vendored (subset) under `buildTools/<platform>-<arch>/pvsneslib/` — PVSnesLib
-  V4.7.0 `devkitsnes/{bin,tools,include,snes_rules}` + `pvsneslib/{include,lib}`, for
-  `win32-x64`, `linux-x64` and `darwin-x64` (native binaries per platform; the unix ones carry
-  a forced exec bit in the index since `core.fileMode` is `false` here). `smconv.spc` (the
+  V4.8.0 plus 4.8.1's `oamMetaDrawMix` `devkitsnes/{bin,tools,include,snes_rules}` +
+  `pvsneslib/{include,lib}`, for `win32-x64`, `linux-x64` and `darwin-arm64` (macOS only has
+  the arm64 one, which `pvsneslibVendorDir` picks even under Rosetta; native binaries per
+  platform; the unix ones carry a forced exec bit in the index since `core.fileMode` is `false`
+  here - a newly added binary needs `git update-index --chmod=+x`). A packaged app extracts the
+  toolchain to a temp folder and reuses it only while `toolchainStamp` (file names and sizes)
+  matches. `smconv.spc` (the
   platform-independent SPC700 driver blob) travels in every `tools/`. Only 64-bit hosts (no
   `win32-ia32`). **`devkitsnes/{bin,tools}` is trimmed to just what's actually invoked** (user
-  audit + cleanup): `816-tcc`/`wla-65816`/`wlalink` (`bin/`) + `816-opt`/`smconv`+`smconv.spc`
-  (`tools/`) — matches exactly what `buildSnesRom.js` and `compileSnesMusic.js` spawn, plus
+  audit + cleanup): `816-tcc`/`wla-65816`/`wlalink` (`bin/`) + `816-opt`/`constify`/
+  `smconv`+`smconv.spc` (`tools/`) — matches exactly what `buildSnesRom.js` and `compileSnesMusic.js` spawn, plus
   `snesromusage` (kept as a manual ROM/RAM profiling tool, see `PERF.md`, not build-automated).
   Removed: `wla-spc700` (this project never assembles its own SPC700 code - it uses the
-  prebuilt `smconv.spc` driver), `gfx2snes`/`gfx4snes`/`tmx2snes`/`bin2txt`/`constify`/
+  prebuilt `smconv.spc` driver), `gfx2snes`/`gfx4snes`/`tmx2snes`/`bin2txt`/
   `snestools`/`fnt4snes`/`mp44snes` (PVSnesLib's own PNG/BMP/TMX/font/video asset pipeline -
   this project converts every asset itself in JS, `snes_rules` never has a `.bmp`/`.tmx`/`.wav`
   to feed them), `snesbrr` (only ever run ad-hoc by `tools/gen-sfx.js` to regenerate the
@@ -1046,13 +1052,15 @@ than redesigning** when something is missing.
   without them (16px-high images by their width, others a blank state).
 - **Editor**: `containers/pages/SpritesPage.tsx` + `components/sprites/`.
 - **Compiler**: `lib/compiler/compileSnesSprites.js` — its header documents the binary format.
-  Per scene: up to 32 sheets (player first) and 512 OBJ tiles, tiles 32-95 reserved for emotes
-  and portraits; sheets share OBJ palettes 0 and 3-7. All loaded with the scene (no runtime
+  A frame is a PVSnesLib metasprite. Per scene: up to 32 sheets (player first) and 512 OBJ
+  tiles, tiles 32-95 reserved for emotes and portraits; 8x8 tiles can only be in the second
+  256 tile page (`oamMetaDrawMix` takes the small size there), 16x16 ones in both; sheets share OBJ palettes 0 and 3-7. All loaded with the scene (no runtime
   streaming). Transparency everywhere: the top-left pixel's colour, or alpha < 128.
 - **Engine**: `sprites.c`/`.h` (slots, animations, OAM). OAM is rebuilt each frame, front-most
-  first, from sprite 1; sprite 0 is the dialogue portrait. The loop writing a frame's sprites
-  is assembly, `src/sprites_draw.asm` (`SpriteDrawList`): in C under 816-tcc it was too slow
-  for 14 actors (see `PERF.md`). Actors far off-screen skip their animation update.
+  first, from sprite 1; sprite 0 is the dialogue portrait. A frame's sprites are written by
+  PVSnesLib's `oamMetaDrawMix` (a loop in C under 816-tcc was too slow for 14 actors, see
+  `PERF.md`), which gives an off-screen sprite of a drawn frame a hidden OAM entry. Actors far
+  off-screen skip their animation update.
 - **Dialogue portrait**: BG3's box tiles have priority and hide every sprite, so `ui.c` opens a
   2x2 transparent hole under the portrait and `compileSnesAvatars` composes it over the box
   background.

@@ -17,6 +17,7 @@ const getPixels = require("util").promisify(require("get-pixels"));
 
 const s8 = (v) => (v > 127 ? v - 256 : v);
 const u16 = (data, at) => data[at] | (data[at + 1] << 8);
+const s16 = (v) => (v > 32767 ? v - 65536 : v);
 
 const readSlot = (data, slot) => {
   expect(slot).toBeLessThan(data[0]);
@@ -30,20 +31,36 @@ const readSlot = (data, slot) => {
   };
   const frame = (position) => {
     expect(position).toBeLessThan(data[frameTable]);
-    const at = start + u16(data, frameTable + 1 + position * 2);
-    return Array.from({ length: data[at] }, (_, i) => {
-      const e = at + 1 + i * 5;
-      return {
-        dx: s8(data[e]),
-        dy: s8(data[e + 1]),
-        tile: data[e + 2] | ((data[e + 3] & 1) << 8),
-        flipY: !!(data[e + 3] & 0x80),
-        flipX: !!(data[e + 3] & 0x40),
-        priority: (data[e + 3] >> 4) & 3,
-        palette: (data[e + 3] >> 1) & 7,
-        size: data[e + 4] ? 16 : 8,
-      };
-    });
+    // t_metasprite entries, up to the end marker
+    const entries = [];
+    for (
+      let e = start + u16(data, frameTable + 1 + position * 2);
+      s16(u16(data, e)) !== -128;
+      e += 8
+    ) {
+      const block = u16(data, e + 4);
+      const attr = data[e + 6];
+      expect([2, 4]).toContain(data[e + 7]);
+      const size = data[e + 7] === 2 ? 16 : 8;
+      expect(block).toBeLessThan(size === 16 ? 64 : 256);
+      // the tile oamMetaDrawMix() shows: from its lookup tables, in the page
+      // the attributes name, an 8x8 sprite always being in the second one
+      const inPage =
+        size === 16 ? Math.floor(block / 8) * 32 + (block % 8) * 2 : block;
+      const page = size === 8 ? 1 : attr & 1;
+      expect(attr & 1).toBe(page);
+      entries.push({
+        dx: s16(u16(data, e)),
+        dy: s16(u16(data, e + 2)),
+        tile: page * 256 + inPage,
+        flipY: !!(attr & 0x80),
+        flipX: !!(attr & 0x40),
+        priority: (attr >> 4) & 3,
+        palette: (attr >> 1) & 7,
+        size,
+      });
+    }
+    return entries;
   };
   return { bounds, stateCount, animation, frame };
 };
@@ -372,6 +389,7 @@ describe("packSceneSprites", () => {
     expect(scene.slotPalettes).toEqual([3, 3]);
     // one 16x16 tile on rows 6 and 7
     expect(scene.tileCount).toBe(96 + 18);
+    expect(scene.highTileCount).toBe(0);
     await expectSlotToMatch(scene, 0, a.sheet, a.file, [""]);
     await expectSlotToMatch(scene, 1, b.sheet, b.file, [""]);
   });
@@ -389,7 +407,7 @@ describe("packSceneSprites", () => {
     await expectSlotToMatch(scene, 0, a.sheet, a.file, [""]);
   });
 
-  test("places 8x8 tiles around 16x16 ones and warns when full", async () => {
+  test("places 8x8 tiles in the second page and warns when full", async () => {
     const frames = [
       [[tile(0, 0, 0, 0, 16), tile(0, 16, 16, 0, 8), tile(8, 16, 24, 0, 8)]],
     ];
@@ -399,12 +417,38 @@ describe("packSceneSprites", () => {
       readSlot(scene.data, 0)
         .frame(0)
         .map((e) => e.tile)
-    ).toEqual([3, 2, 0]);
+    ).toEqual([257, 256, 0]);
+    expect([scene.tileCount, scene.highTileCount]).toEqual([18, 2]);
 
     const full = packSceneSprites([a.compiled], { reserved: [[0, 510]] });
+    expect(full.warnings.length).toBe(1);
     expect(full.warnings[0]).toMatch(/more than the 2 sprite tiles/);
     // only the 8x8 tiles fit
     expect(readSlot(full.data, 0).frame(0).length).toBe(2);
+
+    // 8x8 tiles can't use the first page, even with room there
+    const noPage2 = packSceneSprites([a.compiled], { reserved: [[256, 512]] });
+    expect(noPage2.warnings.length).toBe(1);
+    expect(noPage2.warnings[0]).toMatch(/tiles available for 8x8 sprites/);
+    expect(
+      readSlot(noPage2.data, 0)
+        .frame(0)
+        .map((e) => e.size)
+    ).toEqual([16]);
+  });
+
+  test("lets 16x16 tiles go to the second page", async () => {
+    const frames = [[[tile(0, 0, 0, 0, 16), tile(0, 16, 16, 0, 8)]]];
+    const a = await compileOne([["", "fixed", false, frames]]);
+    // the first page is full, the second one only used by the 8x8 tile
+    const scene = packSceneSprites([a.compiled], { reserved: [[0, 256]] });
+    expect(scene.warnings).toEqual([]);
+    expect(
+      readSlot(scene.data, 0)
+        .frame(0)
+        .map((e) => e.tile)
+    ).toEqual([256, 258]);
+    await expectSlotToMatch(scene, 0, a.sheet, a.file, [""]);
   });
 });
 

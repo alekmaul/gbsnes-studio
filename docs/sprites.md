@@ -94,6 +94,7 @@ _Actor: Set Animation Speed_ event). A moving actor always animates; an idle one
 | --- | --- |
 | Sprite sheets (the player's included) | 32 |
 | Tiles of video memory for sprites | 416 tiles of 8x8, shared by all its sheets |
+| Of which tiles placed as 8x8 sprites | 256 (a 16x16 tile has no such limit) |
 | Hardware sprites on screen | 128 (actor tiles, emote, projectiles, portrait) |
 | Colour palettes for sprite sheets | 6 of 16 colours |
 

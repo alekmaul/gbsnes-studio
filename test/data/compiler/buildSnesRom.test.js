@@ -4,6 +4,7 @@ import Path from "path";
 import buildSnesRom, {
   filterLog,
   makefileWithSettings,
+  toolchainStamp,
 } from "../../../src/lib/compiler/buildSnesRom";
 import { engineRoot, pvsneslibVendorDir } from "../../../src/consts";
 
@@ -13,6 +14,30 @@ const hasToolchain = fs.existsSync(vendored);
 // Integration test: drives the real PVSnesLib toolchain, so it only runs on a
 // platform that has the vendored toolchain checked in.
 const maybe = hasToolchain ? describe : describe.skip;
+
+describe("toolchainStamp", () => {
+  test("changes when a program or the library of the toolchain does", async () => {
+    const root = await fs.mkdtemp(Path.join(os.tmpdir(), "gbs-stamp-"));
+    const write = (file, content) =>
+      fs.outputFile(Path.join(root, file), content);
+    try {
+      await write("devkitsnes/bin/816-tcc", "a");
+      await write("devkitsnes/tools/816-opt", "b");
+      await write("pvsneslib/lib/LoROM_FastROM/libc.obj", "c");
+      const first = await toolchainStamp(root);
+      expect(await toolchainStamp(root)).toBe(first);
+
+      await write("devkitsnes/tools/constify", "d");
+      const added = await toolchainStamp(root);
+      expect(added).not.toBe(first);
+
+      await write("pvsneslib/lib/LoROM_FastROM/libc.obj", "longer");
+      expect(await toolchainStamp(root)).not.toBe(added);
+    } finally {
+      await fs.remove(root);
+    }
+  });
+});
 
 describe("filterLog", () => {
   const ESC = String.fromCharCode(27);

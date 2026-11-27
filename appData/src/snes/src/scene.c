@@ -932,6 +932,12 @@ void SceneInit(void)
     /* this scene's OBJ tiles + 8-palette CGRAM image (with the emote and
      * avatar palettes at OBJ pal 1 / 2) */
     dmaCopyVram((u8 *)scene_spr_ptrs[scene_index], OBJ_GFX_VRAM, scene_spr_len[scene_index]);
+    /* what belongs to the second page follows; a length of 0 would copy 64 KB */
+    if (scene_spr_high_len[scene_index])
+    {
+        dmaCopyVram((u8 *)scene_spr_ptrs[scene_index] + scene_spr_len[scene_index],
+                    OBJ_GFX_PAGE2_VRAM, scene_spr_high_len[scene_index]);
+    }
     dmaCopyCGram((u8 *)scene_spr_pal_ptrs[scene_index], 128, SPR_PAL_SIZE);
 
     if (use_map_engine)

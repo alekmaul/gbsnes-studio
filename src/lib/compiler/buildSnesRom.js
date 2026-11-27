@@ -11,12 +11,13 @@ import copy, { pathExists } from "../helpers/fsCopy";
  * The Game Boy target shells out to `lcc` through a generated make.bat
  * (buildMakeBat.js) via makeBuild.js. PVSnesLib normally builds through a
  * GNU-make file (`snes_rules`) which needs make + a Unix shell + coreutils.
- * To avoid shipping those, this module drives the four tools directly, the
+ * To avoid shipping those, this module drives the tools directly, the
  * same way snes_rules does:
  *
  *   <root>/hdr.asm            generated here from devkitsnes/include/hdr.asm.in
- *   *.c   -> 816-tcc -> .ps -> 816-opt -> .asm -> wla-65816 -> .obj
- *   *.asm ->                              wla-65816 -> .obj
+ *   *.c   -> 816-tcc -> .ps -> 816-opt -> .asp -> constify -> .asm
+ *            -> wla-65816 -> .obj
+ *   *.asm ->    wla-65816 -> .obj
  *   linkfile (local .obj + pvsneslib/lib/<map>_<speed>/*.obj)
  *   wlalink -> build/rom/game.sfc
  *
@@ -71,6 +72,27 @@ const spaceFreeTmp = () => {
   return tmp;
 };
 
+// Identifies a toolchain by the names and sizes of its programs and library,
+// so that the copy extracted by another version of the app isn't reused.
+// readdir and lstat work inside app.asar.
+const toolchainStamp = async (root) => {
+  const folders = [
+    "devkitsnes/bin",
+    "devkitsnes/tools",
+    "pvsneslib/lib/LoROM_FastROM",
+  ];
+  const lines = [];
+  for (const folder of folders) {
+    const dir = Path.join(root, folder);
+    const names = (await fs.readdir(dir)).sort();
+    for (const name of names) {
+      const { size } = await fs.lstat(Path.join(dir, name));
+      lines.push(`${folder}/${name} ${size}`);
+    }
+  }
+  return lines.join("\n");
+};
+
 // Locate the vendored PVSnesLib for this platform, extracted to a real,
 // space-free path first if needed - either because the install dir contains
 // spaces (GBDK/tcc/wla all misbehave then), or because it's packed inside a
@@ -78,8 +100,8 @@ const spaceFreeTmp = () => {
 // inside app.asar is a real file, and child_process.spawn() needs one -
 // Electron's asar support makes *reading* transparent (stat/lstat/readdir/
 // readFile/createReadStream), never execution - so every tool spawn below
-// (816-tcc, wla-65816, wlalink, 816-opt, smconv) would fail with ENOENT
-// otherwise.
+// (816-tcc, wla-65816, wlalink, 816-opt, constify, smconv) would fail with
+// ENOENT otherwise.
 const resolvePvsHome = async ({ progress }) => {
   const vendored = pvsneslibVendorDir();
   if (!(await pathExists(vendored))) {
@@ -102,13 +124,17 @@ const resolvePvsHome = async ({ progress }) => {
   const dest = Path.join(spaceFreeTmp(), "gbs-pvsneslib");
   // Written only after a copy fully completes - guards the cache-reuse
   // check below against a partial/interrupted extraction (crashed mid-copy)
-  // looking like a valid one.
+  // looking like a valid one. It holds the toolchain's stamp.
   const doneMarker = Path.join(dest, ".extracted-ok");
 
   if (inAsar) {
     // A real extraction (tens of MB) is the one genuinely slow case here -
     // reuse a previous build's copy instead of redoing it every time.
-    if (await pathExists(doneMarker)) {
+    const stamp = await toolchainStamp(vendored);
+    if (
+      (await pathExists(doneMarker)) &&
+      (await fs.readFile(doneMarker, "utf8")) === stamp
+    ) {
       return dest;
     }
     progress("Extracting the build toolchain (first SNES build only)");
@@ -124,7 +150,7 @@ const resolvePvsHome = async ({ progress }) => {
     // identical fix on `main`, where the EACCES this avoids was user-found
     // on a real packaged Linux build.
     await copy(vendored, dest, { overwrite: false, mode: 0o755 });
-    await fs.writeFile(doneMarker, "");
+    await fs.writeFile(doneMarker, stamp);
     return dest;
   }
 
@@ -367,7 +393,7 @@ const buildSnesRom = async ({
   // runs every tool from the project root with root-relative paths — match that.
   const fromRoot = (p) => Path.relative(buildRoot, p).split(Path.sep).join("/");
 
-  // C sources: 816-tcc -> 816-opt -> wla-65816
+  // C sources: 816-tcc -> 816-opt -> constify -> wla-65816 (as snes_rules)
   for (const cFile of cFiles) {
     const base = cFile.replace(/\.c$/, "");
     await spawnTool(
@@ -390,10 +416,20 @@ const buildSnesRom = async ({
     await spawnTool(
       "Optimising",
       tool("816-opt"),
-      ["-q", "-i", `${base}.ps`, "-o", `${base}.asm`],
+      ["-q", "-i", `${base}.ps`, "-o", `${base}.asp`],
       buildRoot,
       { progress, warnings }
     );
+    await waitForFile(`${base}.asp`);
+    // Puts the `const` data in ROM; it reads the C source to know which it is
+    await spawnTool(
+      "Moving constants",
+      tool("constify"),
+      [cFile, `${base}.asp`, `${base}.asm`],
+      buildRoot,
+      { progress, warnings }
+    );
+    await fs.remove(`${base}.asp`);
     await waitForFile(`${base}.asm`);
     await spawnTool(
       "Assembling",
@@ -460,4 +496,4 @@ const buildSnesRom = async ({
 };
 
 export default buildSnesRom;
-export { resolvePvsHome, filterLog, makefileWithSettings };
+export { resolvePvsHome, filterLog, makefileWithSettings, toolchainStamp };

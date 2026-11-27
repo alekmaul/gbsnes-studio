@@ -380,7 +380,9 @@ const spriteData = [
   ...word(25), // frame table at +25
   ...new Array(16).fill(0), // 8 animations, all frame 0
   1, ...word(28), // one frame, at +28
-  1, -8 & 0xff, -16 & 0xff, 0, 0x20, 1 // one 16x16 sprite
+  // a metasprite: dx, dy, block, attributes, OBJ_SPRITE16; then its end
+  ...word(-8 & 0xffff), ...word(-16 & 0xffff), ...word(0), 0x20, 2,
+  ...word(-128 & 0xffff)
 ];
 
 // ---- emit -------------------------------------------------------------
@@ -482,6 +484,7 @@ extern const unsigned char scene_spr_pal_0[${sprPal.length}];
 extern const unsigned char scene_sprdata_0[${spriteData.length}];
 extern const unsigned char *const scene_spr_ptrs[2];
 extern const unsigned short scene_spr_len[2];
+extern const unsigned short scene_spr_high_len[2];
 extern const unsigned char *const scene_spr_pal_ptrs[2];
 extern const unsigned char *const scene_sprite_data_ptrs[2];
 extern const unsigned char *const scene_sprite_slot_ptrs[2];
@@ -611,6 +614,7 @@ extern const unsigned char *const scenes[];
 ${cArray("scene_spr_slot_0", [0])}
 const unsigned char *const scene_spr_ptrs[2] = { scene_spr_0, scene_spr_0 };
 const unsigned short scene_spr_len[2] = { ${sprSheet.length}, ${sprSheet.length} };
+const unsigned short scene_spr_high_len[2] = { 0, 0 };
 const unsigned char *const scene_spr_pal_ptrs[2] = { scene_spr_pal_0, scene_spr_pal_0 };
 const unsigned char *const scene_sprite_data_ptrs[2] = { scene_sprdata_0, scene_sprdata_0 };
 const unsigned char *const scene_sprite_slot_ptrs[2] = { scene_spr_slot_0, scene_spr_slot_0 };

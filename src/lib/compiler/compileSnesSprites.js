@@ -28,13 +28,17 @@
  *     frame table:
  *       u8   frameCount
  *       u16  frameOffset[frameCount]
- *     frame:
- *       u8   tileCount              front-most tile first (OAM order)
- *       { s8 dx, s8 dy, u8 tile, u8 attr, u8 large } x tileCount
+ *     frame, as PVSnesLib's oamMetaDrawMix() reads it (t_metasprite):
+ *       { s16 dx, s16 dy, u16 block, u8 attr, u8 type } per sprite, front-most
+ *       first (OAM order), then the end marker s16 -128
  *
  * dx/dy are added to the actor's position (centre of its feet). attr is the
- * OAM attribute byte (vhoopppN, N = bit 8 of the tile number) and large is 1
- * for a 16x16 sprite.
+ * OAM attribute byte (vhoopppN, N = bit 8 of the tile number) and type
+ * OBJ_SPRITE8 or OBJ_SPRITE16. block is the tile number inside its 256 tile
+ * page: for 8x8 sprites the tile itself, for 16x16 ones its position among the
+ * 8 x 8 blocks of the page. oamMetaDrawMix() always takes 8x8 sprites (the
+ * small size) from the second page, so they are all placed there; 16x16 sprites
+ * may be in either page, as N says.
  */
 import {
   animationMapBySpriteType,
@@ -47,6 +51,11 @@ const getPixels = require("util").promisify(require("get-pixels"));
 export const MAX_SPRITE_COLORS = 16; // including the transparent one
 export const OBJ_VRAM_TILES = 512;
 export const OBJ_PALETTE_COUNT = 8;
+export const OBJ_PAGE_TILES = 256;
+// t_metasprite types and end marker (PVSnesLib's sprite.h)
+export const METASPRITE_SPRITE16 = 2;
+export const METASPRITE_SPRITE8 = 4;
+export const METASPRITE_END = -128;
 const TILES_PER_ROW = 16;
 const NUM_ANIMATIONS = 8;
 const MAX_FRAMES = 255;
@@ -259,7 +268,8 @@ export const compileSpriteSheet = async (sheet, filename) => {
         }
         const dx = mirror ? 8 - tile.x - tile.size : tile.x - 8;
         const dy = -(tile.y + tile.size);
-        if (dx < -128 || dx > 127 || dy < -128 || dy > 127) {
+        // a dx of -128 would end the metasprite
+        if (dx <= METASPRITE_END || dx > 127 || dy < -128 || dy > 127) {
           outOfRange++;
           return null;
         }
@@ -444,13 +454,13 @@ const createVram = (totalTiles, reserved) => {
   const cells = (base, size) =>
     size === 8 ? [base] : [base, base + 1, base + 16, base + 17];
 
-  const place = (rows) => {
+  const place = (rows, first = 0) => {
     const size = rows.length;
     const key = `${size}:${tileKey(rows)}`;
     if (placed.has(key)) {
       return placed.get(key);
     }
-    for (let base = 0; base < totalTiles; base++) {
+    for (let base = first; base < totalTiles; base++) {
       const aligned =
         size === 8 ||
         (base % 2 === 0 && Math.floor(base / TILES_PER_ROW) % 2 === 0);
@@ -471,13 +481,18 @@ const createVram = (totalTiles, reserved) => {
     return null;
   };
 
-  // Length of the area holding what was placed (a 16x16 tile ends on the
-  // second tile of its lower row)
-  const usedTiles = () =>
-    Array.from(placed.keys()).reduce((max, key) => {
+  // Length of what a 256 tile page holds, from its start (a 16x16 tile ends
+  // on the second tile of its lower row)
+  const usedTiles = (page) => {
+    const start = page * OBJ_PAGE_TILES;
+    return Array.from(placed.keys()).reduce((max, key) => {
       const size = key.startsWith("8:") ? 1 : 18;
-      return Math.max(max, placed.get(key) + size);
+      const base = placed.get(key);
+      return base >= start && base < start + OBJ_PAGE_TILES
+        ? Math.max(max, base - start + size)
+        : max;
     }, 0);
+  };
 
   return { data, place, usedTiles, available };
 };
@@ -501,16 +516,16 @@ const encodeSlot = (sheet, entriesByFrame, stateOrder) => {
   const offsets = entriesByFrame.map((entries) => {
     const offset = framesOffset + frameBytes.length;
     frameBytes.push(
-      entries.length,
       ...[].concat(
         ...entries.map((e) => [
-          e.dx & 0xff,
-          e.dy & 0xff,
-          e.tile & 0xff,
+          ...u16(e.dx),
+          ...u16(e.dy),
+          ...u16(e.block),
           e.attr,
-          e.large,
+          e.type,
         ])
-      )
+      ),
+      ...u16(METASPRITE_END)
     );
     return offset;
   });
@@ -538,8 +553,9 @@ const encodeSlot = (sheet, entriesByFrame, stateOrder) => {
  *   reserved       [first, end[ tile ranges of OBJ VRAM used by something else
  *   palettes       OBJ palette registers the sheets may use
  *   sceneName      for warnings
- * Returns { tiles, tileCount, paletteBytes (all 8 OBJ palettes), data,
- *   slotPalettes, warnings }.
+ * Returns { tiles (both pages), tileCount and highTileCount (the tiles used at
+ *   the start of the first and of the second page), paletteBytes (all 8 OBJ
+ *   palettes), data, slotPalettes, warnings }.
  */
 export const packSceneSprites = (
   sheets,
@@ -561,21 +577,29 @@ export const packSceneSprites = (
     }))
   );
 
-  // 16x16 tiles first: single tiles then fill whatever space they leave
+  // 8x8 tiles first, in the second page, the only one they can use; 16x16
+  // tiles then fill the first page and what is left of the second one
   const bases = remapped.map(() => []);
-  let overflow = false;
-  [16, 8].forEach((size) => {
+  const overflow = {};
+  [8, 16].forEach((size) => {
     remapped.forEach((tiles, slot) => {
       tiles.forEach((tile, index) => {
         if (tile.size === size) {
-          const base = vram.place(tile.rows);
-          overflow = overflow || base === null;
+          const base = vram.place(tile.rows, size === 8 ? OBJ_PAGE_TILES : 0);
+          overflow[size] = overflow[size] || base === null;
           bases[slot][index] = base;
         }
       });
     });
   });
-  if (overflow) {
+  if (overflow[8]) {
+    warnings.push(
+      `Scene '${sceneName}' needs more than the tiles available for 8x8 ` +
+        `sprites (${OBJ_PAGE_TILES} at most) - some parts of its sprites are ` +
+        `missing. Use fewer sprite sheets or frames, or 16x16 tiles.`
+    );
+  }
+  if (overflow[16]) {
     warnings.push(
       `Scene '${sceneName}' needs more than the ` +
         `${vram.available} sprite tiles available - some ` +
@@ -592,17 +616,24 @@ export const packSceneSprites = (
           const priority = e.priority
             ? OBJ_PRIORITY_BEHIND
             : OBJ_PRIORITY_FRONT;
+          const large = sheet.tiles[e.tile].size === 16;
+          // inside the page: a 16x16 block covers 2 rows and 2 columns
+          const inPage = tile % OBJ_PAGE_TILES;
+          const block = large
+            ? Math.floor(inPage / (TILES_PER_ROW * 2)) * (TILES_PER_ROW / 2) +
+              (inPage % TILES_PER_ROW) / 2
+            : inPage;
           return {
             dx: e.dx,
             dy: e.dy,
-            tile,
+            block,
             attr:
               (e.flipY ? 0x80 : 0) |
               (e.flipX ? 0x40 : 0) |
               (priority << 4) |
               (assigned[slot].register << 1) |
               (tile >> 8),
-            large: sheet.tiles[e.tile].size === 16 ? 1 : 0,
+            type: large ? METASPRITE_SPRITE16 : METASPRITE_SPRITE8,
           };
         })
     );
@@ -638,7 +669,8 @@ export const packSceneSprites = (
 
   return {
     tiles: vram.data,
-    tileCount: vram.usedTiles(),
+    tileCount: vram.usedTiles(0),
+    highTileCount: vram.usedTiles(1),
     paletteBytes: cgram,
     data,
     slotPalettes: assigned.map((a) => a.register),

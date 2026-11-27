@@ -7,6 +7,7 @@ const unsigned char scene_spr_slot_0[1] = {
 
 const unsigned char *const scene_spr_ptrs[2] = { scene_spr_0, scene_spr_0 };
 const unsigned short scene_spr_len[2] = { 3072, 3072 };
+const unsigned short scene_spr_high_len[2] = { 0, 0 };
 const unsigned char *const scene_spr_pal_ptrs[2] = { scene_spr_pal_0, scene_spr_pal_0 };
 const unsigned char *const scene_sprite_data_ptrs[2] = { scene_sprdata_0, scene_sprdata_0 };
 const unsigned char *const scene_sprite_slot_ptrs[2] = { scene_spr_slot_0, scene_spr_slot_0 };

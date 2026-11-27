@@ -296,6 +296,15 @@ Space Battle (15 On Update scripts): 0.48, against 0.44 with the earlier rendere
 (identical OAM). What is left of `SceneRenderActors`' time is its C part (actor loop, animation
 choice, finding the frame).
 
+### 2026-11-27: `oamMetaDrawMix`
+
+`sprites_draw.asm` was replaced by the same loop in PVSnesLib (`oamMetaDrawMix`), with its
+toolchain update (V4.8.0, `constify`). Same ticks per video frame in every case of the table
+above, and the same screens as before, pixel for pixel, on the two sample projects. A frame
+entry went from 5 to 8 bytes (about 2 KB more ROM for the larger sample), an off-screen sprite
+of a drawn frame now takes a hidden OAM entry, and `constify` moved the constant tables from
+WRAM to ROM (about 1 KB of WRAM).
+
 ### Not done — future work
 
 - Hand-optimising the render / actor-update hot path (or the parts of it that `816-opt` leaves

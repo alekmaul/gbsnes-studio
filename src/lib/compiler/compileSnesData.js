@@ -65,6 +65,7 @@ import {
   compileSpriteSheet,
   getSpriteStateOrder,
   packSceneSprites,
+  OBJ_PAGE_TILES,
 } from "./compileSnesSprites";
 import upgradeSpriteSheet, { hasSpriteStates } from "../sprite/upgradeSpriteSheet";
 import { buildMapEngineBackground, METATILE_PROP_WORDS } from "./snesMapEngine";
@@ -562,8 +563,15 @@ const compileSnesData = async (
     });
     packed.warnings.forEach(warnings);
 
+    // What is uploaded: the start of the first 256 tile page, followed by the
+    // start of the second one (8x8 sprites), without the gap between them
     const tileCount = Math.max(packed.tileCount, RESERVED_END);
-    const tiles = packed.tiles.slice(0, tileCount * 32);
+    const secondPage = OBJ_PAGE_TILES * 32;
+    const tiles = packed.tiles
+      .slice(0, tileCount * 32)
+      .concat(
+        packed.tiles.slice(secondPage, secondPage + packed.highTileCount * 32)
+      );
     for (let i = fixed.EMOTE_TILE0 * 32; i < fixed.AVATAR_TILE0 * 32; i++) {
       tiles[i] = fixed.spriteTiles[i] || 0;
     }
@@ -602,7 +610,13 @@ const compileSnesData = async (
       );
     }
 
-    return { tiles, palBytes, data: packed.data };
+    return {
+      tiles,
+      tilesLen: tileCount * 32,
+      highTilesLen: packed.highTileCount * 32,
+      palBytes,
+      data: packed.data,
+    };
   };
 
   const sceneSprites = scenes.map((_, i) => buildSceneSprites(i));
@@ -1332,6 +1346,7 @@ ${sprPals.arrays.map((_, i) => `extern const unsigned char scene_spr_pal_${i}[${
 ${sprData.arrays.map((a, i) => `extern const unsigned char scene_sprdata_${i}[${a.length}];`).join("\n")}
 extern const unsigned char *const scene_spr_ptrs[${scenes.length}];
 extern const unsigned short scene_spr_len[${scenes.length}];
+extern const unsigned short scene_spr_high_len[${scenes.length}];
 extern const unsigned char *const scene_spr_pal_ptrs[${scenes.length}];
 extern const unsigned char *const scene_sprite_data_ptrs[${scenes.length}];
 extern const unsigned char *const scene_sprite_slot_ptrs[${scenes.length}];
@@ -1531,7 +1546,10 @@ const unsigned char *const scene_spr_pal_ptrs[${scenes.length}] = {
 ${sceneSprPalIdx.map((i) => `    scene_spr_pal_${i}`).join(",\n")}
 };
 const unsigned short scene_spr_len[${scenes.length}] = {
-${sceneSprTileIdx.map((i) => `    ${sprTiles.arrays[i].length}`).join(",\n")}
+${sceneSprites.map((s) => `    ${s.tilesLen}`).join(",\n")}
+};
+const unsigned short scene_spr_high_len[${scenes.length}] = {
+${sceneSprites.map((s) => `    ${s.highTilesLen}`).join(",\n")}
 };
 const unsigned char *const scene_sprite_data_ptrs[${scenes.length}] = {
 ${sceneSprDataIdx.map((i) => `    scene_sprdata_${i}`).join(",\n")}

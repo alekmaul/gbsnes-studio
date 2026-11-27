@@ -37,6 +37,8 @@
  *   BG3 map   0x7800-0x7FFF (SC_32x32, 1024 of 2048 words needed -
  *             ui.c's UI_MAP_VRAM) */
 #define OBJ_GFX_VRAM 0x0000
+/* The second 256 tile page of OBJ_GFX_VRAM: all the 8x8 sprites are there */
+#define OBJ_GFX_PAGE2_VRAM 0x1000
 #define BG1_GFX_VRAM 0x2000
 #define BG1_MAP_VRAM 0x6800
 

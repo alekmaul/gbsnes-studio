@@ -8,9 +8,10 @@
  * not in assets.c - see compileSnesData.js. */
 extern const unsigned char scene_spr_0[3072];
 extern const unsigned char scene_spr_pal_0[256];
-extern const unsigned char scene_sprdata_0[37];
+extern const unsigned char scene_sprdata_0[41];
 extern const unsigned char *const scene_spr_ptrs[2];
 extern const unsigned short scene_spr_len[2];
+extern const unsigned short scene_spr_high_len[2];
 extern const unsigned char *const scene_spr_pal_ptrs[2];
 extern const unsigned char *const scene_sprite_data_ptrs[2];
 extern const unsigned char *const scene_sprite_slot_ptrs[2];

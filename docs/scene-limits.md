@@ -35,7 +35,7 @@ memory:
 | Background tileset (unique 8x8 tiles) | **1024 tiles** |
 | Background tilemap | up to 64x64 tiles (streamed beyond that on the width axis) |
 | Sprite sheets loaded at once | **32** (shown as `S: n/32` in the status bar) |
-| Sprite tiles | **416** tiles of 8x8, shared by the scene's sheets |
+| Sprite tiles | **416** tiles of 8x8, shared by the scene's sheets (**256** at most for 8x8 sprites) |
 | UI box (font, frame, cursor) | fixed, doesn't share budget with the background |
 
 {: .note }

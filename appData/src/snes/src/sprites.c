@@ -15,10 +15,6 @@
 #define SCREEN_W 256
 #define SCREEN_H 224
 
-/* sprites_draw.asm */
-extern u16 SpriteDrawList(const unsigned char *sprites, u16 count, s16 x,
-                          s16 y, u16 oam);
-
 static const unsigned char *scene_data;
 static const unsigned char *slot_data[MAX_SCENE_SPRITES];
 static const unsigned char *slot_frames[MAX_SCENE_SPRITES];
@@ -193,6 +189,7 @@ void SpriteDrawFrame(u8 slot, u8 frame, s16 x, s16 y)
 {
     const unsigned char *frames;
     const unsigned char *p;
+    u16 id;
 
     if (slot >= slot_count) return;
     /* Nothing of a frame is further than 128 pixels from its actor: skip
@@ -206,8 +203,11 @@ void SpriteDrawFrame(u8 slot, u8 frame, s16 x, s16 y)
     if (frame >= frames[0]) return;
     frames += 1 + ((u16)frame << 1);
     p = slot_data[slot] + (frames[0] | ((u16)frames[1] << 8));
-    /* the loop over the frame's sprites is in sprites_draw.asm */
-    oam_next = SpriteDrawList(p + 1, p[0], x, y, oam_next);
+    /* A frame is a PVSnesLib metasprite of 8x8 and 16x16 sprites, the large
+     * size of the engine's OBJ mode (game.c). It takes and returns a sprite
+     * number, 4 bytes of the OAM buffer each */
+    id = oamMetaDrawMix(oam_next >> 2, x, y, (u8 *)p, OBJ_SPRITE16, 0);
+    oam_next = id << 2;
 }
 
 void SpritesEnd(void)
