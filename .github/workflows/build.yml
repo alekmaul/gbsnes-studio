@@ -74,7 +74,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: snes-studio-windows-x64
-          path: out/make/**
+          # The installer and the portable zip only: Squirrel's .nupkg and
+          # RELEASES serve automatic updates, which the app doesn't use, and
+          # held the whole application a third time.
+          path: |
+            out/make/**/*.exe
+            out/make/**/*.zip
           if-no-files-found: error
           retention-days: 14
 
