@@ -5,193 +5,112 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [3.0.0] - 2026-09-18 - `v3` branch
+## [2.0.0] - Unreleased
 
-Removed the Game Boy engine, toolchain and every target-selection concept entirely — SNES
-Studio is now a **mono-target SNES product**. `v2` stays the last dual-target release,
-frozen at `v2.0.0`. Tracked as 5 milestones (M14-M18); the roadmap artifact has the full
-decision log. **5 of 5 done as of 2026-09-18**:
+A new generation of the editor and of the SNES engine, now called **GB2SNES Studio**. The
+changes below are relative to 1.1.9.
 
-- **M14**: removed `appData/src/gb/` (the GBDK engine), the `gbdk`/`mod2gbt` toolchain
-  (including the now-vestigial `darwin-x64` buildTools folder), `appData/js-emulator/`, and
-  every GB-only compiler file (`compileData.js`, `compileImages.js`, `ggbgfx.js`,
-  `compileMusic.js`, `bankedData.js`, `makeBuild.js`, `buildMakeScript.js`).
-  `src/lib/compiler/targets/` collapsed from a `{ gb, snes }` registry with a
-  `getTarget(id = "gb")` lookup — a real, repeated silent-fallback-to-GB-behaviour risk —
-  into a single exported SNES descriptor with no implicit fallback possible. Fixed three
-  pre-existing bugs this collapse exposed: `engineMiddleware.ts`'s engine.json path was
-  hardcoded to `"gb"` regardless of the open project; "Eject Engine" always ejected the GB
-  engine (its `projectType` was never actually threaded from the real target); and the
-  background-size validation (`validation.ts`) checked every project against hardcoded GB
-  pixel limits, with no SNES equivalent at all.
-- **M15**: removed every Game Boy trace from the editor UI — the `blank`/`gbhtml`/`gbs2`
-  templates, the Target Platform picker, the GBC colour card and cartridge-type card
-  (both confirmed compiler-inert for SNES), and the `isSnes`/`showExtra` conditionals
-  gating X/Y/L/R controls (now always shown). `settingsState.ts`'s stopgap
-  `target?: string` field is now real typed `snesRegion`/`snesSramSize`/`snesRomBanks`
-  fields. Found, and deliberately left for a separate design decision: the World editor's
-  scene-background preview still quantizes every image through a Game-Boy-shaped 4-shade
-  green heuristic (the toggle to disable it no longer has a Settings UI) — a pre-existing
-  `v2` gap, not something this milestone's changes caused, and not something the compiled
-  ROM is affected by. A follow-up commit fixed a real regression from this milestone: a
-  blank white screen on launch (`App.css` still importing two deleted files' CSS), plus
-  three real TypeScript errors surfaced by webpack's real diagnostics along the way
-  (excess properties passed to `buildProject()`, an over-loose parameter type).
-- **M16**: a full row-by-row opcode audit (`script_cmds.c`'s 112-entry table against
-  `scriptCommands.js`) confirmed no opcode is silently missing. 17 real `Script_Noop_b`
-  gaps found (3 more genuinely match inert Game Boy behaviour); only 3 of the 17 were
-  documented anywhere before this — the other 14 (`IF_ACTOR_RELATIVE_TO_ACTOR`,
-  `PLAYER_BOUNCE`, the 3 `PALETTE_SET_*` opcodes, `ACTOR_STOP_UPDATE`,
-  `ACTOR_SET_ANIMATE`, `SET_PROPERTY`, the 6 `ENGINE_FIELD_*` variants) are now
-  documented in `appData/src/snes/EVENTS.md`.
-- **M17**: `CLAUDE.md` rewritten around the SNES-only product this branch actually is —
-  it still described the old dual-target 1.2.2-based `main` framing and a 7-stage Game
-  Boy compile pipeline that no longer exists (deleted in M14). Also fixed, found along
-  the way: two sections still described the pre-`v2` `electron-compile`/`src/index.js`
-  architecture, never updated when `v2` switched to webpack + Redux Toolkit — a
-  staleness bug independent of the Game Boy removal itself. `README.md` lost its
-  dual-target tagline; `gbdkjs` and `ggbgfx` (both GBDK-toolchain-only, confirmed unused)
-  dropped from `package.json`.
-- **M18**: a real `electron-forge package` build confirmed the packaged app contains no
-  GBDK/Game Boy engine references anywhere in `app.asar`, only the SNES/PVSnesLib
-  toolchain. `yarn test` green throughout (124/124 suites). The compiler-level
-  correctness this milestone's own checklist calls out (camera clamp, dialogue wrap
-  width, sprite budget, now hardcoded rather than defaulted) was already proven
-  byte-exact by the existing test suite in M14, including real toolchain-gated
-  end-to-end `.sfc` builds against the vendored PVSnesLib toolchain.
+### Upgrading from 1.x
+- Projects are migrated when you open them. Keep a copy of your project before opening it.
+- The Game Boy target is gone: every project builds a Super Nintendo ROM. Backgrounds must be
+  at least 256x224 pixels.
+- Sprites use a new system. Sprite sheets 16 pixels high are converted automatically; any
+  other sheet gets an empty state, whose frames have to be placed on the Sprites page.
+- Custom palettes and their two script events are gone: colours come straight from your PNG
+  files.
 
-Post-M18 polish, found through the user's own hands-on testing of the real app the same day:
+### Added
+- **Five scene types**: Top Down 2D, Platformer (with ladders and one-way platforms),
+  Adventure, Shoot Em Up and Point and Click.
+- **Sprites**, as in GB Studio 3.2.1: states, animations, and frames made of 8x8 and 16x16
+  tiles, edited on a new Sprites page. Up to 32 sprite sheets per scene.
+- **Projectiles**: Launch Projectile, Weapon Attack, Player Bounce, collision groups and hit
+  scripts for actors and the player.
+- **Scripting**: math expressions (If Expression, Loop While, Evaluate Expression), Loop For,
+  If Current Scene Is, On Update scripts, Activate and Deactivate Actor, 4 timers, setting
+  actor sprite sheets and states, reading and writing engine fields, global variables in
+  custom events, an "On Save" branch, and a Mosaic screen effect.
+- **Dialogue**: change the typing speed inside a text with `!S0!` to `!S5!`, and show a
+  variable as a character with `#00#`.
+- **Backgrounds**: up to 1024 unique tiles, up to 2040 pixels wide, parallax scrolling in
+  Platformer scenes, and tiles drawn in front of sprites (priority tool).
+- **Camera** deadzone and offset.
+- **Audio**: `.it` music besides `.mod`, and your own `.wav` sound effects.
+- **Save data**: 3 save slots.
+- **Settings**: engine fields (movement and physics values, scroll speed, button mapping),
+  ROM size, default player sprite per scene type, X, Y, L and R key bindings.
+- **Editor**: magic brush, a player sprite per scene, fonts and emotes as project files,
+  categorised "Add Event" menu with favourites, pixels per frame in the speed list, interface
+  scaling, "Export Project Data", and a sample project covering the five scene types.
+- A documentation site.
 
-- Fixed CI: `get-pixels` was an undeclared dependency (only ever present transitively via
-  the now-removed `ggbgfx`), and `v3` had never actually triggered a CI run at all since the
-  branch's creation (`branches: [main, v2]` never included `v3`).
-- Fixed macOS packaging: `after-copy.js` still referenced the deleted `buildTools/darwin-x64`
-  folder, and `actions/setup-node@v4` forced Node itself to run x64-under-Rosetta-2 on the
-  arm64 `macos-15` CI runner, crashing hard partway through `yarn install`
-  (`electron`'s own arch-resolution env vars are sufficient on their own; Node doesn't also
-  need to run under emulation).
-- Fixed a new SNES project opening straight into a spurious "Project Requires Migrating"
-  dialog: all three templates shipped with stale `_version`/`_release` stamps from before the
-  `v2` rebuild; pre-migrated to the current schema.
-- Fixed `TypeError: trimlines is not a function` when typing into a dialogue/menu/choice text
-  field: the VM2 sandbox that loads event files mocked `trimlines` via a default import
-  (unwrapped value, no `.default`) while every event consuming it read `.default` off it,
-  matching every *other* mock in that file (all namespace imports) — pre-existing since before
-  `v2`, just never hit until real interactive typing exercised it.
-- Refreshed branding artwork to a new SNES-controller-handheld motif: the app icon, the
-  `.gbsproj` project-file icon, the macOS DMG installer background, the splash-screen logo,
-  and the Windows installer loading GIF.
-- SNES-sized the `snesgbs2` template's backgrounds (14 of 15 were still drawn at Game Boy
-  height) and re-laid out its scenes into a non-overlapping World-editor grid.
-- **Removed the GB-heritage "Custom Palettes" editor entirely** (menu entry, page, per-scene/
-  actor palette pickers, the "Colorize" paint tool, the `palettes`/`paletteIds`/`paletteId`/
-  `tileColors` project fields, `customColorsEnabled` and the four `default*PaletteId(s)`
-  settings, the two runtime palette-swap script events) — it had no purpose on this target,
-  since `snesgfx.js` already extracts every background/sprite's real palette straight from its
-  PNG with no user-editable overlay anywhere in the compile path. Also removed the World
-  editor's scene/sprite preview quantization (`ColorizedImage`, a GB-green-channel recolour
-  pass) that ran every preview through a 4-shade GB heuristic before display — previews now
-  show each PNG's real colours directly, matching what the compiler already builds into the ROM.
+### Changed
+- Rebuilt on the editor of GB Studio 2.0.0-beta5, with parts of GB Studio 3.2.1.
+- A scene can hold 19 actors and 30 triggers.
+- Updated toolchain: PVSnesLib 4.8.0, with the `oamMetaDrawMix` routine.
+- New application identifier on macOS (`dev.gb2snes.gb2snesstudio`): the system sees it as a
+  new application.
 
-## [2.0.0] - 2026-09-18 - `v2` branch
+### Fixed
+- The update check and its "Download" buttons point to this project, not to GB Studio.
 
-Rebuilt SNES Studio (GB engine + the SNES/PVSnesLib target) on top of **GB Studio
-2.0.0-beta5** instead of 1.2.2 — webpack + TypeScript replacing `electron-compile`, Redux
-Toolkit, GBDK 2020, and the new genre-based GB engine (Top Down / Platformer / Shoot Em Up /
-Point and Click / Adventure). `main` stays untouched and frozen at `v1.1.4`.
-Tracked as 14 milestones; the roadmap artifact and `MIGRATION_V2_AUDIT.md` (repo root, `v2`
-branch) are the detailed decision log. **14 of 14 done as of 2026-09-18** — `v2` is
-feature-complete:
+### Requirements
+- macOS: building a ROM needs a Mac with Apple Silicon running macOS 26 or later.
 
-- **M0-M1**: audit of the 1.2.2→2.0.0-beta5 diff; the bare GB target builds, packages, and
-  boots a real project's ROM on the new base (no SNES yet).
-- **M2**: SNES toolchain re-vendored and confirmed packaging-safe (`app.asar`) under webpack.
-- **M3**: compile-target descriptors (`targets/gb.js`/`targets/snes.js`) reintroduced.
-- **M4-M5**: all 5 GB Studio 2.0 scene genres (Top Down, Point and Click, Adventure,
-  Platformer, Shoot Em Up) implemented on the SNES engine.
-- **M6**: SNES engine supports up to 6 background palette regions per scene.
-- **M7**: the SNES data compiler (`compileSnesData.js`) ported onto the new compiler pipeline.
-- **M8**: SNES ROM building (`buildSnesRom.js`/`compileSnesMusic.js`) wired into the app's real
-  `buildProject()` — "Build ROM" works end to end for SNES again.
-- **M9**: SNES-aware script events (dialogue wrap, camera/overlay clamps, X/Y/L/R input)
-  confirmed working under GB Studio 2.0's event model; fixed a real pre-existing crash in the
-  dialogue/menu/choice text editors (GB included) found along the way.
-- **M10**: a real `v1.1.4` SNES project (the sample game) verified to migrate and recompile
-  cleanly on the new project schema.
-- **M11**: Settings page gained a Target Platform selector + SNES Options card; Controls page
-  gained X/Y/L/R key bindings; the World editor's scene-info budget badges and camera-viewport
-  overlay are target-aware.
-- The "New Project" splash screen now actually offers the SNES sample/blank templates —
-  they existed on disk and were fully working since M2/M10, but the template picker's own
-  list never included them, so there was no way to create a SNES project from the app's UI
-  at all until now (user-found). The template picker also now puts each platform's
-  templates on its own labelled row instead of one strip that overflowed off-window once
-  a 4th/5th template was added, and the splash window itself grew (400px → 560px tall) so
-  that second row and the selected template's description aren't clipped off by the
-  window edge — this window doesn't scroll or resize (both user-found the same day).
-- Ported three Linux/macOS execution fixes found on `main` (shipped there as `v1.1.5`):
-  the extracted PVSnesLib toolchain now keeps its executable bit (was silently losing it
-  on Linux/macOS, "spawn .../smconv EACCES"), and the vendored macOS toolchain folder is
-  correctly labeled `darwin-arm64` instead of `darwin-x64` (the binaries were always
-  genuinely arm64 — harmless on Apple Silicon, but would have failed outright on a real
-  Intel Mac). The Linux glibc-baseline fix from `v1.1.5` wasn't needed here — `v2`'s own
-  vendored Linux toolchain already has a low enough glibc requirement.
-- **M12, part 1**: the SNES web player/Play button now works. `buildProjectSnes()` never
-  supported a "web" build before (ROM only); it now shares the same `buildWebPlayer()` helper
-  the Game Boy path uses, and the "Play" window (`main.ts`) sizes itself for the SNES player's
-  larger canvas instead of opening at the Game Boy's smaller size. Verified against the real
-  app: built the sample SNES project, opened Play, and watched the actual game run (not a
-  black screen) at the correct window size.
-- **M12, part 2 (branding + CI, M12 complete)**: branding assets (icons, DMG background,
-  README) were already identical to `main`'s v1.1.4 state — only the Help menu's
-  "Documentation"/"Learn More" items needed the same "(GB Studio)" suffix `main` already has
-  (they open the upstream GB Studio site, not a GBSNES-specific one). The real gap was CI:
-  `.github/workflows/build.yml` had been copied from `main` back at M2 but never actually
-  triggered on `v2` pushes (`branches: [main]` only) — every packaging-related change since
-  had never run through real CI. Now triggers on both branches, with comments corrected for
-  `v2`'s actual toolchain (electron-forge 6-beta / Electron 8, not 5 / 4). Fixing this exposed
-  a real, unrelated blocker: two pre-existing test failures (since the M1 import from upstream
-  GB Studio 2.0.0-beta5) would have failed CI's `test` job on every run, gating all three
-  platform builds — a scene's width/height/collisions were supposed to reset when its
-  background was deleted or resized outside the app, but silently never did (a reducer bug,
-  fixed separately). `yarn test` is now 100% green (589/589, 3 Windows-skipped).
-- Windows packaging verified end-to-end locally (`yarn make:win`, mimicking the CI job): a
-  real Squirrel installer + zip build, `app.asar` contents inspected directly and confirmed
-  correct.
-- **M13 (functional-parity checklist against `v1.1.4`, complete)**: every item verified in
-  real interactive play (offscreen Electron + real keyboard dispatch + WRAM reads, a much
-  faster and more reliable technique than driving the packaged app's own window) — dialogue/
-  menus, emotes (`ACTOR_EMOTE`), overlay show/move/hide as their own explicit action (not just
-  the Logo intro curtain), music layered with sound effects (a distinct DSP voice per effect,
-  confirmed via SPC700 register interception), a full SRAM save → new session → reload →
-  confirm-loaded cycle (not just save-then-immediately-load), X/Y/L/R input, and per-scene
-  sprite-sheet/OBJ-palette limits. Two real, pre-existing SNES compiler crashes found and fixed
-  along the way (`EVENT_LAUNCH_PROJECTILE`/`EVENT_ACTOR_SET_SPRITE` reading a GB-only field the
-  SNES compiler never populates; `ACTOR_SET_SPRITE` pushing a GB Studio 1.2.2 field name that
-  no longer exists on the v2 project schema) — both opcodes stay documented `Script_Noop_b`
-  placeholders on the SNES engine, only the compiler no longer crashes on them.
-- **All 5 scene genres verified in real gameplay** (Top Down, Platformer, Point and Click,
-  Shoot Em Up, Adventure) — the last 4 had never been exercised with real input before this
-  milestone. Added `appData/templates/snesgbs2` (a copy of `gbs2`, the real GB Studio 2.0
-  sample with scenes in all 5 genres — `sneshtml` is derived from the older, Top-Down-only
-  `gbhtml`), now a selectable "Sample Project (SNES, all genres)" template; a new Settings >
-  Target Platform "ROM Size" field (256KB-2MB) since `gbs2`'s much larger asset set overflows
-  the previous hardcoded 8-bank default. Adventure's free-pixel diagonal movement + per-axis
-  collision (tested via `sneshtml`'s Outside scene, since `snesgbs2` has no Adventure scene)
-  is the first real interactive verification that code path has ever had — its own comment
-  noted it "isn't Mesen-verifiable" when it was written.
-- Rebranded **"GBSNES Studio" → "SNES Studio"**, in two passes: first brought `v2`'s window
-  titles and every `src/lang/*.json` string up to the "GBSNES Studio" branding `main` already
-  had (missed when `v2` was first imported from upstream GB Studio 2.0.0-beta5 — only
-  `package.json`/`forge.config.js` had it), then renamed that to "SNES Studio" project-wide,
-  including the lowercase technical identifiers (npm name, `executableName`, the Squirrel
-  installer name/exe, CI artifact names) — but not the actual `github.com/alekmaul/gbsnes-studio`
-  repository URLs, which aren't changing. Also fixed a real bug found along the way: the macOS
-  notarize hook's own build-output path was already stale (`GB Studio-darwin-x64/...`,
-  should have tracked `productName`), which would have made a real macOS release build fail to
-  notarize.
+## [1.1.9] - 2026-09-26
 
-`v2` is now feature-complete against `v1.1.4`.
+### Fixed
+- CI: `v1.1.8`'s Linux test run failed (`fsCopy.test.js`'s executable-bit-preservation suite,
+  skipped on Windows so not caught on the machine the actual fix was verified on), which blocked
+  all three platform builds from running at all - no `v1.1.8` release artifacts exist. Restored
+  the default "preserve the source file's own permissions" behavior on non-Windows with no change
+  to Windows behavior. `v1.1.8` is superseded by this release; don't use it.
+
+## [1.1.8] - 2026-09-26
+
+### Fixed
+- SNES: **"Build ROM"/"Export Web" could fail on Windows with `EPERM: operation not permitted`**
+  on `hdr.asm` (or `assets.h`, depending on version) — a real regression introduced across the
+  v1.1.5-v1.1.7 line while chasing this exact class of bug, found by bisecting real packaged
+  builds rather than guessing: `fsCopy.js`'s file-copy helper gained an `fs.chmod()` call and a
+  changed completion-timing check (to fix a genuine, separate Linux/macOS bug), and
+  `buildSnesRom.js`'s toolchain-extraction cache logic changed alongside it. On Windows, that
+  combination left just enough of a handle/timing gap for the very next build step to fail
+  reopening a just-written file. Rolled both back to the version confirmed reliable on real
+  Windows hardware (repeated Export ROM/Export Web runs, no failures); the Linux/macOS
+  executable-bit fix is kept, now scoped to non-Windows only.
+
+## [1.1.7] - 2026-09-22
+
+### Changed
+- **SNES-only for now.** Game Boy builds proved unreliable on Windows across several real test
+  machines despite a long series of attempted fixes, while SNES has been consistently reliable.
+  Rather than keep shipping GB-side fixes that don't hold up, the Game Boy target is hidden from
+  the New Project screen's template list and the Settings page's Target Platform picker - only
+  SNES options remain selectable. The GB engine and build code are untouched and still present;
+  a project that already has its target explicitly set to Game Boy keeps building as one, it's
+  just no longer offered as a starting choice.
+
+## [1.1.5] - 2026-09-16
+
+### Fixed
+- SNES: **a packaged Linux/macOS build's "Build ROM" could fail with "spawn .../smconv EACCES"**
+  — extracting the vendored toolchain out of `app.asar` lost every file's executable bit, since
+  neither the extraction step nor the file copy it used ever preserved (or forced) POSIX
+  permissions, and a stale extraction from before the fix could keep masking it even after an
+  update. Fixed at the root: extracted files no longer rely on trusting the source file's mode
+  reported from inside `app.asar` (this project's old `asar` packing format doesn't reliably
+  preserve it) — the executable bit is now forced explicitly, and the extraction cache path was
+  renamed so old, broken copies are never reused.
+- SNES: **the vendored macOS toolchain was mislabeled `darwin-x64` while actually being genuine
+  `arm64` binaries** — harmless on real Apple Silicon (Rosetta doesn't care), but would have
+  hard-failed on a real Intel Mac. Moved to a correctly-labeled `darwin-arm64` folder; a real
+  Intel Mac isn't supported yet (documented explicitly in the error message, rather than
+  silently pointing at the wrong architecture).
+- SNES: **"Build ROM" could fail on Linux with `libc.so.6: version 'GLIBC_2.38' not found`** —
+  the vendored Linux toolchain (`816-tcc`, `wla-65816`, `wlalink`, `816-opt`, `smconv`) was built
+  on a newer Ubuntu than most users actually run. Rebuilt natively on Ubuntu 22.04 instead, which
+  lowers the requirement to GLIBC_2.34 (backward-compatible with newer Ubuntu too).
 
 ## [1.1.4] - 2026-09-12
 
