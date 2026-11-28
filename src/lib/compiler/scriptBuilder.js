@@ -1592,8 +1592,10 @@ class ScriptBuilder {
   };
 
   replaceVariables = (string, variables, event) => {
-    const getVariableSymbol = (index) => `$${String(index).padStart(2, "0")}$`;
-    const getVariableCharSymbol = (index) => `#${String(index).padStart(2, "0")}#`;
+    // the engine reads the index on 3 digits (ui_subst, ui.c)
+    const getVariableSymbol = (index) => `$${String(index).padStart(3, "0")}$`;
+    const getVariableCharSymbol = (index) =>
+      `#${String(index).padStart(3, "0")}#`;
 
     return (
       string

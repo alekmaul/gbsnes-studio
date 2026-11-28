@@ -308,12 +308,30 @@ static u8 ui_put_number(u8 o, s16 value)
     return o;
 }
 
-/* Copy `str` into ui_text, substituting "$NN$" with script_variables[NN] as
- * decimal digits and "#NN#" with script_variables[NN] as one raw character
+/* The variable index of a "$NNN$" or "#NNN#" code starting at str, or a value
+ * above NUM_VARIABLES if there is none. The compiler writes the 3 digits */
+static u16 ui_variable_code(const unsigned char *str)
+{
+    u16 index = 0;
+    u8 i;
+    /* one test per if: 816-tcc mis-links long &&/|| chains (see scene.c) */
+    for (i = 1; i < 4; i++)
+    {
+        u8 d = str[i];
+        if (d < '0') return 0xFFFF;
+        if (d > '9') return 0xFFFF;
+        index = index * 10 + (d - '0');
+    }
+    if (str[4] != str[0]) return 0xFFFF;
+    return index;
+}
+
+/* Copy `str` into ui_text, substituting "$NNN$" with script_variables[NNN] as
+ * decimal digits and "#NNN#" with script_variables[NNN] as one raw character
  * code (v4, user-asked - docs/dialogue-variables.md's own "#NN#" row was
  * previously documented as compiled-but-not-implemented; this closes that
- * gap). A substituted #NN# byte can legally be 0 (script_variables[NN] can
- * be any value) - safe to embed mid-string here, unlike the !Sx! encoding in
+ * gap). A substituted character can legally be 0 (the variable can hold any
+ * value) - safe to embed mid-string here, unlike the !Sx! encoding in
  * trimlines.js, because nothing downstream of this function (ui_wrap,
  * ui_reveal_char) scans ui_text for a 0 terminator; both use ui_len, set
  * once below. A value below 0x20 has no real glyph (UI_CHAR's `c - 0x20`
@@ -325,37 +343,21 @@ static void ui_subst(const unsigned char *str)
     u8 i = 0, o = 0;
     while (str[i] != 0 && o < sizeof(ui_text) - 7)
     {
-        if (str[i] == '$')
         {
-            /* one test per if: 816-tcc mis-links long &&/|| chains (see scene.c) */
-            u8 d0 = str[i + 1];
-            u8 d1 = str[i + 2];
-            u8 ok = 1;
-            if (d0 < '0' || d0 > '9') ok = 0;
-            if (d1 < '0' || d1 > '9') ok = 0;
-            if (str[i + 3] != '$') ok = 0;
-            if (ok)
+            u8 c = str[i];
+            u8 code = 0;
+            if (c == '$') code = 1;
+            if (c == '#') code = 1;
+            if (code)
             {
-                u8 vi = (u8)((d0 - '0') * 10 + (d1 - '0'));
-                o = ui_put_number(o, script_variables[vi]);
-                i += 4;
-                continue;
-            }
-        }
-        if (str[i] == '#')
-        {
-            u8 d0 = str[i + 1];
-            u8 d1 = str[i + 2];
-            u8 ok = 1;
-            if (d0 < '0' || d0 > '9') ok = 0;
-            if (d1 < '0' || d1 > '9') ok = 0;
-            if (str[i + 3] != '#') ok = 0;
-            if (ok)
-            {
-                u8 vi = (u8)((d0 - '0') * 10 + (d1 - '0'));
-                ui_text[o++] = (char)script_variables[vi];
-                i += 4;
-                continue;
+                u16 vi = ui_variable_code(str + i);
+                if (vi <= NUM_VARIABLES)
+                {
+                    if (c == '$') o = ui_put_number(o, script_variables[vi]);
+                    else ui_text[o++] = (char)script_variables[vi];
+                    i += 5;
+                    continue;
+                }
             }
         }
         ui_text[o++] = (char)str[i++];

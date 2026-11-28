@@ -1581,3 +1581,12 @@ test("Should be able to end the script", () => {
   sb.scriptEnd();
   expect(output).toEqual([cmd(END)]);
 });
+
+test("Should write the variables of a dialogue on 3 digits", () => {
+  const output = [];
+  const strings = [];
+  const variables = Array.from({ length: 106 }, (_, i) => String(i));
+  const sb = new ScriptBuilder(output, { variables, strings, avatars: [] });
+  sb.textDialogue("$5$ $105$ #104#");
+  expect(strings).toEqual(["$005$ $105$ #104#"]);
+});

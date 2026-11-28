@@ -175,7 +175,7 @@ const uiStrings = [
   "You are brave!",                   // 4
   "Maybe next time.",                 // 5
   "One\nTwo\nThree\nFour\nFive",      // 6  MENU options (M5e: 2-column layout)
-  "You picked $07$."                  // 7
+  "You picked $007$."                 // 7
 ];
 function strBytes(s) {
   const out = [];
@@ -278,7 +278,7 @@ const scriptTrigA = [
   0x28, 0,                         // 10  ACTOR_PUSH continuous=0 (2 tiles)
   0x16, 0x02,                      // 12  ACTOR_EMOTE 2
   0x5c, 0x00, 0x07, 0, 0x00, 0x06, 1, 2, // 14  MENU var7, string 6, layout=1 (2-col), B cancels
-  0x01, 0x00, 0x00, 0x07,          // 22  TEXT string 7 ("You picked $07$.")
+  0x01, 0x00, 0x00, 0x07,          // 22  TEXT string 7 ("You picked $007$.")
   0x19, 0x00, 0x00, 24,            // 26  OVERLAY_SHOW colour 0, from row 24
   0x0b, 30,                        // 30  WAIT 30
   0x1c, 0x00, 8, 2,                // 32  OVERLAY_MOVE_TO row 8, speed 2

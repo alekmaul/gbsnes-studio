@@ -109,9 +109,9 @@ const unsigned char string_6[24] = {
     117, 114, 10, 70, 105, 118, 101, 0
 };
 
-const unsigned char string_7[17] = {
-    89, 111, 117, 32, 112, 105, 99, 107, 101, 100, 32, 36, 48, 55, 36, 46,
-    0
+const unsigned char string_7[18] = {
+    89, 111, 117, 32, 112, 105, 99, 107, 101, 100, 32, 36, 48, 48, 55, 36,
+    46, 0
 };
 
 const BANK_PTR string_ptrs[] = {
