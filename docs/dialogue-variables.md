@@ -25,8 +25,8 @@ the typewriter effect reaches that point in the text.
 | `$T0$`   | A **Temp** variable (`T0`-`T9`) - shared scratch variables, not scoped to any one entity or script; typically used to pass a value into or out of a Custom Event. |
 | `$V0$`   | A Custom Event's own variable parameter (`V0`-`V9`) - only meaningful inside that Custom Event's own script, where it stands in for whichever variable the caller bound to that parameter. |
 
-A variable's value is a single byte (0-255), so the inserted text is always 1 to 3 digits, no
-leading zeros and no fixed width.
+A variable's value goes from -32768 to 32767, so the inserted text is 1 to 6 characters, the
+minus sign included, with no leading zeros and no fixed width.
 
 ## Inserting a variable as a character
 

@@ -56,8 +56,8 @@ const fields = [
         eq: "val"
       }
     ],
-    min: 0,
-    max: 255,
+    min: -32768,
+    max: 32767,
     defaultValue: "1"
   },
   {
@@ -69,8 +69,8 @@ const fields = [
         eq: "rnd"
       }
     ],
-    min: 0,
-    max: 255,
+    min: -32768,
+    max: 32767,
     label: l10n("FIELD_MIN_VALUE"),
     defaultValue: "0",
     width: "50%"
@@ -84,8 +84,8 @@ const fields = [
         eq: "rnd"
       }
     ],
-    min: 0,
-    max: 255,
+    min: -32768,
+    max: 32767,
     label: l10n("FIELD_MAX_VALUE"),
     defaultValue: "255",
     width: "50%"

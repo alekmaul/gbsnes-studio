@@ -12,8 +12,8 @@ const fields = [
     type: "union",
     types: ["number", "variable", "property"],
     defaultType: "number",
-    min: 0,
-    max: 255,
+    min: -32768,
+    max: 32767,
     defaultValue: {
       number: 0,
       variable: "LAST_VARIABLE",

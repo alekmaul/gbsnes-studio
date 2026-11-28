@@ -8,7 +8,8 @@ nav_order: 8
 # Save Data
 
 Cartridge SRAM saves, with 3 independent save slots. Each save stores the player's position and
-facing plus every variable.
+facing plus every variable. A save made by a game built with an earlier version of
+GB2SNES Studio, whose variables were smaller, counts as no save.
 
 **Save Data** - writes the current save scope to a slot.
 

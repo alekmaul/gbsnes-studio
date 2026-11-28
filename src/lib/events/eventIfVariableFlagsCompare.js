@@ -20,7 +20,15 @@ const fields = [
       [4, l10n("FIELD_FLAG_5")],
       [5, l10n("FIELD_FLAG_6")],
       [6, l10n("FIELD_FLAG_7")],
-      [7, l10n("FIELD_FLAG_8")]
+      [7, l10n("FIELD_FLAG_8")],
+      [8, l10n("FIELD_FLAG_9")],
+      [9, l10n("FIELD_FLAG_10")],
+      [10, l10n("FIELD_FLAG_11")],
+      [11, l10n("FIELD_FLAG_12")],
+      [12, l10n("FIELD_FLAG_13")],
+      [13, l10n("FIELD_FLAG_14")],
+      [14, l10n("FIELD_FLAG_15")],
+      [15, l10n("FIELD_FLAG_16")]
     ],
     defaultValue: 1
   },
@@ -59,24 +67,18 @@ const fields = [
 const compile = (input, helpers) => {
   const {
     ifVariableValue,
-    variableSetToValue,
     variableCopy,
-    variablesDiv,
-    variablesMod,
+    variableClearFlags,
     temporaryEntityVariable
   } = helpers;
   const tmp1 = temporaryEntityVariable(0);
-  const tmp2 = temporaryEntityVariable(1);
   const truePath = input.true;
   const falsePath = input.__disableElse ? [] : input.false;
-
+  // Keep the flag's bit only. Dividing the variable, as before, gives the wrong
+  // answer once it is negative (flag 16 set)
   variableCopy(tmp1, input.variable);
-  variableSetToValue(tmp2, 2 ** input.flag);
-  variablesDiv(tmp1, tmp2);
-  variableSetToValue(tmp2, 2);
-  variablesMod(tmp1, tmp2);
-
-  ifVariableValue(tmp1, "==", 1, truePath, falsePath);
+  variableClearFlags(tmp1, 0xffff ^ (1 << input.flag));
+  ifVariableValue(tmp1, "!=", 0, truePath, falsePath);
 };
 
 module.exports = {

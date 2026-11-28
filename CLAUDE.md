@@ -1873,6 +1873,15 @@ plain hoistable case, a non-hoistable case blocked by a conditional, and the rea
 custom-event shape) plus the existing Adventure-genre bounds tests updated for the blob's new
 trailing byte.
 
+### Variables (16 bit, as GB Studio 3.x)
+
+768 signed 16 bit variables (`NUM_VARIABLES` in `gbs_types.h` must equal `maxVariables` in
+`targets/snes.js`, guarded by `compileSnesData.test.js`). Values take 2 bytes in the bytecode
+(`ScriptBuilder.pushValue`); dialogue strings carry `$NNN$` / `#NNN#` with a 3 digit index; a
+16 bit engine field takes one variable. Saves are marked with `SAVE_MARKER` (`save.c`): change
+it whenever the saved layout changes. Passages further up which describe 8 bit variables
+predate this.
+
 ## Tests
 
 Jest under `test/`, mirroring `src/lib`/`src/store` (`test/events/*` one per event,

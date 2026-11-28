@@ -4,10 +4,8 @@ const temporaryEntityVariable = (num) => `tmp${num + 1}`;
 
 test("Should be able to conditionally execute if variable contains a flag", () => {
   const mockIfVariableValue = jest.fn();
-  const mockVariableSetToValue = jest.fn();
   const mockVariableCopy = jest.fn();
-  const mockVariablesDiv = jest.fn();
-  const mockVariablesMod = jest.fn();
+  const mockVariableClearFlags = jest.fn();
   const truePath = [{ command: "EVENT_END", id: "abc" }];
   const falsePath = [{ command: "EVENT_END", id: "def" }];
 
@@ -20,19 +18,15 @@ test("Should be able to conditionally execute if variable contains a flag", () =
     },
     {
       ifVariableValue: mockIfVariableValue, 
-      variableSetToValue: mockVariableSetToValue,
       variableCopy: mockVariableCopy,
-      variablesDiv: mockVariablesDiv,
-      variablesMod: mockVariablesMod,
+      variableClearFlags: mockVariableClearFlags,
       temporaryEntityVariable
     }
   );
 
   expect(mockVariableCopy).toBeCalledWith("tmp1", "2");
-  expect(mockVariableSetToValue).toBeCalledWith("tmp2", 32);
-  expect(mockVariablesDiv).toBeCalledWith("tmp1", "tmp2");
-  expect(mockVariableSetToValue).toBeCalledWith("tmp2", 2);
-  expect(mockVariablesMod).toBeCalledWith("tmp1", "tmp2");
+  // every bit but flag 6's is cleared
+  expect(mockVariableClearFlags).toBeCalledWith("tmp1", 0xffff - 32);
 
-  expect(mockIfVariableValue).toBeCalledWith("tmp1", "==", 1, truePath, falsePath);
+  expect(mockIfVariableValue).toBeCalledWith("tmp1", "!=", 0, truePath, falsePath);
 });

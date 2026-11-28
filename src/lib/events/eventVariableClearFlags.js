@@ -65,19 +65,70 @@ const fields = [
     width: "50%",
     defaultValue: false
   },
+  {
+    key: "flag9",
+    label: l10n("FIELD_FLAG_9"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag10",
+    label: l10n("FIELD_FLAG_10"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag11",
+    label: l10n("FIELD_FLAG_11"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag12",
+    label: l10n("FIELD_FLAG_12"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag13",
+    label: l10n("FIELD_FLAG_13"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag14",
+    label: l10n("FIELD_FLAG_14"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag15",
+    label: l10n("FIELD_FLAG_15"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
+  {
+    key: "flag16",
+    label: l10n("FIELD_FLAG_16"),
+    type: "checkbox",
+    width: "50%",
+    defaultValue: false
+  },
 ];
 
 const compile = (input, helpers) => {
   const { variableClearFlags } = helpers;
   let flag = 0;
-  if (input.flag1) flag += 2**0; 
-  if (input.flag2) flag += 2**1; 
-  if (input.flag3) flag += 2**2; 
-  if (input.flag4) flag += 2**3; 
-  if (input.flag5) flag += 2**4; 
-  if (input.flag6) flag += 2**5; 
-  if (input.flag7) flag += 2**6; 
-  if (input.flag8) flag += 2**7; 
+  for (let i = 1; i <= 16; i++) {
+    if (input[`flag${i}`]) flag += 2 ** (i - 1);
+  }
   variableClearFlags(input.variable, flag);
 };
 

@@ -18,6 +18,10 @@ changes below are relative to 1.1.9.
   other sheet gets an empty state, whose frames have to be placed on the Sprites page.
 - Custom palettes and their two script events are gone: colours come straight from your PNG
   files.
+- Variables now go from -32768 to 32767. **Increment** and **Decrement** no longer stop at 255
+  and 0: check any script which relied on it, such as a lives counter. A 16 bit engine field
+  takes one variable instead of two.
+- Saved games of a ROM built with 1.x are ignored.
 
 ### Added
 - **Five scene types**: Top Down 2D, Platformer (with ladders and one-way platforms),
@@ -37,6 +41,7 @@ changes below are relative to 1.1.9.
 - **Camera** deadzone and offset.
 - **Audio**: `.it` music besides `.mod`, and your own `.wav` sound effects.
 - **Save data**: 3 save slots.
+- **Variables**: 768 of them, signed 16 bit, with 16 flags each.
 - **Settings**: engine fields (movement and physics values, scroll speed, button mapping),
   ROM size, default player sprite per scene type, X, Y, L and R key bindings.
 - **Editor**: magic brush, a player sprite per scene, fonts and emotes as project files,

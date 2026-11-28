@@ -29,14 +29,19 @@ so nothing here *fails to compile* — the question is only what the SNES engine
 
 ## Variables & math
 
+Variables are 768 signed 16 bit values (`NUM_VARIABLES`, `gbs_types.h`; `maxVariables`,
+`targets/snes.js`), as in GB Studio 3.x: calculations wrap around, Increment / Decrement have no
+stop, "Clamp" keeps a result within 0..255, and dividing by 0 gives 0. A variable used as a tile
+position or a frame number is kept within 0..255.
+
 | Event | SNES | Notes |
 | --- | --- | --- |
 | Set / Increment / Decrement, Set to Random, Copy | ✅ | |
 | Math (add/sub/mul/div/mod, by value or variable) | ✅ | |
 | If Variable (value / compare / true / false), If Variable Flags Compare | ✅ | |
-| Add / Clear / Set Flags | ✅ | |
+| Add / Clear / Set Flags | ✅ | 16 flags per variable. |
 | Reset All Variables | ✅ | |
-| Evaluate Expression | ✅ | M3 (v4). Same RPN micro-op sequence as If Expression / Loop While above, ending in a `RPN_SET_VARIABLE` opcode instead of a branch test. Variables are `u8` on this target (unlike GB Studio 3.x's 16-bit signed) — the RPN stack itself is `s16` internally (an intermediate result can go negative/out-of-range before a final compare), but the value actually stored back wraps to `u8` like every other math opcode (`MATH_ADD` etc). **Verified (M8, v4)**: a real Mesen run of `Loop While $var$ < 5 { $var$ = $var$ + 1 }` (5 iterations, self-referencing evaluate) read the variable back as exactly `5` from live WRAM after the loop. |
+| Evaluate Expression | ✅ | M3 (v4). Same RPN micro-op sequence as If Expression / Loop While above, ending in a `RPN_SET_VARIABLE` opcode instead of a branch test. |
 
 ## Timers & input
 

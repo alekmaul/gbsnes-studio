@@ -12,29 +12,16 @@ import {
   groupVariables,
   NamedVariable,
   namedVariablesByContext,
-  nextVariable,
 } from "../../lib/helpers/variables";
-import { RelativePortal } from "../ui/layout/RelativePortal";
-import { Tooltip } from "../ui/tooltips/Tooltip";
-import {
-  Bits16Icon,
-  Bits8Icon,
-  CheckIcon,
-  PencilIcon,
-} from "../ui/icons/Icons";
-import useDelayedState from "../ui/hooks/use-delayed-state";
+import { CheckIcon, PencilIcon } from "../ui/icons/Icons";
 import { Input } from "../ui/form/Input";
 import entitiesActions from "../../store/features/entities/entitiesActions";
 import l10n from "../../lib/helpers/l10n";
-import { Dictionary } from "@reduxjs/toolkit";
-import { keyBy } from "lodash";
-import { EditorSelectionType } from "../../store/features/editor/editorState";
 import editorActions from "../../store/features/editor/editorActions";
 
 interface VariableSelectProps {
   id?: string;
   value?: string;
-  type: "8bit" | "16bit";
   entityId: string;
   allowRename?: boolean;
   onChange: (newValue: string) => void;
@@ -52,48 +39,12 @@ const Select = styled(DefaultSelect)`
   value: Option | undefined;
   options: OptGroup[];
   onChange: (newValue: Option) => void;
-  formatOptionLabel: (option: Option) => React.ReactElement;
 }>;
 // react-select/styled-components/@types version drift makes the styled
 // wrapper's inferred prop overloads reject this component's real usage
 // below ("Property 'value' does not exist..." etc.) - not a real prop
 // mismatch, just a types mismatch from this fresh install's resolved
 // versions. Recast to the props this component actually passes.
-
-const OtherVariable = styled.span`
-  opacity: 0.5;
-`;
-
-const VariableSizeIndicator = styled.div`
-  position: absolute;
-  top: 1px;
-  left: 1px;
-  width: 24px;
-  height: 26px;
-  background-color: ${(props) => props.theme.colors.input.border};
-  border-top-left-radius: ${(props) =>
-    Math.max(0, props.theme.borderRadius - 1)}px;
-  border-bottom-left-radius: ${(props) =>
-    Math.max(0, props.theme.borderRadius - 1)}px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  line-height: 10px;
-  font-size: 12px;
-  font-weight: bold;
-  opacity: 0.8;
-
-  :hover {
-    opacity: 1;
-  }
-
-  svg {
-    width: 20px;
-    height: 20px;
-    fill: ${(props) => props.theme.colors.input.text};
-  }
-`;
 
 const VariableRenameInput = styled(Input)`
   &&&& {
@@ -106,7 +57,7 @@ const VariableRenameInput = styled(Input)`
 const VariableRenameButton = styled.button`
   position: absolute;
   top: 3px;
-  right: 20px;
+  right: 3px;
   width: 22px;
   height: 22px;
   border: 0;
@@ -175,52 +126,16 @@ const VariableRenameCompleteButton = styled.button`
   }
 `;
 
-export const VariableToken = styled.span`
-  background: ${(props) => props.theme.colors.token.variable};
-  box-shadow: 0 0 0px 1px ${(props) => props.theme.colors.token.variable};
-  border-radius: 5px;
-  color: ${(props) => props.theme.colors.token.text};
-`;
-
-const formatOptionLabel = (
-  type: "8bit" | "16bit",
-  editorType: EditorSelectionType,
-  namedVariablesLookup: Dictionary<NamedVariable>
-) => (option: Option) => {
-  let otherVariable = "";
-  if (type === "16bit") {
-    if (editorType === "customEvent") {
-      otherVariable = `${option.label}+1`;
-    } else {
-      otherVariable =
-        namedVariablesLookup[nextVariable(option.value)]?.name || "";
-    }
-  }
-  return (
-    <>
-      {option.label}
-      {type === "16bit" && otherVariable && (
-        <OtherVariable> & {otherVariable}</OtherVariable>
-      )}
-    </>
-  );
-};
-
 export const VariableSelect: FC<VariableSelectProps> = ({
   value,
-  type = "8bit",
   onChange,
   entityId,
   allowRename,
 }) => {
-  const [tooltipVisible, setTooltipVisible] = useDelayedState(false);
   const [renameVisible, setRenameVisible] = useState(false);
   const [editValue, setEditValue] = useState("");
   const [renameId, setRenameId] = useState("");
   const [variables, setVariables] = useState<NamedVariable[]>([]);
-  const [namedVariablesLookup, setNamedVariablesLookup] = useState<
-    Dictionary<NamedVariable>
-  >({});
   const [options, setOptions] = useState<OptGroup[]>([]);
   const [currentVariable, setCurrentVariable] = useState<NamedVariable>();
   const [currentValue, setCurrentValue] = useState<Option>();
@@ -244,23 +159,15 @@ export const VariableSelect: FC<VariableSelectProps> = ({
       variablesLookup,
       customEvent
     );
-    const namedLookup = keyBy(variables, "id");
-    setNamedVariablesLookup(namedLookup);
     const groupedVariables = groupVariables(variables);
     const groupedOptions: OptGroup[] = groupedVariables.map((g) => {
       const options = g.variables.map((v) => ({
         value: v.id,
         label: `${v.name}`,
       }));
-      const filteredOptions =
-        type === "16bit" && editorType !== "customEvent"
-          ? options.filter((o) => {
-              return namedLookup[nextVariable(o.value)];
-            })
-          : options;
       return {
         label: g.name,
-        options: filteredOptions,
+        options,
       };
     });
     setVariables(variables);
@@ -279,18 +186,6 @@ export const VariableSelect: FC<VariableSelectProps> = ({
       });
     }
   }, [currentVariable]);
-
-  const onClickType = () => {
-    setTooltipVisible(true);
-  };
-
-  const onMouseEnterType = () => {
-    setTooltipVisible(true, 500);
-  };
-
-  const onMouseLeaveType = () => {
-    setTooltipVisible(false);
-  };
 
   const onRenameStart = () => {
     if (currentValue) {
@@ -335,20 +230,7 @@ export const VariableSelect: FC<VariableSelectProps> = ({
       }
     }
 
-    if (type === "16bit" && value === renameId) {
-      // If editing 16-bit rename the second variable
-      // once finished editing the first
-      const next = namedVariablesLookup[nextVariable(value)];
-      if (next) {
-        setEditValue(next.name);
-        setRenameId(next.id);
-        setRenameVisible(true);
-      } else {
-        setRenameVisible(false);
-      }
-    } else {
-      setRenameVisible(false);
-    }
+    setRenameVisible(false);
   };
 
   const onJumpToVariable = (
@@ -367,34 +249,6 @@ export const VariableSelect: FC<VariableSelectProps> = ({
 
   return (
     <Wrapper onClick={onJumpToVariable}>
-      {tooltipVisible && (
-        <RelativePortal pin="top-right" offsetX={80} offsetY={33}>
-          {type === "8bit" && (
-            <Tooltip style={{ width: 120 }}>
-              {l10n("FIELD_8BIT_DESCRIPTION")}
-            </Tooltip>
-          )}
-          {type === "16bit" && (
-            <Tooltip style={{ width: 250, maxWidth: 250 }}>
-              <p>{l10n("FIELD_16BIT_DESCRIPTION")}</p>
-              <p>{l10n("FIELD_16BIT_CALCULATION")}:</p>
-              {currentValue && (
-                <p>
-                  (<VariableToken>${currentValue.label}</VariableToken> * 256) +{" "}
-                  <VariableToken>
-                    $
-                    {editorType === "customEvent"
-                      ? `${currentValue.label}+1`
-                      : namedVariablesLookup[nextVariable(currentValue.value)]
-                          ?.name}
-                  </VariableToken>
-                </p>
-              )}
-            </Tooltip>
-          )}
-        </RelativePortal>
-      )}
-
       {renameVisible ? (
         <VariableRenameInput
           key={renameId}
@@ -412,21 +266,8 @@ export const VariableSelect: FC<VariableSelectProps> = ({
           onChange={(newValue: Option) => {
             onChange(newValue.value);
           }}
-          formatOptionLabel={formatOptionLabel(
-            type,
-            editorType,
-            namedVariablesLookup
-          )}
         />
       )}
-      <VariableSizeIndicator
-        onClick={onClickType}
-        onMouseEnter={onMouseEnterType}
-        onMouseLeave={onMouseLeaveType}
-      >
-        {type === "8bit" && <Bits8Icon />}
-        {type === "16bit" && <Bits16Icon />}
-      </VariableSizeIndicator>
       {canRename &&
         (renameVisible ? (
           <VariableRenameCompleteButton

@@ -48,8 +48,8 @@ const fields = [].concat(
           }
         ],
         type: "number",
-        min: 0,
-        max: 255,
+        min: -32768,
+        max: 32767,
         defaultValue: i + 1
       });
       arr.push({

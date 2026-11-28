@@ -83,7 +83,6 @@ const updateEngineFieldEvents = (engineFields: EngineFieldSchema[]) => {
             setDefault(engineField.max, Infinity),
             engineField.cType
           ),
-          variableType: "16bit",
           options: engineField.options || [],
           defaultValue: {
             [fieldType]: engineField.defaultValue || 0,
@@ -116,7 +115,6 @@ const updateEngineFieldEvents = (engineFields: EngineFieldSchema[]) => {
           key: "value",
           type: "variable",
           defaultValue: "0",
-          variableType: "16bit",
         }
       : {
           key: "value",

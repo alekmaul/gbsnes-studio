@@ -18,8 +18,8 @@ const fields = [
   {
     key: "comparator",
     type: "number",
-    min: 0,
-    max: 255,
+    min: -32768,
+    max: 32767,
     width: "50%",
     defaultValue: "0"
   },

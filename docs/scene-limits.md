@@ -59,6 +59,11 @@ The status bar under each scene shows `A: n/19`, `S: n/32` and `T: n/30`:
 > in the editor - this is authoring guidance only, not a hard limit. The real ceiling is
 > always 19, regardless of scene size.
 
+## Variables
+
+A project can use up to **768** variables, each from -32768 to 32767. They are shared by all
+its scenes, and the local and temporary variables of an actor, trigger or scene count too.
+
 ## Scripts
 
 A single compiled script (all the events on one actor, trigger or scene, including anything
