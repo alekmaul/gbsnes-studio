@@ -34,7 +34,7 @@
 
 // --- engine state shared with the VM / Scene (see the *.h externs) ---
 ACTOR actors[MAX_ACTORS];
-u8 script_variables[NUM_VARIABLES + 1];
+s16 script_variables[NUM_VARIABLES + 1];
 u16 joy;
 u16 prev_joy;
 u8 time;

@@ -17,6 +17,23 @@ test("Should set variable to a value", () => {
   expect(mockVariableSetToValue).toBeCalledWith("2", 9);
 });
 
+test("Should set variable to a negative value", () => {
+  const mockVariableSetToValue = jest.fn();
+  compile(
+    {
+      variable: "2",
+      value: {
+        type: "number",
+        value: "-5"
+      }
+    },
+    {
+      variableSetToValue: mockVariableSetToValue
+    }
+  );
+  expect(mockVariableSetToValue).toBeCalledWith("2", -5);
+});
+
 test("Should set variable to true if value was 1", () => {
   const mockVariableSetToTrue = jest.fn();
   compile(

@@ -32,6 +32,8 @@ extern u8 scene_fade_speed;
 
 #define ADVANCE() (script_ptr += 1 + script_cmd_args_len)
 #define ARG16(a, b) (((u16)script_cmd_args[a] << 8) | script_cmd_args[b])
+/* A value of the script, signed 16 bit like the variables */
+#define SARG16(a, b) ((s16)ARG16(a, b))
 
 // The compiler emits valid indices; this is just insurance against a stray
 // write trashing WRAM during bring-up.
@@ -40,6 +42,15 @@ static u16 var_clamp(u16 i)
     return i > NUM_VARIABLES ? NUM_VARIABLES : i;
 }
 #define VAR(i) script_variables[var_clamp(i)]
+
+/* The 0..255 range: of "Clamp", and of the variables used as a tile position,
+ * a frame number... */
+static s16 byte_range(s16 value)
+{
+    if (value < 0) return 0;
+    if (value > 255) return 255;
+    return value;
+}
 
 // PVSnesLib RNG (console.h)
 extern u16 rand(void);
@@ -78,8 +89,8 @@ void Script_IfFlag_b(void)
 
 void Script_IfValue_b(void)
 {
-    u8 value = VAR(ARG16(0, 1));
-    u8 cmp = script_cmd_args[3];
+    s16 value = VAR(ARG16(0, 1));
+    s16 cmp = SARG16(3, 4);
     u8 match;
     switch (script_cmd_args[2])
     {
@@ -93,7 +104,7 @@ void Script_IfValue_b(void)
     }
     if (match)
     {
-        script_ptr = script_start_ptr + ARG16(4, 5);
+        script_ptr = script_start_ptr + ARG16(5, 6);
     }
     else
     {
@@ -104,8 +115,8 @@ void Script_IfValue_b(void)
 
 void Script_IfValueCompare_b(void)
 {
-    u8 a = VAR(script_ptr_x);
-    u8 b = VAR(script_ptr_y);
+    s16 a = VAR(script_ptr_x);
+    s16 b = VAR(script_ptr_y);
     u8 match;
     switch (script_cmd_args[0])
     {
@@ -599,28 +610,27 @@ void Script_Menu_b(void)
 /* -------- variables -------- */
 void Script_SetFlag_b(void)      { VAR(ARG16(0, 1)) = 1;                    ADVANCE(); script_continue = 1; }
 void Script_ClearFlag_b(void)    { VAR(ARG16(0, 1)) = 0;                    ADVANCE(); script_continue = 1; }
-void Script_SetFlagValue_b(void) { VAR(ARG16(0, 1)) = script_cmd_args[2];  ADVANCE(); script_continue = 1; }
+void Script_SetFlagValue_b(void) { VAR(ARG16(0, 1)) = SARG16(2, 3);        ADVANCE(); script_continue = 1; }
 
 void Script_IncFlag_b(void)
 {
-    u16 p = ARG16(0, 1);
-    if (VAR(p) != 255) VAR(p)++;
+    VAR(ARG16(0, 1))++;
     ADVANCE();
     script_continue = 1;
 }
 
 void Script_DecFlag_b(void)
 {
-    u16 p = ARG16(0, 1);
-    if (VAR(p) != 0) VAR(p)--;
+    VAR(ARG16(0, 1))--;
     ADVANCE();
     script_continue = 1;
 }
 
 void Script_SetFlagRandomValue_b(void)
 {
-    u8 modulo = script_cmd_args[3] + 1;
-    VAR(ARG16(0, 1)) = script_cmd_args[2] + ((u8)rand() % modulo);
+    /* args: var(hi,lo), min(hi,lo), max - min (hi,lo), at most 32767 */
+    u16 modulo = ARG16(4, 5) + 1;
+    VAR(ARG16(0, 1)) = SARG16(2, 3) + (s16)(rand() % modulo);
     ADVANCE();
     script_continue = 1;
 }
@@ -645,38 +655,46 @@ void Script_LoadVectors_b(void)
 }
 
 void Script_CopyVal_b(void)    { VAR(script_ptr_x) = VAR(script_ptr_y);                  ADVANCE(); script_continue = 1; }
-void Script_MathAdd_b(void)    { VAR(ARG16(0, 1)) += script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
-void Script_MathSub_b(void)    { VAR(ARG16(0, 1)) -= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
-void Script_MathMul_b(void)    { VAR(ARG16(0, 1)) *= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
-void Script_MathDiv_b(void)    { VAR(ARG16(0, 1)) /= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
-void Script_MathMod_b(void)    { VAR(ARG16(0, 1)) %= script_cmd_args[2];                 ADVANCE(); script_continue = 1; }
+/* Division and modulo by 0 give 0, as in expressions (rpn.c) */
+static s16 divide(s16 a, s16 b)
+{
+    if (b == 0) return 0;
+    return a / b;
+}
+static s16 modulus(s16 a, s16 b)
+{
+    if (b == 0) return 0;
+    return a % b;
+}
+void Script_MathAdd_b(void)    { VAR(ARG16(0, 1)) += SARG16(2, 3);                       ADVANCE(); script_continue = 1; }
+void Script_MathSub_b(void)    { VAR(ARG16(0, 1)) -= SARG16(2, 3);                       ADVANCE(); script_continue = 1; }
+void Script_MathMul_b(void)    { VAR(ARG16(0, 1)) *= SARG16(2, 3);                       ADVANCE(); script_continue = 1; }
+void Script_MathDiv_b(void)    { u16 p = ARG16(0, 1); VAR(p) = divide(VAR(p), SARG16(2, 3));  ADVANCE(); script_continue = 1; }
+void Script_MathMod_b(void)    { u16 p = ARG16(0, 1); VAR(p) = modulus(VAR(p), SARG16(2, 3)); ADVANCE(); script_continue = 1; }
 // MATH_ADD_VALUE / MATH_SUB_VALUE. args: clamp (0/1) - new in v2 (2.0.0-beta5,
-// was 0 args before). When set, saturates at 0/255 instead of wrapping -
-// simple and target-independent, so implemented for real now rather than
-// left a no-op like the genre-specific new opcodes above.
+// was 0 args before). When set, the result is kept within 0..255, as GB
+// Studio 3.x does.
 void Script_MathAddVal_b(void)
 {
-    u8 a = VAR(script_ptr_x);
-    u8 b = VAR(script_ptr_y);
-    u8 clamp = script_cmd_args[0];
-    VAR(script_ptr_x) = (!clamp || a < (u8)(255 - b)) ? (u8)(a + b) : 255;
+    s16 result = VAR(script_ptr_x) + VAR(script_ptr_y);
+    if (script_cmd_args[0]) result = byte_range(result);
+    VAR(script_ptr_x) = result;
     ADVANCE();
     script_continue = 1;
 }
 void Script_MathSubVal_b(void)
 {
-    u8 a = VAR(script_ptr_x);
-    u8 b = VAR(script_ptr_y);
-    u8 clamp = script_cmd_args[0];
-    VAR(script_ptr_x) = (!clamp || a > b) ? (u8)(a - b) : 0;
+    s16 result = VAR(script_ptr_x) - VAR(script_ptr_y);
+    if (script_cmd_args[0]) result = byte_range(result);
+    VAR(script_ptr_x) = result;
     ADVANCE();
     script_continue = 1;
 }
 void Script_MathMulVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) * VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
-void Script_MathDivVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) / VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
-void Script_MathModVal_b(void) { VAR(script_ptr_x) = VAR(script_ptr_x) % VAR(script_ptr_y); ADVANCE(); script_continue = 1; }
-void Script_VariableAddFlags_b(void)   { VAR(ARG16(0, 1)) |= script_cmd_args[2];  ADVANCE(); script_continue = 1; }
-void Script_VariableClearFlags_b(void) { VAR(ARG16(0, 1)) &= ~script_cmd_args[2]; ADVANCE(); script_continue = 1; }
+void Script_MathDivVal_b(void) { VAR(script_ptr_x) = divide(VAR(script_ptr_x), VAR(script_ptr_y));  ADVANCE(); script_continue = 1; }
+void Script_MathModVal_b(void) { VAR(script_ptr_x) = modulus(VAR(script_ptr_x), VAR(script_ptr_y)); ADVANCE(); script_continue = 1; }
+void Script_VariableAddFlags_b(void)   { VAR(ARG16(0, 1)) |= SARG16(2, 3);  ADVANCE(); script_continue = 1; }
+void Script_VariableClearFlags_b(void) { VAR(ARG16(0, 1)) &= ~SARG16(2, 3); ADVANCE(); script_continue = 1; }
 
 /* -------- actors (instant ops only for M4; walking needs Scene, M4b) -------- */
 void Script_ActorActivate_b(void)
@@ -909,8 +927,8 @@ void Script_PlayerBounce_b(void)
 // for it), so this one's observable behaviour is unchanged by this fix.
 void Script_ActorMoveToVal_b(void)
 {
-    BEGIN_MOVE(((s16)VAR(script_ptr_x) << 3) + 8,
-               ((s16)VAR(script_ptr_y) << 3) + 8,
+    BEGIN_MOVE((byte_range(VAR(script_ptr_x)) << 3) + 8,
+               (byte_range(VAR(script_ptr_y)) << 3) + 8,
                script_cmd_args[0]);
 }
 
@@ -999,8 +1017,8 @@ void Script_ActorGetPos_b(void)
 
 void Script_ActorSetPosToVal_b(void)
 {
-    actors[script_actor].x = ((s16)VAR(script_ptr_x) << 3) + 8;
-    actors[script_actor].y = ((s16)VAR(script_ptr_y) << 3) + 8;
+    actors[script_actor].x = (byte_range(VAR(script_ptr_x)) << 3) + 8;
+    actors[script_actor].y = (byte_range(VAR(script_ptr_y)) << 3) + 8;
     ADVANCE();
     script_continue = 1;
 }
@@ -1060,7 +1078,7 @@ void Script_ActorSetFlip_b(void)
 void Script_TextMulti_b(void) { UITextMulti(script_cmd_args[0]); ADVANCE(); script_continue = 1; }
 void Script_ActorSetFrameToVal_b(void)
 {
-    ActorSetFrameValue(VAR(ARG16(0, 1)));
+    ActorSetFrameValue((u8)byte_range(VAR(ARG16(0, 1))));
     ADVANCE();
     script_continue = 1;
 }
@@ -1133,21 +1151,16 @@ void Script_EngineFieldUpdateWord_b(void)
 // ENGINE_FIELD_UPDATE_VAR. args: offset(hi,lo), varIndex(hi,lo). Byte field := VAR(varIndex).
 void Script_EngineFieldUpdateVar_b(void)
 {
-    engine_fields_raw[ARG16(0, 1)] = VAR(ARG16(2, 3));
+    engine_fields_raw[ARG16(0, 1)] = (u8)VAR(ARG16(2, 3));
     ADVANCE();
     script_continue = 1;
 }
 
-// ENGINE_FIELD_UPDATE_VAR_WORD. args: offset(hi,lo), hiVarIndex(hi,lo),
-// loVarIndex(hi,lo). Word field := (VAR(hiVarIndex) << 8) | VAR(loVarIndex)
-// - matches scriptBuilder.js's engineFieldSetToVariable exactly (a 16-bit
-// script value split across two u8 script_variables[], hi pushed first).
+// ENGINE_FIELD_UPDATE_VAR_WORD. args: offset(hi,lo), varIndex(hi,lo).
+// Word field := VAR(varIndex)
 void Script_EngineFieldUpdateVarWord_b(void)
 {
-    u16 offset = ARG16(0, 1);
-    u8 hiByte = VAR(ARG16(2, 3));
-    u8 loByte = VAR(ARG16(4, 5));
-    *(u16 *)&engine_fields_raw[offset] = ((u16)hiByte << 8) | loByte;
+    *(s16 *)&engine_fields_raw[ARG16(0, 1)] = VAR(ARG16(2, 3));
     ADVANCE();
     script_continue = 1;
 }
@@ -1160,15 +1173,11 @@ void Script_EngineFieldStore_b(void)
     script_continue = 1;
 }
 
-// ENGINE_FIELD_STORE_WORD. args: offset(hi,lo), loVarIndex(hi,lo),
-// hiVarIndex(hi,lo) - note the reversed var order vs UPDATE_VAR_WORD,
-// matching scriptBuilder.js's engineFieldStoreInVariable exactly (it pushes
-// loIndex before hiIndex, the opposite order to engineFieldSetToVariable).
+// ENGINE_FIELD_STORE_WORD. args: offset(hi,lo), varIndex(hi,lo).
+// VAR(varIndex) := word field
 void Script_EngineFieldStoreWord_b(void)
 {
-    u16 value = *(u16 *)&engine_fields_raw[ARG16(0, 1)];
-    VAR(ARG16(2, 3)) = (u8)(value & 0xff);
-    VAR(ARG16(4, 5)) = (u8)(value >> 8);
+    VAR(ARG16(2, 3)) = *(s16 *)&engine_fields_raw[ARG16(0, 1)];
     ADVANCE();
     script_continue = 1;
 }
@@ -1218,7 +1227,7 @@ void Script_IfExpression_b(void)
 
 void Script_RpnSetVariable_b(void)
 {
-    VAR(ARG16(0, 1)) = (u8)RpnPop();
+    VAR(ARG16(0, 1)) = RpnPop();
     ADVANCE();
     script_continue = 1;
 }
@@ -1312,8 +1321,8 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_NextFrame_b, 0) /* 0x21 NEXT_FRAME */ \
     X(Script_IncFlag_b, 2) /* 0x22 INC_VALUE */ \
     X(Script_DecFlag_b, 2) /* 0x23 DEC_VALUE */ \
-    X(Script_SetFlagValue_b, 3) /* 0x24 SET_VALUE */ \
-    X(Script_IfValue_b, 6) /* 0x25 IF_VALUE */ \
+    X(Script_SetFlagValue_b, 4) /* 0x24 SET_VALUE */ \
+    X(Script_IfValue_b, 7) /* 0x25 IF_VALUE */ \
     X(Script_IfInput_b, 4) /* 0x26 IF_INPUT */ \
     X(Script_Choice_b, 5) /* 0x27 CHOICE */ \
     X(Script_ActorPush_b, 1) /* 0x28 ACTOR_PUSH */ \
@@ -1323,17 +1332,17 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ClearData_b, 1) /* 0x2C CLEAR_DATA */ \
     X(Script_IfSavedData_b, 3) /* 0x2D IF_SAVED_DATA */ \
     X(Script_IfActorDirection_b, 3) /* 0x2E IF_ACTOR_DIRECTION */ \
-    X(Script_SetFlagRandomValue_b, 4) /* 0x2F SET_RANDOM_VALUE */ \
+    X(Script_SetFlagRandomValue_b, 6) /* 0x2F SET_RANDOM_VALUE */ \
     X(Script_ActorGetPos_b, 0) /* 0x30 ACTOR_GET_POSITION */ \
     X(Script_ActorSetPosToVal_b, 0) /* 0x31 ACTOR_SET_POSITION_TO_VALUE */ \
     X(Script_ActorMoveToVal_b, 2) /* 0x32 ACTOR_MOVE_TO_VALUE */ \
     X(Script_ActorMoveRel_b, 6) /* 0x33 ACTOR_MOVE_RELATIVE */ \
     X(Script_ActorSetPosRel_b, 4) /* 0x34 ACTOR_SET_POSITION_RELATIVE */ \
-    X(Script_MathAdd_b, 3) /* 0x35 MATH_ADD */ \
-    X(Script_MathSub_b, 3) /* 0x36 MATH_SUB */ \
-    X(Script_MathMul_b, 3) /* 0x37 MATH_MUL */ \
-    X(Script_MathDiv_b, 3) /* 0x38 MATH_DIV */ \
-    X(Script_MathMod_b, 3) /* 0x39 MATH_MOD */ \
+    X(Script_MathAdd_b, 4) /* 0x35 MATH_ADD */ \
+    X(Script_MathSub_b, 4) /* 0x36 MATH_SUB */ \
+    X(Script_MathMul_b, 4) /* 0x37 MATH_MUL */ \
+    X(Script_MathDiv_b, 4) /* 0x38 MATH_DIV */ \
+    X(Script_MathMod_b, 4) /* 0x39 MATH_MOD */ \
     X(Script_MathAddVal_b, 1) /* 0x3A MATH_ADD_VALUE */ \
     X(Script_MathSubVal_b, 1) /* 0x3B MATH_SUB_VALUE */ \
     X(Script_MathMulVal_b, 0) /* 0x3C MATH_MUL_VALUE */ \
@@ -1358,8 +1367,8 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_ActorSetFlip_b, 1) /* 0x4F ACTOR_SET_FLIP */ \
     X(Script_TextMulti_b, 1) /* 0x50 TEXT_MULTI */ \
     X(Script_ActorSetFrameToVal_b, 2) /* 0x51 ACTOR_SET_FRAME_TO_VALUE */ \
-    X(Script_VariableAddFlags_b, 3) /* 0x52 VARIABLE_ADD_FLAGS */ \
-    X(Script_VariableClearFlags_b, 3) /* 0x53 VARIABLE_CLEAR_FLAGS */ \
+    X(Script_VariableAddFlags_b, 4) /* 0x52 VARIABLE_ADD_FLAGS */ \
+    X(Script_VariableClearFlags_b, 4) /* 0x53 VARIABLE_CLEAR_FLAGS */ \
     X(Script_SoundStartTone_b, 3) /* 0x54 SOUND_START_TONE */ \
     X(Script_SoundStopTone_b, 0) /* 0x55 SOUND_STOP_TONE */ \
     X(Script_SoundPlayBeep_b, 1) /* 0x56 SOUND_PLAY_BEEP */ \
@@ -1385,9 +1394,9 @@ void Script_ActorDeactivateFlag_b(void)
     X(Script_EngineFieldUpdate_b, 3) /* 0x6A ENGINE_FIELD_UPDATE - v4, runtime engine-field writes */ \
     X(Script_EngineFieldUpdateWord_b, 4) /* 0x6B ENGINE_FIELD_UPDATE_WORD - v4 */ \
     X(Script_EngineFieldUpdateVar_b, 4) /* 0x6C ENGINE_FIELD_UPDATE_VAR - v4 */ \
-    X(Script_EngineFieldUpdateVarWord_b, 6) /* 0x6D ENGINE_FIELD_UPDATE_VAR_WORD - v4 */ \
+    X(Script_EngineFieldUpdateVarWord_b, 4) /* 0x6D ENGINE_FIELD_UPDATE_VAR_WORD - v4 */ \
     X(Script_EngineFieldStore_b, 4) /* 0x6E ENGINE_FIELD_STORE - v4 */ \
-    X(Script_EngineFieldStoreWord_b, 6) /* 0x6F ENGINE_FIELD_STORE_WORD - v4 */ \
+    X(Script_EngineFieldStoreWord_b, 4) /* 0x6F ENGINE_FIELD_STORE_WORD - v4 */ \
     X(Script_RpnPushConst_b, 2) /* 0x70 RPN_PUSH_CONST */ \
     X(Script_RpnPushVar_b, 2) /* 0x71 RPN_PUSH_VAR */ \
     X(Script_RpnOperator_b, 1) /* 0x72 RPN_OPERATOR */ \

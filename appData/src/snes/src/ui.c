@@ -281,12 +281,39 @@ void UIInit(void)
     bgSetScroll(2, 0, 0);
 }
 
+/* Appends `value` in decimal at ui_text[o], 6 characters at most ("-32768").
+ * Returns the new end */
+static u8 ui_put_number(u8 o, s16 value)
+{
+    u16 n = (u16)value;
+    u16 d = 10000;
+    if (value < 0)
+    {
+        ui_text[o++] = '-';
+        n = 0 - n;
+    }
+    /* skip the leading zeros */
+    while (d > 1)
+    {
+        if (n >= d) break;
+        d /= 10;
+    }
+    while (d > 1)
+    {
+        ui_text[o++] = (char)('0' + n / d);
+        n %= d;
+        d /= 10;
+    }
+    ui_text[o++] = (char)('0' + n);
+    return o;
+}
+
 /* Copy `str` into ui_text, substituting "$NN$" with script_variables[NN] as
  * decimal digits and "#NN#" with script_variables[NN] as one raw character
  * code (v4, user-asked - docs/dialogue-variables.md's own "#NN#" row was
  * previously documented as compiled-but-not-implemented; this closes that
  * gap). A substituted #NN# byte can legally be 0 (script_variables[NN] can
- * be any u8) - safe to embed mid-string here, unlike the !Sx! encoding in
+ * be any value) - safe to embed mid-string here, unlike the !Sx! encoding in
  * trimlines.js, because nothing downstream of this function (ui_wrap,
  * ui_reveal_char) scans ui_text for a 0 terminator; both use ui_len, set
  * once below. A value below 0x20 has no real glyph (UI_CHAR's `c - 0x20`
@@ -296,7 +323,7 @@ void UIInit(void)
 static void ui_subst(const unsigned char *str)
 {
     u8 i = 0, o = 0;
-    while (str[i] != 0 && o < sizeof(ui_text) - 4)
+    while (str[i] != 0 && o < sizeof(ui_text) - 7)
     {
         if (str[i] == '$')
         {
@@ -310,16 +337,7 @@ static void ui_subst(const unsigned char *str)
             if (ok)
             {
                 u8 vi = (u8)((d0 - '0') * 10 + (d1 - '0'));
-                u8 v = script_variables[vi];
-                if (v >= 100)
-                {
-                    ui_text[o++] = (char)('0' + v / 100);
-                }
-                if (v >= 10)
-                {
-                    ui_text[o++] = (char)('0' + (v / 10) % 10);
-                }
-                ui_text[o++] = (char)('0' + v % 10);
+                o = ui_put_number(o, script_variables[vi]);
                 i += 4;
                 continue;
             }

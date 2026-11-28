@@ -41,7 +41,7 @@ extern const u8 script_cmd_arg_lens[SCRIPT_CMD_COUNT];
 
 /* Provided by game.c */
 extern ACTOR actors[MAX_ACTORS];
-extern u8 script_variables[NUM_VARIABLES + 1];
+extern s16 script_variables[NUM_VARIABLES + 1];
 extern u16 joy;
 
 void ScriptStart(BANK_PTR *events);

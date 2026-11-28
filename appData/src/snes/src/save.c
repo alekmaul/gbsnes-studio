@@ -17,7 +17,11 @@ typedef struct
 } SAVE_HEADER;
 
 #define SAVE_VARS_OFFSET ((u16)sizeof(SAVE_HEADER))
-#define SAVE_SLOT_SIZE ((u16)(SAVE_VARS_OFFSET + NUM_VARIABLES + 1))
+#define SAVE_VARS_SIZE ((u16)((NUM_VARIABLES + 1) * 2))
+#define SAVE_SLOT_SIZE ((u16)(SAVE_VARS_OFFSET + SAVE_VARS_SIZE))
+/* The header's first byte of a written slot. 2: 16 bit variables - a save of
+ * the earlier format (1, 8 bit variables) counts as no save */
+#define SAVE_MARKER 2
 
 static u16 SaveSlotOffset(u8 slot)
 {
@@ -39,14 +43,14 @@ u8 SaveDataExists(u8 slot)
     // ~255/256 fresh carts. Matches the GB engine's own `*RAMPtr == TRUE`
     // check (ScriptRunner_b.c) - same 1/256 residual false-positive odds GB
     // already accepts, not a new gap introduced here.
-    return exists == 1;
+    return exists == SAVE_MARKER;
 }
 
 void SaveGameData(u8 slot)
 {
     u16 offset = SaveSlotOffset(slot);
     SAVE_HEADER header;
-    header.exists = 1;
+    header.exists = SAVE_MARKER;
     header.scene_index = scene_index;
     header.tile_x = (u8)SceneActorTileX(0);
     header.tile_y = (u8)SceneActorTileY(0);
@@ -54,7 +58,8 @@ void SaveGameData(u8 slot)
     header.dir_y = actors[0].dir_y;
 
     consoleCopySramWithOffset((u8 *)&header, sizeof(header), offset);
-    consoleCopySramWithOffset(script_variables, NUM_VARIABLES + 1, offset + SAVE_VARS_OFFSET);
+    consoleCopySramWithOffset((u8 *)script_variables, SAVE_VARS_SIZE,
+                              offset + SAVE_VARS_OFFSET);
 }
 
 void ClearGameData(u8 slot)
@@ -75,7 +80,8 @@ u8 LoadGameData(u8 slot)
     }
 
     consoleLoadSramWithOffset((u8 *)&header, sizeof(header), offset);
-    consoleLoadSramWithOffset(script_variables, NUM_VARIABLES + 1, offset + SAVE_VARS_OFFSET);
+    consoleLoadSramWithOffset((u8 *)script_variables, SAVE_VARS_SIZE,
+                              offset + SAVE_VARS_OFFSET);
 
     /* dir code 1 (down) is a placeholder - SceneRequestSwitch's dir_to_vec
      * result is overwritten right after with the actual saved facing, same

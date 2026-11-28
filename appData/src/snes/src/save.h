@@ -21,8 +21,8 @@
  *
  * NUM_SAVE_SLOTS independent slots, each its own fixed-size region
  * (SAVE_SLOT_SIZE bytes) starting at `slot * SAVE_SLOT_SIZE`. 3 slots x
- * ~137 bytes is under 1% of even the smallest configurable cartridge SRAM
- * (1 KB) - no budget concern. `slot` is clamped to a valid index so a
+ * ~1.5 KB fit in the 8 KB of cartridge SRAM the Settings page offers.
+ * `slot` is clamped to a valid index so a
  * corrupt/out-of-range byte can't read or write outside the reserved
  * save region.
  */

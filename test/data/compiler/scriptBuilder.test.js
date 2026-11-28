@@ -589,7 +589,21 @@ test("Should be able to set variable to value", () => {
   const output = [];
   const sb = new ScriptBuilder(output, { variables: ["0"] });
   sb.variableSetToValue("0", 5);
-  expect(output).toEqual([cmd(SET_VALUE), 0, 0, 5]);
+  expect(output).toEqual([cmd(SET_VALUE), 0, 0, 0, 5]);
+});
+
+test("Should compile variable values as signed 16 bit", () => {
+  const output = [];
+  const sb = new ScriptBuilder(output, { variables: ["0"] });
+  sb.variableSetToValue("0", 1000);
+  sb.variableSetToValue("0", -2);
+  // a value may reach the compiler as a string
+  sb.variableSetToValue("0", "-32768");
+  expect(output).toEqual([
+    cmd(SET_VALUE), 0, 0, 0x03, 0xe8,
+    cmd(SET_VALUE), 0, 0, 0xff, 0xfe,
+    cmd(SET_VALUE), 0, 0, 0x80, 0x00
+  ]);
 });
 
 test("Should be able to copy one variable to another", () => {
@@ -602,8 +616,10 @@ test("Should be able to copy one variable to another", () => {
 test("Should be able to set variable to random number", () => {
   const output = [];
   const sb = new ScriptBuilder(output, { variables: ["0"] });
-  sb.variableSetToRandom("0", 10, 50);
-  expect(output).toEqual([cmd(SET_RANDOM_VALUE), 0, 0, 10, 50]);
+  sb.variableSetToRandom("0", -10, 5000);
+  expect(output).toEqual([
+    cmd(SET_RANDOM_VALUE), 0, 0, 0xff, 0xf6, 0x13, 0x88
+  ]);
 });
 
 test("Should be able to add variables", () => {
@@ -666,14 +682,14 @@ test("Should be able to add flags to a variable", () => {
   const output = [];
   const sb = new ScriptBuilder(output, { variables: ["0"] });
   sb.variableAddFlags("0", 129);
-  expect(output).toEqual([cmd(VARIABLE_ADD_FLAGS), 0, 0, 129]);
+  expect(output).toEqual([cmd(VARIABLE_ADD_FLAGS), 0, 0, 0, 129]);
 });
 
 test("Should be able to clear flags to a variable", () => {
   const output = [];
   const sb = new ScriptBuilder(output, { variables: ["0"] });
   sb.variableClearFlags("0", 129);
-  expect(output).toEqual([cmd(VARIABLE_CLEAR_FLAGS), 0, 0, 129]);
+  expect(output).toEqual([cmd(VARIABLE_CLEAR_FLAGS), 0, 0, 0, 129]);
 });
 
 test("Should be able to show a white overlay", () => {
@@ -867,19 +883,20 @@ test("Should be able to conditionally execute if variable matches a value", () =
       output.push(99);
     }
   });
-  sb.ifVariableValue("1", "==", 42, [], []);
+  sb.ifVariableValue("1", "==", 300, [], []);
   expect(output).toEqual([
     cmd(IF_VALUE),
     0,
     1,
     operatorDec("=="),
-    42,
+    0x01,
+    0x2c,
     0,
-    11,
+    12,
     99,
     cmd(JUMP),
     0,
-    12,
+    13,
     99
   ]);
 });
@@ -1516,7 +1533,7 @@ test("Should be able to set a byte engine field to a variable", () => {
   expect(output).toEqual([cmd(ENGINE_FIELD_UPDATE_VAR), hi(5), lo(5), hi(0), lo(0)]);
 });
 
-test("Should be able to set a word engine field from a hi/lo variable pair", () => {
+test("Should be able to set a word engine field from a variable", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {
     engineFields: testEngineFields,
@@ -1527,10 +1544,8 @@ test("Should be able to set a word engine field from a hi/lo variable pair", () 
     cmd(ENGINE_FIELD_UPDATE_VAR_WORD),
     hi(10),
     lo(10),
-    hi(0), // hi byte source: variable "0" -> index 0
+    hi(0), // the one 16 bit source variable
     lo(0),
-    hi(1), // lo byte source: variable "1" -> index 1
-    lo(1),
   ]);
 });
 
@@ -1544,7 +1559,7 @@ test("Should be able to store a byte engine field in a variable", () => {
   expect(output).toEqual([cmd(ENGINE_FIELD_STORE), hi(5), lo(5), hi(0), lo(0)]);
 });
 
-test("Should be able to store a word engine field in a hi/lo variable pair", () => {
+test("Should be able to store a word engine field in a variable", () => {
   const output = [];
   const sb = new ScriptBuilder(output, {
     engineFields: testEngineFields,
@@ -1555,9 +1570,7 @@ test("Should be able to store a word engine field in a hi/lo variable pair", () 
     cmd(ENGINE_FIELD_STORE_WORD),
     hi(10),
     lo(10),
-    hi(1), // lo byte destination: variable "1" -> index 1, pushed first
-    lo(1),
-    hi(0), // hi byte destination: variable "0" -> index 0, pushed second
+    hi(0), // the one 16 bit destination variable
     lo(0),
   ]);
 });

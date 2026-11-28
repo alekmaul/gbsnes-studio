@@ -1385,3 +1385,53 @@ describe("compileSnesData - EVENT_LAUNCH_PROJECTILE inside an Actor's On Update 
     expect(out.stats.sceneSlotForIndex[0][sheetIndex]).not.toBe(0xff);
   });
 });
+
+describe("compileSnesData - 16 bit variables", () => {
+  const PROJECT_ROOT = Path.join(__dirname, "..", "..", "projects", "Test_ActorInvoke");
+  const makeProject = (variableCount) => ({
+    settings: { target: "snes", startSceneId: "s", startX: 0, startY: 0 },
+    backgrounds: [{ id: "bg", filename: "placeholder.png", width: 20, height: 18 }],
+    spriteSheets: [{ id: "npc", filename: "signpost.png" }],
+    variables: [],
+    scenes: [
+      {
+        id: "s",
+        name: "Variables",
+        backgroundId: "bg",
+        width: 20,
+        height: 18,
+        actors: [],
+        triggers: [],
+        script: Array.from({ length: variableCount }, (_, i) => ({
+          command: "EVENT_SET_TRUE",
+          args: { variable: String(i) },
+        })),
+      },
+    ],
+  });
+
+  test("the engine has as many variables as the compiler allows", () => {
+    const header = fs.readFileSync(
+      Path.join(__dirname, "..", "..", "..", "appData", "src", "snes", "src", "gbs_types.h"),
+      "utf8"
+    );
+    expect(header).toContain(`#define NUM_VARIABLES ${snesTarget.maxVariables}\n`);
+  });
+
+  test("accepts every variable of the engine", async () => {
+    const out = await compileSnesData(makeProject(snesTarget.maxVariables), {
+      projectRoot: PROJECT_ROOT,
+      warnings: () => {},
+    });
+    expect(out.stats.variables).toBe(snesTarget.maxVariables);
+  });
+
+  test("stops the build with one variable too many", async () => {
+    await expect(
+      compileSnesData(makeProject(snesTarget.maxVariables + 1), {
+        projectRoot: PROJECT_ROOT,
+        warnings: () => {},
+      })
+    ).rejects.toThrow(/uses 769 variables, more than the 768/);
+  });
+});

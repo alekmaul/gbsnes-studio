@@ -49,11 +49,8 @@
 #define RPN_OP_MAX 18
 #define RPN_OP_ABS 19 /* unary */
 
-/* Variables (script_variables[]) are u8, wrapping on overflow just like the
- * existing MATH_ADD/SUB/etc opcodes - the eval stack itself is s16 so an
- * expression can go through a negative/out-of-range intermediate result
- * (e.g. "$a$ - $b$" where b > a) before a final comparison or truncated
- * store. */
+/* The eval stack holds s16, like the variables (script_variables[]): results
+ * wrap on overflow, as with the MATH_ADD/SUB/etc opcodes. */
 void RpnPush(s16 value);
 s16 RpnPop(void);
 void RpnApplyOperator(u8 op);

@@ -26,16 +26,17 @@ const compile = (input, helpers) => {
   const { variableSetToUnionValue } = helpers;
 
   if(input.value.type === "number") {
-    const value = parseInt(input.value.value, 10);
-    if (value > 1)  {
-      const { variableSetToValue } = helpers;
-      variableSetToValue(input.variable, value);
-    } else if (value === 1) {
+    // no value counts as 0
+    const value = parseInt(input.value.value, 10) || 0;
+    if (value === 1) {
       const { variableSetToTrue } = helpers;
       variableSetToTrue(input.variable);
-    } else {
+    } else if (value === 0) {
       const { variableSetToFalse } = helpers;
       variableSetToFalse(input.variable);
+    } else {
+      const { variableSetToValue } = helpers;
+      variableSetToValue(input.variable, value);
     }
   } else {
     variableSetToUnionValue(input.variable, input.value);

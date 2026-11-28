@@ -1127,6 +1127,15 @@ const compileSnesData = async (
   });
 
   // ---- resolve dialogue-string placeholders across every script ------
+  // Every script is compiled by now, so every variable has its index
+  if (variables.length > snesTarget.maxVariables) {
+    throw new Error(
+      `This project uses ${variables.length} variables, more than the ` +
+        `${snesTarget.maxVariables} the engine has. Use fewer variables (the ` +
+        `local and temporary ones of each actor count too).`
+    );
+  }
+
   const scriptBytes = rawScripts.map((b, i) =>
     resolvePlaceholders(b, `event_ptrs[${i}]`, warnings)
   );

@@ -154,7 +154,7 @@ const compile = (input, helpers) => {
     }
     case "rnd": {
       const min = input.minValue || 0;
-      const range = Math.min(254, Math.max(0, (input.maxValue || 0) - min));
+      const range = Math.min(32767, Math.max(0, (input.maxValue || 0) - min));
       variableSetToRandom(tmp1, min, range);
       break;
     }

@@ -25,9 +25,10 @@
  * constraint (actors use ~10 of 128 hardware sprites), it's just no reason
  * to go bigger than what a scene realistically needs at once. */
 #define MAX_PROJECTILES 4
-/* Placeholder until the M7 data compiler emits the real count (data_ptrs.h) */
+/* Script variables, signed 16 bit (GB Studio 3.x's count and range). Must
+ * match maxVariables in src/lib/compiler/targets/snes.js */
 #ifndef NUM_VARIABLES
-#define NUM_VARIABLES 128
+#define NUM_VARIABLES 768
 #endif
 
 typedef struct

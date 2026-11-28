@@ -119,6 +119,9 @@ const snesTarget = {
   // Sprite sheets loaded at once by a scene, the player's included
   // (MAX_SCENE_SPRITES, sprites.h). Shown in the scene info bar.
   maxSpriteSheets: 32,
+
+  // Script variables, signed 16 bit: NUM_VARIABLES in the engine's gbs_types.h
+  maxVariables: 768,
   // No v1.1.4 equivalent - the SNES's 128-sprite OAM budget is far larger
   // than the Game Boy's, this was never a practical scene-authoring
   // constraint worth warning about.
